@@ -1,0 +1,22 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PathHide.Views.DialogBase"
+        Width="400" SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <DockPanel Margin="20">
+        <!-- Button row at the bottom -->
+        <StackPanel DockPanel.Dock="Bottom"
+                    x:Name="ButtonPanel"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    HorizontalAlignment="Right"
+                    Margin="0,16,0,0"/>
+
+        <!-- Content area -->
+        <ContentPresenter x:Name="DialogContent"/>
+    </DockPanel>
+
+</Window>

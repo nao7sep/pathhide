@@ -4,8 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using MsBox.Avalonia;
-using MsBox.Avalonia.Enums;
 using PathHide.ViewModels;
 
 namespace PathHide.Views;
@@ -36,10 +34,9 @@ public partial class MainWindow : Window
 
     private async Task<bool> ShowConfirmAsync(string title, string message)
     {
-        var box = MessageBoxManager.GetMessageBoxStandard(
-            title, message, ButtonEnum.YesNo);
-        var result = await box.ShowWindowDialogAsync(this);
-        return result == ButtonResult.Yes;
+        var dialog = new ConfirmDialog(title, message);
+        await dialog.ShowDialog(this);
+        return dialog.Confirmed;
     }
 
     private async void OnAddFilesClick(object? sender, RoutedEventArgs e)
