@@ -48,7 +48,7 @@ public partial class MainWindow : Window
         });
 
         if (files.Count > 0)
-            ViewModel.AddPaths(files.Select(f => f.Path.LocalPath));
+            await ViewModel.AddPathsAsync(files.Select(f => f.Path.LocalPath));
     }
 
     private async void OnAddFoldersClick(object? sender, RoutedEventArgs e)
@@ -60,7 +60,7 @@ public partial class MainWindow : Window
         });
 
         if (folders.Count > 0)
-            ViewModel.AddPaths(folders.Select(f => f.Path.LocalPath));
+            await ViewModel.AddPathsAsync(folders.Select(f => f.Path.LocalPath));
     }
 
 #pragma warning disable CS0618 // DragDrop API transition — suppress until Avalonia stabilizes new API
@@ -71,14 +71,14 @@ public partial class MainWindow : Window
             : DragDropEffects.None;
     }
 
-    private void OnDrop(object? sender, DragEventArgs e)
+    private async void OnDrop(object? sender, DragEventArgs e)
     {
         var items = e.Data.GetFiles();
         if (items is null)
             return;
 
         var paths = items.Select(i => i.Path.LocalPath);
-        ViewModel.AddPaths(paths);
+        await ViewModel.AddPathsAsync(paths);
     }
 #pragma warning restore CS0618
 

@@ -92,11 +92,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
     // --- Add / Remove ---
 
-    public async void AddPaths(IEnumerable<string> paths)
+    public async Task AddPathsAsync(IEnumerable<string> paths)
     {
         var added = 0;
         var skipped = 0;
-        var newEntries = new List<PathEntry>();
+        var addedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var raw in paths)
         {
@@ -113,31 +113,29 @@ public partial class MainWindowViewModel : ViewModelBase
                 continue;
             }
 
-            var entry = new PathEntry
+            _entries.Add(new PathEntry
             {
                 Path = normalized,
                 DesiredVisibility = DesiredVisibility.Hidden,
-            };
-            _entries.Add(entry);
-            newEntries.Add(entry);
+            });
+            addedPaths.Add(normalized);
             added++;
         }
 
-        if (added > 0)
-        {
-            if (!TrySavePaths())
-                return;
-
-            BuildRows();
-
-            var newRows = Rows.Where(r => newEntries.Contains(r.Entry)).ToList();
-            var summary = await ApplyDesiredStateAsync(newRows);
-            ShowNotification($"{added} added, {skipped} skipped — {summary}");
-        }
-        else
+        if (added == 0)
         {
             ShowNotification($"{added} added, {skipped} skipped");
+            return;
         }
+
+        if (!TrySavePaths())
+            return;
+
+        BuildRows();
+
+        var newRows = Rows.Where(r => addedPaths.Contains(r.Path)).ToList();
+        var summary = await ApplyDesiredStateAsync(newRows);
+        ShowNotification($"{added} added, {skipped} skipped — {summary}");
     }
 
     [RelayCommand]
