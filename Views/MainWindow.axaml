@@ -66,7 +66,7 @@
                            Foreground="{StaticResource TealDarkBrush}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding Notification}"
+                <TextBlock Text="{Binding StatusBarText}"
                            IsVisible="{Binding !IsScanning}"
                            Foreground="#37474F"
                            VerticalAlignment="Center"/>

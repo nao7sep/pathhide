@@ -46,11 +46,34 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool _isScanning;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusBarText))]
     private string _notification = string.Empty;
 
     public string ProgressText => ScanTotal > 0
         ? $"Scanning {ScanProgress} / {ScanTotal}"
         : string.Empty;
+
+    public string StatusBarText => !string.IsNullOrEmpty(Notification)
+        ? Notification
+        : BuildSummary();
+
+    private string BuildSummary()
+    {
+        if (Rows.Count == 0)
+            return "No entries — drop files or folders here to get started";
+
+        var hidden = Rows.Count(r => r.ActualState == ActualState.Hidden);
+        var visible = Rows.Count(r => r.ActualState == ActualState.Visible);
+        var missing = Rows.Count(r => r.ActualState == ActualState.Missing);
+        var problems = Rows.Count(r => r.ActualState is ActualState.Unreachable or ActualState.Error);
+
+        var parts = new List<string> { $"{Rows.Count} entries" };
+        if (hidden > 0) parts.Add($"{hidden} hidden");
+        if (visible > 0) parts.Add($"{visible} visible");
+        if (missing > 0) parts.Add($"{missing} missing");
+        if (problems > 0) parts.Add($"{problems} problems");
+        return string.Join("  ·  ", parts);
+    }
 
     public MainWindowViewModel()
     {
@@ -259,6 +282,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 row.PathFamily = family;
             Rows.Add(row);
         }
+
+        OnPropertyChanged(nameof(StatusBarText));
     }
 
     private async Task RunScanAsync()
@@ -288,6 +313,7 @@ public partial class MainWindowViewModel : ViewModelBase
         finally
         {
             IsScanning = false;
+            OnPropertyChanged(nameof(StatusBarText));
         }
     }
 
