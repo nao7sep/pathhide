@@ -90,6 +90,17 @@ public static class PathNormalizer
         if (path.Length == 3 && path[1] == ':')
             return path;
 
+        // UNC root like "\\server\share\" — after the leading "\\", count separators.
+        // "\\server\share\" inner = "server\share\" has 2 separators → root, strip only trailing.
+        // "\\server\" inner = "server\" has 1 separator → incomplete, return as-is to avoid corruption.
+        // "\\server\share\foo\" inner = "server\share\foo\" has 3+ separators → normal path, strip.
+        if (path.Length >= 4 && path[0] == '\\' && path[1] == '\\')
+        {
+            var separatorsInInner = path.AsSpan(2).Count('\\');
+            if (separatorsInInner <= 1)
+                return path;
+        }
+
         return path.TrimEnd(separator);
     }
 

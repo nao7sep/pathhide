@@ -112,8 +112,9 @@ public sealed class MacVisibilityService : IVisibilityService
         {
             return Directory.Exists(parent);
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Debug(ex, "Cannot check ancestor accessibility for {Path}", path);
             return false;
         }
     }
@@ -132,8 +133,9 @@ public sealed class MacVisibilityService : IVisibilityService
 
             return ItemKind.File;
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Debug(ex, "Cannot detect item kind for {Path}", path);
             return ItemKind.Unknown;
         }
     }

@@ -99,7 +99,9 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (added > 0)
         {
-            _pathListStore.Save(_entries);
+            if (!TrySavePaths())
+                return;
+
             BuildRows();
             _ = RunScanAsync();
         }
@@ -127,7 +129,9 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var row in selected)
             _entries.Remove(row.Entry);
 
-        _pathListStore.Save(_entries);
+        if (!TrySavePaths())
+            return;
+
         BuildRows();
         ShowNotification($"{selected.Count} removed");
     }
@@ -147,7 +151,9 @@ public partial class MainWindowViewModel : ViewModelBase
             row.DesiredVisibility = DesiredVisibility.Hidden;
         }
 
-        _pathListStore.Save(_entries);
+        if (!TrySavePaths())
+            return;
+
         var summary = await ApplyDesiredStateAsync(selected);
         ShowNotification(summary);
     }
@@ -165,7 +171,9 @@ public partial class MainWindowViewModel : ViewModelBase
             row.DesiredVisibility = DesiredVisibility.Shown;
         }
 
-        _pathListStore.Save(_entries);
+        if (!TrySavePaths())
+            return;
+
         var summary = await ApplyDesiredStateAsync(selected);
         ShowNotification(summary);
     }
@@ -179,7 +187,9 @@ public partial class MainWindowViewModel : ViewModelBase
             row.DesiredVisibility = DesiredVisibility.Hidden;
         }
 
-        _pathListStore.Save(_entries);
+        if (!TrySavePaths())
+            return;
+
         var summary = await ApplyDesiredStateAsync(Rows.ToList());
         ShowNotification(summary);
     }
@@ -193,7 +203,9 @@ public partial class MainWindowViewModel : ViewModelBase
             row.DesiredVisibility = DesiredVisibility.Shown;
         }
 
-        _pathListStore.Save(_entries);
+        if (!TrySavePaths())
+            return;
+
         var summary = await ApplyDesiredStateAsync(Rows.ToList());
         ShowNotification(summary);
     }
@@ -221,6 +233,21 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     // --- Internals ---
+
+    private bool TrySavePaths()
+    {
+        try
+        {
+            _pathListStore.Save(_entries);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to save paths");
+            ShowNotification($"Failed to save: {ex.Message}");
+            return false;
+        }
+    }
 
     private void BuildRows()
     {
