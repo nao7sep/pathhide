@@ -27,7 +27,7 @@
                 <!-- Add group -->
                 <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
                     <Button Content="Add Files" Classes="add" x:Name="AddFilesButton"/>
-                    <Button Content="Add Folders" Classes="add" x:Name="AddFoldersButton"/>
+                    <Button Content="Add Directories" Classes="add" x:Name="AddFoldersButton"/>
                 </StackPanel>
 
                 <!-- Selected actions -->

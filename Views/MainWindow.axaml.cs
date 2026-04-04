@@ -55,7 +55,7 @@ public partial class MainWindow : Window
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Add Folders",
+            Title = "Add Directories",
             AllowMultiple = true,
         });
 
