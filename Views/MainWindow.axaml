@@ -3,18 +3,67 @@
         xmlns:vm="using:PathHide.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="550"
         x:Class="PathHide.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="PathHide">
+        Title="PathHide"
+        Width="900" Height="550"
+        DragDrop.AllowDrop="True">
 
     <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <TextBlock Text="{Binding Greeting}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    <DockPanel Margin="8">
+
+        <!-- Top toolbar -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="4" Margin="0,0,0,8">
+            <Button Content="Add Files" x:Name="AddFilesButton"/>
+            <Button Content="Add Folders" x:Name="AddFoldersButton"/>
+            <Separator Width="1" Margin="4,0"/>
+            <Button Content="Hide Selected" Command="{Binding HideSelectedCommand}"/>
+            <Button Content="Show Selected" Command="{Binding ShowSelectedCommand}"/>
+            <Button Content="Remove Selected" Command="{Binding RemoveSelectedCommand}"/>
+            <Separator Width="1" Margin="4,0"/>
+            <Button Content="Hide All" Command="{Binding HideAllCommand}"/>
+            <Button Content="Show All" Command="{Binding ShowAllCommand}"/>
+            <Button Content="Reapply All" Command="{Binding ReapplyAllCommand}"/>
+            <Separator Width="1" Margin="4,0"/>
+            <Button Content="Reload" Command="{Binding ReloadCommand}"/>
+            <Button Content="Cancel Scan" Command="{Binding CancelScanCommand}"
+                    IsVisible="{Binding IsScanning}"/>
+        </StackPanel>
+
+        <!-- Bottom status bar -->
+        <Panel DockPanel.Dock="Bottom" Height="28" Margin="0,8,0,0">
+            <TextBlock Text="{Binding ProgressText}"
+                       IsVisible="{Binding IsScanning}"
+                       VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding Notification}"
+                       IsVisible="{Binding !IsScanning}"
+                       VerticalAlignment="Center"/>
+        </Panel>
+
+        <!-- Path list -->
+        <DataGrid x:Name="PathGrid"
+                  ItemsSource="{Binding Rows}"
+                  AutoGenerateColumns="False"
+                  CanUserReorderColumns="True"
+                  CanUserResizeColumns="True"
+                  CanUserSortColumns="True"
+                  SelectionMode="Extended"
+                  IsReadOnly="True"
+                  GridLinesVisibility="Horizontal">
+            <DataGrid.Columns>
+                <DataGridCheckBoxColumn Header="&#x2713;" Binding="{Binding IsSelected}"/>
+                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
+                <DataGridTextColumn Header="Family" Binding="{Binding PathFamily}" Width="70"/>
+                <DataGridTextColumn Header="Desired" Binding="{Binding DesiredVisibility}" Width="80"/>
+                <DataGridTextColumn Header="Actual" Binding="{Binding ActualState}" Width="80"/>
+                <DataGridTextColumn Header="Kind" Binding="{Binding ItemKind}" Width="80"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+    </DockPanel>
 
 </Window>

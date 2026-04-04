@@ -1,6 +1,331 @@
-﻿namespace PathHide.ViewModels;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using PathHide.Models;
+using PathHide.Services;
+using PathHide.Storage;
+using Serilog;
+
+namespace PathHide.ViewModels;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
-    public string Greeting { get; } = "Welcome to Avalonia!";
+    private static readonly ILogger Log = Serilog.Log.ForContext<MainWindowViewModel>();
+
+    private readonly PathListStore _pathListStore = new();
+    private readonly SettingsStore _settingsStore = new();
+    private readonly IVisibilityService _visibilityService;
+    private readonly PathScanner _scanner;
+
+    private List<PathEntry> _entries = [];
+    private AppSettings _settings = new();
+    private CancellationTokenSource? _scanCts;
+
+    public ObservableCollection<PathRowViewModel> Rows { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
+    private int _scanTotal;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ProgressText))]
+    private int _scanProgress;
+
+    [ObservableProperty]
+    private bool _isScanning;
+
+    [ObservableProperty]
+    private string _notification = string.Empty;
+
+    public string ProgressText => ScanTotal > 0
+        ? $"Scanning {ScanProgress} / {ScanTotal}"
+        : string.Empty;
+
+    public MainWindowViewModel()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            _visibilityService = new WindowsVisibilityService(() => _settings.WindowsHideMode);
+        else
+            _visibilityService = new MacVisibilityService();
+
+        _scanner = new PathScanner(_visibilityService);
+
+        _settings = _settingsStore.Load();
+        _entries = _pathListStore.Load();
+        BuildRows();
+        _ = RunScanAsync();
+    }
+
+    // --- Add / Remove ---
+
+    public void AddPaths(IEnumerable<string> paths)
+    {
+        var added = 0;
+        var skipped = 0;
+
+        foreach (var raw in paths)
+        {
+            if (!PathNormalizer.TryNormalize(raw, out var normalized, out _))
+            {
+                Log.Warning("Rejected path (not absolute): {Path}", raw);
+                skipped++;
+                continue;
+            }
+
+            if (_entries.Any(e => PathNormalizer.AreEqual(e.Path, normalized)))
+            {
+                skipped++;
+                continue;
+            }
+
+            _entries.Add(new PathEntry
+            {
+                Path = normalized,
+                DesiredVisibility = DesiredVisibility.Hidden,
+            });
+            added++;
+        }
+
+        if (added > 0)
+        {
+            _pathListStore.Save(_entries);
+            BuildRows();
+            _ = RunScanAsync();
+        }
+
+        ShowNotification($"{added} added, {skipped} skipped");
+    }
+
+    [RelayCommand]
+    private void RemoveSelected()
+    {
+        var selected = Rows.Where(r => r.IsSelected).ToList();
+        if (selected.Count == 0)
+            return;
+
+        foreach (var row in selected)
+            _entries.Remove(row.Entry);
+
+        _pathListStore.Save(_entries);
+        BuildRows();
+        ShowNotification($"{selected.Count} removed");
+    }
+
+    // --- Hide / Show ---
+
+    [RelayCommand]
+    private async Task HideSelectedAsync()
+    {
+        var selected = Rows.Where(r => r.IsSelected).ToList();
+        if (selected.Count == 0)
+            return;
+
+        foreach (var row in selected)
+        {
+            row.Entry.DesiredVisibility = DesiredVisibility.Hidden;
+            row.DesiredVisibility = DesiredVisibility.Hidden;
+        }
+
+        _pathListStore.Save(_entries);
+        var summary = await ApplyDesiredStateAsync(selected);
+        ShowNotification(summary);
+    }
+
+    [RelayCommand]
+    private async Task ShowSelectedAsync()
+    {
+        var selected = Rows.Where(r => r.IsSelected).ToList();
+        if (selected.Count == 0)
+            return;
+
+        foreach (var row in selected)
+        {
+            row.Entry.DesiredVisibility = DesiredVisibility.Shown;
+            row.DesiredVisibility = DesiredVisibility.Shown;
+        }
+
+        _pathListStore.Save(_entries);
+        var summary = await ApplyDesiredStateAsync(selected);
+        ShowNotification(summary);
+    }
+
+    [RelayCommand]
+    private async Task HideAllAsync()
+    {
+        foreach (var row in Rows)
+        {
+            row.Entry.DesiredVisibility = DesiredVisibility.Hidden;
+            row.DesiredVisibility = DesiredVisibility.Hidden;
+        }
+
+        _pathListStore.Save(_entries);
+        var summary = await ApplyDesiredStateAsync(Rows.ToList());
+        ShowNotification(summary);
+    }
+
+    [RelayCommand]
+    private async Task ShowAllAsync()
+    {
+        foreach (var row in Rows)
+        {
+            row.Entry.DesiredVisibility = DesiredVisibility.Shown;
+            row.DesiredVisibility = DesiredVisibility.Shown;
+        }
+
+        _pathListStore.Save(_entries);
+        var summary = await ApplyDesiredStateAsync(Rows.ToList());
+        ShowNotification(summary);
+    }
+
+    [RelayCommand]
+    private async Task ReapplyAllAsync()
+    {
+        var summary = await ApplyDesiredStateAsync(Rows.ToList());
+        ShowNotification(summary);
+    }
+
+    [RelayCommand]
+    private async Task ReloadAsync()
+    {
+        _settings = _settingsStore.Load();
+        _entries = _pathListStore.Load();
+        BuildRows();
+        await RunScanAsync();
+    }
+
+    [RelayCommand]
+    private void CancelScan()
+    {
+        _scanCts?.Cancel();
+    }
+
+    // --- Internals ---
+
+    private void BuildRows()
+    {
+        Rows.Clear();
+        foreach (var entry in _entries)
+        {
+            var row = new PathRowViewModel(entry);
+            if (PathNormalizer.TryNormalize(entry.Path, out _, out var family))
+                row.PathFamily = family;
+            Rows.Add(row);
+        }
+    }
+
+    private async Task RunScanAsync()
+    {
+        _scanCts?.Cancel();
+        _scanCts = new CancellationTokenSource();
+        var token = _scanCts.Token;
+
+        IsScanning = true;
+        ScanTotal = Rows.Count;
+        ScanProgress = 0;
+
+        var progress = new Progress<int>(p => ScanProgress = p);
+
+        try
+        {
+            await foreach (var result in _scanner.ScanAsync(_entries, progress, token))
+            {
+                var row = Rows.FirstOrDefault(r => r.Entry == result.Entry);
+                row?.ApplyScanResult(result.Inspection, result.Family);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Log.Information("Scan cancelled");
+        }
+        finally
+        {
+            IsScanning = false;
+        }
+    }
+
+    private async Task<string> ApplyDesiredStateAsync(List<PathRowViewModel> targets)
+    {
+        var applied = 0;
+        var missing = 0;
+        var errors = 0;
+
+        foreach (var row in targets)
+        {
+            try
+            {
+                var inspection = await Task.Run(() => _visibilityService.Inspect(row.Path));
+
+                if (inspection.ActualState == ActualState.Missing)
+                {
+                    missing++;
+                    row.ActualState = ActualState.Missing;
+                    continue;
+                }
+
+                if (inspection.ActualState is ActualState.Unreachable or ActualState.Error)
+                {
+                    errors++;
+                    row.ActualState = inspection.ActualState;
+                    continue;
+                }
+
+                await Task.Run(() =>
+                {
+                    if (row.Entry.DesiredVisibility == DesiredVisibility.Hidden)
+                        _visibilityService.Hide(row.Path);
+                    else
+                        _visibilityService.Show(row.Path);
+                });
+
+                var updated = await Task.Run(() => _visibilityService.Inspect(row.Path));
+                row.ApplyScanResult(updated, row.PathFamily);
+                applied++;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to apply desired state to {Path}", row.Path);
+                errors++;
+                row.ActualState = ActualState.Error;
+            }
+        }
+
+        var parts = new List<string>();
+        if (applied > 0) parts.Add($"{applied} applied");
+        if (missing > 0) parts.Add($"{missing} missing");
+        if (errors > 0) parts.Add($"{errors} errors");
+        return parts.Count > 0 ? string.Join(", ", parts) : "nothing to do";
+    }
+
+    private CancellationTokenSource? _notificationCts;
+
+    private void ShowNotification(string message)
+    {
+        Log.Information("Notification: {Message}", message);
+        Notification = message;
+
+        _notificationCts?.Cancel();
+        _notificationCts = new CancellationTokenSource();
+        var token = _notificationCts.Token;
+
+        _ = ClearNotificationAsync(token);
+    }
+
+    private async Task ClearNotificationAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(5000, token);
+            Notification = string.Empty;
+        }
+        catch (OperationCanceledException)
+        {
+            // Next notification replaced this one
+        }
+    }
 }
