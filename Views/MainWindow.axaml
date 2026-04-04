@@ -3,11 +3,11 @@
         xmlns:vm="using:PathHide.ViewModels"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="580"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="720"
         x:Class="PathHide.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="PathHide"
-        Width="960" Height="580"
+        Width="1280" Height="720"
         Background="#FAFBFC"
         DragDrop.AllowDrop="True">
 
