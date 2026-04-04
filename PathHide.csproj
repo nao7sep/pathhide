@@ -10,7 +10,7 @@
     <Description>A desktop utility that hides or shows specific files and directories and remembers the desired visibility state.</Description>
     <Authors>Yoshinao Inoguchi</Authors>
     <Copyright>Copyright © 2026 Yoshinao Inoguchi</Copyright>
-    <Version>1.0.0</Version>
+    <Version>0.1.0</Version>
     <RuntimeIdentifiers>osx-arm64;win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
