@@ -1,0 +1,11 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# IDE and editor
+.vs/
+.idea/
+*.user
+
+# macOS
+.DS_Store
