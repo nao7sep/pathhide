@@ -2,15 +2,123 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="PathHide.App"
              xmlns:local="using:PathHide"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             RequestedThemeVariant="Light">
 
     <Application.DataTemplates>
         <local:ViewLocator/>
     </Application.DataTemplates>
-  
+
+    <Application.Resources>
+        <!-- Calm palette -->
+        <Color x:Key="TealLight">#E0F2F1</Color>
+        <Color x:Key="TealMid">#4DB6AC</Color>
+        <Color x:Key="TealDark">#00897B</Color>
+
+        <Color x:Key="SlateLight">#ECEFF1</Color>
+        <Color x:Key="SlateMid">#90A4AE</Color>
+
+        <Color x:Key="CoralMid">#E57373</Color>
+        <Color x:Key="CoralDark">#D32F2F</Color>
+
+        <Color x:Key="AmberMid">#FFB74D</Color>
+        <Color x:Key="AmberDark">#F57C00</Color>
+
+        <Color x:Key="IndigoMid">#7986CB</Color>
+        <Color x:Key="IndigoDark">#3F51B5</Color>
+
+        <SolidColorBrush x:Key="TealLightBrush" Color="{StaticResource TealLight}"/>
+        <SolidColorBrush x:Key="TealMidBrush" Color="{StaticResource TealMid}"/>
+        <SolidColorBrush x:Key="TealDarkBrush" Color="{StaticResource TealDark}"/>
+        <SolidColorBrush x:Key="SlateLightBrush" Color="{StaticResource SlateLight}"/>
+        <SolidColorBrush x:Key="SlateMidBrush" Color="{StaticResource SlateMid}"/>
+        <SolidColorBrush x:Key="CoralMidBrush" Color="{StaticResource CoralMid}"/>
+        <SolidColorBrush x:Key="CoralDarkBrush" Color="{StaticResource CoralDark}"/>
+        <SolidColorBrush x:Key="AmberMidBrush" Color="{StaticResource AmberMid}"/>
+        <SolidColorBrush x:Key="AmberDarkBrush" Color="{StaticResource AmberDark}"/>
+        <SolidColorBrush x:Key="IndigoMidBrush" Color="{StaticResource IndigoMid}"/>
+        <SolidColorBrush x:Key="IndigoDarkBrush" Color="{StaticResource IndigoDark}"/>
+    </Application.Resources>
+
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+
+        <!-- Teal add buttons -->
+        <Style Selector="Button.add">
+            <Setter Property="Background" Value="{StaticResource TealMidBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.add:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource TealDarkBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Indigo action buttons -->
+        <Style Selector="Button.action">
+            <Setter Property="Background" Value="{StaticResource IndigoMidBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.action:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource IndigoDarkBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Amber batch buttons -->
+        <Style Selector="Button.batch">
+            <Setter Property="Background" Value="{StaticResource AmberMidBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.batch:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource AmberDarkBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Coral destructive buttons -->
+        <Style Selector="Button.destructive">
+            <Setter Property="Background" Value="{StaticResource CoralMidBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.destructive:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource CoralDarkBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Subtle utility buttons -->
+        <Style Selector="Button.utility">
+            <Setter Property="Background" Value="{StaticResource SlateLightBrush}"/>
+            <Setter Property="Foreground" Value="#37474F"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.utility:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource SlateMidBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Dialog accent button -->
+        <Style Selector="Button.accent">
+            <Setter Property="Background" Value="{StaticResource TealMidBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource TealDarkBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
     </Application.Styles>
 </Application>
