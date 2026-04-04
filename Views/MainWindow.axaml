@@ -23,35 +23,44 @@
                 BorderBrush="#E0E0E0"
                 BorderThickness="0,0,0,1"
                 Padding="12,8">
-            <WrapPanel Orientation="Horizontal">
-                <!-- Add group -->
-                <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
-                    <Button Content="Add Files" Classes="add" x:Name="AddFilesButton"/>
-                    <Button Content="Add Directories" Classes="add" x:Name="AddFoldersButton"/>
-                </StackPanel>
+            <DockPanel>
+                <!-- Settings (right-aligned) -->
+                <Button DockPanel.Dock="Right"
+                        Content="&#x2630;"
+                        Classes="utility"
+                        FontSize="16"
+                        Padding="8,4"
+                        x:Name="SettingsButton"
+                        IsVisible="{Binding HasSettings}"
+                        ToolTip.Tip="Settings"/>
 
-                <!-- Selected actions -->
-                <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
-                    <Button Content="Hide Selected" Classes="action" Command="{Binding HideSelectedCommand}"/>
-                    <Button Content="Show Selected" Classes="action" Command="{Binding ShowSelectedCommand}"/>
-                    <Button Content="Remove" Classes="destructive" Command="{Binding RemoveSelectedCommand}"/>
-                </StackPanel>
+                <!-- Action buttons (left, wrapping) -->
+                <WrapPanel Orientation="Horizontal">
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                        <Button Content="Add Files" Classes="add" x:Name="AddFilesButton"/>
+                        <Button Content="Add Directories" Classes="add" x:Name="AddFoldersButton"/>
+                    </StackPanel>
 
-                <!-- Batch actions -->
-                <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
-                    <Button Content="Hide All" Classes="batch" Command="{Binding HideAllCommand}"/>
-                    <Button Content="Show All" Classes="batch" Command="{Binding ShowAllCommand}"/>
-                    <Button Content="Reapply All" Classes="batch" Command="{Binding ReapplyAllCommand}"/>
-                </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                        <Button Content="Hide Selected" Classes="action" Command="{Binding HideSelectedCommand}"/>
+                        <Button Content="Show Selected" Classes="action" Command="{Binding ShowSelectedCommand}"/>
+                        <Button Content="Remove" Classes="destructive" Command="{Binding RemoveSelectedCommand}"/>
+                    </StackPanel>
 
-                <!-- Utility -->
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <Button Content="Reload" Classes="utility" Command="{Binding ReloadCommand}"/>
-                    <Button Content="Cancel Scan" Classes="destructive"
-                            Command="{Binding CancelScanCommand}"
-                            IsVisible="{Binding IsScanning}"/>
-                </StackPanel>
-            </WrapPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                        <Button Content="Hide All" Classes="batch" Command="{Binding HideAllCommand}"/>
+                        <Button Content="Show All" Classes="batch" Command="{Binding ShowAllCommand}"/>
+                        <Button Content="Reapply All" Classes="batch" Command="{Binding ReapplyAllCommand}"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <Button Content="Reload" Classes="utility" Command="{Binding ReloadCommand}"/>
+                        <Button Content="Cancel Scan" Classes="destructive"
+                                Command="{Binding CancelScanCommand}"
+                                IsVisible="{Binding IsScanning}"/>
+                    </StackPanel>
+                </WrapPanel>
+            </DockPanel>
         </Border>
 
         <!-- Status bar -->

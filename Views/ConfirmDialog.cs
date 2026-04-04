@@ -7,6 +7,7 @@ public sealed class ConfirmDialog : DialogBase
 {
     public ConfirmDialog(string title, string message)
     {
+        Width = 400;
         Title = title;
 
         SetContent(new TextBlock

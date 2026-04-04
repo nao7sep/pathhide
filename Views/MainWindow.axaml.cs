@@ -18,6 +18,7 @@ public partial class MainWindow : Window
 
         AddFilesButton.Click += OnAddFilesClick;
         AddFoldersButton.Click += OnAddFoldersClick;
+        SettingsButton.Click += OnSettingsClick;
 
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -37,6 +38,13 @@ public partial class MainWindow : Window
         var dialog = new ConfirmDialog(title, message);
         await dialog.ShowDialog(this);
         return dialog.Confirmed;
+    }
+
+    private async void OnSettingsClick(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new SettingsDialog(ViewModel.IsHiddenAndSystem);
+        await dialog.ShowDialog(this);
+        ViewModel.IsHiddenAndSystem = dialog.IsHiddenAndSystem;
     }
 
     private async void OnAddFilesClick(object? sender, RoutedEventArgs e)

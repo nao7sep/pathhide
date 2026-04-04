@@ -49,6 +49,13 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(StatusBarText))]
     private string _notification = string.Empty;
 
+    [ObservableProperty]
+    private bool _isHiddenAndSystem;
+
+    // Currently, all settings are Windows-only. When a cross-platform setting is added,
+    // change this to always return true and remove the platform check.
+    public bool HasSettings { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
     public string ProgressText => ScanTotal > 0
         ? $"Scanning {ScanProgress} / {ScanTotal}"
         : string.Empty;
@@ -85,6 +92,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _scanner = new PathScanner(_visibilityService);
 
         _settings = _settingsStore.Load();
+        _isHiddenAndSystem = _settings.WindowsHideMode == WindowsHideMode.HiddenAndSystem;
         _entries = _pathListStore.Load();
         BuildRows();
         _ = RunScanAsync();
@@ -253,6 +261,23 @@ public partial class MainWindowViewModel : ViewModelBase
         _entries = _pathListStore.Load();
         BuildRows();
         await RunScanAsync();
+    }
+
+    partial void OnIsHiddenAndSystemChanged(bool value)
+    {
+        _settings.WindowsHideMode = value
+            ? WindowsHideMode.HiddenAndSystem
+            : WindowsHideMode.HiddenOnly;
+
+        try
+        {
+            _settingsStore.Save(_settings);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed to save settings");
+            ShowNotification($"Failed to save settings: {ex.Message}");
+        }
     }
 
     [RelayCommand]

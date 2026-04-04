@@ -29,6 +29,7 @@ public partial class DialogBase : Window
                 Content = label,
                 Tag = tag,
                 MinWidth = 80,
+                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             };
 
             if (isDefault)
