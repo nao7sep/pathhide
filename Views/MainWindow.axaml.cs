@@ -1,8 +1,11 @@
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using MsBox.Avalonia;
+using MsBox.Avalonia.Enums;
 using PathHide.ViewModels;
 
 namespace PathHide.Views;
@@ -21,6 +24,21 @@ public partial class MainWindow : Window
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         KeyDown += OnKeyDown;
+
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object? sender, RoutedEventArgs e)
+    {
+        ViewModel.ConfirmAsync = ShowConfirmAsync;
+    }
+
+    private async Task<bool> ShowConfirmAsync(string title, string message)
+    {
+        var box = MessageBoxManager.GetMessageBoxStandard(
+            title, message, ButtonEnum.YesNo);
+        var result = await box.ShowWindowDialogAsync(this);
+        return result == ButtonResult.Yes;
     }
 
     private async void OnAddFilesClick(object? sender, RoutedEventArgs e)

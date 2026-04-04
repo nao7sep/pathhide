@@ -27,6 +27,11 @@ public partial class MainWindowViewModel : ViewModelBase
     private AppSettings _settings = new();
     private CancellationTokenSource? _scanCts;
 
+    /// <summary>
+    /// Set by the view to show a confirmation dialog. Returns true if confirmed.
+    /// </summary>
+    public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
+
     public ObservableCollection<PathRowViewModel> Rows { get; } = [];
 
     [ObservableProperty]
@@ -103,11 +108,21 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void RemoveSelected()
+    private async Task RemoveSelectedAsync()
     {
         var selected = Rows.Where(r => r.IsSelected).ToList();
         if (selected.Count == 0)
             return;
+
+        if (ConfirmAsync is not null)
+        {
+            var confirmed = await ConfirmAsync(
+                "Remove entries",
+                $"Remove {selected.Count} selected {(selected.Count == 1 ? "entry" : "entries")} from the list?");
+
+            if (!confirmed)
+                return;
+        }
 
         foreach (var row in selected)
             _entries.Remove(row.Entry);
