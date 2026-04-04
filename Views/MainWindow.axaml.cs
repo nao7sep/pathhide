@@ -24,6 +24,7 @@ public partial class MainWindow : Window
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         KeyDown += OnKeyDown;
+        PathGrid.SelectionChanged += OnGridSelectionChanged;
 
         Loaded += OnLoaded;
     }
@@ -83,6 +84,15 @@ public partial class MainWindow : Window
         ViewModel.AddPaths(paths);
     }
 #pragma warning restore CS0618
+
+    private void OnGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        foreach (PathRowViewModel row in e.RemovedItems)
+            row.IsSelected = false;
+
+        foreach (PathRowViewModel row in e.AddedItems)
+            row.IsSelected = true;
+    }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {

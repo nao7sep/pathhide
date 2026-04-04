@@ -55,7 +55,6 @@
                   IsReadOnly="True"
                   GridLinesVisibility="Horizontal">
             <DataGrid.Columns>
-                <DataGridCheckBoxColumn Header="&#x2713;" Binding="{Binding IsSelected}"/>
                 <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
                 <DataGridTextColumn Header="Family" Binding="{Binding PathFamily}" Width="70"/>
                 <DataGridTextColumn Header="Desired" Binding="{Binding DesiredVisibility}" Width="80"/>
