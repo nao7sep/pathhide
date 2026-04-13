@@ -26,6 +26,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private List<PathEntry> _entries = [];
     private AppSettings _settings = new();
     private CancellationTokenSource? _scanCts;
+    private bool _suppressHideModeSave;
 
     /// <summary>
     /// Set by the view to show a confirmation dialog. Returns true if confirmed.
@@ -92,7 +93,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _scanner = new PathScanner(_visibilityService);
 
         _settings = _settingsStore.Load();
-        _isHiddenAndSystem = _settings.WindowsHideMode == WindowsHideMode.HiddenAndSystem;
+        SyncHideModeFromSettings();
         _entries = _pathListStore.Load();
         SyncRowsWithEntries();
         _ = RunScanAsync();
@@ -104,7 +105,8 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         var added = 0;
         var skipped = 0;
-        var addedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var addedPaths = new List<string>();
+        var previousEntries = CloneEntries(_entries);
 
         foreach (var raw in paths)
         {
@@ -136,11 +138,11 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        if (!TrySavePaths())
+        if (!TryCommitPathChanges(previousEntries))
             return;
 
         var newRows = SyncRowsWithEntries()
-            .Where(r => addedPaths.Contains(r.Path))
+            .Where(r => addedPaths.Any(path => PathNormalizer.AreEqual(path, r.Path)))
             .ToList();
         var summary = await ApplyDesiredStateAsync(newRows);
         ShowNotification($"{added} added, {skipped} skipped — {summary}");
@@ -152,6 +154,8 @@ public partial class MainWindowViewModel : ViewModelBase
         var selected = Rows.Where(r => r.IsSelected).ToList();
         if (selected.Count == 0)
             return;
+
+        var previousEntries = CloneEntries(_entries);
 
         if (ConfirmAsync is not null)
         {
@@ -166,7 +170,7 @@ public partial class MainWindowViewModel : ViewModelBase
         foreach (var row in selected)
             _entries.Remove(row.Entry);
 
-        if (!TrySavePaths())
+        if (!TryCommitPathChanges(previousEntries))
             return;
 
         SyncRowsWithEntries();
@@ -182,13 +186,15 @@ public partial class MainWindowViewModel : ViewModelBase
         if (selected.Count == 0)
             return;
 
+        var previousEntries = CloneEntries(_entries);
+
         foreach (var row in selected)
         {
             row.Entry.DesiredVisibility = DesiredVisibility.Hidden;
             row.DesiredVisibility = DesiredVisibility.Hidden;
         }
 
-        if (!TrySavePaths())
+        if (!TryCommitPathChanges(previousEntries))
             return;
 
         var summary = await ApplyDesiredStateAsync(selected);
@@ -202,13 +208,15 @@ public partial class MainWindowViewModel : ViewModelBase
         if (selected.Count == 0)
             return;
 
+        var previousEntries = CloneEntries(_entries);
+
         foreach (var row in selected)
         {
             row.Entry.DesiredVisibility = DesiredVisibility.Shown;
             row.DesiredVisibility = DesiredVisibility.Shown;
         }
 
-        if (!TrySavePaths())
+        if (!TryCommitPathChanges(previousEntries))
             return;
 
         var summary = await ApplyDesiredStateAsync(selected);
@@ -218,13 +226,15 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task HideAllAsync()
     {
+        var previousEntries = CloneEntries(_entries);
+
         foreach (var row in Rows)
         {
             row.Entry.DesiredVisibility = DesiredVisibility.Hidden;
             row.DesiredVisibility = DesiredVisibility.Hidden;
         }
 
-        if (!TrySavePaths())
+        if (!TryCommitPathChanges(previousEntries))
             return;
 
         var summary = await ApplyDesiredStateAsync(Rows.ToList());
@@ -234,13 +244,15 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task ShowAllAsync()
     {
+        var previousEntries = CloneEntries(_entries);
+
         foreach (var row in Rows)
         {
             row.Entry.DesiredVisibility = DesiredVisibility.Shown;
             row.DesiredVisibility = DesiredVisibility.Shown;
         }
 
-        if (!TrySavePaths())
+        if (!TryCommitPathChanges(previousEntries))
             return;
 
         var summary = await ApplyDesiredStateAsync(Rows.ToList());
@@ -258,6 +270,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task ReloadAsync()
     {
         _settings = _settingsStore.Load();
+        SyncHideModeFromSettings();
         _entries = _pathListStore.Load();
         SyncRowsWithEntries();
         await RunScanAsync();
@@ -265,6 +278,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
     partial void OnIsHiddenAndSystemChanged(bool value)
     {
+        if (_suppressHideModeSave)
+            return;
+
+        var previousMode = _settings.WindowsHideMode;
         _settings.WindowsHideMode = value
             ? WindowsHideMode.HiddenAndSystem
             : WindowsHideMode.HiddenOnly;
@@ -275,6 +292,16 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            _settings.WindowsHideMode = previousMode;
+            _suppressHideModeSave = true;
+            try
+            {
+                IsHiddenAndSystem = previousMode == WindowsHideMode.HiddenAndSystem;
+            }
+            finally
+            {
+                _suppressHideModeSave = false;
+            }
             Log.Error(ex, "Failed to save settings");
             ShowNotification($"Failed to save settings: {ex.Message}");
         }
@@ -303,26 +330,64 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    private bool TryCommitPathChanges(List<PathEntry> previousEntries)
+    {
+        if (TrySavePaths())
+            return true;
+
+        _entries = previousEntries;
+        SyncRowsWithEntries();
+        return false;
+    }
+
+    private static List<PathEntry> CloneEntries(IEnumerable<PathEntry> entries)
+    {
+        return entries
+            .Select(entry => new PathEntry
+            {
+                Path = entry.Path,
+                DesiredVisibility = entry.DesiredVisibility,
+            })
+            .ToList();
+    }
+
+    private void SyncHideModeFromSettings()
+    {
+        var isHiddenAndSystem = _settings.WindowsHideMode == WindowsHideMode.HiddenAndSystem;
+        if (IsHiddenAndSystem == isHiddenAndSystem)
+            return;
+
+        _suppressHideModeSave = true;
+        try
+        {
+            IsHiddenAndSystem = isHiddenAndSystem;
+        }
+        finally
+        {
+            _suppressHideModeSave = false;
+        }
+    }
+
     private List<PathRowViewModel> SyncRowsWithEntries()
     {
-        var existingRowsByKey = new Dictionary<string, PathRowViewModel>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var row in Rows)
-            existingRowsByKey[GetPathKey(row.Path)] = row;
+        var remainingRows = Rows.ToList();
 
         var desiredRows = new List<PathRowViewModel>(_entries.Count);
         var addedRows = new List<PathRowViewModel>();
 
         foreach (var entry in _entries)
         {
-            var key = GetPathKey(entry.Path);
-            if (!existingRowsByKey.Remove(key, out var row))
+            var existingIndex = remainingRows.FindIndex(row => PathNormalizer.AreEqual(row.Path, entry.Path));
+            PathRowViewModel row;
+            if (existingIndex < 0)
             {
                 row = new PathRowViewModel(entry);
                 addedRows.Add(row);
             }
             else
             {
+                row = remainingRows[existingIndex];
+                remainingRows.RemoveAt(existingIndex);
                 row.SyncEntry(entry);
             }
 
@@ -358,29 +423,33 @@ public partial class MainWindowViewModel : ViewModelBase
         return addedRows;
     }
 
-    private static string GetPathKey(string path)
-    {
-        return PathNormalizer.TryNormalize(path, out var normalized, out _)
-            ? normalized
-            : path;
-    }
-
     private async Task RunScanAsync()
     {
-        _scanCts?.Cancel();
-        _scanCts = new CancellationTokenSource();
-        var token = _scanCts.Token;
+        var previousScanCts = _scanCts;
+        previousScanCts?.Cancel();
+        previousScanCts?.Dispose();
+
+        var scanCts = new CancellationTokenSource();
+        _scanCts = scanCts;
+        var token = scanCts.Token;
 
         IsScanning = true;
         ScanTotal = Rows.Count;
         ScanProgress = 0;
 
-        var progress = new Progress<int>(p => ScanProgress = p);
+        var progress = new Progress<int>(p =>
+        {
+            if (ReferenceEquals(_scanCts, scanCts))
+                ScanProgress = p;
+        });
 
         try
         {
             await foreach (var result in _scanner.ScanAsync(_entries, progress, token))
             {
+                if (!ReferenceEquals(_scanCts, scanCts))
+                    return;
+
                 var row = Rows.FirstOrDefault(r => r.Entry == result.Entry);
                 row?.ApplyScanResult(result.Inspection, result.Family);
             }
@@ -391,8 +460,14 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         finally
         {
-            IsScanning = false;
-            OnPropertyChanged(nameof(StatusBarText));
+            if (ReferenceEquals(_scanCts, scanCts))
+            {
+                _scanCts = null;
+                IsScanning = false;
+                OnPropertyChanged(nameof(StatusBarText));
+            }
+
+            scanCts.Dispose();
         }
     }
 

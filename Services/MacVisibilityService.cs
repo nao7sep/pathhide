@@ -54,22 +54,27 @@ public sealed class MacVisibilityService : IVisibilityService
     private static bool IsFinderHidden(string path)
     {
         // stat -f %Xf gives hex flags on macOS; UF_HIDDEN = 0x8000
-        var psi = new ProcessStartInfo("stat", $"-f %Xf \"{path}\"")
+        var psi = new ProcessStartInfo("stat")
         {
             RedirectStandardOutput = true,
+            RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        psi.ArgumentList.Add("-f");
+        psi.ArgumentList.Add("%Xf");
+        psi.ArgumentList.Add(path);
 
         using var process = Process.Start(psi);
         if (process is null)
             throw new InvalidOperationException("Failed to start stat");
 
         var output = process.StandardOutput.ReadToEnd().Trim();
+        var stderr = process.StandardError.ReadToEnd().Trim();
         process.WaitForExit();
 
         if (process.ExitCode != 0)
-            throw new InvalidOperationException($"stat exited with code {process.ExitCode}");
+            throw new InvalidOperationException($"stat exited with code {process.ExitCode}: {stderr}");
 
         var flags = Convert.ToUInt32(output, 16);
         return (flags & 0x8000) != 0;
@@ -77,13 +82,17 @@ public sealed class MacVisibilityService : IVisibilityService
 
     private static void RunChflags(string flag, string path)
     {
-        var symlinkFlag = IsSymlink(path) ? "-h " : string.Empty;
-        var psi = new ProcessStartInfo("chflags", $"{symlinkFlag}{flag} \"{path}\"")
+        var psi = new ProcessStartInfo("chflags")
         {
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        if (IsSymlink(path))
+            psi.ArgumentList.Add("-h");
+
+        psi.ArgumentList.Add(flag);
+        psi.ArgumentList.Add(path);
 
         using var process = Process.Start(psi);
         if (process is null)

@@ -52,10 +52,7 @@ public static class PathNormalizer
 
     private static string NormalizePosix(string input)
     {
-        // Canonical separator is /; input already uses / since it started with /
-        // but could contain mixed separators from a paste
-        var result = input.Replace('\\', '/');
-        return StripTrailingSeparator(result, '/');
+        return StripTrailingSeparator(input, '/');
     }
 
     private static string NormalizeWindows(string input)
@@ -106,6 +103,20 @@ public static class PathNormalizer
 
     public static bool AreEqual(string a, string b)
     {
-        return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        var aIsNormalized = TryNormalize(a, out var normalizedA, out var familyA);
+        var bIsNormalized = TryNormalize(b, out var normalizedB, out var familyB);
+
+        if (aIsNormalized && bIsNormalized)
+        {
+            if (familyA != familyB)
+                return false;
+
+            return string.Equals(
+                normalizedA,
+                normalizedB,
+                familyA == PathFamily.Posix ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
+        }
+
+        return string.Equals(a, b, StringComparison.Ordinal);
     }
 }
