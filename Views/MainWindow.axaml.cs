@@ -71,24 +71,22 @@ public partial class MainWindow : Window
             await ViewModel.AddPathsAsync(folders.Select(f => f.Path.LocalPath));
     }
 
-#pragma warning disable CS0618 // DragDrop API transition — suppress until Avalonia stabilizes new API
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        e.DragEffects = e.Data.Contains(DataFormats.Files)
+        e.DragEffects = e.DataTransfer.Contains(DataFormat.File)
             ? DragDropEffects.Copy
             : DragDropEffects.None;
     }
 
     private async void OnDrop(object? sender, DragEventArgs e)
     {
-        var items = e.Data.GetFiles();
+        var items = e.DataTransfer.TryGetFiles();
         if (items is null)
             return;
 
         var paths = items.Select(i => i.Path.LocalPath);
         await ViewModel.AddPathsAsync(paths);
     }
-#pragma warning restore CS0618
 
     private void OnGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
