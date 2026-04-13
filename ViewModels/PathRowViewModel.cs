@@ -1,3 +1,4 @@
+using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PathHide.Models;
 
@@ -5,7 +6,7 @@ namespace PathHide.ViewModels;
 
 public partial class PathRowViewModel : ObservableObject
 {
-    public PathEntry Entry { get; }
+    public PathEntry Entry { get; private set; }
 
     public string Path => Entry.Path;
 
@@ -28,6 +29,17 @@ public partial class PathRowViewModel : ObservableObject
     {
         Entry = entry;
         _desiredVisibility = entry.DesiredVisibility;
+    }
+
+    public void SyncEntry(PathEntry entry)
+    {
+        var previousPath = Entry.Path;
+        Entry = entry;
+
+        if (!string.Equals(previousPath, entry.Path, StringComparison.Ordinal))
+            OnPropertyChanged(nameof(Path));
+
+        DesiredVisibility = entry.DesiredVisibility;
     }
 
     public void ApplyScanResult(Services.PathInspection inspection, PathFamily family)

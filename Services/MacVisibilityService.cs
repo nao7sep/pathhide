@@ -77,7 +77,8 @@ public sealed class MacVisibilityService : IVisibilityService
 
     private static void RunChflags(string flag, string path)
     {
-        var psi = new ProcessStartInfo("chflags", $"{flag} \"{path}\"")
+        var symlinkFlag = IsSymlink(path) ? "-h " : string.Empty;
+        var psi = new ProcessStartInfo("chflags", $"{symlinkFlag}{flag} \"{path}\"")
         {
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -93,6 +94,20 @@ public sealed class MacVisibilityService : IVisibilityService
 
         if (process.ExitCode != 0)
             throw new InvalidOperationException($"chflags {flag} failed: {stderr.Trim()}");
+    }
+
+    private static bool IsSymlink(string path)
+    {
+        try
+        {
+            var attrs = File.GetAttributes(path);
+            return attrs.HasFlag(FileAttributes.ReparsePoint);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug(ex, "Cannot determine whether {Path} is a symlink", path);
+            return false;
+        }
     }
 
     private static bool ExistsAnything(string path)

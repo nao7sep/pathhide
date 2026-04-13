@@ -94,7 +94,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _settings = _settingsStore.Load();
         _isHiddenAndSystem = _settings.WindowsHideMode == WindowsHideMode.HiddenAndSystem;
         _entries = _pathListStore.Load();
-        BuildRows();
+        SyncRowsWithEntries();
         _ = RunScanAsync();
     }
 
@@ -139,9 +139,9 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!TrySavePaths())
             return;
 
-        BuildRows();
-
-        var newRows = Rows.Where(r => addedPaths.Contains(r.Path)).ToList();
+        var newRows = SyncRowsWithEntries()
+            .Where(r => addedPaths.Contains(r.Path))
+            .ToList();
         var summary = await ApplyDesiredStateAsync(newRows);
         ShowNotification($"{added} added, {skipped} skipped — {summary}");
     }
@@ -169,7 +169,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (!TrySavePaths())
             return;
 
-        BuildRows();
+        SyncRowsWithEntries();
         ShowNotification($"{selected.Count} removed");
     }
 
@@ -259,7 +259,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         _settings = _settingsStore.Load();
         _entries = _pathListStore.Load();
-        BuildRows();
+        SyncRowsWithEntries();
         await RunScanAsync();
     }
 
@@ -303,18 +303,66 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private void BuildRows()
+    private List<PathRowViewModel> SyncRowsWithEntries()
     {
-        Rows.Clear();
+        var existingRowsByKey = new Dictionary<string, PathRowViewModel>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in Rows)
+            existingRowsByKey[GetPathKey(row.Path)] = row;
+
+        var desiredRows = new List<PathRowViewModel>(_entries.Count);
+        var addedRows = new List<PathRowViewModel>();
+
         foreach (var entry in _entries)
         {
-            var row = new PathRowViewModel(entry);
+            var key = GetPathKey(entry.Path);
+            if (!existingRowsByKey.Remove(key, out var row))
+            {
+                row = new PathRowViewModel(entry);
+                addedRows.Add(row);
+            }
+            else
+            {
+                row.SyncEntry(entry);
+            }
+
             if (PathNormalizer.TryNormalize(entry.Path, out _, out var family))
                 row.PathFamily = family;
-            Rows.Add(row);
+            else
+                row.PathFamily = default;
+
+            desiredRows.Add(row);
+        }
+
+        var desiredSet = new HashSet<PathRowViewModel>(desiredRows);
+        for (var i = Rows.Count - 1; i >= 0; i--)
+        {
+            if (!desiredSet.Contains(Rows[i]))
+                Rows.RemoveAt(i);
+        }
+
+        for (var i = 0; i < desiredRows.Count; i++)
+        {
+            var desiredRow = desiredRows[i];
+            if (i < Rows.Count && ReferenceEquals(Rows[i], desiredRow))
+                continue;
+
+            var existingIndex = Rows.IndexOf(desiredRow);
+            if (existingIndex >= 0)
+                Rows.Move(existingIndex, i);
+            else
+                Rows.Insert(i, desiredRow);
         }
 
         OnPropertyChanged(nameof(StatusBarText));
+        return addedRows;
+    }
+
+    private static string GetPathKey(string path)
+    {
+        return PathNormalizer.TryNormalize(path, out var normalized, out _)
+            ? normalized
+            : path;
     }
 
     private async Task RunScanAsync()
