@@ -1,16 +1,20 @@
 using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 
 namespace PathHide.Views;
 
 public partial class DialogBase : Window
 {
+    private Control? _initialFocusControl;
+
     public string? ResultTag { get; private set; }
 
     public DialogBase()
     {
         InitializeComponent();
+        Opened += OnOpened;
     }
 
     protected void SetContent(Control content)
@@ -18,9 +22,10 @@ public partial class DialogBase : Window
         DialogContent.Content = content;
     }
 
-    protected void SetButtons(IEnumerable<(string Label, string Tag, bool IsDefault)> buttons)
+    protected IReadOnlyDictionary<string, Button> SetButtons(IEnumerable<(string Label, string Tag, bool IsDefault)> buttons)
     {
         ButtonPanel.Children.Clear();
+        var createdButtons = new Dictionary<string, Button>();
 
         foreach (var (label, tag, isDefault) in buttons)
         {
@@ -37,7 +42,23 @@ public partial class DialogBase : Window
 
             button.Click += OnButtonClick;
             ButtonPanel.Children.Add(button);
+            createdButtons[tag] = button;
         }
+
+        return createdButtons;
+    }
+
+    protected void SetInitialFocus(Control control)
+    {
+        _initialFocusControl = control;
+    }
+
+    private void OnOpened(object? sender, System.EventArgs e)
+    {
+        if (_initialFocusControl is null)
+            return;
+
+        Dispatcher.UIThread.Post(() => _initialFocusControl.Focus());
     }
 
     private void OnButtonClick(object? sender, RoutedEventArgs e)

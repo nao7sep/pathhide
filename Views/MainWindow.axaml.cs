@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using PathHide.ViewModels;
 
 namespace PathHide.Views;
@@ -31,6 +32,13 @@ public partial class MainWindow : Window
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
         ViewModel.ConfirmAsync = ShowConfirmAsync;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (ViewModel.Rows.Count > 0)
+                PathGrid.Focus();
+            else
+                AddFilesButton.Focus();
+        });
     }
 
     private async Task<bool> ShowConfirmAsync(string title, string message)

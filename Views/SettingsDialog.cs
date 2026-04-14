@@ -42,5 +42,6 @@ public sealed class SettingsDialog : DialogBase
             ("Save", "save", true),
             ("Cancel", "cancel", false),
         ]);
+        SetInitialFocus(_hiddenAndSystemCheckBox);
     }
 }

@@ -17,10 +17,11 @@ public sealed class ConfirmDialog : DialogBase
             FontSize = 14,
         });
 
-        SetButtons([
+        var buttons = SetButtons([
             ("Yes", "yes", true),
             ("No", "no", false),
         ]);
+        SetInitialFocus(buttons["no"]);
     }
 
     public bool Confirmed => ResultTag == "yes";
