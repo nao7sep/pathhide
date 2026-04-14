@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 
@@ -15,6 +16,7 @@ public partial class DialogBase : Window
     {
         InitializeComponent();
         Opened += OnOpened;
+        KeyDown += OnKeyDown;
     }
 
     protected void SetContent(Control content)
@@ -59,6 +61,12 @@ public partial class DialogBase : Window
             return;
 
         Dispatcher.UIThread.Post(() => _initialFocusControl.Focus());
+    }
+
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+            Close();
     }
 
     private void OnButtonClick(object? sender, RoutedEventArgs e)

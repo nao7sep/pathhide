@@ -580,6 +580,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var applied = 0;
         var missing = 0;
         var errors = 0;
+        var retryBucket = new List<PathRowViewModel>();
 
         foreach (var row in targets)
         {
@@ -613,11 +614,62 @@ public partial class MainWindowViewModel : ViewModelBase
                 row.ApplyScanResult(updated, row.PathFamily);
                 applied++;
             }
+            catch (UnauthorizedAccessException)
+            {
+                retryBucket.Add(row);
+            }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to apply desired state to {Path}", row.Path);
                 errors++;
-                row.ActualState = ActualState.Error;
+                var recheck = await Task.Run(() => _visibilityService.Inspect(row.Path));
+                row.ApplyScanResult(recheck, row.PathFamily);
+            }
+        }
+
+        int? elevationExitCode = null;
+
+        if (retryBucket.Count > 0 && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            var toHide = retryBucket
+                .Where(r => r.Entry.DesiredVisibility == DesiredVisibility.Hidden
+                         && _settings.WindowsHideMode == WindowsHideMode.HiddenOnly)
+                .Select(r => r.Path)
+                .ToList();
+
+            var toHideWithSystem = retryBucket
+                .Where(r => r.Entry.DesiredVisibility == DesiredVisibility.Hidden
+                         && _settings.WindowsHideMode == WindowsHideMode.HiddenAndSystem)
+                .Select(r => r.Path)
+                .ToList();
+
+            var toShow = retryBucket
+                .Where(r => r.Entry.DesiredVisibility == DesiredVisibility.Shown)
+                .Select(r => r.Path)
+                .ToList();
+
+            elevationExitCode = await Services.WindowsElevatedApplicator.ApplyAsync(toHide, toHideWithSystem, toShow);
+
+            foreach (var row in retryBucket)
+            {
+                var recheck = await Task.Run(() => _visibilityService.Inspect(row.Path));
+                row.ApplyScanResult(recheck, row.PathFamily);
+
+                var matched = row.Entry.DesiredVisibility == DesiredVisibility.Hidden
+                    ? recheck.ActualState == ActualState.Hidden
+                    : recheck.ActualState == ActualState.Visible;
+
+                if (matched) applied++;
+                else errors++;
+            }
+        }
+        else
+        {
+            foreach (var row in retryBucket)
+            {
+                errors++;
+                var recheck = await Task.Run(() => _visibilityService.Inspect(row.Path));
+                row.ApplyScanResult(recheck, row.PathFamily);
             }
         }
 
@@ -625,6 +677,10 @@ public partial class MainWindowViewModel : ViewModelBase
         if (applied > 0) parts.Add($"{applied} applied");
         if (missing > 0) parts.Add($"{missing} missing");
         if (errors > 0) parts.Add($"{errors} errors");
+
+        if (elevationExitCode is not null and not 0)
+            parts.Add($"elevated process returned {elevationExitCode}");
+
         return parts.Count > 0 ? string.Join(", ", parts) : "nothing to do";
     }
 

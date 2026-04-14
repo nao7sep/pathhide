@@ -24,15 +24,18 @@
                 BorderThickness="0,0,0,1"
                 Padding="12,8">
             <DockPanel>
-                <!-- Settings (right-aligned) -->
-                <Button DockPanel.Dock="Right"
-                        Content="&#x2630;"
-                        Classes="utility"
-                        FontSize="16"
-                        Padding="8,4"
-                        x:Name="SettingsButton"
-                        IsVisible="{Binding HasSettings}"
-                        ToolTip.Tip="Settings"/>
+                <!-- Settings + About (right-aligned) -->
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            Spacing="4">
+                    <Button Content="Settings"
+                            Classes="utility"
+                            x:Name="SettingsButton"
+                            IsVisible="{Binding HasSettings}"/>
+                    <Button Content="About"
+                            Classes="utility"
+                            x:Name="AboutButton"/>
+                </StackPanel>
 
                 <!-- Action buttons (left, wrapping) -->
                 <WrapPanel Orientation="Horizontal">
