@@ -8,6 +8,7 @@ public sealed class SettingsDialog : DialogBase
 {
     private readonly CheckBox _hiddenAndSystemCheckBox;
 
+    public bool Accepted => ResultTag == "save";
     public bool IsHiddenAndSystem => _hiddenAndSystemCheckBox.IsChecked == true;
 
     public SettingsDialog(bool isHiddenAndSystem)
@@ -37,6 +38,9 @@ public sealed class SettingsDialog : DialogBase
         };
 
         SetContent(panel);
-        SetButtons([("Close", "close", true)]);
+        SetButtons([
+            ("Save", "save", true),
+            ("Cancel", "cancel", false),
+        ]);
     }
 }

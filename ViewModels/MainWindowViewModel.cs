@@ -26,6 +26,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private List<PathEntry> _entries = [];
     private AppSettings _settings = new();
     private CancellationTokenSource? _scanCts;
+    private Task _scanTask = Task.CompletedTask;
     private bool _suppressHideModeSave;
 
     /// <summary>
@@ -73,12 +74,14 @@ public partial class MainWindowViewModel : ViewModelBase
         var hidden = Rows.Count(r => r.ActualState == ActualState.Hidden);
         var visible = Rows.Count(r => r.ActualState == ActualState.Visible);
         var missing = Rows.Count(r => r.ActualState == ActualState.Missing);
+        var pending = Rows.Count(r => r.ActualState == ActualState.Unknown);
         var problems = Rows.Count(r => r.ActualState is ActualState.Unreachable or ActualState.Error);
 
         var parts = new List<string> { $"{Rows.Count} entries" };
         if (hidden > 0) parts.Add($"{hidden} hidden");
         if (visible > 0) parts.Add($"{visible} visible");
         if (missing > 0) parts.Add($"{missing} missing");
+        if (pending > 0) parts.Add($"{pending} pending");
         if (problems > 0) parts.Add($"{problems} problems");
         return string.Join("  ·  ", parts);
     }
@@ -96,85 +99,101 @@ public partial class MainWindowViewModel : ViewModelBase
         SyncHideModeFromSettings();
         _entries = _pathListStore.Load();
         SyncRowsWithEntries();
-        _ = RunScanAsync();
+        StartBackgroundScan();
     }
 
     // --- Add / Remove ---
 
     public async Task AddPathsAsync(IEnumerable<string> paths)
     {
+        var scanWasActive = await PauseScanningAsync();
         var added = 0;
         var skipped = 0;
         var addedPaths = new List<string>();
         var previousEntries = CloneEntries(_entries);
 
-        foreach (var raw in paths)
+        try
         {
-            if (!PathNormalizer.TryNormalize(raw, out var normalized, out _))
+            foreach (var raw in paths)
             {
-                Log.Warning("Rejected path (not absolute): {Path}", raw);
-                skipped++;
-                continue;
+                if (!PathNormalizer.TryNormalize(raw, out var normalized, out _))
+                {
+                    Log.Warning("Rejected path (not absolute): {Path}", raw);
+                    skipped++;
+                    continue;
+                }
+
+                if (_entries.Any(e => PathNormalizer.AreEqual(e.Path, normalized)))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                _entries.Add(new PathEntry
+                {
+                    Path = normalized,
+                    DesiredVisibility = DesiredVisibility.Hidden,
+                });
+                addedPaths.Add(normalized);
+                added++;
             }
 
-            if (_entries.Any(e => PathNormalizer.AreEqual(e.Path, normalized)))
+            if (added == 0)
             {
-                skipped++;
-                continue;
+                ShowNotification($"{added} added, {skipped} skipped");
+                return;
             }
 
-            _entries.Add(new PathEntry
-            {
-                Path = normalized,
-                DesiredVisibility = DesiredVisibility.Hidden,
-            });
-            addedPaths.Add(normalized);
-            added++;
-        }
+            if (!TryCommitPathChanges(previousEntries))
+                return;
 
-        if (added == 0)
+            var newRows = SyncRowsWithEntries()
+                .Where(r => addedPaths.Any(path => PathNormalizer.AreEqual(path, r.Path)))
+                .ToList();
+            var summary = await ApplyDesiredStateAsync(newRows);
+            ShowNotification($"{added} added, {skipped} skipped — {summary}");
+        }
+        finally
         {
-            ShowNotification($"{added} added, {skipped} skipped");
-            return;
+            ResumeScanningIfNeeded(scanWasActive);
         }
-
-        if (!TryCommitPathChanges(previousEntries))
-            return;
-
-        var newRows = SyncRowsWithEntries()
-            .Where(r => addedPaths.Any(path => PathNormalizer.AreEqual(path, r.Path)))
-            .ToList();
-        var summary = await ApplyDesiredStateAsync(newRows);
-        ShowNotification($"{added} added, {skipped} skipped — {summary}");
     }
 
     [RelayCommand]
     private async Task RemoveSelectedAsync()
     {
+        var scanWasActive = await PauseScanningAsync();
         var selected = Rows.Where(r => r.IsSelected).ToList();
-        if (selected.Count == 0)
-            return;
-
         var previousEntries = CloneEntries(_entries);
 
-        if (ConfirmAsync is not null)
+        try
         {
-            var confirmed = await ConfirmAsync(
-                "Remove entries",
-                $"Remove {selected.Count} selected {(selected.Count == 1 ? "entry" : "entries")} from the list?");
-
-            if (!confirmed)
+            if (selected.Count == 0)
                 return;
+
+            if (ConfirmAsync is not null)
+            {
+                var confirmed = await ConfirmAsync(
+                    "Remove entries",
+                    $"Remove {selected.Count} selected {(selected.Count == 1 ? "entry" : "entries")} from the list?");
+
+                if (!confirmed)
+                    return;
+            }
+
+            foreach (var row in selected)
+                _entries.Remove(row.Entry);
+
+            if (!TryCommitPathChanges(previousEntries))
+                return;
+
+            SyncRowsWithEntries();
+            ShowNotification($"{selected.Count} removed");
         }
-
-        foreach (var row in selected)
-            _entries.Remove(row.Entry);
-
-        if (!TryCommitPathChanges(previousEntries))
-            return;
-
-        SyncRowsWithEntries();
-        ShowNotification($"{selected.Count} removed");
+        finally
+        {
+            ResumeScanningIfNeeded(scanWasActive);
+        }
     }
 
     // --- Hide / Show ---
@@ -182,98 +201,140 @@ public partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task HideSelectedAsync()
     {
+        var scanWasActive = await PauseScanningAsync();
         var selected = Rows.Where(r => r.IsSelected).ToList();
-        if (selected.Count == 0)
-            return;
-
         var previousEntries = CloneEntries(_entries);
 
-        foreach (var row in selected)
+        try
         {
-            row.Entry.DesiredVisibility = DesiredVisibility.Hidden;
-            row.DesiredVisibility = DesiredVisibility.Hidden;
+            if (selected.Count == 0)
+                return;
+
+            foreach (var row in selected)
+            {
+                row.Entry.DesiredVisibility = DesiredVisibility.Hidden;
+                row.DesiredVisibility = DesiredVisibility.Hidden;
+            }
+
+            if (!TryCommitPathChanges(previousEntries))
+                return;
+
+            var summary = await ApplyDesiredStateAsync(selected);
+            ShowNotification(summary);
         }
-
-        if (!TryCommitPathChanges(previousEntries))
-            return;
-
-        var summary = await ApplyDesiredStateAsync(selected);
-        ShowNotification(summary);
+        finally
+        {
+            ResumeScanningIfNeeded(scanWasActive);
+        }
     }
 
     [RelayCommand]
     private async Task ShowSelectedAsync()
     {
+        var scanWasActive = await PauseScanningAsync();
         var selected = Rows.Where(r => r.IsSelected).ToList();
-        if (selected.Count == 0)
-            return;
-
         var previousEntries = CloneEntries(_entries);
 
-        foreach (var row in selected)
+        try
         {
-            row.Entry.DesiredVisibility = DesiredVisibility.Shown;
-            row.DesiredVisibility = DesiredVisibility.Shown;
+            if (selected.Count == 0)
+                return;
+
+            foreach (var row in selected)
+            {
+                row.Entry.DesiredVisibility = DesiredVisibility.Shown;
+                row.DesiredVisibility = DesiredVisibility.Shown;
+            }
+
+            if (!TryCommitPathChanges(previousEntries))
+                return;
+
+            var summary = await ApplyDesiredStateAsync(selected);
+            ShowNotification(summary);
         }
-
-        if (!TryCommitPathChanges(previousEntries))
-            return;
-
-        var summary = await ApplyDesiredStateAsync(selected);
-        ShowNotification(summary);
+        finally
+        {
+            ResumeScanningIfNeeded(scanWasActive);
+        }
     }
 
     [RelayCommand]
     private async Task HideAllAsync()
     {
+        var scanWasActive = await PauseScanningAsync();
         var previousEntries = CloneEntries(_entries);
 
-        foreach (var row in Rows)
+        try
         {
-            row.Entry.DesiredVisibility = DesiredVisibility.Hidden;
-            row.DesiredVisibility = DesiredVisibility.Hidden;
+            foreach (var row in Rows)
+            {
+                row.Entry.DesiredVisibility = DesiredVisibility.Hidden;
+                row.DesiredVisibility = DesiredVisibility.Hidden;
+            }
+
+            if (!TryCommitPathChanges(previousEntries))
+                return;
+
+            var summary = await ApplyDesiredStateAsync(Rows.ToList());
+            ShowNotification(summary);
         }
-
-        if (!TryCommitPathChanges(previousEntries))
-            return;
-
-        var summary = await ApplyDesiredStateAsync(Rows.ToList());
-        ShowNotification(summary);
+        finally
+        {
+            ResumeScanningIfNeeded(scanWasActive);
+        }
     }
 
     [RelayCommand]
     private async Task ShowAllAsync()
     {
+        var scanWasActive = await PauseScanningAsync();
         var previousEntries = CloneEntries(_entries);
 
-        foreach (var row in Rows)
+        try
         {
-            row.Entry.DesiredVisibility = DesiredVisibility.Shown;
-            row.DesiredVisibility = DesiredVisibility.Shown;
+            foreach (var row in Rows)
+            {
+                row.Entry.DesiredVisibility = DesiredVisibility.Shown;
+                row.DesiredVisibility = DesiredVisibility.Shown;
+            }
+
+            if (!TryCommitPathChanges(previousEntries))
+                return;
+
+            var summary = await ApplyDesiredStateAsync(Rows.ToList());
+            ShowNotification(summary);
         }
-
-        if (!TryCommitPathChanges(previousEntries))
-            return;
-
-        var summary = await ApplyDesiredStateAsync(Rows.ToList());
-        ShowNotification(summary);
+        finally
+        {
+            ResumeScanningIfNeeded(scanWasActive);
+        }
     }
 
     [RelayCommand]
     private async Task ReapplyAllAsync()
     {
-        var summary = await ApplyDesiredStateAsync(Rows.ToList());
-        ShowNotification(summary);
+        var scanWasActive = await PauseScanningAsync();
+        try
+        {
+            var summary = await ApplyDesiredStateAsync(Rows.ToList());
+            ShowNotification(summary);
+        }
+        finally
+        {
+            ResumeScanningIfNeeded(scanWasActive);
+        }
     }
 
     [RelayCommand]
     private async Task ReloadAsync()
     {
+        await PauseScanningAsync();
         _settings = _settingsStore.Load();
         SyncHideModeFromSettings();
         _entries = _pathListStore.Load();
         SyncRowsWithEntries();
-        await RunScanAsync();
+        _scanTask = RunScanAsync();
+        await _scanTask;
     }
 
     partial void OnIsHiddenAndSystemChanged(bool value)
@@ -349,6 +410,43 @@ public partial class MainWindowViewModel : ViewModelBase
                 DesiredVisibility = entry.DesiredVisibility,
             })
             .ToList();
+    }
+
+    private void StartBackgroundScan()
+    {
+        if (Rows.Count == 0)
+            return;
+
+        _scanTask = RunScanAsync();
+    }
+
+    private async Task<bool> PauseScanningAsync()
+    {
+        var scanCts = _scanCts;
+        if (scanCts is null)
+            return false;
+
+        try
+        {
+            scanCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+
+        if (!_scanTask.IsCompleted)
+            await _scanTask;
+
+        return true;
+    }
+
+    private void ResumeScanningIfNeeded(bool scanWasActive)
+    {
+        if (!scanWasActive || _scanCts is not null)
+            return;
+
+        StartBackgroundScan();
     }
 
     private void SyncHideModeFromSettings()
@@ -432,9 +530,10 @@ public partial class MainWindowViewModel : ViewModelBase
         var scanCts = new CancellationTokenSource();
         _scanCts = scanCts;
         var token = scanCts.Token;
+        var entries = _entries.ToList();
 
         IsScanning = true;
-        ScanTotal = Rows.Count;
+        ScanTotal = entries.Count;
         ScanProgress = 0;
 
         var progress = new Progress<int>(p =>
@@ -445,7 +544,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         try
         {
-            await foreach (var result in _scanner.ScanAsync(_entries, progress, token))
+            await foreach (var result in _scanner.ScanAsync(entries, progress, token))
             {
                 if (!ReferenceEquals(_scanCts, scanCts))
                     return;
@@ -457,6 +556,11 @@ public partial class MainWindowViewModel : ViewModelBase
         catch (OperationCanceledException)
         {
             Log.Information("Scan cancelled");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Scan failed");
+            ShowNotification($"Scan failed: {ex.Message}");
         }
         finally
         {

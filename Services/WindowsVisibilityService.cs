@@ -54,6 +54,8 @@ public sealed class WindowsVisibilityService : IVisibilityService
 
         if (mode == WindowsHideMode.HiddenAndSystem)
             attrs |= FileAttributes.System;
+        else
+            attrs &= ~FileAttributes.System;
 
         Log.Information("Hiding {Path} with mode {Mode}", path, mode);
         File.SetAttributes(path, attrs);

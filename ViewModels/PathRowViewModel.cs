@@ -17,10 +17,10 @@ public partial class PathRowViewModel : ObservableObject
     private DesiredVisibility _desiredVisibility;
 
     [ObservableProperty]
-    private ActualState _actualState;
+    private ActualState _actualState = ActualState.Unknown;
 
     [ObservableProperty]
-    private ItemKind _itemKind;
+    private ItemKind _itemKind = ItemKind.Unknown;
 
     [ObservableProperty]
     private bool _isSelected;

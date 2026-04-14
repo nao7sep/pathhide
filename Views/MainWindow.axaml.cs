@@ -44,7 +44,9 @@ public partial class MainWindow : Window
     {
         var dialog = new SettingsDialog(ViewModel.IsHiddenAndSystem);
         await dialog.ShowDialog(this);
-        ViewModel.IsHiddenAndSystem = dialog.IsHiddenAndSystem;
+
+        if (dialog.Accepted)
+            ViewModel.IsHiddenAndSystem = dialog.IsHiddenAndSystem;
     }
 
     private async void OnAddFilesClick(object? sender, RoutedEventArgs e)

@@ -7,4 +7,5 @@ public enum ActualState
     Missing,
     Unreachable,
     Error,
+    Unknown,
 }
