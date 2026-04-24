@@ -5,7 +5,7 @@
         CanResize="False"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
-        Background="#FAFBFC">
+        Background="{StaticResource AppBackgroundBrush}">
 
     <DockPanel Margin="24">
         <!-- Button row at the bottom -->

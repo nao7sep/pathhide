@@ -8,7 +8,7 @@
         x:DataType="vm:MainWindowViewModel"
         Title="PathHide"
         Width="1280" Height="720"
-        Background="#FAFBFC"
+        Background="{StaticResource AppBackgroundBrush}"
         DragDrop.AllowDrop="True">
 
     <Design.DataContext>
@@ -19,8 +19,8 @@
 
         <!-- Toolbar -->
         <Border DockPanel.Dock="Top"
-                Background="White"
-                BorderBrush="#E0E0E0"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="12,8">
             <DockPanel>
@@ -33,7 +33,7 @@
                             x:Name="SettingsButton"
                             IsVisible="{Binding HasSettings}"/>
                     <Button Content="About"
-                            Classes="utility"
+                            Classes="about"
                             x:Name="AboutButton"/>
                 </StackPanel>
 
@@ -45,20 +45,20 @@
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
-                        <Button Content="Hide Selected" Classes="action" Command="{Binding HideSelectedCommand}"/>
-                        <Button Content="Show Selected" Classes="action" Command="{Binding ShowSelectedCommand}"/>
-                        <Button Content="Remove" Classes="destructive" Command="{Binding RemoveSelectedCommand}"/>
+                        <Button Content="Hide Selected" Classes="hide" Command="{Binding HideSelectedCommand}"/>
+                        <Button Content="Hide All" Classes="hide" Command="{Binding HideAllCommand}"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
-                        <Button Content="Hide All" Classes="batch" Command="{Binding HideAllCommand}"/>
-                        <Button Content="Show All" Classes="batch" Command="{Binding ShowAllCommand}"/>
-                        <Button Content="Reapply All" Classes="batch" Command="{Binding ReapplyAllCommand}"/>
+                        <Button Content="Show Selected" Classes="show" Command="{Binding ShowSelectedCommand}"/>
+                        <Button Content="Show All" Classes="show" Command="{Binding ShowAllCommand}"/>
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <Button Content="Reload" Classes="utility" Command="{Binding ReloadCommand}"/>
-                        <Button Content="Cancel Scan" Classes="destructive"
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                        <Button Content="Reload" Classes="reload" Command="{Binding ReloadCommand}"/>
+                        <Button Content="Reapply All" Classes="reapply" Command="{Binding ReapplyAllCommand}"/>
+                        <Button Content="Remove" Classes="destructive" Command="{Binding RemoveSelectedCommand}"/>
+                        <Button Content="Cancel" Classes="cancel"
                                 Command="{Binding CancelScanCommand}"
                                 IsVisible="{Binding IsScanning}"/>
                     </StackPanel>
@@ -68,27 +68,27 @@
 
         <!-- Status bar -->
         <Border DockPanel.Dock="Bottom"
-                Background="{StaticResource TealLightBrush}"
-                BorderBrush="#B2DFDB"
+                Background="{StaticResource StatusBackgroundBrush}"
+                BorderBrush="{StaticResource StatusBorderBrush}"
                 BorderThickness="0,1,0,0"
                 Padding="12,6">
             <Panel>
                 <TextBlock Text="{Binding ProgressText}"
                            IsVisible="{Binding IsScanning}"
-                           Foreground="{StaticResource TealDarkBrush}"
+                           Foreground="{StaticResource StatusAccentBrush}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
                 <TextBlock Text="{Binding StatusBarText}"
                            IsVisible="{Binding !IsScanning}"
-                           Foreground="#37474F"
+                           Foreground="{StaticResource TextSecondaryBrush}"
                            VerticalAlignment="Center"/>
             </Panel>
         </Border>
 
         <!-- Path list -->
         <Border Margin="12" CornerRadius="8"
-                BorderBrush="#E0E0E0" BorderThickness="1"
-                Background="White"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                Background="{StaticResource SurfaceBrush}"
                 ClipToBounds="True">
             <DataGrid x:Name="PathGrid"
                       ItemsSource="{Binding Rows}"

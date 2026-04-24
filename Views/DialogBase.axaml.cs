@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -29,7 +30,7 @@ public partial class DialogBase : Window
         ButtonPanel.Children.Clear();
         var createdButtons = new Dictionary<string, Button>();
 
-        foreach (var (label, tag, isDefault) in buttons)
+        foreach (var (label, tag, isDefault) in buttons.OrderBy(button => button.IsDefault))
         {
             var button = new Button
             {

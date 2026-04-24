@@ -18,8 +18,8 @@ public sealed class ConfirmDialog : DialogBase
         });
 
         var buttons = SetButtons([
-            ("Yes", "yes", true),
             ("No", "no", false),
+            ("Yes", "yes", true),
         ]);
         SetInitialFocus(buttons["no"]);
     }

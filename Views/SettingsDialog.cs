@@ -43,8 +43,8 @@ public sealed class SettingsDialog : DialogBase
 
         SetContent(panel);
         SetButtons([
-            ("Save", "save", true),
             ("Cancel", "cancel", false),
+            ("Save", "save", true),
         ]);
         SetInitialFocus(_hiddenAndSystemCheckBox);
 

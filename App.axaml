@@ -9,115 +9,199 @@
     </Application.DataTemplates>
 
     <Application.Resources>
-        <!-- Calm palette -->
-        <Color x:Key="TealLight">#E0F2F1</Color>
-        <Color x:Key="TealMid">#4DB6AC</Color>
-        <Color x:Key="TealDark">#00897B</Color>
+        <!-- Semantic UI palette -->
+        <Color x:Key="AppBackground">#F6F8FA</Color>
+        <Color x:Key="Surface">#FFFFFF</Color>
+        <Color x:Key="Border">#D8DEE8</Color>
+        <Color x:Key="TextPrimary">#1F2430</Color>
+        <Color x:Key="TextSecondary">#586070</Color>
 
-        <Color x:Key="SlateLight">#ECEFF1</Color>
-        <Color x:Key="SlateMid">#90A4AE</Color>
+        <Color x:Key="Add">#047857</Color>
+        <Color x:Key="AddHover">#065F46</Color>
+        <Color x:Key="Hide">#BE185D</Color>
+        <Color x:Key="HideHover">#9D174D</Color>
+        <Color x:Key="Show">#6D28D9</Color>
+        <Color x:Key="ShowHover">#5B21B6</Color>
+        <Color x:Key="Reload">#1D4ED8</Color>
+        <Color x:Key="ReloadHover">#1E40AF</Color>
+        <Color x:Key="Reapply">#0E7490</Color>
+        <Color x:Key="ReapplyHover">#155E75</Color>
+        <Color x:Key="Danger">#DC2626</Color>
+        <Color x:Key="DangerHover">#B91C1C</Color>
+        <Color x:Key="Cancel">#B45309</Color>
+        <Color x:Key="CancelHover">#92400E</Color>
+        <Color x:Key="About">#4A044E</Color>
+        <Color x:Key="AboutHover">#3B0764</Color>
+        <Color x:Key="AboutForeground">#FFF7FE</Color>
 
-        <Color x:Key="CoralMid">#E57373</Color>
-        <Color x:Key="CoralDark">#D32F2F</Color>
+        <Color x:Key="Utility">#E9EEF5</Color>
+        <Color x:Key="UtilityHover">#D8E0EA</Color>
+        <Color x:Key="StatusBackground">#F8FAFC</Color>
+        <Color x:Key="StatusBorder">#D8DEE8</Color>
+        <Color x:Key="StatusAccent">#1D4ED8</Color>
 
-        <Color x:Key="AmberMid">#FFB74D</Color>
-        <Color x:Key="AmberDark">#F57C00</Color>
+        <SolidColorBrush x:Key="AppBackgroundBrush" Color="{StaticResource AppBackground}"/>
+        <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource Surface}"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource Border}"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
 
-        <Color x:Key="IndigoMid">#7986CB</Color>
-        <Color x:Key="IndigoDark">#3F51B5</Color>
+        <SolidColorBrush x:Key="AddBrush" Color="{StaticResource Add}"/>
+        <SolidColorBrush x:Key="AddHoverBrush" Color="{StaticResource AddHover}"/>
+        <SolidColorBrush x:Key="HideBrush" Color="{StaticResource Hide}"/>
+        <SolidColorBrush x:Key="HideHoverBrush" Color="{StaticResource HideHover}"/>
+        <SolidColorBrush x:Key="ShowBrush" Color="{StaticResource Show}"/>
+        <SolidColorBrush x:Key="ShowHoverBrush" Color="{StaticResource ShowHover}"/>
+        <SolidColorBrush x:Key="ReloadBrush" Color="{StaticResource Reload}"/>
+        <SolidColorBrush x:Key="ReloadHoverBrush" Color="{StaticResource ReloadHover}"/>
+        <SolidColorBrush x:Key="ReapplyBrush" Color="{StaticResource Reapply}"/>
+        <SolidColorBrush x:Key="ReapplyHoverBrush" Color="{StaticResource ReapplyHover}"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource Danger}"/>
+        <SolidColorBrush x:Key="DangerHoverBrush" Color="{StaticResource DangerHover}"/>
+        <SolidColorBrush x:Key="CancelBrush" Color="{StaticResource Cancel}"/>
+        <SolidColorBrush x:Key="CancelHoverBrush" Color="{StaticResource CancelHover}"/>
+        <SolidColorBrush x:Key="AboutBrush" Color="{StaticResource About}"/>
+        <SolidColorBrush x:Key="AboutHoverBrush" Color="{StaticResource AboutHover}"/>
+        <SolidColorBrush x:Key="AboutForegroundBrush" Color="{StaticResource AboutForeground}"/>
 
-        <SolidColorBrush x:Key="TealLightBrush" Color="{StaticResource TealLight}"/>
-        <SolidColorBrush x:Key="TealMidBrush" Color="{StaticResource TealMid}"/>
-        <SolidColorBrush x:Key="TealDarkBrush" Color="{StaticResource TealDark}"/>
-        <SolidColorBrush x:Key="SlateLightBrush" Color="{StaticResource SlateLight}"/>
-        <SolidColorBrush x:Key="SlateMidBrush" Color="{StaticResource SlateMid}"/>
-        <SolidColorBrush x:Key="CoralMidBrush" Color="{StaticResource CoralMid}"/>
-        <SolidColorBrush x:Key="CoralDarkBrush" Color="{StaticResource CoralDark}"/>
-        <SolidColorBrush x:Key="AmberMidBrush" Color="{StaticResource AmberMid}"/>
-        <SolidColorBrush x:Key="AmberDarkBrush" Color="{StaticResource AmberDark}"/>
-        <SolidColorBrush x:Key="IndigoMidBrush" Color="{StaticResource IndigoMid}"/>
-        <SolidColorBrush x:Key="IndigoDarkBrush" Color="{StaticResource IndigoDark}"/>
+        <SolidColorBrush x:Key="UtilityBrush" Color="{StaticResource Utility}"/>
+        <SolidColorBrush x:Key="UtilityHoverBrush" Color="{StaticResource UtilityHover}"/>
+        <SolidColorBrush x:Key="StatusBackgroundBrush" Color="{StaticResource StatusBackground}"/>
+        <SolidColorBrush x:Key="StatusBorderBrush" Color="{StaticResource StatusBorder}"/>
+        <SolidColorBrush x:Key="StatusAccentBrush" Color="{StaticResource StatusAccent}"/>
     </Application.Resources>
 
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
 
-        <!-- Teal add buttons -->
+        <!-- Add buttons -->
         <Style Selector="Button.add">
-            <Setter Property="Background" Value="{StaticResource TealMidBrush}"/>
+            <Setter Property="Background" Value="{StaticResource AddBrush}"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.add:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource TealDarkBrush}"/>
+            <Setter Property="Background" Value="{StaticResource AddHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
-        <!-- Indigo action buttons -->
-        <Style Selector="Button.action">
-            <Setter Property="Background" Value="{StaticResource IndigoMidBrush}"/>
+        <!-- Hide buttons -->
+        <Style Selector="Button.hide">
+            <Setter Property="Background" Value="{StaticResource HideBrush}"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
-        <Style Selector="Button.action:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource IndigoDarkBrush}"/>
+        <Style Selector="Button.hide:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource HideHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
-        <!-- Amber batch buttons -->
-        <Style Selector="Button.batch">
-            <Setter Property="Background" Value="{StaticResource AmberMidBrush}"/>
+        <!-- Show buttons -->
+        <Style Selector="Button.show">
+            <Setter Property="Background" Value="{StaticResource ShowBrush}"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
-        <Style Selector="Button.batch:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource AmberDarkBrush}"/>
+        <Style Selector="Button.show:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ShowHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
-        <!-- Coral destructive buttons -->
+        <!-- Reload button -->
+        <Style Selector="Button.reload">
+            <Setter Property="Background" Value="{StaticResource ReloadBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.reload:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Reapply button -->
+        <Style Selector="Button.reapply">
+            <Setter Property="Background" Value="{StaticResource ReapplyBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.reapply:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReapplyHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Destructive buttons -->
         <Style Selector="Button.destructive">
-            <Setter Property="Background" Value="{StaticResource CoralMidBrush}"/>
+            <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.destructive:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource CoralDarkBrush}"/>
+            <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Cancellation button -->
+        <Style Selector="Button.cancel">
+            <Setter Property="Background" Value="{StaticResource CancelBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.cancel:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource CancelHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- About button -->
+        <Style Selector="Button.about">
+            <Setter Property="Background" Value="{StaticResource AboutBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource AboutForegroundBrush}"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.about:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource AboutHoverBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource AboutForegroundBrush}"/>
         </Style>
 
         <!-- Subtle utility buttons -->
         <Style Selector="Button.utility">
-            <Setter Property="Background" Value="{StaticResource SlateLightBrush}"/>
-            <Setter Property="Foreground" Value="#37474F"/>
+            <Setter Property="Background" Value="{StaticResource UtilityBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.utility:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource SlateMidBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{StaticResource UtilityHoverBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         </Style>
 
         <!-- Dialog accent button -->
         <Style Selector="Button.accent">
-            <Setter Property="Background" Value="{StaticResource TealMidBrush}"/>
+            <Setter Property="Background" Value="{StaticResource ReloadBrush}"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource TealDarkBrush}"/>
+            <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
     </Application.Styles>
