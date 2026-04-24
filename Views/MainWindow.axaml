@@ -103,11 +103,11 @@
                       Background="Transparent"
                       RowBackground="White">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
-                    <DataGridTextColumn Header="Family" Binding="{Binding PathFamily}" Width="100"/>
-                    <DataGridTextColumn Header="Desired" Binding="{Binding DesiredVisibility}" Width="90"/>
-                    <DataGridTextColumn Header="Actual" Binding="{Binding ActualState}" Width="120"/>
-                    <DataGridTextColumn Header="Kind" Binding="{Binding ItemKind}" Width="110"/>
+                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" SortMemberPath="Path" Width="*"/>
+                    <DataGridTextColumn Header="Family" Binding="{Binding PathFamily}" SortMemberPath="PathFamily" Width="100"/>
+                    <DataGridTextColumn Header="Desired" Binding="{Binding DesiredVisibility}" SortMemberPath="DesiredVisibility" Width="90"/>
+                    <DataGridTextColumn Header="Actual" Binding="{Binding ActualState}" SortMemberPath="ActualState" Width="120"/>
+                    <DataGridTextColumn Header="Kind" Binding="{Binding ItemKind}" SortMemberPath="ItemKind" Width="110"/>
                 </DataGrid.Columns>
             </DataGrid>
         </Border>

@@ -75,6 +75,17 @@
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
 
+        <!-- Keep DataGrid cell navigation active without drawing a harsh current-cell box. -->
+        <Style Selector="DataGridCell">
+            <Setter Property="FocusAdorner" Value="{x:Null}"/>
+        </Style>
+        <Style Selector="DataGridCell:current /template/ Rectangle#CurrencyVisual">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="DataGridCell:focus /template/ Grid#FocusVisual">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+
         <!-- Add buttons -->
         <Style Selector="Button.add">
             <Setter Property="Background" Value="{StaticResource AddBrush}"/>

@@ -1,4 +1,5 @@
 using System.Linq;
+using System.ComponentModel;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -33,6 +34,8 @@ public partial class MainWindow : Window
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
         ViewModel.ConfirmAsync = ShowConfirmAsync;
+        PathGrid.Columns.First(c => c.SortMemberPath == nameof(PathRowViewModel.Path))
+            .Sort(ListSortDirection.Ascending);
         Dispatcher.UIThread.Post(() =>
         {
             if (ViewModel.Rows.Count > 0)
