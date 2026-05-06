@@ -70,7 +70,9 @@ internal static partial class MacFs
         uint options);
 
     private const ushort AttrBitMapCount = 5;
-    private const uint   AttrCmnFlags    = 0x00000040;
+    // ATTR_CMN_FLAGS from <sys/attr.h>. Beware: 0x00000040 is ATTR_CMN_OBJPERMANENTID
+    // and was a previous typo here; both compile, but only this value returns st_flags.
+    private const uint   AttrCmnFlags    = 0x00040000;
     private const uint   FsOptNoFollow   = 0x00000001;
 
     [StructLayout(LayoutKind.Sequential, Pack = 4)]

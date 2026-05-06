@@ -11,6 +11,8 @@ public static class StorageRoot
 
     public static string Directory { get; private set; } = DefaultDirectory;
 
+    public static string LogsDirectory => Path.Combine(Directory, "logs");
+
     public static void Override(string directory)
     {
         Directory = directory;

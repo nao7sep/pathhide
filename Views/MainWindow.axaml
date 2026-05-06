@@ -24,18 +24,24 @@
                 BorderThickness="0,0,0,1"
                 Padding="12,8">
             <DockPanel>
-                <!-- Settings + About (right-aligned) -->
-                <StackPanel DockPanel.Dock="Right"
-                            Orientation="Horizontal"
-                            Spacing="4">
-                    <Button Content="Settings"
-                            Classes="utility"
-                            x:Name="SettingsButton"
-                            IsVisible="{Binding HasSettings}"/>
-                    <Button Content="About"
-                            Classes="about"
-                            x:Name="AboutButton"/>
-                </StackPanel>
+                <!-- Hamburger menu (right-aligned) -->
+                <Button DockPanel.Dock="Right"
+                        Content="☰"
+                        Classes="utility"
+                        FontSize="18"
+                        Padding="14,2"
+                        x:Name="MenuButton"
+                        ToolTip.Tip="Menu">
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <MenuItem Header="Open Log File" x:Name="OpenLogMenuItem"/>
+                            <MenuItem Header="Settings"
+                                      x:Name="SettingsMenuItem"
+                                      IsVisible="{Binding HasSettings}"/>
+                            <MenuItem Header="About" x:Name="AboutMenuItem"/>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
 
                 <!-- Action buttons (left, wrapping) -->
                 <WrapPanel Orientation="Horizontal">
@@ -45,13 +51,13 @@
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
-                        <Button Content="Hide Selected" Classes="hide" Command="{Binding HideSelectedCommand}"/>
                         <Button Content="Hide All" Classes="hide" Command="{Binding HideAllCommand}"/>
+                        <Button Content="Hide Selected" Classes="hide" Command="{Binding HideSelectedCommand}"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
-                        <Button Content="Show Selected" Classes="show" Command="{Binding ShowSelectedCommand}"/>
                         <Button Content="Show All" Classes="show" Command="{Binding ShowAllCommand}"/>
+                        <Button Content="Show Selected" Classes="show" Command="{Binding ShowSelectedCommand}"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">

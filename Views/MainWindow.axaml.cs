@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using PathHide.Services;
 using PathHide.ViewModels;
 
 namespace PathHide.Views;
@@ -20,8 +21,10 @@ public partial class MainWindow : Window
 
         AddFilesButton.Click += OnAddFilesClick;
         AddFoldersButton.Click += OnAddFoldersClick;
-        AboutButton.Click += OnAboutClick;
-        SettingsButton.Click += OnSettingsClick;
+
+        OpenLogMenuItem.Click += OnOpenLogClick;
+        SettingsMenuItem.Click += OnSettingsClick;
+        AboutMenuItem.Click += OnAboutClick;
 
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -55,6 +58,11 @@ public partial class MainWindow : Window
     private async void OnAboutClick(object? sender, RoutedEventArgs e)
     {
         await new AboutDialog().ShowDialog(this);
+    }
+
+    private void OnOpenLogClick(object? sender, RoutedEventArgs e)
+    {
+        LogReveal.Reveal();
     }
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)

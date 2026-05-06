@@ -18,7 +18,7 @@ sealed class Program
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .WriteTo.File(
-                Path.Combine(StorageRoot.Directory, "logs", "pathhide-.log"),
+                Path.Combine(StorageRoot.LogsDirectory, "pathhide-.log"),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 14)
             .CreateLogger();
