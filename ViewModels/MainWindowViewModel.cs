@@ -18,8 +18,8 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private static readonly ILogger Log = Serilog.Log.ForContext<MainWindowViewModel>();
 
-    private readonly PathListStore _pathListStore = new();
-    private readonly SettingsStore _settingsStore = new();
+    private readonly JsonStore<List<PathEntry>> _pathListStore = new("paths.json", "paths");
+    private readonly JsonStore<AppSettings> _settingsStore = new("settings.json", "settings");
     private readonly IVisibilityService _visibilityService;
     private readonly PathScanner _scanner;
 
@@ -380,7 +380,13 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         try
         {
-            _pathListStore.Save(_entries);
+            // Sort a snapshot so paths.json is diff-stable without mutating the
+            // live in-memory list. UI ordering is a separate concern handled by
+            // the DataGrid's own sort.
+            var snapshot = _entries
+                .OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            _pathListStore.Save(snapshot);
             return true;
         }
         catch (Exception ex)

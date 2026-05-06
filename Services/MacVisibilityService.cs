@@ -1,6 +1,6 @@
 using System;
-using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using PathHide.Models;
 using Serilog;
 
@@ -14,19 +14,26 @@ public sealed class MacVisibilityService : IVisibilityService
     {
         try
         {
-            if (!ExistsAnything(path))
+            if (!Path.Exists(path))
             {
-                if (IsAncestorAccessible(path))
-                    return new PathInspection(ActualState.Missing, ItemKind.Unknown);
-
-                return new PathInspection(ActualState.Unreachable, ItemKind.Unknown);
+                return IsAncestorAccessible(path)
+                    ? new PathInspection(ActualState.Missing, ItemKind.Unknown)
+                    : new PathInspection(ActualState.Unreachable, ItemKind.Unknown);
             }
 
-            var kind = DetectKind(path);
-            var hidden = IsFinderHidden(path);
-            var state = hidden ? ActualState.Hidden : ActualState.Visible;
+            // Don't follow symlinks: describe the link's own flags so the result
+            // matches what Hide/Show will actually modify.
+            if (!MacFs.TryGetFlags(path, followSymlinks: false, out var flags))
+            {
+                Log.Error(
+                    "getattrlist({Path}) failed (errno {Errno})",
+                    path, Marshal.GetLastPInvokeError());
+                return new PathInspection(ActualState.Error, ItemKind.Unknown);
+            }
 
-            return new PathInspection(state, kind);
+            var hidden = (flags & MacFs.UF_HIDDEN) != 0;
+            var state = hidden ? ActualState.Hidden : ActualState.Visible;
+            return new PathInspection(state, DetectKind(path));
         }
         catch (UnauthorizedAccessException)
         {
@@ -41,89 +48,57 @@ public sealed class MacVisibilityService : IVisibilityService
 
     public void Hide(string path)
     {
-        Log.Information("Hiding {Path} via chflags hidden", path);
-        RunChflags("hidden", path);
+        Log.Information("Hiding {Path}", path);
+        SetHidden(path, hidden: true);
     }
 
     public void Show(string path)
     {
-        Log.Information("Showing {Path} via chflags nohidden", path);
-        RunChflags("nohidden", path);
+        Log.Information("Showing {Path}", path);
+        SetHidden(path, hidden: false);
     }
 
-    private static bool IsFinderHidden(string path)
+    private static void SetHidden(string path, bool hidden)
     {
-        // stat -f %Xf gives hex flags on macOS; UF_HIDDEN = 0x8000
-        var psi = new ProcessStartInfo("stat")
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        psi.ArgumentList.Add("-f");
-        psi.ArgumentList.Add("%Xf");
-        psi.ArgumentList.Add(path);
+        var operateOnLink = IsSymlink(path);
 
-        using var process = Process.Start(psi);
-        if (process is null)
-            throw new InvalidOperationException("Failed to start stat");
+        // Read existing flags so we don't trample unrelated bits like UF_NODUMP
+        // or UF_IMMUTABLE that the user (or another tool) may have set.
+        if (!MacFs.TryGetFlags(path, followSymlinks: !operateOnLink, out var flags))
+            ThrowErrno($"getattrlist({path})");
 
-        var output = process.StandardOutput.ReadToEnd().Trim();
-        var stderr = process.StandardError.ReadToEnd().Trim();
-        process.WaitForExit();
+        var updated = hidden
+            ? (flags | MacFs.UF_HIDDEN)
+            : (flags & ~MacFs.UF_HIDDEN);
 
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"stat exited with code {process.ExitCode}: {stderr}");
+        if (updated == flags)
+            return;
 
-        var flags = Convert.ToUInt32(output, 16);
-        return (flags & 0x8000) != 0;
+        if (MacFs.SetFlags(path, updated, followSymlinks: !operateOnLink) != 0)
+            ThrowErrno($"chflags({path})");
     }
 
-    private static void RunChflags(string flag, string path)
+    private static void ThrowErrno(string operation)
     {
-        var psi = new ProcessStartInfo("chflags")
-        {
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        if (IsSymlink(path))
-            psi.ArgumentList.Add("-h");
-
-        psi.ArgumentList.Add(flag);
-        psi.ArgumentList.Add(path);
-
-        using var process = Process.Start(psi);
-        if (process is null)
-            throw new InvalidOperationException("Failed to start chflags");
-
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"chflags {flag} failed: {stderr.Trim()}");
+        var errno = Marshal.GetLastPInvokeError();
+        var message = Marshal.GetPInvokeErrorMessage(errno);
+        throw new IOException($"{operation} failed: {message} (errno {errno})");
     }
 
     private static bool IsSymlink(string path)
     {
         try
         {
-            var attrs = File.GetAttributes(path);
-            return attrs.HasFlag(FileAttributes.ReparsePoint);
+            // FileInfo/DirectoryInfo.LinkTarget is the link-aware probe; unlike
+            // File.GetAttributes it doesn't follow the symlink before answering.
+            return new FileInfo(path).LinkTarget is not null
+                || new DirectoryInfo(path).LinkTarget is not null;
         }
         catch (Exception ex)
         {
             Log.Debug(ex, "Cannot determine whether {Path} is a symlink", path);
             return false;
         }
-    }
-
-    private static bool ExistsAnything(string path)
-    {
-        // File.Exists and Directory.Exists both return false for symlinks to missing targets,
-        // so also check via filesystem entry enumeration
-        return Path.Exists(path);
     }
 
     private static bool IsAncestorAccessible(string path)
@@ -147,15 +122,10 @@ public sealed class MacVisibilityService : IVisibilityService
     {
         try
         {
-            var attrs = File.GetAttributes(path);
-
-            if (attrs.HasFlag(FileAttributes.ReparsePoint))
+            if (IsSymlink(path))
                 return ItemKind.Symlink;
 
-            if (attrs.HasFlag(FileAttributes.Directory))
-                return ItemKind.Directory;
-
-            return ItemKind.File;
+            return Directory.Exists(path) ? ItemKind.Directory : ItemKind.File;
         }
         catch (Exception ex)
         {
