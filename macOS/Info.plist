@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>io.github.nao7sep.pathhide</string>
+    <key>CFBundleName</key>
+    <string>PathHide</string>
+    <key>CFBundleDisplayName</key>
+    <string>PathHide</string>
+    <key>CFBundleExecutable</key>
+    <string>PathHide</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSSupportsAutomaticTermination</key>
+    <true/>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>PathHide needs access to manage the hidden flag on items in your Desktop folder.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>PathHide needs access to manage the hidden flag on items in your Documents folder.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>PathHide needs access to manage the hidden flag on items in your Downloads folder.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>PathHide needs access to manage the hidden flag on items on removable volumes.</string>
+    <key>NSNetworkVolumesUsageDescription</key>
+    <string>PathHide needs access to manage the hidden flag on items on network volumes.</string>
+</dict>
+</plist>

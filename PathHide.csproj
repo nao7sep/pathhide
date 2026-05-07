@@ -15,7 +15,7 @@
     <Authors>Yoshinao Inoguchi</Authors>
     <Copyright>Copyright © 2026 Yoshinao Inoguchi</Copyright>
     <Version>0.1.0</Version>
-    <RuntimeIdentifiers>osx-arm64;win-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>osx-arm64;osx-x64;win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
