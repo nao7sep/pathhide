@@ -19,7 +19,7 @@ namespace PathHide.Storage;
 /// calling <see cref="Save"/> — and should sort a copy rather than the
 /// live in-memory collection to avoid surprising callers that share it.
 /// </remarks>
-public sealed class JsonStore<T> where T : class, new()
+public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 {
     private static readonly ILogger Log = Serilog.Log.ForContext<JsonStore<T>>();
 

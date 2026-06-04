@@ -18,8 +18,8 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     private static readonly ILogger Log = Serilog.Log.ForContext<MainWindowViewModel>();
 
-    private readonly JsonStore<List<PathEntry>> _pathListStore = new("paths.json", "paths");
-    private readonly JsonStore<AppSettings> _settingsStore = new("settings.json", "settings");
+    private readonly IJsonStore<List<PathEntry>> _pathListStore;
+    private readonly IJsonStore<AppSettings> _settingsStore;
     private readonly IVisibilityService _visibilityService;
     private readonly PathScanner _scanner;
 
@@ -87,8 +87,27 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public MainWindowViewModel()
+        : this(visibilityService: null, pathListStore: null, settingsStore: null)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+    }
+
+    /// <summary>
+    /// Test seam: a null argument falls back to the production default
+    /// (real <see cref="JsonStore{T}"/> files and the OS-appropriate
+    /// <see cref="IVisibilityService"/>), so the parameterless production
+    /// constructor stays unchanged while tests inject in-memory fakes.
+    /// </summary>
+    internal MainWindowViewModel(
+        IVisibilityService? visibilityService,
+        IJsonStore<List<PathEntry>>? pathListStore,
+        IJsonStore<AppSettings>? settingsStore)
+    {
+        _pathListStore = pathListStore ?? new JsonStore<List<PathEntry>>("paths.json", "paths");
+        _settingsStore = settingsStore ?? new JsonStore<AppSettings>("settings.json", "settings");
+
+        if (visibilityService is not null)
+            _visibilityService = visibilityService;
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             _visibilityService = new WindowsVisibilityService(() => _settings.WindowsHideMode);
         else
             _visibilityService = new MacVisibilityService();
