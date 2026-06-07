@@ -5,8 +5,6 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <IsPublishable>false</IsPublishable>
-    <!-- Test assembly name must match the InternalsVisibleTo in PathHide.csproj. -->
-    <AssemblyName>PathHide.Tests</AssemblyName>
     <!-- The host app is a WinExe; referencing it warns about the mismatch. The
          test host is a console app and only consumes the produced assembly. -->
     <NoWarn>$(NoWarn);NU1702</NoWarn>

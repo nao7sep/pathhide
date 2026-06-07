@@ -11,10 +11,6 @@
         Background="{StaticResource AppBackgroundBrush}"
         DragDrop.AllowDrop="True">
 
-    <Design.DataContext>
-        <vm:MainWindowViewModel/>
-    </Design.DataContext>
-
     <DockPanel>
 
         <!-- Toolbar -->

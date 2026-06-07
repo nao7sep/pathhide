@@ -24,6 +24,9 @@ public sealed class FakeVisibilityService : IVisibilityService
     /// <summary>When set, the next matching call throws this exception once.</summary>
     public Func<string, Exception?>? OnInspect { get; set; }
 
+    /// <summary>When set and it returns non-null, <see cref="Hide"/> throws instead of recording.</summary>
+    public Func<string, Exception?>? OnHide { get; set; }
+
     public void Set(string path, ActualState state, ItemKind kind = ItemKind.File)
         => _byPath[path] = new PathInspection(state, kind);
 
@@ -40,6 +43,10 @@ public sealed class FakeVisibilityService : IVisibilityService
 
     public void Hide(string path)
     {
+        var thrown = OnHide?.Invoke(path);
+        if (thrown is not null)
+            throw thrown;
+
         Hidden.Enqueue(path);
         _byPath[path] = new PathInspection(
             ActualState.Hidden,

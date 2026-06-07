@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
         ViewModel.ConfirmAsync = ShowConfirmAsync;
+        ViewModel.Initialize();
         PathGrid.Columns.First(c => c.SortMemberPath == nameof(PathRowViewModel.Path))
             .Sort(ListSortDirection.Ascending);
         Dispatcher.UIThread.Post(() =>
@@ -71,7 +72,7 @@ public partial class MainWindow : Window
         await dialog.ShowDialog(this);
 
         if (dialog.Accepted)
-            ViewModel.IsHiddenAndSystem = dialog.IsHiddenAndSystem;
+            ViewModel.SetWindowsHideMode(dialog.IsHiddenAndSystem);
     }
 
     private async void OnAddFilesClick(object? sender, RoutedEventArgs e)

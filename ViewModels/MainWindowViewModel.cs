@@ -23,11 +23,15 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IVisibilityService _visibilityService;
     private readonly PathScanner _scanner;
 
+    // The same AppSettings instance the Windows visibility service closes over (wired in
+    // App's composition root). Mutate its fields in place; never reassign the reference,
+    // or the service would read stale state.
+    private readonly AppSettings _settings;
+
     private List<PathEntry> _entries = [];
-    private AppSettings _settings = new();
     private CancellationTokenSource? _scanCts;
     private Task _scanTask = Task.CompletedTask;
-    private bool _suppressHideModeSave;
+    private bool _initialized;
 
     /// <summary>
     /// Set by the view to show a confirmation dialog. Returns true if confirmed.
@@ -51,12 +55,16 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(StatusBarText))]
     private string _notification = string.Empty;
 
-    [ObservableProperty]
-    private bool _isHiddenAndSystem;
-
     // Currently, all settings are Windows-only. When a cross-platform setting is added,
     // change this to always return true and remove the platform check.
     public bool HasSettings { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
+    /// <summary>
+    /// Current Windows hide mode as a bool, used to seed the settings dialog. Read-only:
+    /// the mode is changed and persisted through <see cref="SetWindowsHideMode"/>, never
+    /// through a bound setter, so there is no save side effect on assignment.
+    /// </summary>
+    public bool IsHiddenAndSystem => _settings.WindowsHideMode == WindowsHideMode.HiddenAndSystem;
 
     public string ProgressText => ScanTotal > 0
         ? $"Scanning {ScanProgress} / {ScanTotal}"
@@ -86,36 +94,41 @@ public partial class MainWindowViewModel : ViewModelBase
         return string.Join("  ·  ", parts);
     }
 
-    public MainWindowViewModel()
-        : this(visibilityService: null, pathListStore: null, settingsStore: null)
+    /// <summary>
+    /// All dependencies are supplied by the composition root (see <c>App</c>),
+    /// including the already-loaded <paramref name="settings"/>. The Windows
+    /// visibility service closes over that same instance to read the current hide
+    /// mode, so the view model mutates it in place rather than replacing it.
+    /// </summary>
+    /// <remarks>
+    /// Construction is side-effect-free: no disk I/O and no scan happen here, so the
+    /// type is safe to instantiate outside a running app. Call <see cref="Initialize"/>
+    /// once the view is ready to load entries and start scanning.
+    /// </remarks>
+    public MainWindowViewModel(
+        IVisibilityService visibilityService,
+        IJsonStore<List<PathEntry>> pathListStore,
+        IJsonStore<AppSettings> settingsStore,
+        AppSettings settings)
     {
+        _visibilityService = visibilityService;
+        _pathListStore = pathListStore;
+        _settingsStore = settingsStore;
+        _settings = settings;
+        _scanner = new PathScanner(visibilityService);
     }
 
     /// <summary>
-    /// Test seam: a null argument falls back to the production default
-    /// (real <see cref="JsonStore{T}"/> files and the OS-appropriate
-    /// <see cref="IVisibilityService"/>), so the parameterless production
-    /// constructor stays unchanged while tests inject in-memory fakes.
+    /// Loads persisted path entries and starts the initial background scan. The view
+    /// calls this once it is loaded. Idempotent — only the first call has any effect,
+    /// so a repeated Loaded event cannot trigger a second load or scan.
     /// </summary>
-    internal MainWindowViewModel(
-        IVisibilityService? visibilityService,
-        IJsonStore<List<PathEntry>>? pathListStore,
-        IJsonStore<AppSettings>? settingsStore)
+    public void Initialize()
     {
-        _pathListStore = pathListStore ?? new JsonStore<List<PathEntry>>("paths.json", "paths");
-        _settingsStore = settingsStore ?? new JsonStore<AppSettings>("settings.json", "settings");
+        if (_initialized)
+            return;
+        _initialized = true;
 
-        if (visibilityService is not null)
-            _visibilityService = visibilityService;
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            _visibilityService = new WindowsVisibilityService(() => _settings.WindowsHideMode);
-        else
-            _visibilityService = new MacVisibilityService();
-
-        _scanner = new PathScanner(_visibilityService);
-
-        _settings = _settingsStore.Load();
-        SyncHideModeFromSettings();
         _entries = _pathListStore.Load();
         SyncRowsWithEntries();
         StartBackgroundScan();
@@ -348,40 +361,42 @@ public partial class MainWindowViewModel : ViewModelBase
     private async Task ReloadAsync()
     {
         await PauseScanningAsync();
-        _settings = _settingsStore.Load();
-        SyncHideModeFromSettings();
+
+        // Reload reconciles the path list and re-scans. It deliberately does NOT reload
+        // settings: the hide mode is owned in-app and persisted immediately on every change
+        // (see SetWindowsHideMode), so the in-memory value never diverges from disk. Copying
+        // a freshly loaded settings object back into the shared instance field-by-field would
+        // be both brittle (it silently couples to AppSettings having one field) and pointless.
         _entries = _pathListStore.Load();
         SyncRowsWithEntries();
         _scanTask = RunScanAsync();
         await _scanTask;
     }
 
-    partial void OnIsHiddenAndSystemChanged(bool value)
+    /// <summary>
+    /// Updates and persists the Windows hide mode. On a save failure the in-memory
+    /// mode is restored to its previous value — so it never diverges from disk or from
+    /// what the visibility service reads — and the failure is surfaced to the user.
+    /// No-op when the mode is unchanged.
+    /// </summary>
+    public void SetWindowsHideMode(bool hiddenAndSystem)
     {
-        if (_suppressHideModeSave)
+        var newMode = hiddenAndSystem ? WindowsHideMode.HiddenAndSystem : WindowsHideMode.HiddenOnly;
+        if (_settings.WindowsHideMode == newMode)
             return;
 
         var previousMode = _settings.WindowsHideMode;
-        _settings.WindowsHideMode = value
-            ? WindowsHideMode.HiddenAndSystem
-            : WindowsHideMode.HiddenOnly;
+        _settings.WindowsHideMode = newMode;
 
         try
         {
             _settingsStore.Save(_settings);
+            Log.Information("Windows hide mode set to {Mode}", newMode);
+            OnPropertyChanged(nameof(IsHiddenAndSystem));
         }
         catch (Exception ex)
         {
             _settings.WindowsHideMode = previousMode;
-            _suppressHideModeSave = true;
-            try
-            {
-                IsHiddenAndSystem = previousMode == WindowsHideMode.HiddenAndSystem;
-            }
-            finally
-            {
-                _suppressHideModeSave = false;
-            }
             Log.Error(ex, "Failed to save settings");
             ShowNotification($"Failed to save settings: {ex.Message}");
         }
@@ -472,23 +487,6 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
 
         StartBackgroundScan();
-    }
-
-    private void SyncHideModeFromSettings()
-    {
-        var isHiddenAndSystem = _settings.WindowsHideMode == WindowsHideMode.HiddenAndSystem;
-        if (IsHiddenAndSystem == isHiddenAndSystem)
-            return;
-
-        _suppressHideModeSave = true;
-        try
-        {
-            IsHiddenAndSystem = isHiddenAndSystem;
-        }
-        finally
-        {
-            _suppressHideModeSave = false;
-        }
     }
 
     private List<PathRowViewModel> SyncRowsWithEntries()
@@ -639,8 +637,11 @@ public partial class MainWindowViewModel : ViewModelBase
                 row.ApplyScanResult(updated, row.PathFamily);
                 applied++;
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException) when (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
+                // Access-denied on Windows is recoverable via a single elevated retry
+                // (below). The filter keeps this Windows-only; on other platforms the
+                // general handler counts it as a plain error — no elevation path exists.
                 retryBucket.Add(row);
             }
             catch (Exception ex)
@@ -654,6 +655,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
         int? elevationExitCode = null;
 
+        // retryBucket is only ever populated on Windows (the catch above is filtered to
+        // Windows), so this platform check is logically redundant — but it is REQUIRED, not
+        // documentary: it is the guard the CA1416 analyzer needs to permit the
+        // [SupportedOSPlatform("windows")] call to ApplyAsync below. Do not remove it.
         if (retryBucket.Count > 0 && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             var toHide = retryBucket
@@ -686,15 +691,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
                 if (matched) applied++;
                 else errors++;
-            }
-        }
-        else
-        {
-            foreach (var row in retryBucket)
-            {
-                errors++;
-                var recheck = await Task.Run(() => _visibilityService.Inspect(row.Path));
-                row.ApplyScanResult(recheck, row.PathFamily);
             }
         }
 

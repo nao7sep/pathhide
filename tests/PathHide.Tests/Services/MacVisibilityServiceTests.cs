@@ -10,7 +10,7 @@ namespace PathHide.Tests.Services;
 /// <summary>
 /// Integration tests for the macOS hidden-flag path, run against real temp files
 /// on a real mac. This is the guard for the <c>getattrlist</c>/<c>chflags</c>
-/// P/Invoke in <see cref="MacFs"/> — a regression in the attribute-bitmap
+/// P/Invoke in <c>MacFs</c> — a regression in the attribute-bitmap
 /// constant (a documented past bug) makes the read path disagree with the write
 /// path, which the hide/inspect roundtrips below would catch. Each flag assertion
 /// is cross-checked with <c>stat(1)</c> so it does not rely solely on the code

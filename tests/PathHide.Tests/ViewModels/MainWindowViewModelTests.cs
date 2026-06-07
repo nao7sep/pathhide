@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using PathHide.Models;
@@ -10,21 +13,31 @@ using Xunit;
 namespace PathHide.Tests.ViewModels;
 
 /// <summary>
-/// Orchestration tests for <see cref="MainWindowViewModel"/> through its internal
-/// test-seam constructor, with in-memory fakes for the visibility service and both
-/// stores. Covers add/dedup, save-failure rollback, the apply summary strings, and
-/// the status-bar summary.
+/// Orchestration tests for <see cref="MainWindowViewModel"/> through its public
+/// constructor, with in-memory fakes for the visibility service and both stores.
+/// Covers add/dedup, save-failure rollback, apply summary strings, the status-bar
+/// summary, the settings (Windows hide mode) flow, and the construct/initialize split.
 /// </summary>
 public class MainWindowViewModelTests
 {
     private static PathEntry Entry(string path) =>
         new() { Path = path, DesiredVisibility = DesiredVisibility.Hidden };
 
+    /// <summary>
+    /// Builds a view model and runs <see cref="MainWindowViewModel.Initialize"/>, mirroring
+    /// what the window does on load. The settings instance is the store's own value, exactly
+    /// as the composition root wires it (the visibility service closes over that instance).
+    /// </summary>
     private static MainWindowViewModel CreateViewModel(
         FakeVisibilityService visibility,
         FakeJsonStore<List<PathEntry>> paths,
         FakeJsonStore<AppSettings>? settings = null)
-        => new(visibility, paths, settings ?? new FakeJsonStore<AppSettings>());
+    {
+        var settingsStore = settings ?? new FakeJsonStore<AppSettings>();
+        var vm = new MainWindowViewModel(visibility, paths, settingsStore, settingsStore.Load());
+        vm.Initialize();
+        return vm;
+    }
 
     [Fact]
     public async Task AddPaths_NormalizesDeduplicatesAndRejectsRelative()
@@ -136,5 +149,151 @@ public class MainWindowViewModelTests
         var vm = CreateViewModel(new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>());
 
         Assert.Equal("No entries — drop files or folders here to get started", vm.StatusBarText);
+    }
+
+    // --- Construct / Initialize split (no I/O in the constructor) ---
+
+    [Fact]
+    public void Constructor_DoesNotLoadEntries_UntilInitialize()
+    {
+        var paths = new FakeJsonStore<List<PathEntry>>
+        {
+            Value = new List<PathEntry> { Entry("/a"), Entry("/b") },
+        };
+        var settingsStore = new FakeJsonStore<AppSettings>();
+        var vm = new MainWindowViewModel(new FakeVisibilityService(), paths, settingsStore, settingsStore.Load());
+
+        // Construction is side-effect-free: the persisted entries are not read yet.
+        Assert.Empty(vm.Rows);
+
+        vm.Initialize();
+
+        Assert.Equal(2, vm.Rows.Count);
+    }
+
+    [Fact]
+    public void Initialize_IsIdempotent_SecondCallDoesNotReload()
+    {
+        var paths = new FakeJsonStore<List<PathEntry>>
+        {
+            Value = new List<PathEntry> { Entry("/a") },
+        };
+        var settingsStore = new FakeJsonStore<AppSettings>();
+        var vm = new MainWindowViewModel(new FakeVisibilityService(), paths, settingsStore, settingsStore.Load());
+
+        vm.Initialize();
+        vm.Initialize();
+
+        Assert.Single(vm.Rows);
+        // Single(Rows) alone would pass even without the guard (SyncRowsWithEntries is
+        // itself idempotent), so assert the guard's real effect: the second call must not
+        // re-load the path list (which would also restart the scan).
+        Assert.Equal(1, paths.LoadCount);
+    }
+
+    // --- Windows hide mode (settings) ---
+
+    [Fact]
+    public void SetWindowsHideMode_PersistsAndUpdatesSharedSettingsInstance()
+    {
+        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settings = settingsStore.Load();
+        var vm = new MainWindowViewModel(
+            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+
+        Assert.False(vm.IsHiddenAndSystem);
+
+        vm.SetWindowsHideMode(true);
+
+        Assert.True(vm.IsHiddenAndSystem);
+        // The very instance the visibility service reads is updated — no separate sync step.
+        Assert.Equal(WindowsHideMode.HiddenAndSystem, settings.WindowsHideMode);
+        Assert.Equal(1, settingsStore.SaveCount);
+    }
+
+    [Fact]
+    public void SetWindowsHideMode_RaisesPropertyChangedForIsHiddenAndSystem()
+    {
+        var settingsStore = new FakeJsonStore<AppSettings>();
+        var vm = new MainWindowViewModel(
+            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load());
+
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        vm.SetWindowsHideMode(true);
+
+        // IsHiddenAndSystem is a plain getter now; a bound view must still be told it changed.
+        Assert.Contains(nameof(MainWindowViewModel.IsHiddenAndSystem), changed);
+    }
+
+    [Fact]
+    public void SetWindowsHideMode_WhenUnchanged_DoesNotSave()
+    {
+        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settings = settingsStore.Load(); // defaults to HiddenOnly
+        var vm = new MainWindowViewModel(
+            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+
+        vm.SetWindowsHideMode(false);
+
+        Assert.Equal(0, settingsStore.SaveCount);
+    }
+
+    [Fact]
+    public void SetWindowsHideMode_WhenSaveFails_RevertsInMemoryAndNotifies()
+    {
+        var settingsStore = new FakeJsonStore<AppSettings> { ThrowOnSave = true };
+        var settings = settingsStore.Load();
+        var vm = new MainWindowViewModel(
+            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        vm.SetWindowsHideMode(true);
+
+        // The failed save leaves memory (and what the service reads) on the old value...
+        Assert.False(vm.IsHiddenAndSystem);
+        Assert.Equal(WindowsHideMode.HiddenOnly, settings.WindowsHideMode);
+        Assert.Contains("Failed to save settings", vm.Notification);
+        // ...and must not announce a hide-mode change that was rolled back.
+        Assert.DoesNotContain(nameof(MainWindowViewModel.IsHiddenAndSystem), changed);
+    }
+
+    // --- Apply error handling ---
+
+    [Fact]
+    public async Task ApplyDesiredState_WhenHideThrowsGenericError_CountsAsErrorAndRechecks()
+    {
+        var visibility = new FakeVisibilityService();
+        visibility.OnHide = _ => new IOException("write failed (test)");
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        // A newly added entry defaults to Hidden and is applied immediately, so Hide runs.
+        await vm.AddPathsAsync(new[] { "/x" });
+
+        Assert.Contains("1 errors", vm.Notification);
+        Assert.Contains("/x", visibility.Inspected); // re-inspected after the failure
+    }
+
+    [Fact]
+    public async Task ApplyDesiredState_AccessDeniedOffWindows_IsErrorNotElevatedRetry()
+    {
+        // The Windows branch launches a real elevated process, so only assert the
+        // non-Windows routing here; on Windows this scenario is the elevation path.
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
+
+        var visibility = new FakeVisibilityService();
+        visibility.OnHide = _ => new UnauthorizedAccessException("denied (test)");
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        await vm.AddPathsAsync(new[] { "/x" });
+
+        Assert.Contains("1 errors", vm.Notification);
+        Assert.DoesNotContain("elevated", vm.Notification);
     }
 }

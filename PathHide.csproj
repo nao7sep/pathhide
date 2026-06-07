@@ -34,11 +34,6 @@
     <None Remove="tests\**" />
   </ItemGroup>
 
-  <!-- Exercises the internal test-seam constructor on MainWindowViewModel. -->
-  <ItemGroup>
-    <InternalsVisibleTo Include="PathHide.Tests" />
-  </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.1" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.0" />

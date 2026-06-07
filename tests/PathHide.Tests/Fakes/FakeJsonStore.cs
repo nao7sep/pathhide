@@ -13,9 +13,14 @@ public sealed class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
     public T Value { get; set; } = new();
     public bool ThrowOnSave { get; set; }
     public int SaveCount { get; private set; }
+    public int LoadCount { get; private set; }
     public T? LastSaved { get; private set; }
 
-    public T Load() => Value;
+    public T Load()
+    {
+        LoadCount++;
+        return Value;
+    }
 
     public void Save(T value)
     {
