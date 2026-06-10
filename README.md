@@ -28,7 +28,7 @@ The `Show` action always clears both `HIDDEN` and `SYSTEM` regardless of the cur
 
 PathHide writes a runtime log so a problem can be reconstructed after the fact.
 
-- **One file per launch**, under `~/.pathhide/logs/`, named with the UTC launch time and nothing else: `yyyymmdd-hhmmss-utc.log`. Two launches in the same second collide on the name; the exclusive create then fails and the app degrades to console logging — not engineered around.
+- **One file per launch**, under `~/.pathhide/logs/`, named with the UTC launch time and nothing else: `yyyymmdd-hhmmss-utc.log`. If the file can't be opened, the app falls back to console logging.
 - **JSON Lines** — one event per line, each an object with a `time` (UTC, millisecond ISO-8601), `level` (`debug`/`info`/`warn`/`error`), and `message`, plus event-specific fields. Machine-parseable first, greppable by eye second.
 - **Never auto-deleted.** Logs are small; old ones may be exactly what's needed to debug a problem that surfaces later. Delete them by hand if you want to reclaim the space.
 - Open the current log from the toolbar's `☰` menu → **Open Log File** (reveals it in Finder/Explorer).
