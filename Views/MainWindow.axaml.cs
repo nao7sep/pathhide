@@ -1,5 +1,6 @@
 using System.Linq;
 using System.ComponentModel;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -12,6 +13,13 @@ namespace PathHide.Views;
 
 public partial class MainWindow : Window
 {
+    // Cmd/Ctrl+, → Settings (the conventions' standard settings accelerator). Settings is
+    // Windows-only here, so Control is the right modifier; the gesture is defined once and
+    // used both to label the menu item and to match the key press in OnKeyDown. A MenuFlyout
+    // item's own HotKey only registers while the flyout is open, so the accelerator is wired
+    // at the window level instead, with InputGesture providing the visible association.
+    private static readonly KeyGesture SettingsGesture = new(Key.OemComma, KeyModifiers.Control);
+
     private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
 
     public MainWindow()
@@ -23,6 +31,7 @@ public partial class MainWindow : Window
 
         OpenLogMenuItem.Click += OnOpenLogClick;
         SettingsMenuItem.Click += OnSettingsClick;
+        SettingsMenuItem.InputGesture = SettingsGesture;
         AboutMenuItem.Click += OnAboutClick;
 
         AddHandler(DragDrop.DropEvent, OnDrop);
@@ -59,7 +68,9 @@ public partial class MainWindow : Window
         LogReveal.Reveal();
     }
 
-    private async void OnSettingsClick(object? sender, RoutedEventArgs e)
+    private async void OnSettingsClick(object? sender, RoutedEventArgs e) => await OpenSettingsAsync();
+
+    private async Task OpenSettingsAsync()
     {
         var dialog = new SettingsDialog(ViewModel.IsHiddenAndSystem);
         await dialog.ShowDialog(this);
@@ -123,6 +134,16 @@ public partial class MainWindow : Window
         if (e.Key == Key.Delete || e.Key == Key.Back)
         {
             ViewModel.RemoveSelectedCommand.Execute(null);
+            return;
+        }
+
+        // Gated on HasSettings so the accelerator is live only where Settings exists
+        // (Windows); a modal dialog is a separate top-level, so this never fires while
+        // Settings is already open.
+        if (ViewModel.HasSettings && SettingsGesture.Matches(e))
+        {
+            e.Handled = true;
+            _ = OpenSettingsAsync();
         }
     }
 }

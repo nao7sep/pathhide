@@ -1,8 +1,8 @@
-using System.Diagnostics;
 using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using PathHide.Services;
 
 namespace PathHide.Views;
 
@@ -22,16 +22,14 @@ public sealed class AboutDialog : DialogBase
             Content = "GitHub ↗",
             Classes = { "utility" },
         };
-        githubButton.Click += (_, _) =>
-            Process.Start(new ProcessStartInfo(GitHubUrl) { UseShellExecute = true });
+        githubButton.Click += (_, _) => ExternalLauncher.Open(GitHubUrl);
 
         var issuesButton = new Button
         {
             Content = "Report Issue ↗",
             Classes = { "utility" },
         };
-        issuesButton.Click += (_, _) =>
-            Process.Start(new ProcessStartInfo($"{GitHubUrl}/issues") { UseShellExecute = true });
+        issuesButton.Click += (_, _) => ExternalLauncher.Open($"{GitHubUrl}/issues");
 
         var panel = new StackPanel
         {

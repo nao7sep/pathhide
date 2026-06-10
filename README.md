@@ -16,7 +16,7 @@ PathHide is for managing clutter, not for security.
 ## Platform Behavior
 
 - **macOS**: Toggles the Finder hidden flag (`UF_HIDDEN` via the `chflags(2)`/`lchflags(2)` syscalls). No platform-specific settings.
-- **Windows**: Sets `HIDDEN` file attribute by default. A settings dialog (accessible via **Settings** in the toolbar's `☰` menu) allows enabling `HIDDEN` + `SYSTEM` mode for stronger hiding. The Settings entry is only present on Windows.
+- **Windows**: Sets `HIDDEN` file attribute by default. A settings dialog (accessible via **Settings** in the toolbar's `☰` menu, or `Ctrl+,`) allows enabling `HIDDEN` + `SYSTEM` mode for stronger hiding. The Settings entry is only present on Windows.
 
   When an apply fails because a path is protected by Windows access control, PathHide retries those access-denied paths by relaunching itself elevated via a UAC prompt (`runas`). All access-denied paths from one apply are retried together in a single elevated invocation — one prompt per apply operation. Failures from other causes are reported as errors without an elevation retry. After the elevated process exits, PathHide re-inspects each retried path to determine the actual outcome; both the exit code and the re-inspection result are reported independently.
 
