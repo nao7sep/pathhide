@@ -5,15 +5,12 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.Versioning;
 using System.Threading.Tasks;
-using Serilog;
 
 namespace PathHide.Services;
 
 [SupportedOSPlatform("windows")]
 public static class WindowsElevatedApplicator
 {
-    private static readonly ILogger Log = Serilog.Log.ForContext(typeof(WindowsElevatedApplicator));
-
     public static async Task<int> ApplyAsync(
         IEnumerable<string> toHide,
         IEnumerable<string> toHideWithSystem,
@@ -22,7 +19,7 @@ public static class WindowsElevatedApplicator
         var exePath = Environment.ProcessPath;
         if (string.IsNullOrEmpty(exePath))
         {
-            Log.Error("Cannot determine process path for elevated apply");
+            Log.Error("elevated apply: no process path");
             return -1;
         }
 
@@ -56,26 +53,32 @@ public static class WindowsElevatedApplicator
 
         try
         {
-            Log.Information("Launching elevated process ({TotalPaths} paths)", totalPaths);
+            Log.Info("elevated apply: launching", new
+            {
+                totalPaths,
+                hide = hideList.Count,
+                system = systemList.Count,
+                show = showList.Count,
+            });
             using var process = Process.Start(psi);
             if (process is null)
             {
-                Log.Error("Elevated process did not start");
+                Log.Error("elevated apply: process did not start");
                 return -1;
             }
 
             await process.WaitForExitAsync();
-            Log.Information("Elevated process exited with code {Code}", process.ExitCode);
+            Log.Info("elevated apply: exited", new { exitCode = process.ExitCode });
             return process.ExitCode;
         }
         catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
         {
-            Log.Information("UAC prompt cancelled by user");
+            Log.Info("elevated apply: UAC cancelled by user");
             return -1;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to launch elevated process");
+            Log.Error("elevated apply: launch failed", ex);
             return -1;
         }
     }

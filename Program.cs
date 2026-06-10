@@ -1,9 +1,10 @@
 using System;
 using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using Avalonia;
 using PathHide.Services;
 using PathHide.Storage;
-using Serilog;
 using System.CommandLine;
 
 namespace PathHide;
@@ -16,29 +17,34 @@ sealed class Program
         if (args.Length > 0 && args[0] == "apply")
             return RunApplyMode(args);
 
-        // One file per launch, named with a UTC timestamp (matching the other
-        // apps). Infinite rolling means Serilog writes the single named file;
-        // shared lets two instances launched in the same second share it.
-        var logFile = Path.Combine(StorageRoot.LogsDirectory, SessionLog.FileName(DateTimeOffset.UtcNow));
-        Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
-            .WriteTo.File(logFile, rollingInterval: RollingInterval.Infinite, shared: true)
-            .CreateLogger();
-
+        // One JSON-Lines file per launch under the app's logs directory; the logger
+        // installs its own crash hooks and console fallback.
+        Log.Start(StorageRoot.LogsDirectory);
+        var clean = true;
         try
         {
-            Log.Information("PathHide starting");
+            Log.Info("startup", new
+            {
+                version = AppVersion(),
+                os = RuntimeInformation.OSDescription,
+                arch = RuntimeInformation.OSArchitecture,
+                storageDir = StorageRoot.Directory,
+                debugLogging = Log.DebugEnabled,
+            });
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
         catch (Exception ex)
         {
-            Log.Fatal(ex, "PathHide terminated unexpectedly");
+            // The "why" of a forced shutdown; the shutdown line below records that it
+            // was not clean.
+            Log.Error("fatal: terminated unexpectedly", ex);
+            clean = false;
             return 1;
         }
         finally
         {
-            Log.Information("PathHide shutting down");
-            Log.CloseAndFlush();
+            Log.Info("shutdown", new { clean });
+            Log.Shutdown();
         }
     }
 
@@ -49,8 +55,14 @@ sealed class Program
             .WithInterFont()
             .LogToTrace();
 
+    private static string AppVersion() =>
+        Assembly.GetEntryAssembly()?.GetName().Version?.ToString() ?? "unknown";
+
     private static int RunApplyMode(string[] args)
     {
+        // The elevated apply pass is a genuinely separate OS process, so it gets its
+        // own per-session log file (co-located with the GUI process's logs).
+        Log.Start(StorageRoot.LogsDirectory);
         try
         {
             var hideOpt = new Option<string[]>("--hide")
@@ -71,10 +83,10 @@ sealed class Program
                 var toSystem = result.GetValue(systemOpt) ?? [];
                 var toShow   = result.GetValue(showOpt)   ?? [];
 
-                var anyFailed = ApplyFileAttributes(toHide,   hide: true,  system: false) != 0
-                             || ApplyFileAttributes(toSystem, hide: true,  system: true)  != 0
-                             || ApplyFileAttributes(toShow,   hide: false, system: false) != 0;
-                return anyFailed ? 1 : 0;
+                var failed = ApplyFileAttributes(toHide,   hide: true,  system: false)
+                           + ApplyFileAttributes(toSystem, hide: true,  system: true)
+                           + ApplyFileAttributes(toShow,   hide: false, system: false);
+                return failed > 0 ? 1 : 0;
             });
 
             var root = new RootCommand("PathHide apply mode");
@@ -83,16 +95,28 @@ sealed class Program
             var parseResult = root.Parse(args);
             return parseResult.Invoke(parseResult.InvocationConfiguration);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Log.Error("apply mode: failed", ex);
             return 3;
+        }
+        finally
+        {
+            Log.Shutdown();
         }
     }
 
+    /// <returns>The number of paths that could not be updated.</returns>
     private static int ApplyFileAttributes(string[] paths, bool hide, bool system)
     {
-        var anyFailed = false;
+        if (paths.Length == 0)
+            return 0;
 
+        // Loop coverage per the conventions: one info line for the intent, one for the
+        // outcome, and one error per failure — never one line per successful item.
+        Log.Info("apply: start", new { count = paths.Length, hide, system });
+
+        var failed = 0;
         foreach (var path in paths)
         {
             try
@@ -107,12 +131,17 @@ sealed class Program
 
                 File.SetAttributes(path, attrs);
             }
-            catch
+            catch (Exception ex)
             {
-                anyFailed = true;
+                // These paths reached the elevated pass precisely because the
+                // unelevated attempt hit access-denied, so a failure here is
+                // unexpected and gets a full error — not a silent swallow.
+                Log.Error("apply: failed to set attributes", ex, new { path, hide, system });
+                failed++;
             }
         }
 
-        return anyFailed ? 1 : 0;
+        Log.Info("apply: done", new { ok = paths.Length - failed, failed });
+        return failed;
     }
 }

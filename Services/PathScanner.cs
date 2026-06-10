@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using PathHide.Models;
-using Serilog;
 
 namespace PathHide.Services;
 
@@ -14,8 +13,6 @@ public sealed record ScanResult(
 
 public sealed class PathScanner
 {
-    private static readonly ILogger Log = Serilog.Log.ForContext<PathScanner>();
-
     private readonly IVisibilityService _visibilityService;
 
     public PathScanner(IVisibilityService visibilityService)
@@ -51,9 +48,14 @@ public sealed class PathScanner
                     cancellationToken);
             }
 
-            Log.Debug(
-                "Scanned {Path}: {ActualState}, {ItemKind}, {Family}",
-                entry.Path, inspection.ActualState, inspection.ItemKind, family);
+            // Per-item, scales with the path list — debug only.
+            Log.Debug("scanned", new
+            {
+                path = entry.Path,
+                actualState = inspection.ActualState,
+                itemKind = inspection.ItemKind,
+                family,
+            });
 
             progress?.Report(i + 1);
             yield return new ScanResult(entry, inspection, family);

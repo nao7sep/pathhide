@@ -10,14 +10,11 @@ using CommunityToolkit.Mvvm.Input;
 using PathHide.Models;
 using PathHide.Services;
 using PathHide.Storage;
-using Serilog;
 
 namespace PathHide.ViewModels;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
-    private static readonly ILogger Log = Serilog.Log.ForContext<MainWindowViewModel>();
-
     private readonly IJsonStore<List<PathEntry>> _pathListStore;
     private readonly IJsonStore<AppSettings> _settingsStore;
     private readonly IVisibilityService _visibilityService;
@@ -152,7 +149,7 @@ public partial class MainWindowViewModel : ViewModelBase
             {
                 if (!PathNormalizer.TryNormalize(raw, out var normalized, out _))
                 {
-                    Log.Warning("Rejected path (not absolute): {Path}", raw);
+                    Log.Warn("add: rejected non-absolute path", new { path = raw });
                     skipped++;
                     continue;
                 }
@@ -171,6 +168,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 addedPaths.Add(normalized);
                 added++;
             }
+
+            Log.Info("add paths", new { added, skipped });
 
             if (added == 0)
             {
@@ -218,6 +217,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
             foreach (var row in selected)
                 _entries.Remove(row.Entry);
+
+            Log.Info("remove paths", new { removed = selected.Count });
 
             if (!TryCommitPathChanges(previousEntries))
                 return;
@@ -370,6 +371,7 @@ public partial class MainWindowViewModel : ViewModelBase
         // (see SetWindowsHideMode), so the in-memory value never diverges from disk. Copying
         // a freshly loaded settings object back into the shared instance field-by-field would
         // be both brittle (it silently couples to AppSettings having one field) and pointless.
+        Log.Info("reload");
         _entries = _pathListStore.Load();
         SyncRowsWithEntries();
         _scanTask = RunScanAsync();
@@ -394,13 +396,13 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             _settingsStore.Save(_settings);
-            Log.Information("Windows hide mode set to {Mode}", newMode);
+            Log.Info("settings: hide mode changed", new { mode = newMode });
             OnPropertyChanged(nameof(IsHiddenAndSystem));
         }
         catch (Exception ex)
         {
             _settings.WindowsHideMode = previousMode;
-            Log.Error(ex, "Failed to save settings");
+            Log.Error("settings: save failed", ex);
             ShowNotification($"Failed to save settings: {ex.Message}");
         }
     }
@@ -428,7 +430,7 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to save paths");
+            Log.Error("paths: save failed", ex);
             ShowNotification($"Failed to save: {ex.Message}");
             return false;
         }
@@ -581,11 +583,11 @@ public partial class MainWindowViewModel : ViewModelBase
         }
         catch (OperationCanceledException)
         {
-            Log.Information("Scan cancelled");
+            Log.Info("scan: cancelled");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Scan failed");
+            Log.Error("scan: failed", ex);
             ShowNotification($"Scan failed: {ex.Message}");
         }
         finally
@@ -603,6 +605,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private async Task<string> ApplyDesiredStateAsync(List<PathRowViewModel> targets)
     {
+        Log.Info("apply: start", new { count = targets.Count });
+
         var applied = 0;
         var missing = 0;
         var errors = 0;
@@ -649,7 +653,7 @@ public partial class MainWindowViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Failed to apply desired state to {Path}", row.Path);
+                Log.Error("apply: failed", ex, new { path = row.Path });
                 errors++;
                 var recheck = await Task.Run(() => _visibilityService.Inspect(row.Path));
                 row.ApplyScanResult(recheck, row.PathFamily);
@@ -697,6 +701,8 @@ public partial class MainWindowViewModel : ViewModelBase
             }
         }
 
+        Log.Info("apply: done", new { applied, missing, errors, elevationExitCode });
+
         var parts = new List<string>();
         if (applied > 0) parts.Add($"{applied} applied");
         if (missing > 0) parts.Add($"{missing} missing");
@@ -712,7 +718,8 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private void ShowNotification(string message)
     {
-        Log.Information("Notification: {Message}", message);
+        // One line per user-visible outcome — the record of what the status bar showed.
+        Log.Info("notification", new { message });
         Notification = message;
 
         _notificationCts?.Cancel();

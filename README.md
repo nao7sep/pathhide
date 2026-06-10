@@ -24,6 +24,16 @@ When Windows is in `HiddenOnly` mode, hide and reapply clear `SYSTEM` and keep o
 
 The `Show` action always clears both `HIDDEN` and `SYSTEM` regardless of the current mode.
 
+## Logs
+
+PathHide writes a runtime log so a problem can be reconstructed after the fact.
+
+- **One file per launch**, under `~/.pathhide/logs/`, named with the UTC launch time: `yyyymmdd-hhmmss-utc.log`.
+- **JSON Lines** — one event per line, each an object with a `time` (UTC, millisecond ISO-8601), `level` (`debug`/`info`/`warn`/`error`), and `message`, plus event-specific fields. Machine-parseable first, greppable by eye second.
+- **Never auto-deleted.** Logs are small; old ones may be exactly what's needed to debug a problem that surfaces later. Delete them by hand if you want to reclaim the space.
+- Open the current log from the toolbar's `☰` menu → **Open Log File** (reveals it in Finder/Explorer).
+- **Developer detail is off by default.** Per-item `debug` lines (each scanned path, each attribute write) are written only in a development build or when the `PATHHIDE_DEBUG=1` environment variable is set, so a normal install never floods the disk. The Windows elevated apply pass is a separate process and writes its own session log alongside the main one.
+
 ## Requirements
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)

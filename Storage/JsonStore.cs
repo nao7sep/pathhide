@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
-using Serilog;
+using PathHide.Services;
 
 namespace PathHide.Storage;
 
@@ -21,8 +21,6 @@ namespace PathHide.Storage;
 /// </remarks>
 public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 {
-    private static readonly ILogger Log = Serilog.Log.ForContext<JsonStore<T>>();
-
     private readonly string _filePath;
     private readonly string _backupPath;
     private readonly string _label;
@@ -46,11 +44,13 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
         if (TryLoadFile(_backupPath, out value))
         {
-            Log.Warning("Recovered {Label} from backup {Path}", _label, _backupPath);
+            Log.Warn("store: recovered from backup", new { label = _label, path = _backupPath });
             return value;
         }
 
-        Log.Warning("No usable {Label} file found; using defaults", _label);
+        // Reached on first run (no files yet — normal) or after both the live file and
+        // its backup were unreadable (each already logged a warn above).
+        Log.Info("store: no existing data, using defaults", new { label = _label });
         return new T();
     }
 
@@ -61,11 +61,11 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             StorageRoot.EnsureExists();
             var json = JsonSerializer.Serialize(value, JsonOptions.Default);
             WriteAtomically(json);
-            Log.Information("Saved {Label} to {Path}", _label, _filePath);
+            Log.Info("store: saved", new { label = _label, path = _filePath });
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to save {Label} to {Path}", _label, _filePath);
+            Log.Error("store: save failed", ex, new { label = _label, path = _filePath });
             throw;
         }
     }
@@ -74,6 +74,8 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     {
         value = new T();
 
+        // An absent file is normal (first run, or no backup yet): not a failure, so it
+        // is not logged here — the caller decides what the absence means.
         if (!File.Exists(filePath))
             return false;
 
@@ -81,12 +83,14 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         {
             var json = File.ReadAllText(filePath);
             value = JsonSerializer.Deserialize<T>(json, JsonOptions.Default) ?? new T();
-            Log.Information("Loaded {Label} from {Path}", _label, filePath);
+            Log.Info("store: loaded", new { label = _label, path = filePath });
             return true;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to load {Label} from {Path}", _label, filePath);
+            // The file exists but will not parse — unexpected, yet recoverable (the
+            // caller falls back to the backup or to defaults), so warn rather than error.
+            Log.Warn("store: file unreadable", ex, new { label = _label, path = filePath });
             return false;
         }
     }

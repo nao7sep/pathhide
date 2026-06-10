@@ -43,6 +43,10 @@ public partial class App : Application
         var settingsStore = new JsonStore<AppSettings>("settings.json", "settings");
         var settings = settingsStore.Load();
 
+        // Key effective configuration at startup (the conventions' baseline). The hide
+        // mode is the one user-tunable setting; it lives here, loaded above.
+        Log.Info("config", new { hideMode = settings.WindowsHideMode });
+
         IVisibilityService visibilityService = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? new WindowsVisibilityService(() => settings.WindowsHideMode)
             : new MacVisibilityService();

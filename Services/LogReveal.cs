@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using PathHide.Storage;
-using Serilog;
 
 namespace PathHide.Services;
 
@@ -16,8 +15,6 @@ namespace PathHide.Services;
 /// </summary>
 public static class LogReveal
 {
-    private static readonly ILogger Log = Serilog.Log.ForContext(typeof(LogReveal));
-
     public static void Reveal()
     {
         try
@@ -33,7 +30,7 @@ public static class LogReveal
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to reveal log file");
+            Log.Error("reveal log: failed", ex);
         }
     }
 
@@ -49,7 +46,7 @@ public static class LogReveal
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Could not enumerate logs in {Dir}", dir);
+            Log.Debug("reveal log: enumerate failed", ex, new { dir });
             return null;
         }
     }

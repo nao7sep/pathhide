@@ -1,14 +1,11 @@
 using System;
 using System.IO;
 using PathHide.Models;
-using Serilog;
 
 namespace PathHide.Services;
 
 public sealed class WindowsVisibilityService : IVisibilityService
 {
-    private static readonly ILogger Log = Serilog.Log.ForContext<WindowsVisibilityService>();
-
     private readonly Func<WindowsHideMode> _getHideMode;
 
     public WindowsVisibilityService(Func<WindowsHideMode> getHideMode)
@@ -41,7 +38,7 @@ public sealed class WindowsVisibilityService : IVisibilityService
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to inspect {Path}", path);
+            Log.Error("inspect: failed", ex, new { path });
             return new PathInspection(ActualState.Error, ItemKind.Unknown);
         }
     }
@@ -57,7 +54,9 @@ public sealed class WindowsVisibilityService : IVisibilityService
         else
             attrs &= ~FileAttributes.System;
 
-        Log.Information("Hiding {Path} with mode {Mode}", path, mode);
+        // Per-item boundary crossing: debug, not info. The command aggregate is
+        // logged once by the caller (ApplyDesiredStateAsync).
+        Log.Debug("hiding path", new { path, mode });
         File.SetAttributes(path, attrs);
     }
 
@@ -67,7 +66,7 @@ public sealed class WindowsVisibilityService : IVisibilityService
         attrs &= ~FileAttributes.Hidden;
         attrs &= ~FileAttributes.System;
 
-        Log.Information("Showing {Path}", path);
+        Log.Debug("showing path", new { path });
         File.SetAttributes(path, attrs);
     }
 
@@ -83,7 +82,7 @@ public sealed class WindowsVisibilityService : IVisibilityService
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Cannot check ancestor accessibility for {Path}", path);
+            Log.Debug("ancestor probe failed", ex, new { path });
             return false;
         }
     }
@@ -104,7 +103,7 @@ public sealed class WindowsVisibilityService : IVisibilityService
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Cannot detect item kind for {Path}", path);
+            Log.Debug("kind probe failed", ex, new { path });
             return ItemKind.Unknown;
         }
     }

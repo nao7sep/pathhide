@@ -2,14 +2,11 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using PathHide.Models;
-using Serilog;
 
 namespace PathHide.Services;
 
 public sealed class MacVisibilityService : IVisibilityService
 {
-    private static readonly ILogger Log = Serilog.Log.ForContext<MacVisibilityService>();
-
     public PathInspection Inspect(string path)
     {
         try
@@ -25,9 +22,7 @@ public sealed class MacVisibilityService : IVisibilityService
             // matches what Hide/Show will actually modify.
             if (!MacFs.TryGetFlags(path, followSymlinks: false, out var flags))
             {
-                Log.Error(
-                    "getattrlist({Path}) failed (errno {Errno})",
-                    path, Marshal.GetLastPInvokeError());
+                Log.Error("inspect: getattrlist failed", new { path, errno = Marshal.GetLastPInvokeError() });
                 return new PathInspection(ActualState.Error, ItemKind.Unknown);
             }
 
@@ -41,20 +36,22 @@ public sealed class MacVisibilityService : IVisibilityService
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to inspect {Path}", path);
+            Log.Error("inspect: failed", ex, new { path });
             return new PathInspection(ActualState.Error, ItemKind.Unknown);
         }
     }
 
     public void Hide(string path)
     {
-        Log.Information("Hiding {Path}", path);
+        // Per-item boundary crossing: debug, not info. The aggregate of a hide/show
+        // command is logged once by the caller (ApplyDesiredStateAsync).
+        Log.Debug("hiding path", new { path });
         SetHidden(path, hidden: true);
     }
 
     public void Show(string path)
     {
-        Log.Information("Showing {Path}", path);
+        Log.Debug("showing path", new { path });
         SetHidden(path, hidden: false);
     }
 
@@ -96,7 +93,7 @@ public sealed class MacVisibilityService : IVisibilityService
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Cannot determine whether {Path} is a symlink", path);
+            Log.Debug("symlink probe failed", ex, new { path });
             return false;
         }
     }
@@ -113,7 +110,7 @@ public sealed class MacVisibilityService : IVisibilityService
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Cannot check ancestor accessibility for {Path}", path);
+            Log.Debug("ancestor probe failed", ex, new { path });
             return false;
         }
     }
@@ -129,7 +126,7 @@ public sealed class MacVisibilityService : IVisibilityService
         }
         catch (Exception ex)
         {
-            Log.Debug(ex, "Cannot detect item kind for {Path}", path);
+            Log.Debug("kind probe failed", ex, new { path });
             return ItemKind.Unknown;
         }
     }
