@@ -1,6 +1,5 @@
 using System.Linq;
 using System.ComponentModel;
-using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -36,7 +35,8 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        ViewModel.ConfirmAsync = ShowConfirmAsync;
+        ViewModel.ConfirmDestructiveAsync = request =>
+            ConfirmDialog.ConfirmDestructiveAsync(this, request.Title, request.Message, request.ConfirmLabel);
         ViewModel.Initialize();
         PathGrid.Columns.First(c => c.SortMemberPath == nameof(PathRowViewModel.Path))
             .Sort(ListSortDirection.Ascending);
@@ -47,13 +47,6 @@ public partial class MainWindow : Window
             else
                 AddFilesButton.Focus();
         });
-    }
-
-    private async Task<bool> ShowConfirmAsync(string title, string message)
-    {
-        var dialog = new ConfirmDialog(title, message);
-        await dialog.ShowDialog(this);
-        return dialog.Confirmed;
     }
 
     private async void OnAboutClick(object? sender, RoutedEventArgs e)

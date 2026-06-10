@@ -10,7 +10,7 @@ namespace PathHide.Services;
 
 /// <summary>
 /// Best-effort "show me the log" helper. Locates the most recently written
-/// rolled log file under <see cref="StorageRoot.LogsDirectory"/> and reveals it
+/// per-launch log file under <see cref="StorageRoot.LogsDirectory"/> and reveals it
 /// in the host platform's file manager (Finder on macOS, Explorer on Windows).
 /// Falls back to opening the logs directory if no log file is present.
 /// </summary>
@@ -42,7 +42,7 @@ public static class LogReveal
         try
         {
             return new DirectoryInfo(dir)
-                .EnumerateFiles("pathhide-*.log")
+                .EnumerateFiles("*.log")
                 .OrderByDescending(f => f.LastWriteTimeUtc)
                 .FirstOrDefault()
                 ?.FullName;

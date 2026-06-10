@@ -34,9 +34,11 @@ public partial class MainWindowViewModel : ViewModelBase
     private bool _initialized;
 
     /// <summary>
-    /// Set by the view to show a confirmation dialog. Returns true if confirmed.
+    /// Set by the view to show a destructive-action confirmation dialog. Returns true if the
+    /// user confirms. Left null in headless contexts (tests), where the destructive action
+    /// proceeds unprompted.
     /// </summary>
-    public Func<string, string, Task<bool>>? ConfirmAsync { get; set; }
+    public Func<ConfirmRequest, Task<bool>>? ConfirmDestructiveAsync { get; set; }
 
     public ObservableCollection<PathRowViewModel> Rows { get; } = [];
 
@@ -203,11 +205,12 @@ public partial class MainWindowViewModel : ViewModelBase
             if (selected.Count == 0)
                 return;
 
-            if (ConfirmAsync is not null)
+            if (ConfirmDestructiveAsync is not null)
             {
-                var confirmed = await ConfirmAsync(
+                var confirmed = await ConfirmDestructiveAsync(new ConfirmRequest(
                     "Remove entries",
-                    $"Remove {selected.Count} selected {(selected.Count == 1 ? "entry" : "entries")} from the list?");
+                    $"Remove {selected.Count} selected {(selected.Count == 1 ? "entry" : "entries")} from the list?",
+                    "Remove"));
 
                 if (!confirmed)
                     return;

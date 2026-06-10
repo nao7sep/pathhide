@@ -215,5 +215,11 @@
             <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
+
+        <!-- The accent commit button carries an explicit background, so dim it when disabled
+             to read as unavailable — e.g. Save before a setting is changed. -->
+        <Style Selector="Button.accent:disabled">
+            <Setter Property="Opacity" Value="0.45"/>
+        </Style>
     </Application.Styles>
 </Application>

@@ -98,7 +98,7 @@ public class MainWindowViewModelTests
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
-        vm.ConfirmAsync = (_, _) => Task.FromResult(true);
+        vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
         await vm.AddPathsAsync(new[] { "/x" });
 
         vm.Rows.Single().IsSelected = true;
@@ -114,12 +114,69 @@ public class MainWindowViewModelTests
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
-        vm.ConfirmAsync = (_, _) => Task.FromResult(false);
+        vm.ConfirmDestructiveAsync = _ => Task.FromResult(false);
         await vm.AddPathsAsync(new[] { "/x" });
 
         vm.Rows.Single().IsSelected = true;
         await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
 
+        Assert.Single(vm.Rows);
+    }
+
+    [Theory]
+    [InlineData(1, "1 selected entry from the list?")]
+    [InlineData(3, "3 selected entries from the list?")]
+    public async Task RemoveSelected_RaisesDestructiveConfirm_WithSpecificLabelAndCountAwareCopy(
+        int count, string expectedMessageTail)
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        ConfirmRequest? captured = null;
+        // Decline, so nothing is removed — this test pins the request payload, not the outcome.
+        vm.ConfirmDestructiveAsync = request =>
+        {
+            captured = request;
+            return Task.FromResult(false);
+        };
+
+        await vm.AddPathsAsync(Enumerable.Range(0, count).Select(i => $"/p{i}").ToArray());
+        foreach (var row in vm.Rows)
+            row.IsSelected = true;
+
+        await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
+
+        Assert.NotNull(captured);
+        // The destructive action must carry a specific, danger-styled label — never a generic
+        // "Yes"/"OK" — and count-aware singular/plural copy (the modal-conventions fix).
+        Assert.Equal("Remove", captured!.ConfirmLabel);
+        Assert.Equal("Remove entries", captured.Title);
+        Assert.EndsWith(expectedMessageTail, captured.Message);
+        // Declined: every row is still present.
+        Assert.Equal(count, vm.Rows.Count);
+    }
+
+    [Fact]
+    public async Task RemoveSelected_WhenNothingSelected_DoesNotPromptForConfirmation()
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        var prompted = false;
+        vm.ConfirmDestructiveAsync = _ =>
+        {
+            prompted = true;
+            return Task.FromResult(true);
+        };
+
+        await vm.AddPathsAsync(new[] { "/x" });
+        // No row selected.
+        await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
+
+        // An empty selection short-circuits before the confirm — no spurious dialog.
+        Assert.False(prompted);
         Assert.Single(vm.Rows);
     }
 

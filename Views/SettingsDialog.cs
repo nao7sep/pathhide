@@ -1,6 +1,4 @@
-using System.Threading.Tasks;
 using Avalonia.Controls;
-using Avalonia.Layout;
 using Avalonia.Media;
 
 namespace PathHide.Views;
@@ -9,7 +7,7 @@ public sealed class SettingsDialog : DialogBase
 {
     private readonly CheckBox _hiddenAndSystemCheckBox;
     private readonly bool _originalIsHiddenAndSystem;
-    private bool _skipDirtyCheck;
+    private readonly Button _saveButton;
 
     public bool Accepted => ResultTag == "save";
     public bool IsHiddenAndSystem => _hiddenAndSystemCheckBox.IsChecked == true;
@@ -42,36 +40,26 @@ public sealed class SettingsDialog : DialogBase
         };
 
         SetContent(panel);
-        SetButtons([
-            ("Cancel", "cancel", false),
-            ("Save", "save", true),
+        var buttons = SetButtons(
+        [
+            new DialogButton("Cancel", "cancel"),
+            new DialogButton("Save", "save", DialogButtonKind.Primary) { IsDefault = true },
         ]);
+        _saveButton = buttons["save"];
+
         SetInitialFocus(_hiddenAndSystemCheckBox);
 
-        Closing += OnClosing;
+        // Wire the change handler only after _saveButton exists, so an IsCheckedChanged raised
+        // during setup can never run UpdateSaveState against a null button. Then seed the state.
+        _hiddenAndSystemCheckBox.IsCheckedChanged += (_, _) => UpdateSaveState();
+        UpdateSaveState();
     }
 
-    private bool IsDirty => _hiddenAndSystemCheckBox.IsChecked != _originalIsHiddenAndSystem;
+    // Save commits a draft, so the shell's dirty guard prompts on dismiss and Save stays
+    // disabled until the draft actually differs from the persisted value (the conventions'
+    // dirty gate for explicit commit buttons). Validity is not a factor here — a checkbox
+    // is always valid — so dirtiness alone gates the commit.
+    protected override bool HasUnsavedChanges => IsHiddenAndSystem != _originalIsHiddenAndSystem;
 
-    private void OnClosing(object? sender, WindowClosingEventArgs e)
-    {
-        if (_skipDirtyCheck || ResultTag == "save" || !IsDirty)
-            return;
-
-        // Cancel the synchronous close and run the async confirmation instead.
-        e.Cancel = true;
-        _ = ConfirmDiscardAsync();
-    }
-
-    private async Task ConfirmDiscardAsync()
-    {
-        var dialog = new ConfirmDialog("Discard Changes", "You have unsaved changes. Discard them and close?");
-        await dialog.ShowDialog(this);
-
-        if (dialog.Confirmed)
-        {
-            _skipDirtyCheck = true;
-            Close();
-        }
-    }
+    private void UpdateSaveState() => _saveButton.IsEnabled = HasUnsavedChanges;
 }

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Avalonia;
+using PathHide.Services;
 using PathHide.Storage;
 using Serilog;
 using System.CommandLine;
@@ -15,12 +16,13 @@ sealed class Program
         if (args.Length > 0 && args[0] == "apply")
             return RunApplyMode(args);
 
+        // One file per launch, named with a UTC timestamp (matching the other
+        // apps). Infinite rolling means Serilog writes the single named file;
+        // shared lets two instances launched in the same second share it.
+        var logFile = Path.Combine(StorageRoot.LogsDirectory, SessionLog.FileName(DateTimeOffset.UtcNow));
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
-            .WriteTo.File(
-                Path.Combine(StorageRoot.LogsDirectory, "pathhide-.log"),
-                rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 14)
+            .WriteTo.File(logFile, rollingInterval: RollingInterval.Infinite, shared: true)
             .CreateLogger();
 
         try
