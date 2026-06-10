@@ -7,6 +7,14 @@ using PathHide.Storage;
 
 namespace PathHide.Services;
 
+internal enum LogRevealTargetKind
+{
+    File,
+    Directory,
+}
+
+internal readonly record struct LogRevealTarget(string Path, LogRevealTargetKind Kind);
+
 /// <summary>
 /// Best-effort "show me the log" helper. Locates the most recently written
 /// per-launch log file under <see cref="StorageRoot.LogsDirectory"/> and reveals it
@@ -19,19 +27,27 @@ public static class LogReveal
     {
         try
         {
-            var dir = StorageRoot.LogsDirectory;
-            Directory.CreateDirectory(dir);
-
-            var current = TryFindMostRecentLog(dir);
-            if (current is not null)
-                RevealInFileManager(current);
+            var target = SelectTarget(StorageRoot.LogsDirectory, Log.Flush);
+            if (target.Kind == LogRevealTargetKind.File)
+                RevealInFileManager(target.Path);
             else
-                OpenDirectoryInFileManager(dir);
+                OpenDirectoryInFileManager(target.Path);
         }
         catch (Exception ex)
         {
             Log.Error("reveal log: failed", ex);
         }
+    }
+
+    internal static LogRevealTarget SelectTarget(string logsDirectory, Action flush)
+    {
+        flush();
+        Directory.CreateDirectory(logsDirectory);
+
+        var current = TryFindMostRecentLog(logsDirectory);
+        return current is not null
+            ? new LogRevealTarget(current, LogRevealTargetKind.File)
+            : new LogRevealTarget(logsDirectory, LogRevealTargetKind.Directory);
     }
 
     private static string? TryFindMostRecentLog(string dir)

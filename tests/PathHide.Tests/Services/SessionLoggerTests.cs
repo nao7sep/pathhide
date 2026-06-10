@@ -206,6 +206,50 @@ public sealed class SessionLoggerTests
     }
 
     [Fact]
+    public void Flush_failure_is_reported_to_console_without_throwing()
+    {
+        var writer = new ThrowingFlushWriter();
+        var log = new SessionLogger(writer, debugEnabled: true, Denied, leaveOpen: true);
+        var originalErr = Console.Error;
+        var console = new StringWriter();
+        Console.SetError(console);
+
+        try
+        {
+            var thrown = Record.Exception(() => log.Flush());
+
+            Assert.Null(thrown);
+            Assert.Contains("[logger] flush failed: IOException: disk full", console.ToString());
+        }
+        finally
+        {
+            Console.SetError(originalErr);
+        }
+    }
+
+    [Fact]
+    public void Dispose_final_flush_failure_is_reported_to_console_without_throwing()
+    {
+        var writer = new ThrowingFlushWriter();
+        var log = new SessionLogger(writer, debugEnabled: true, Denied, leaveOpen: true);
+        var originalErr = Console.Error;
+        var console = new StringWriter();
+        Console.SetError(console);
+
+        try
+        {
+            var thrown = Record.Exception(log.Dispose);
+
+            Assert.Null(thrown);
+            Assert.Contains("[logger] final flush failed: IOException: disk full", console.ToString());
+        }
+        finally
+        {
+            Console.SetError(originalErr);
+        }
+    }
+
+    [Fact]
     public void Writing_after_dispose_falls_back_to_console_not_a_silent_drop()
     {
         // A worker-thread log can race shutdown's Dispose. The event must surface
@@ -232,5 +276,11 @@ public sealed class SessionLoggerTests
         // ...but the event surfaced on the console instead of being dropped.
         Assert.Contains("late", console.ToString());
         Assert.Contains("/x", console.ToString());
+    }
+
+    private sealed class ThrowingFlushWriter : StringWriter
+    {
+        public override void Flush() =>
+            throw new IOException("disk full");
     }
 }

@@ -115,7 +115,10 @@ public sealed class SessionLogger : IDisposable
             if (_disposed)
                 return;
             try { _writer.Flush(); }
-            catch { /* best-effort; a flush failure has nowhere useful to go */ }
+            catch (Exception ex)
+            {
+                EmitToConsole($"[logger] flush failed: {ex.GetType().Name}: {ex.Message}");
+            }
         }
     }
 
@@ -126,13 +129,21 @@ public sealed class SessionLogger : IDisposable
             if (_disposed)
                 return;
             _disposed = true;
-            try
+
+            try { _writer.Flush(); }
+            catch (Exception ex)
             {
-                _writer.Flush();
-                if (!_leaveOpen)
-                    _writer.Dispose();
+                EmitToConsole($"[logger] final flush failed: {ex.GetType().Name}: {ex.Message}");
             }
-            catch { /* shutting down; nothing left to surface this to */ }
+
+            if (!_leaveOpen)
+            {
+                try { _writer.Dispose(); }
+                catch (Exception ex)
+                {
+                    EmitToConsole($"[logger] dispose failed: {ex.GetType().Name}: {ex.Message}");
+                }
+            }
         }
     }
 

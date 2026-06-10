@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
 
 namespace PathHide.Services;
@@ -58,17 +57,7 @@ public static class Log
             SessionLogger fileLogger;
             try
             {
-                Directory.CreateDirectory(logsDirectory);
-                var path = Path.Combine(logsDirectory, SessionLog.FileName(DateTime.UtcNow));
-
-                // Append so a same-named file is never truncated; FileShare.Read keeps
-                // it readable while open (the "Open Log File" reveal, external tail).
-                // Two launches in the same UTC second are the only way two sessions
-                // share a name — not special-cased here, as in most single-user desktop
-                // apps; a second concurrent instance is already racing on paths.json.
-                var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
-                var writer = new StreamWriter(stream) { AutoFlush = false };
-                fileLogger = new SessionLogger(writer, IsDebugEnabled(), DeniedKeys);
+                fileLogger = new SessionLogger(SessionLog.OpenWriter(logsDirectory), IsDebugEnabled(), DeniedKeys);
             }
             catch (Exception ex)
             {
