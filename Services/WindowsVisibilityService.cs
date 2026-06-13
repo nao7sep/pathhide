@@ -38,7 +38,7 @@ public sealed class WindowsVisibilityService : IVisibilityService
         }
         catch (Exception ex)
         {
-            Log.Error("inspect: failed", ex, new { path });
+            Log.Debug("inspect: failed", ex, new { path });
             return new PathInspection(ActualState.Error, ItemKind.Unknown);
         }
     }

@@ -22,7 +22,7 @@ public sealed class MacVisibilityService : IVisibilityService
             // matches what Hide/Show will actually modify.
             if (!MacFs.TryGetFlags(path, followSymlinks: false, out var flags))
             {
-                Log.Error("inspect: getattrlist failed", new { path, errno = Marshal.GetLastPInvokeError() });
+                Log.Debug("inspect: getattrlist failed", new { path, errno = Marshal.GetLastPInvokeError() });
                 return new PathInspection(ActualState.Error, ItemKind.Unknown);
             }
 
@@ -36,7 +36,7 @@ public sealed class MacVisibilityService : IVisibilityService
         }
         catch (Exception ex)
         {
-            Log.Error("inspect: failed", ex, new { path });
+            Log.Debug("inspect: failed", ex, new { path });
             return new PathInspection(ActualState.Error, ItemKind.Unknown);
         }
     }
