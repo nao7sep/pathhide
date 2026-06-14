@@ -13,9 +13,11 @@ public sealed class MacVisibilityService : IVisibilityService
         {
             if (!Path.Exists(path))
             {
-                return IsAncestorAccessible(path)
-                    ? new PathInspection(ActualState.Missing, ItemKind.Unknown)
-                    : new PathInspection(ActualState.Unreachable, ItemKind.Unknown);
+                // Not directly statable — distinguish a genuinely missing path/ancestor
+                // from a permission wall. macOS has no elevation step, but the state is
+                // still reported faithfully (the apply pipeline treats AccessDenied as a
+                // terminal error here).
+                return new PathInspection(PathProbe.ClassifyInaccessible(path), ItemKind.Unknown);
             }
 
             // Don't follow symlinks: describe the link's own flags so the result
@@ -32,7 +34,7 @@ public sealed class MacVisibilityService : IVisibilityService
         }
         catch (UnauthorizedAccessException)
         {
-            return new PathInspection(ActualState.Unreachable, ItemKind.Unknown);
+            return new PathInspection(ActualState.AccessDenied, ItemKind.Unknown);
         }
         catch (Exception ex)
         {
@@ -94,23 +96,6 @@ public sealed class MacVisibilityService : IVisibilityService
         catch (Exception ex)
         {
             Log.Debug("symlink probe failed", ex, new { path });
-            return false;
-        }
-    }
-
-    private static bool IsAncestorAccessible(string path)
-    {
-        var parent = Path.GetDirectoryName(path);
-        if (string.IsNullOrEmpty(parent))
-            return false;
-
-        try
-        {
-            return Directory.Exists(parent);
-        }
-        catch (Exception ex)
-        {
-            Log.Debug("ancestor probe failed", ex, new { path });
             return false;
         }
     }

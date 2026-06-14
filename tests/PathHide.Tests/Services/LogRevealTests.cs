@@ -11,7 +11,7 @@ public sealed class LogRevealTests
     public void SelectTarget_flushes_before_looking_for_the_current_log()
     {
         using var temp = new TempDirectory();
-        var logPath = Path.Combine(temp.Path, "20260610-093015-123-utc-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.log");
+        var logPath = Path.Combine(temp.Path, "20260610-093015-utc.log");
 
         var target = LogReveal.SelectTarget(temp.Path, () =>
         {

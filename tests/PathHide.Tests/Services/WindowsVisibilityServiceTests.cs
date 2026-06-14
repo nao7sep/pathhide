@@ -87,4 +87,14 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
 
         Assert.Equal(ActualState.Missing, Service().Inspect(missing).ActualState);
     }
+
+    [WindowsOnlyFact]
+    public void Inspect_PathUnderNonexistentParent_ReturnsMissing()
+    {
+        var missing = Path.Combine(_dir, "no-such-dir", "child");
+
+        // Elevation cannot conjure a missing parent, so this must classify as Missing,
+        // never AccessDenied (which would route it into a futile elevated retry).
+        Assert.Equal(ActualState.Missing, Service().Inspect(missing).ActualState);
+    }
 }

@@ -38,6 +38,7 @@ public partial class MainWindow : Window
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         KeyDown += OnKeyDown;
         PathGrid.SelectionChanged += OnGridSelectionChanged;
+        PathGrid.KeyDown += OnGridKeyDown;
 
         Loaded += OnLoaded;
     }
@@ -131,12 +132,6 @@ public partial class MainWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Delete || e.Key == Key.Back)
-        {
-            ViewModel.RemoveSelectedCommand.Execute(null);
-            return;
-        }
-
         // Gated on HasSettings so the accelerator is live only where Settings exists
         // (Windows); a modal dialog is a separate top-level, so this never fires while
         // Settings is already open.
@@ -144,6 +139,20 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             _ = OpenSettingsAsync();
+        }
+    }
+
+    // Delete removes the selected entries — but only while the list itself has focus. It is
+    // wired on the grid, not the window, so the destructive command can never fire from a
+    // toolbar button or other focused control. Backspace is deliberately NOT a delete alias:
+    // on a focused control it reads as "go back"/erase, so triggering a destructive remove
+    // from it is a footgun.
+    private void OnGridKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete)
+        {
+            e.Handled = true;
+            ViewModel.RemoveSelectedCommand.Execute(null);
         }
     }
 }

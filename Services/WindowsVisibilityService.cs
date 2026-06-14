@@ -17,24 +17,27 @@ public sealed class WindowsVisibilityService : IVisibilityService
     {
         try
         {
-            if (!Path.Exists(path))
-            {
-                if (IsAncestorAccessible(path))
-                    return new PathInspection(ActualState.Missing, ItemKind.Unknown);
-
-                return new PathInspection(ActualState.Unreachable, ItemKind.Unknown);
-            }
-
-            var kind = DetectKind(path);
+            // One stat for both the kind and the hidden flag. GetAttributes describes the
+            // reparse point itself (it does not follow symlinks), matching what Hide/Show
+            // modify. A missing or access-denied path throws a reason-bearing exception,
+            // sorted out below.
             var attrs = File.GetAttributes(path);
             var hidden = attrs.HasFlag(FileAttributes.Hidden);
             var state = hidden ? ActualState.Hidden : ActualState.Visible;
-
-            return new PathInspection(state, kind);
+            return new PathInspection(state, DetectKind(attrs));
         }
         catch (UnauthorizedAccessException)
         {
-            return new PathInspection(ActualState.Unreachable, ItemKind.Unknown);
+            // A permission wall on the path or an ancestor — recoverable via an elevated
+            // retry on Windows (the apply pipeline routes AccessDenied there).
+            return new PathInspection(ActualState.AccessDenied, ItemKind.Unknown);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            // Not directly statable because something in the chain is absent. Distinguish a
+            // genuinely missing path/ancestor (Missing — elevation cannot help) from a
+            // permission wall higher up (AccessDenied).
+            return new PathInspection(PathProbe.ClassifyInaccessible(path), ItemKind.Unknown);
         }
         catch (Exception ex)
         {
@@ -70,41 +73,14 @@ public sealed class WindowsVisibilityService : IVisibilityService
         File.SetAttributes(path, attrs);
     }
 
-    private static bool IsAncestorAccessible(string path)
+    private static ItemKind DetectKind(FileAttributes attrs)
     {
-        var parent = Path.GetDirectoryName(path);
-        if (string.IsNullOrEmpty(parent))
-            return false;
+        if (attrs.HasFlag(FileAttributes.ReparsePoint))
+            return ItemKind.Symlink;
 
-        try
-        {
-            return Directory.Exists(parent);
-        }
-        catch (Exception ex)
-        {
-            Log.Debug("ancestor probe failed", ex, new { path });
-            return false;
-        }
-    }
+        if (attrs.HasFlag(FileAttributes.Directory))
+            return ItemKind.Directory;
 
-    private static ItemKind DetectKind(string path)
-    {
-        try
-        {
-            var attrs = File.GetAttributes(path);
-
-            if (attrs.HasFlag(FileAttributes.ReparsePoint))
-                return ItemKind.Symlink;
-
-            if (attrs.HasFlag(FileAttributes.Directory))
-                return ItemKind.Directory;
-
-            return ItemKind.File;
-        }
-        catch (Exception ex)
-        {
-            Log.Debug("kind probe failed", ex, new { path });
-            return ItemKind.Unknown;
-        }
+        return ItemKind.File;
     }
 }

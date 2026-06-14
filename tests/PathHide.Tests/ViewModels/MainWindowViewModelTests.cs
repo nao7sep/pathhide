@@ -353,4 +353,29 @@ public class MainWindowViewModelTests
         Assert.Contains("1 errors", vm.Notification);
         Assert.DoesNotContain("elevated", vm.Notification);
     }
+
+    [Fact]
+    public async Task ApplyDesiredState_AccessDeniedAtInspectOffWindows_IsErrorNoWriteAttempt()
+    {
+        // A path that is access-denied at INSPECT time surfaces as AccessDenied. On
+        // Windows this routes into the elevated retry bucket (a UAC retry, per the
+        // README's access-denied promise), but that branch launches a real elevated
+        // process, so only the non-Windows routing is asserted here: off Windows there
+        // is no elevation step, so AccessDenied stays a terminal error and the Hide write
+        // is never attempted.
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            return;
+
+        var visibility = new FakeVisibilityService();
+        visibility.Set("/x", ActualState.AccessDenied);
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        await vm.AddPathsAsync(new[] { "/x" });
+
+        Assert.Contains("1 errors", vm.Notification);
+        Assert.DoesNotContain("elevated", vm.Notification);
+        // The write boundary is never crossed for an access-denied inspect.
+        Assert.DoesNotContain("/x", visibility.Hidden);
+    }
 }

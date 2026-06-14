@@ -82,7 +82,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var visible = Rows.Count(r => r.ActualState == ActualState.Visible);
         var missing = Rows.Count(r => r.ActualState == ActualState.Missing);
         var pending = Rows.Count(r => r.ActualState == ActualState.Unknown);
-        var problems = Rows.Count(r => r.ActualState is ActualState.Unreachable or ActualState.Error);
+        var problems = Rows.Count(r => r.ActualState is ActualState.AccessDenied or ActualState.Error);
 
         var parts = new List<string> { $"{Rows.Count} entries" };
         if (hidden > 0) parts.Add($"{hidden} hidden");
@@ -625,7 +625,22 @@ public partial class MainWindowViewModel : ViewModelBase
                     continue;
                 }
 
-                if (inspection.ActualState is ActualState.Unreachable or ActualState.Error)
+                // Access-denied at inspect time is the same recoverable condition as a
+                // denied Hide/Show write: on Windows a single elevated retry (drained below)
+                // may have the rights to read and change it, so it joins that bucket rather
+                // than the write attempt, which would only re-hit the same denial. The
+                // platform gate matches the bucket-drain guard below — off Windows there is
+                // no elevation step, so AccessDenied stays a terminal error alongside Error,
+                // which no elevation can fix. A genuinely absent path is Missing (handled
+                // above), never AccessDenied, so this never forces a futile elevation prompt.
+                if (inspection.ActualState == ActualState.AccessDenied
+                    && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    retryBucket.Add(row);
+                    continue;
+                }
+
+                if (inspection.ActualState is ActualState.AccessDenied or ActualState.Error)
                 {
                     errors++;
                     row.ActualState = inspection.ActualState;

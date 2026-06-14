@@ -5,7 +5,7 @@ public enum ActualState
     Hidden,
     Visible,
     Missing,
-    Unreachable,
+    AccessDenied,
     Error,
     Unknown,
 }

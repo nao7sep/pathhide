@@ -158,13 +158,39 @@ public sealed class MacVisibilityServiceTests : IDisposable
     }
 
     [MacOnlyFact]
-    public void Inspect_PathUnderNonexistentParent_ReturnsUnreachable()
+    public void Inspect_PathUnderNonexistentParent_ReturnsMissing()
     {
-        var unreachable = Path.Combine(_dir, "no-such-dir", "child");
+        var missing = Path.Combine(_dir, "no-such-dir", "child");
 
-        var result = _service.Inspect(unreachable);
+        var result = _service.Inspect(missing);
 
-        Assert.Equal(ActualState.Unreachable, result.ActualState);
+        // A path whose parent does not exist is genuinely missing, not a permission wall —
+        // it must not be reported as access-denied (which would route it into a futile
+        // elevated retry on Windows).
+        Assert.Equal(ActualState.Missing, result.ActualState);
+    }
+
+    [MacOnlyFact]
+    public void Inspect_PathUnderUnreadableParent_ReturnsAccessDenied()
+    {
+        var locked = Path.Combine(_dir, "locked");
+        Directory.CreateDirectory(locked);
+        var child = Path.Combine(locked, "child.txt");
+        File.WriteAllText(child, "x");
+
+        // Strip all permissions from the parent so its owner can no longer search into it;
+        // statting the child then hits a permission wall (EACCES), not a not-found. This is
+        // the AccessDenied state the Windows elevated retry exists to recover.
+        Run("/bin/chmod", ["000", locked]);
+        try
+        {
+            Assert.Equal(ActualState.AccessDenied, _service.Inspect(child).ActualState);
+        }
+        finally
+        {
+            // Restore access so the fixture can be torn down.
+            Run("/bin/chmod", ["755", locked]);
+        }
     }
 
     [MacOnlyFact]
