@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
@@ -71,11 +73,16 @@ sealed class Program
                 { AllowMultipleArgumentsPerToken = true, Arity = ArgumentArity.ZeroOrMore };
             var showOpt = new Option<string[]>("--show")
                 { AllowMultipleArgumentsPerToken = true, Arity = ArgumentArity.ZeroOrMore };
+            // Optional sink for per-path results: stdout cannot be redirected across the
+            // runas boundary, so the launcher passes a temp file path here and reads it back.
+            // Absent (e.g. a standalone CLI invocation) means write nothing.
+            var resultsOpt = new Option<string?>("--results");
 
             var applyCmd = new Command("apply", "Apply file attributes in batch");
             applyCmd.Add(hideOpt);
             applyCmd.Add(systemOpt);
             applyCmd.Add(showOpt);
+            applyCmd.Add(resultsOpt);
 
             applyCmd.SetAction((ParseResult result) =>
             {
@@ -83,10 +90,16 @@ sealed class Program
                 var toSystem = result.GetValue(systemOpt) ?? [];
                 var toShow   = result.GetValue(showOpt)   ?? [];
 
-                var failed = ApplyFileAttributes(toHide,   hide: true,  system: false)
-                           + ApplyFileAttributes(toSystem, hide: true,  system: true)
-                           + ApplyFileAttributes(toShow,   hide: false, system: false);
-                return failed > 0 ? 1 : 0;
+                var results = new List<PathApplyResult>(toHide.Length + toSystem.Length + toShow.Length);
+                results.AddRange(ApplyFileAttributes(toHide,   hide: true,  system: false));
+                results.AddRange(ApplyFileAttributes(toSystem, hide: true,  system: true));
+                results.AddRange(ApplyFileAttributes(toShow,   hide: false, system: false));
+
+                WriteResults(result.GetValue(resultsOpt), results);
+
+                // The per-path file is the authoritative channel; the exit code stays a coarse
+                // 0 = all ok / 1 = some failed signal for callers and logs.
+                return results.Any(r => !r.Ok) ? 1 : 0;
             });
 
             var root = new RootCommand("PathHide apply mode");
@@ -106,11 +119,20 @@ sealed class Program
         }
     }
 
-    /// <returns>The number of paths that could not be updated.</returns>
-    private static int ApplyFileAttributes(string[] paths, bool hide, bool system)
+    /// <returns>One <see cref="PathApplyResult"/> per input path, in input order.</returns>
+    /// <remarks>
+    /// <c>File.GetAttributes</c>/<c>File.SetAttributes</c> operate on the reparse point
+    /// itself, not its target (verified on Windows for symlinks and junctions, elevated and
+    /// not). So a path swapped for a junction between the unelevated inspect and this elevated
+    /// write can only have its own attributes changed — it cannot redirect this admin write
+    /// onto the link's target. Keep both calls path-based for that reason; do not switch to a
+    /// follow-based API or add reparse-handle machinery to "harden" a hazard that cannot occur.
+    /// </remarks>
+    private static List<PathApplyResult> ApplyFileAttributes(string[] paths, bool hide, bool system)
     {
+        var results = new List<PathApplyResult>(paths.Length);
         if (paths.Length == 0)
-            return 0;
+            return results;
 
         // Loop coverage per the conventions: one info line for the intent, one for the
         // outcome, and one error per failure — never one line per successful item.
@@ -130,6 +152,7 @@ sealed class Program
                 else attrs &= ~FileAttributes.System;
 
                 File.SetAttributes(path, attrs);
+                results.Add(new PathApplyResult(path, Ok: true));
             }
             catch (Exception ex)
             {
@@ -137,11 +160,29 @@ sealed class Program
                 // unelevated attempt hit access-denied, so a failure here is
                 // unexpected and gets a full error — not a silent swallow.
                 Log.Error("apply: failed to set attributes", ex, new { path, hide, system });
+                results.Add(new PathApplyResult(path, Ok: false));
                 failed++;
             }
         }
 
         Log.Info("apply: done", new { ok = paths.Length - failed, failed });
-        return failed;
+        return results;
+    }
+
+    private static void WriteResults(string? resultsPath, List<PathApplyResult> results)
+    {
+        if (string.IsNullOrEmpty(resultsPath))
+            return;
+
+        try
+        {
+            File.WriteAllText(resultsPath, ElevatedApplyResults.Serialize(results));
+        }
+        catch (Exception ex)
+        {
+            // The launcher falls back to re-inspection for any path it gets no result for,
+            // so a failed write degrades the verdict rather than breaking it.
+            Log.Error("apply: failed to write results file", ex, new { resultsPath });
+        }
     }
 }

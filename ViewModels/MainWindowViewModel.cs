@@ -700,22 +700,26 @@ public partial class MainWindowViewModel : ViewModelBase
                 .Select(r => r.Path)
                 .ToList();
 
-            elevationExitCode = await Services.WindowsElevatedApplicator.ApplyAsync(toHide, toHideWithSystem, toShow);
+            var outcome = await Services.WindowsElevatedApplicator.ApplyAsync(toHide, toHideWithSystem, toShow);
+            elevationExitCode = outcome.ExitCode;
 
             foreach (var row in retryBucket)
             {
+                // Re-inspect only to refresh what the row shows; the success/error verdict
+                // comes from the elevated child's own per-path report (see DecideElevatedRow).
                 var recheck = await Task.Run(() => _visibilityService.Inspect(row.Path));
-                row.ApplyScanResult(recheck, row.PathFamily);
+                bool? childOk = outcome.Results.TryGetValue(row.Path, out var ok) ? ok : null;
 
-                var matched = row.Entry.DesiredVisibility == DesiredVisibility.Hidden
-                    ? recheck.ActualState == ActualState.Hidden
-                    : recheck.ActualState == ActualState.Visible;
+                var (display, wasApplied) = DecideElevatedRow(row.Entry.DesiredVisibility, childOk, recheck);
+                row.ApplyScanResult(recheck with { ActualState = display }, row.PathFamily);
 
-                if (matched) applied++;
+                if (wasApplied) applied++;
                 else errors++;
             }
         }
 
+        // elevationExitCode is a coarse diagnostic kept in the structured log; the user-facing
+        // tally below is built per-path, so the raw child exit code is not surfaced to the UI.
         Log.Info("apply: done", new { applied, missing, errors, elevationExitCode });
 
         var parts = new List<string>();
@@ -723,10 +727,41 @@ public partial class MainWindowViewModel : ViewModelBase
         if (missing > 0) parts.Add($"{missing} missing");
         if (errors > 0) parts.Add($"{errors} errors");
 
-        if (elevationExitCode is not null and not 0)
-            parts.Add($"elevated process returned {elevationExitCode}");
-
         return parts.Count > 0 ? string.Join(", ", parts) : "nothing to do";
+    }
+
+    /// <summary>
+    /// Decides one elevated-retry row's outcome from the elevated child's reported result
+    /// (<paramref name="childOk"/>) and the parent's post-apply re-inspection
+    /// (<paramref name="recheck"/>). Pure, so the verdict logic is testable without a real
+    /// elevation.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Verdict.</b> When the child reported a result, trust it: it is the only actor
+    /// that actually attempted the change with the rights to do so. The unelevated parent may
+    /// still read <see cref="ActualState.AccessDenied"/> on a path the child changed
+    /// successfully (the very permission wall that forced elevation), so deriving success from
+    /// re-inspection alone would falsely report an error. When the child reported nothing
+    /// (<paramref name="childOk"/> is null — UAC cancelled, or the results file was unreadable)
+    /// fall back to comparing the re-inspection against the desired state, which correctly
+    /// yields "not applied" for the cancel case (nothing changed).</para>
+    /// <para><b>Displayed state.</b> Prefer what the re-inspection could actually read. When it
+    /// could not (AccessDenied/Error) but the child confirmed success, show the state the child
+    /// achieved rather than the parent's blind spot.</para>
+    /// </remarks>
+    internal static (ActualState Display, bool Applied) DecideElevatedRow(
+        DesiredVisibility desired, bool? childOk, PathInspection recheck)
+    {
+        var desiredState = desired == DesiredVisibility.Hidden ? ActualState.Hidden : ActualState.Visible;
+
+        var applied = childOk ?? recheck.ActualState == desiredState;
+
+        var readable = recheck.ActualState is ActualState.Hidden or ActualState.Visible or ActualState.Missing;
+        var display = readable ? recheck.ActualState
+                    : childOk == true ? desiredState
+                    : recheck.ActualState;
+
+        return (display, applied);
     }
 
     private CancellationTokenSource? _notificationCts;

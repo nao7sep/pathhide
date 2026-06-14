@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using PathHide.Models;
+using PathHide.Services;
 using PathHide.Tests.Fakes;
 using PathHide.ViewModels;
 using Xunit;
@@ -377,5 +378,77 @@ public class MainWindowViewModelTests
         Assert.DoesNotContain("elevated", vm.Notification);
         // The write boundary is never crossed for an access-denied inspect.
         Assert.DoesNotContain("/x", visibility.Hidden);
+    }
+
+    // --- Elevated-retry verdict mapping (DecideElevatedRow) ---
+    //
+    // The elevated child reports each path's outcome; the parent maps that report (plus its
+    // own re-inspection) to a per-row applied/error verdict and a displayed state. These pin
+    // that mapping, including a path the child reports as failed and the UAC-cancelled
+    // (no report) case.
+
+    [Fact]
+    public void DecideElevatedRow_ChildConfirmsSuccess_OverAccessDenied_IsAppliedAndShowsDesiredState()
+    {
+        // The canonical elevation case: the path is under a permission wall, so the unelevated
+        // re-inspection still reads AccessDenied even though the elevated child changed it. The
+        // old re-inspection-only logic miscounted this as an error.
+        var (display, applied) = MainWindowViewModel.DecideElevatedRow(
+            DesiredVisibility.Hidden, childOk: true, new PathInspection(ActualState.AccessDenied, ItemKind.Unknown));
+
+        Assert.True(applied);
+        Assert.Equal(ActualState.Hidden, display);
+    }
+
+    [Fact]
+    public void DecideElevatedRow_ChildConfirmsSuccess_WhenReadable_ShowsReinspectedState()
+    {
+        var (display, applied) = MainWindowViewModel.DecideElevatedRow(
+            DesiredVisibility.Hidden, childOk: true, new PathInspection(ActualState.Hidden, ItemKind.File));
+
+        Assert.True(applied);
+        Assert.Equal(ActualState.Hidden, display);
+    }
+
+    [Fact]
+    public void DecideElevatedRow_ChildReportsFailure_IsErrorAndShowsAccessDenied()
+    {
+        // A path denied even to the elevated child: reported as failed, never a false success.
+        var (display, applied) = MainWindowViewModel.DecideElevatedRow(
+            DesiredVisibility.Hidden, childOk: false, new PathInspection(ActualState.AccessDenied, ItemKind.Unknown));
+
+        Assert.False(applied);
+        Assert.Equal(ActualState.AccessDenied, display);
+    }
+
+    [Fact]
+    public void DecideElevatedRow_NoReport_Cancelled_FallsBackToReinspect_IsError()
+    {
+        // UAC cancelled: no per-path report, nothing changed, re-inspection still denied.
+        var (display, applied) = MainWindowViewModel.DecideElevatedRow(
+            DesiredVisibility.Hidden, childOk: null, new PathInspection(ActualState.AccessDenied, ItemKind.Unknown));
+
+        Assert.False(applied);
+        Assert.Equal(ActualState.AccessDenied, display);
+    }
+
+    [Fact]
+    public void DecideElevatedRow_NoReport_ButReinspectMatchesDesired_IsApplied()
+    {
+        var (display, applied) = MainWindowViewModel.DecideElevatedRow(
+            DesiredVisibility.Hidden, childOk: null, new PathInspection(ActualState.Hidden, ItemKind.File));
+
+        Assert.True(applied);
+        Assert.Equal(ActualState.Hidden, display);
+    }
+
+    [Fact]
+    public void DecideElevatedRow_Show_ChildConfirms_OverAccessDenied_ShowsVisible()
+    {
+        var (display, applied) = MainWindowViewModel.DecideElevatedRow(
+            DesiredVisibility.Shown, childOk: true, new PathInspection(ActualState.AccessDenied, ItemKind.Unknown));
+
+        Assert.True(applied);
+        Assert.Equal(ActualState.Visible, display);
     }
 }
