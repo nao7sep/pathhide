@@ -42,7 +42,7 @@
 
                 <!-- Action buttons (left, wrapping) -->
                 <WrapPanel Orientation="Horizontal"
-                           KeyboardNavigation.TabNavigation="Once"
+                           x:Name="ActionButtons"
                            AutomationProperties.Name="Actions">
                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
                         <Button Content="Add Files" Classes="add" x:Name="AddFilesButton"/>

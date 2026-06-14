@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using PathHide.Services;
@@ -39,6 +40,7 @@ public partial class MainWindow : Window
         KeyDown += OnKeyDown;
         PathGrid.SelectionChanged += OnGridSelectionChanged;
         PathGrid.KeyDown += OnGridKeyDown;
+        ActionButtons.KeyDown += OnActionButtonsKeyDown;
 
         Loaded += OnLoaded;
     }
@@ -154,5 +156,29 @@ public partial class MainWindow : Window
             e.Handled = true;
             ViewModel.RemoveSelectedCommand.Execute(null);
         }
+    }
+
+    // The action buttons are independent, individually Tab-reachable controls. As a keyboard
+    // convenience, Left/Right also move focus to the adjacent action button — skipping any
+    // that are currently hidden (e.g. Cancel, shown only while scanning) and stopping at the
+    // ends rather than letting the arrow escape the group.
+    private void OnActionButtonsKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Left or Key.Right))
+            return;
+
+        var buttons = ActionButtons.GetLogicalDescendants()
+            .OfType<Button>()
+            .Where(b => b.IsVisible && b.IsEffectivelyEnabled && b.Focusable)
+            .ToList();
+
+        var current = buttons.FindIndex(b => b.IsFocused);
+        if (current < 0)
+            return;
+
+        e.Handled = true;
+        var next = current + (e.Key == Key.Right ? 1 : -1);
+        if (next >= 0 && next < buttons.Count)
+            buttons[next].Focus(NavigationMethod.Directional);
     }
 }
