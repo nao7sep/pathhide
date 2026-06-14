@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.ComponentModel;
 using System.Threading.Tasks;
@@ -33,6 +34,7 @@ public partial class MainWindow : Window
 
         AddFilesButton.Click += OnAddFilesClick;
         AddFoldersButton.Click += OnAddFoldersClick;
+        RemoveButton.Click += OnRemoveClick;
 
         OpenLogMenuItem.Click += OnOpenLogClick;
         SettingsMenuItem.Click += OnSettingsClick;
@@ -172,8 +174,54 @@ public partial class MainWindow : Window
         if (e.Key == Key.Delete)
         {
             e.Handled = true;
-            ViewModel.RemoveSelectedCommand.Execute(null);
+            _ = RemoveSelectedWithRecoveryAsync();
         }
+    }
+
+    private async void OnRemoveClick(object? sender, RoutedEventArgs e) => await RemoveSelectedWithRecoveryAsync();
+
+    // Both the Remove button and the Delete key route here so the grid recovers a usable
+    // selection after a removal. Without it, deleting the selected rows leaves nothing
+    // selected and the keyboard dead-ends — no anchor for the next Delete or an arrow. We
+    // note the lowest selected row first, run the removal, then — only if everything that was
+    // selected got removed — select the row that slid into that slot (clamped to the last
+    // row) and return focus to the grid so the keyboard stays live.
+    private async Task RemoveSelectedWithRecoveryAsync()
+    {
+        var anchor = LowestSelectedRowIndex();
+        await ViewModel.RemoveSelectedCommand.ExecuteAsync(null);
+
+        // Nothing removed (e.g. the confirm was cancelled, or a selection still stands), or
+        // the list is now empty — no recovery to do.
+        if (ViewModel.Rows.Count == 0 || PathGrid.SelectedIndex >= 0)
+            return;
+
+        var target = Math.Clamp(anchor, 0, ViewModel.Rows.Count - 1);
+        // Defer past the grid's own handling of the collection change (which clears the
+        // selection), so this set is the last word — matching OnLoaded's focus pattern.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (target < ViewModel.Rows.Count)
+            {
+                PathGrid.SelectedIndex = target;
+                PathGrid.Focus();
+            }
+        });
+    }
+
+    private int LowestSelectedRowIndex()
+    {
+        var lowest = int.MaxValue;
+        foreach (var item in PathGrid.SelectedItems)
+        {
+            if (item is PathRowViewModel row)
+            {
+                var index = ViewModel.Rows.IndexOf(row);
+                if (index >= 0 && index < lowest)
+                    lowest = index;
+            }
+        }
+        return lowest == int.MaxValue ? 0 : lowest;
     }
 
     // The action buttons are independent, individually Tab-reachable controls. As a keyboard

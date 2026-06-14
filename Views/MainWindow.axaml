@@ -71,7 +71,9 @@
                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
                         <Button Content="Reload" Classes="reload" Command="{Binding ReloadCommand}"/>
                         <Button Content="Reapply All" Classes="reapply" Command="{Binding ReapplyAllCommand}"/>
-                        <Button Content="Remove" Classes="destructive" Command="{Binding RemoveSelectedCommand}"/>
+                        <!-- Remove is wired in code-behind (not Command-bound) so it shares the
+                             grid's post-delete selection recovery with the Delete key. -->
+                        <Button Content="Remove" Classes="destructive" x:Name="RemoveButton"/>
                         <Button Content="Cancel" Classes="cancel"
                                 Command="{Binding CancelScanCommand}"
                                 IsVisible="{Binding IsScanning}"/>
@@ -105,6 +107,7 @@
                 Background="{StaticResource SurfaceBrush}"
                 ClipToBounds="True">
             <DataGrid x:Name="PathGrid"
+                      AutomationProperties.Name="Path entries"
                       ItemsSource="{Binding Rows}"
                       AutoGenerateColumns="False"
                       CanUserReorderColumns="True"
