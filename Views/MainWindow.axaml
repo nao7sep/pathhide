@@ -22,19 +22,28 @@
             <DockPanel>
                 <!-- Hamburger menu (right-aligned) -->
                 <Button DockPanel.Dock="Right"
-                        Content="☰"
                         Classes="utility"
-                        FontSize="18"
                         Padding="14,2"
+                        VerticalAlignment="Stretch"
                         x:Name="MenuButton"
                         AutomationProperties.Name="Menu"
                         ToolTip.Tip="Menu">
+                    <!-- Hamburger drawn as a vector (three equal strokes) rather than the
+                         ☰ glyph, whose strokes render with uneven weight across fonts. -->
+                    <Path Width="18" Height="14"
+                          VerticalAlignment="Center" HorizontalAlignment="Center"
+                          Stroke="{Binding $parent[Button].Foreground}"
+                          StrokeThickness="2"
+                          StrokeLineCap="Round"
+                          UseLayoutRounding="True"
+                          Data="M0,1 H18 M0,7 H18 M0,13 H18"/>
                     <Button.Flyout>
                         <MenuFlyout Placement="BottomEdgeAlignedRight">
                             <MenuItem Header="Open Log File" x:Name="OpenLogMenuItem"/>
                             <MenuItem Header="Settings"
                                       x:Name="SettingsMenuItem"
                                       IsVisible="{Binding HasSettings}"/>
+                            <MenuItem Header="Keyboard Shortcuts" x:Name="ShortcutsMenuItem"/>
                             <MenuItem Header="About" x:Name="AboutMenuItem"/>
                         </MenuFlyout>
                     </Button.Flyout>

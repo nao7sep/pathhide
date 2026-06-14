@@ -34,8 +34,8 @@
         <Color x:Key="AboutHover">#3B0764</Color>
         <Color x:Key="AboutForeground">#FFF7FE</Color>
 
-        <Color x:Key="Utility">#E9EEF5</Color>
-        <Color x:Key="UtilityHover">#D8E0EA</Color>
+        <Color x:Key="Utility">#1F2430</Color>
+        <Color x:Key="UtilityHover">#323847</Color>
         <Color x:Key="StatusBackground">#F8FAFC</Color>
         <Color x:Key="StatusBorder">#D8DEE8</Color>
         <Color x:Key="StatusAccent">#1D4ED8</Color>
@@ -190,17 +190,17 @@
             <Setter Property="Foreground" Value="{StaticResource AboutForegroundBrush}"/>
         </Style>
 
-        <!-- Subtle utility buttons -->
+        <!-- Utility buttons: a dark neutral anchor that stands clear of the white top bar -->
         <Style Selector="Button.utility">
             <Setter Property="Background" Value="{StaticResource UtilityBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.utility:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource UtilityHoverBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
         </Style>
 
         <!-- Dialog accent button -->

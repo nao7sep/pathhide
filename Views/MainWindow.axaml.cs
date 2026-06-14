@@ -21,6 +21,10 @@ public partial class MainWindow : Window
     // at the window level instead, with InputGesture providing the visible association.
     private static readonly KeyGesture SettingsGesture = new(Key.OemComma, KeyModifiers.Control);
 
+    // Ctrl+/ opens the keyboard-shortcuts help (cross-platform — the convention's
+    // Cmd/Ctrl+/). Also reachable from the menu, which shows this accelerator.
+    private static readonly KeyGesture ShortcutsGesture = new(Key.OemQuestion, KeyModifiers.Control);
+
     private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
 
     public MainWindow()
@@ -34,6 +38,8 @@ public partial class MainWindow : Window
         SettingsMenuItem.Click += OnSettingsClick;
         SettingsMenuItem.InputGesture = SettingsGesture;
         AboutMenuItem.Click += OnAboutClick;
+        ShortcutsMenuItem.Click += OnShortcutsClick;
+        ShortcutsMenuItem.InputGesture = ShortcutsGesture;
 
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -65,6 +71,10 @@ public partial class MainWindow : Window
     {
         await new AboutDialog().ShowDialog(this);
     }
+
+    private async void OnShortcutsClick(object? sender, RoutedEventArgs e) => await ShowShortcutsAsync();
+
+    private Task ShowShortcutsAsync() => new ShortcutsDialog().ShowDialog(this);
 
     private void OnOpenLogClick(object? sender, RoutedEventArgs e)
     {
@@ -134,6 +144,14 @@ public partial class MainWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // Ctrl+/ opens shortcuts help — cross-platform, always available.
+        if (ShortcutsGesture.Matches(e))
+        {
+            e.Handled = true;
+            _ = ShowShortcutsAsync();
+            return;
+        }
+
         // Gated on HasSettings so the accelerator is live only where Settings exists
         // (Windows); a modal dialog is a separate top-level, so this never fires while
         // Settings is already open.
