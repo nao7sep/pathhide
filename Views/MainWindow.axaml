@@ -27,6 +27,7 @@
                         FontSize="18"
                         Padding="14,2"
                         x:Name="MenuButton"
+                        AutomationProperties.Name="Menu"
                         ToolTip.Tip="Menu">
                     <Button.Flyout>
                         <MenuFlyout Placement="BottomEdgeAlignedRight">
@@ -40,7 +41,9 @@
                 </Button>
 
                 <!-- Action buttons (left, wrapping) -->
-                <WrapPanel Orientation="Horizontal">
+                <WrapPanel Orientation="Horizontal"
+                           KeyboardNavigation.TabNavigation="Once"
+                           AutomationProperties.Name="Actions">
                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
                         <Button Content="Add Files" Classes="add" x:Name="AddFilesButton"/>
                         <Button Content="Add Directories" Classes="add" x:Name="AddFoldersButton"/>
