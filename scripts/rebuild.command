@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# rebuild: build the app in its release configuration and launch it. On macOS that
+# means publishing a self-contained Release build, assembling an unsigned .app,
+# ad-hoc signing it, and launching via Launch Services. Slow; run after changing
+# source. run-built launches the existing bundle without rebuilding.
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_FILE="$REPO_DIR/PathHide.csproj"
@@ -36,7 +41,7 @@ pause_on_failure() {
   local status="$1"
   if [[ "$status" -ne 0 && "$status" -ne 130 ]]; then
     echo
-    echo "pathhide run failed with exit code $status."
+    echo "pathhide rebuild failed with exit code $status."
     read -r -p "Press Enter to close..."
   fi
 }
@@ -47,6 +52,12 @@ require_command dotnet
 require_command codesign
 
 cd "$REPO_DIR"
+
+# Remove stale publish output so a file deleted since the last build can't linger
+# and get copied into the bundle (the Contents/MacOS reset below only clears the
+# copy target, not the publish source).
+log_step "Cleaning previous publish output"
+rm -rf "$PUBLISH_DIR"
 
 log_step "Publishing self-contained $RID build (host arch $ARCH)"
 dotnet publish "$PROJECT_FILE" \

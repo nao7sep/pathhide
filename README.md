@@ -40,10 +40,16 @@ PathHide writes a runtime log so a problem can be reconstructed after the fact.
 
 ## Build and Run
 
-`dotnet run` works for day-to-day development on either platform. Helper scripts in `scripts/` add platform-specific ceremony for testing access to OS-protected paths:
+`dotnet run` works for day-to-day development on either platform. Helper scripts in `scripts/` add platform-specific ceremony for testing access to OS-protected paths. Each launcher is a `scripts/<name>.command` (macOS) / `scripts/<name>.ps1` (Windows) pair.
 
-- **macOS** (`scripts/run.command`): publishes a self-contained build into a `.app` bundle, ad-hoc signs it (`codesign --sign -`), and launches it via Launch Services. macOS attributes TCC permission prompts to the signed bundle's identity, so the app needs a real bundle (not just `dotnet run`) before TCC will prompt for protected directories like Desktop, Documents, or Downloads. Host architecture (`osx-arm64` or `osx-x64`) is auto-detected from `uname -m`.
-- **Windows** (`scripts/run.ps1`): runs `dotnet run` directly. Windows has no TCC equivalent that requires a signed bundle for permission prompts; the elevation flow uses UAC, which is triggered by attribute writes regardless of signing.
+- **macOS**:
+  - `run-dev` — runs the app from source with `dotnet run`; fast, for active coding. macOS attributes TCC permission prompts to the signed bundle's identity, so TCC-gated directories like Desktop, Documents, or Downloads only prompt under the signed bundle — use `run-built`/`rebuild` to exercise those.
+  - `run-built` — launches the existing signed `.app` bundle without rebuilding.
+  - `rebuild` — publishes a self-contained `Release` build into a `.app` bundle, ad-hoc signs it (`codesign --sign -`), and launches it via Launch Services. Host architecture (`osx-arm64` or `osx-x64`) is auto-detected from `uname -m`. Run after changing source.
+- **Windows**:
+  - `run-dev` — runs `dotnet run` directly. Windows has no TCC equivalent that requires a signed bundle for permission prompts; the elevation flow uses UAC, which is triggered by attribute writes regardless of signing.
+  - `run-built` — launches the existing published executable without rebuilding.
+  - `rebuild` — publishes a `Release` build and launches it.
 
 ## License
 
