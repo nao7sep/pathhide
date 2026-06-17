@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.ComponentModel;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -15,16 +17,12 @@ namespace PathHide.Views;
 
 public partial class MainWindow : Window
 {
-    // Cmd/Ctrl+, → Settings (the conventions' standard settings accelerator). Settings is
-    // Windows-only here, so Control is the right modifier; the gesture is defined once and
-    // used both to label the menu item and to match the key press in OnKeyDown. A MenuFlyout
-    // item's own HotKey only registers while the flyout is open, so the accelerator is wired
-    // at the window level instead, with InputGesture providing the visible association.
-    private static readonly KeyGesture SettingsGesture = new(Key.OemComma, KeyModifiers.Control);
-
-    // Ctrl+/ opens the keyboard-shortcuts help (cross-platform — the convention's
-    // Cmd/Ctrl+/). Also reachable from the menu, which shows this accelerator.
-    private static readonly KeyGesture ShortcutsGesture = new(Key.OemQuestion, KeyModifiers.Control);
+    // The single source of truth for the window's accelerators and the help modal. Built once in
+    // OnLoaded — where the platform command key (Cmd on macOS, Ctrl on Windows) and the view model
+    // are both available — so a label can never describe a binding that does not exist. A MenuFlyout
+    // item's own HotKey only registers while the flyout is open, so accelerators are matched at the
+    // window level in OnKeyDown, with InputGesture providing the visible menu association.
+    private IReadOnlyList<ShortcutItem> _shortcuts = [];
 
     private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
 
@@ -38,10 +36,8 @@ public partial class MainWindow : Window
 
         OpenLogMenuItem.Click += OnOpenLogClick;
         SettingsMenuItem.Click += OnSettingsClick;
-        SettingsMenuItem.InputGesture = SettingsGesture;
         AboutMenuItem.Click += OnAboutClick;
         ShortcutsMenuItem.Click += OnShortcutsClick;
-        ShortcutsMenuItem.InputGesture = ShortcutsGesture;
 
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -55,6 +51,13 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
+        // Build the catalog now that PlatformSettings (the platform command key) and the view model
+        // are both available, then point the accelerator-bearing menu items at the live gestures so
+        // their visible hint always matches what OnKeyDown actually binds.
+        _shortcuts = ShortcutCatalog.Build(this, ViewModel.HasSettings);
+        SettingsMenuItem.InputGesture = GestureFor(ShortcutAction.OpenSettings);
+        ShortcutsMenuItem.InputGesture = GestureFor(ShortcutAction.ShowShortcuts);
+
         ViewModel.ConfirmDestructiveAsync = request =>
             ConfirmDialog.ConfirmDestructiveAsync(this, request.Title, request.Message, request.ConfirmLabel);
         ViewModel.Initialize();
@@ -76,7 +79,7 @@ public partial class MainWindow : Window
 
     private async void OnShortcutsClick(object? sender, RoutedEventArgs e) => await ShowShortcutsAsync();
 
-    private Task ShowShortcutsAsync() => new ShortcutsDialog().ShowDialog(this);
+    private Task ShowShortcutsAsync() => new ShortcutsDialog(_shortcuts).ShowDialog(this);
 
     private void OnOpenLogClick(object? sender, RoutedEventArgs e)
     {
@@ -94,7 +97,9 @@ public partial class MainWindow : Window
             ViewModel.SetWindowsHideMode(dialog.IsHiddenAndSystem);
     }
 
-    private async void OnAddFilesClick(object? sender, RoutedEventArgs e)
+    private async void OnAddFilesClick(object? sender, RoutedEventArgs e) => await AddFilesAsync();
+
+    private async Task AddFilesAsync()
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
@@ -106,7 +111,9 @@ public partial class MainWindow : Window
             await ViewModel.AddPathsAsync(files.Select(f => f.Path.LocalPath));
     }
 
-    private async void OnAddFoldersClick(object? sender, RoutedEventArgs e)
+    private async void OnAddFoldersClick(object? sender, RoutedEventArgs e) => await AddFoldersAsync();
+
+    private async Task AddFoldersAsync()
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
@@ -144,25 +151,62 @@ public partial class MainWindow : Window
             row.IsSelected = true;
     }
 
+    // The window's command layer (per the composite-control conventions): it owns the application
+    // accelerators and reads the current selection through the view-model commands. It deliberately
+    // does NOT own list navigation (Up/Down) or action-button traversal (Left/Right) — those stay with
+    // their controls below. A modal dialog is a separate top-level, so none of these fire while a
+    // dialog is open.
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        // Ctrl+/ opens shortcuts help — cross-platform, always available.
-        if (ShortcutsGesture.Matches(e))
+        foreach (var item in _shortcuts)
         {
-            e.Handled = true;
-            _ = ShowShortcutsAsync();
-            return;
-        }
-
-        // Gated on HasSettings so the accelerator is live only where Settings exists
-        // (Windows); a modal dialog is a separate top-level, so this never fires while
-        // Settings is already open.
-        if (ViewModel.HasSettings && SettingsGesture.Matches(e))
-        {
-            e.Handled = true;
-            _ = OpenSettingsAsync();
+            if (item.Gesture is { } gesture && item.Action is { } action && gesture.Matches(e))
+            {
+                // Only mark handled when the action actually ran, so a gesture whose command is
+                // unavailable (e.g. Esc while not scanning) leaves the key to its default handling.
+                if (TryRunShortcut(action))
+                    e.Handled = true;
+                return;
+            }
         }
     }
+
+    private bool TryRunShortcut(ShortcutAction action) => action switch
+    {
+        ShortcutAction.AddFiles => Run(AddFilesAsync),
+        ShortcutAction.AddDirectories => Run(AddFoldersAsync),
+        ShortcutAction.HideSelected => TryExecute(ViewModel.HideSelectedCommand),
+        ShortcutAction.ShowSelected => TryExecute(ViewModel.ShowSelectedCommand),
+        ShortcutAction.ReapplyAll => TryExecute(ViewModel.ReapplyAllCommand),
+        ShortcutAction.Reload => TryExecute(ViewModel.ReloadCommand),
+        // Esc cancels only while a scan is running; otherwise it stays unhandled.
+        ShortcutAction.CancelScan => ViewModel.IsScanning && TryExecute(ViewModel.CancelScanCommand),
+        // Defensive: the catalog already omits this row off Windows, so it cannot be reached there.
+        ShortcutAction.OpenSettings => ViewModel.HasSettings && Run(OpenSettingsAsync),
+        ShortcutAction.ShowShortcuts => Run(ShowShortcutsAsync),
+        _ => false,
+    };
+
+    // Fires an async window action (a picker or dialog) and reports the gesture as handled. The task
+    // is intentionally not awaited — the key handler is synchronous and the action runs to completion
+    // on the UI thread on its own.
+    private static bool Run(Func<Task> action)
+    {
+        _ = action();
+        return true;
+    }
+
+    private static bool TryExecute(ICommand command)
+    {
+        if (!command.CanExecute(null))
+            return false;
+
+        command.Execute(null);
+        return true;
+    }
+
+    private KeyGesture? GestureFor(ShortcutAction action) =>
+        _shortcuts.FirstOrDefault(i => i.Action == action)?.Gesture;
 
     // Delete removes the selected entries — but only while the list itself has focus. It is
     // wired on the grid, not the window, so the destructive command can never fire from a

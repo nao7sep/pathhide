@@ -34,8 +34,8 @@
         <Color x:Key="AboutHover">#3B0764</Color>
         <Color x:Key="AboutForeground">#FFF7FE</Color>
 
-        <Color x:Key="Utility">#1F2430</Color>
-        <Color x:Key="UtilityHover">#323847</Color>
+        <Color x:Key="Utility">#374151</Color>
+        <Color x:Key="UtilityHover">#1F2937</Color>
         <Color x:Key="StatusBackground">#F8FAFC</Color>
         <Color x:Key="StatusBorder">#D8DEE8</Color>
         <Color x:Key="StatusAccent">#1D4ED8</Color>
@@ -190,7 +190,8 @@
             <Setter Property="Foreground" Value="{StaticResource AboutForegroundBrush}"/>
         </Style>
 
-        <!-- Utility buttons: a dark neutral anchor that stands clear of the white top bar -->
+        <!-- Utility buttons: a dark-gray neutral (clearly not black) with a white icon/label — a
+             deliberate dark control, without the near-black weight the hamburger originally had -->
         <Style Selector="Button.utility">
             <Setter Property="Background" Value="{StaticResource UtilityBrush}"/>
             <Setter Property="Foreground" Value="White"/>
