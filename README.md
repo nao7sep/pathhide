@@ -1,56 +1,32 @@
 # PathHide
 
-A desktop utility for macOS and Windows that hides or shows specific files and directories and remembers the desired visibility state of each entry.
-
-PathHide is for managing clutter, not for security.
+PathHide is a desktop utility for macOS and Windows that hides or shows specific files and directories and remembers the desired visibility of each one, so it can reapply it after files reappear. It's for managing visual clutter — **not** a security tool; hidden files stay fully accessible to anyone who looks. Built on .NET, it uses each platform's native mechanism: the Finder hidden flag on macOS, the HIDDEN attribute on Windows.
 
 ## Features
 
 - Hide and show files and directories using platform-native mechanisms
-- Remember desired visibility state per entry — reapply after files reappear
-- Add paths via file/folder pickers or drag and drop
-- Batch operations: hide all, show all, reapply all
-- Async background scanning with cancellation; entries can show a pending state until scanned
-- Per-user storage at `~/.pathhide/` with backup files for path and settings recovery
-
-## Platform Behavior
-
-- **macOS**: Toggles the Finder hidden flag (`UF_HIDDEN` via the `chflags(2)`/`lchflags(2)` syscalls). No platform-specific settings.
-- **Windows**: Sets `HIDDEN` file attribute by default. A settings dialog (accessible via **Settings** in the toolbar's `☰` menu, or `Ctrl+,`) allows enabling `HIDDEN` + `SYSTEM` mode for stronger hiding. The Settings entry is only present on Windows.
-
-  When an apply fails because a path is protected by Windows access control, PathHide retries those access-denied paths by relaunching itself elevated via a UAC prompt (`runas`). All access-denied paths from one apply are retried together in a single elevated invocation — one prompt per apply operation. Failures from other causes are reported as errors without an elevation retry. The elevated process reports each path's outcome back through a temporary results file, and that report is the authoritative success/error verdict — so a path the elevated process changed successfully is never miscounted as an error just because the unelevated app still cannot read it. PathHide re-inspects each path only to refresh what the row shows. If the prompt is cancelled (or the report cannot be read), PathHide falls back to re-inspection, which correctly reports the unchanged paths rather than a false success.
-
-When Windows is in `HiddenOnly` mode, hide and reapply clear `SYSTEM` and keep only `HIDDEN`.
-
-The `Show` action always clears both `HIDDEN` and `SYSTEM` regardless of the current mode.
-
-## Logs
-
-PathHide writes a runtime log so a problem can be reconstructed after the fact.
-
-- **One file per launch**, under `~/.pathhide/logs/`, named with the UTC launch time and nothing else: `yyyymmdd-hhmmss-utc.log`. If the file can't be opened, the app falls back to console logging.
-- **JSON Lines** — one event per line, each an object with a `time` (UTC, millisecond ISO-8601), `level` (`debug`/`info`/`warn`/`error`), and `message`, plus event-specific fields. Machine-parseable first, greppable by eye second.
-- **Never auto-deleted.** Logs are small; old ones may be exactly what's needed to debug a problem that surfaces later. Delete them by hand if you want to reclaim the space.
-- Open the current log from the toolbar's `☰` menu → **Open Log File** (reveals it in Finder/Explorer).
-- **Developer detail is off by default.** Per-item `debug` lines (each scanned path, each attribute write) are written only in a development build or when the `PATHHIDE_DEBUG=1` environment variable is set, so a normal install never floods the disk. The Windows elevated apply pass is a separate process and writes its own session log alongside the main one.
+- Remember the desired visibility per entry and reapply in bulk (hide all, show all, reapply all)
+- Add paths via pickers or drag and drop
+- Windows: optional stronger hiding (HIDDEN + SYSTEM), with automatic UAC elevation for access-protected paths
+- Per-user storage with backups for path and settings recovery
 
 ## Requirements
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- macOS or Windows
+- To build and run from source: the .NET 10 SDK
 
-## Build and Run
+## Getting started
 
-`dotnet run` works for day-to-day development on either platform. Helper scripts in `scripts/` add platform-specific ceremony for testing access to OS-protected paths. Each launcher is a `scripts/<name>.command` (macOS) / `scripts/<name>.ps1` (Windows) pair.
+Double-click the launcher for your platform (`scripts/run-dev.command` on macOS, `scripts/run-dev.ps1` on Windows), or run from source:
 
-- **macOS**:
-  - `run-dev` — runs the app from source with `dotnet run`; fast, for active coding. macOS attributes TCC permission prompts to the signed bundle's identity, so TCC-gated directories like Desktop, Documents, or Downloads only prompt under the signed bundle — use `run-built`/`rebuild` to exercise those.
-  - `run-built` — launches the existing signed `.app` bundle without rebuilding.
-  - `rebuild` — publishes a self-contained `Release` build into a `.app` bundle, ad-hoc signs it (`codesign --sign -`), and launches it via Launch Services. Host architecture (`osx-arm64` or `osx-x64`) is auto-detected from `uname -m`. Run after changing source.
-- **Windows**:
-  - `run-dev` — runs `dotnet run` directly. Windows has no TCC equivalent that requires a signed bundle for permission prompts; the elevation flow uses UAC, which is triggered by attribute writes regardless of signing.
-  - `run-built` — launches the existing published executable without rebuilding.
-  - `rebuild` — publishes a `Release` build and launches it.
+```sh
+dotnet run
+```
 
 ## License
 
-[MIT](LICENSE)
+MIT © 2026 Yoshinao Inoguchi
+
+## Contact
+
+Yoshinao Inoguchi — nao7sep@gmail.com
