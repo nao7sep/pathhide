@@ -10,23 +10,29 @@ namespace PathHide.Tests.Storage;
 
 /// <summary>
 /// Exercises the real file I/O of <see cref="JsonStore{T}"/> against a temp
-/// directory redirected via <see cref="StorageRoot.Override"/>. These touch the
+/// directory redirected via the <c>PATHHIDE_HOME</c> environment variable — the one
+/// relocation seam, used the same way in tests and production. These touch the
 /// disk on purpose: atomic-write and backup-recovery are the behaviours that
 /// protect the user's saved data, and a fake filesystem would not exercise them.
 /// </summary>
+[Collection(StorageRootEnvironment.CollectionName)]
 public sealed class JsonStoreTests : IDisposable
 {
     private readonly string _root;
+    private readonly string? _previousHome;
 
     public JsonStoreTests()
     {
         _root = Path.Combine(Path.GetTempPath(), "pathhide-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        StorageRoot.Override(_root);
+
+        _previousHome = Environment.GetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable);
+        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _root);
     }
 
     public void Dispose()
     {
+        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _previousHome);
         try { Directory.Delete(_root, recursive: true); }
         catch { /* best-effort cleanup */ }
     }
