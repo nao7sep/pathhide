@@ -19,6 +19,22 @@ sealed class Program
         if (args.Length > 0 && args[0] == "apply")
             return RunApplyMode(args);
 
+        // Resolve and create the storage root before anything else reads or writes it.
+        // An unusable PATHHIDE_HOME (or an unwritable home) is a startup error we report
+        // and STOP on — never a silent fallback that lets the app run unable to persist.
+        // This runs before Log.Start because the log directory itself lives under the
+        // root, and outside the try below so a bad root can never reach the UI.
+        try
+        {
+            StorageRoot.EnsureExists();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                "PathHide cannot start: its storage location could not be created. " + ex.Message);
+            return 1;
+        }
+
         // One JSON-Lines file per launch under the app's logs directory; the logger
         // installs its own crash hooks and console fallback.
         Log.Start(StorageRoot.LogsDirectory);
