@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace PathHide.Storage;
 
@@ -67,13 +68,42 @@ public static class StorageRoot
         return Path.Combine(home, ".pathhide");
     }
 
+    // Matches `${VAR}`, `$VAR` (POSIX) and `%VAR%` (Windows) environment references.
+    private static readonly Regex EnvReferencePattern = new(
+        @"\$\{(?<braced>[A-Za-z_][A-Za-z0-9_]*)\}|\$(?<bare>[A-Za-z_][A-Za-z0-9_]*)|%(?<win>[A-Za-z_][A-Za-z0-9_]*)%",
+        RegexOptions.Compiled);
+
     /// <summary>
-    /// Expands a leading <c>~</c> and any environment references in the override value, then makes it
+    /// Expands <c>${VAR}</c> / <c>$VAR</c> / <c>%VAR%</c> references against the environment. An unset
+    /// reference expands to empty — matching shell behavior and the TypeScript/Rust resolvers in the
+    /// fleet — rather than being left as a literal that would become a directory name.
+    /// </summary>
+    private static string ExpandEnvReferences(string value) =>
+        EnvReferencePattern.Replace(value, match =>
+        {
+            var name = match.Groups["braced"].Success ? match.Groups["braced"].Value
+                : match.Groups["bare"].Success ? match.Groups["bare"].Value
+                : match.Groups["win"].Value;
+            return Environment.GetEnvironmentVariable(name) ?? string.Empty;
+        });
+
+    /// <summary>
+    /// Expands environment references and a leading <c>~</c> in the override value, then makes it
     /// absolute against the home directory (never the working directory) so the override can never
-    /// reintroduce a cwd dependence.
+    /// reintroduce a cwd dependence. An override that is set but expands to nothing (an unset
+    /// <c>$VAR</c>/<c>%VAR%</c>) is a reported startup error, not a silent collapse onto the home directory.
     /// </summary>
     private static string ResolveOverride(string value, string home)
     {
+        value = ExpandEnvReferences(value).Trim();
+
+        if (value.Length == 0)
+        {
+            throw new InvalidOperationException(
+                HomeEnvironmentVariable + " is set but expands to an empty path (an unset $VAR/%VAR%?). " +
+                "Set it to a usable directory, or unset it to use the default.");
+        }
+
         if (value == "~")
         {
             value = home;
@@ -83,8 +113,6 @@ public static class StorageRoot
         {
             value = Path.Combine(home, value[2..]);
         }
-
-        value = Environment.ExpandEnvironmentVariables(value);
 
         // A relative override is resolved against the home directory, not the working directory.
         return Path.IsPathRooted(value)

@@ -66,4 +66,80 @@ public sealed class StorageRootTests : IDisposable
             Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), relative)),
             StorageRoot.Directory);
     }
+
+    [Fact]
+    public void Tilde_Alone_Override_Expands_To_Home()
+    {
+        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "~");
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.Equal(Path.GetFullPath(home), Path.GetFullPath(StorageRoot.Directory));
+    }
+
+    [Fact]
+    public void Tilde_Slash_Override_Expands_Against_Home()
+    {
+        var leaf = "pathhide-tilde-" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "~/" + leaf);
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.Equal(Path.GetFullPath(Path.Combine(home, leaf)), StorageRoot.Directory);
+    }
+
+    [Fact]
+    public void Percent_Environment_Reference_In_Override_Expands()
+    {
+        // A uniquely-named variable avoids colliding with anything in the real environment; it is
+        // restored (cleared) in the finally so the process-wide env stays clean for sibling tests.
+        var probeVariable = "PATHHIDE_OVERRIDE_PROBE_" + Guid.NewGuid().ToString("N");
+        var previousProbe = Environment.GetEnvironmentVariable(probeVariable);
+        var target = Path.Combine(Path.GetTempPath(), "pathhide-percent-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Environment.SetEnvironmentVariable(probeVariable, target);
+            // The resolver expands both the Windows %VAR% form (here) and the POSIX $VAR / ${VAR}
+            // forms (covered by the test below); an unset reference expands to empty.
+            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "%" + probeVariable + "%");
+
+            Assert.Equal(Path.GetFullPath(target), Path.GetFullPath(StorageRoot.Directory));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(probeVariable, previousProbe);
+        }
+    }
+
+    [Fact]
+    public void Dollar_Environment_References_In_Override_Expand()
+    {
+        var probeVariable = "PATHHIDE_OVERRIDE_PROBE_" + Guid.NewGuid().ToString("N");
+        var previousProbe = Environment.GetEnvironmentVariable(probeVariable);
+        var target = Path.Combine(Path.GetTempPath(), "pathhide-dollar-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Environment.SetEnvironmentVariable(probeVariable, target);
+
+            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "$" + probeVariable);
+            Assert.Equal(Path.GetFullPath(target), Path.GetFullPath(StorageRoot.Directory));
+
+            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "${" + probeVariable + "}");
+            Assert.Equal(Path.GetFullPath(target), Path.GetFullPath(StorageRoot.Directory));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(probeVariable, previousProbe);
+        }
+    }
+
+    [Fact]
+    public void Override_That_Expands_To_Empty_Is_Rejected()
+    {
+        // A reference to a variable that is definitely unset expands to empty; that is a
+        // misconfiguration, reported rather than silently collapsing onto the home directory.
+        var unsetVariable = "PATHHIDE_UNSET_PROBE_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(unsetVariable, null);
+        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "$" + unsetVariable);
+
+        Assert.Throws<InvalidOperationException>(() => _ = StorageRoot.Directory);
+    }
 }
