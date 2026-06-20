@@ -4,6 +4,7 @@ using System.Linq;
 using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -51,6 +52,18 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
+        // Derive the window minimum from the live grid columns plus fixed chrome (see
+        // WindowMetrics) rather than a hand-typed constant, so the window can never be shrunk
+        // small enough to hide the toolbar, list, or status bar — and so adding or resizing a
+        // column moves the minimum with it. The toolbar is a single non-wrapping row, so its
+        // natural width is measured and folded in: without this the window could shrink below
+        // the buttons' width and they would wrap onto a second line.
+        Toolbar.Measure(Size.Infinity);
+        MinWidth = Math.Max(
+            WindowMetrics.MinWidthFor(PathGrid.Columns.Select(c => c.MinWidth)),
+            Toolbar.DesiredSize.Width);
+        MinHeight = WindowMetrics.MinHeight();
+
         // Build the catalog now that PlatformSettings (the platform command key) and the view model
         // are both available, then point the accelerator-bearing menu items at the live gestures so
         // their visible hint always matches what OnKeyDown actually binds.

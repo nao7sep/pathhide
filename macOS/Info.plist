@@ -24,6 +24,12 @@
     <string>11.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <!-- Force the native title bar (and any system-drawn chrome) into the light/aqua
+         appearance so a dark-mode Mac cannot paint dark chrome over this light-only app.
+         This is correct ONLY while PathHide is light-only: if the app ever becomes
+         theme-switchable, remove this key and let RequestedThemeVariant drive the bar. -->
+    <key>NSRequiresAquaSystemAppearance</key>
+    <true/>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSSupportsAutomaticTermination</key>

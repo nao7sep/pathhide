@@ -15,6 +15,7 @@
 
         <!-- Toolbar -->
         <Border DockPanel.Dock="Top"
+                x:Name="Toolbar"
                 Background="{StaticResource SurfaceBrush}"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,0,0,1"
@@ -49,10 +50,12 @@
                     </Button.Flyout>
                 </Button>
 
-                <!-- Action buttons (left, wrapping) -->
-                <WrapPanel Orientation="Horizontal"
-                           x:Name="ActionButtons"
-                           AutomationProperties.Name="Actions">
+                <!-- Action buttons (left, single row — never wrap. Wrapping made the rows
+                     touch and doubled the hamburger's height; instead the window minimum
+                     reserves the toolbar's full width so a second line never happens. -->
+                <StackPanel Orientation="Horizontal"
+                            x:Name="ActionButtons"
+                            AutomationProperties.Name="Actions">
                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
                         <Button Content="Add Files" Classes="add" x:Name="AddFilesButton"/>
                         <Button Content="Add Directories" Classes="add" x:Name="AddFoldersButton"/>
@@ -78,7 +81,7 @@
                                 Command="{Binding CancelScanCommand}"
                                 IsVisible="{Binding IsScanning}"/>
                     </StackPanel>
-                </WrapPanel>
+                </StackPanel>
             </DockPanel>
         </Border>
 
@@ -118,13 +121,16 @@
                       GridLinesVisibility="Horizontal"
                       BorderThickness="0"
                       Background="Transparent"
-                      RowBackground="White">
+                      RowBackground="{StaticResource SurfaceBrush}">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" SortMemberPath="Path" Width="*"/>
-                    <DataGridTextColumn Header="Family" Binding="{Binding PathFamily}" SortMemberPath="PathFamily" Width="100"/>
-                    <DataGridTextColumn Header="Desired" Binding="{Binding DesiredVisibility}" SortMemberPath="DesiredVisibility" Width="90"/>
-                    <DataGridTextColumn Header="Actual" Binding="{Binding ActualState}" SortMemberPath="ActualState" Width="120"/>
-                    <DataGridTextColumn Header="Kind" Binding="{Binding ItemKind}" SortMemberPath="ItemKind" Width="110"/>
+                    <!-- Each column carries a real minimum width; WindowMetrics sums these
+                         (read from the live columns) to derive the window's MinWidth, so the
+                         window and its columns can never drift apart. -->
+                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" SortMemberPath="Path" Width="*" MinWidth="240"/>
+                    <DataGridTextColumn Header="Family" Binding="{Binding PathFamily}" SortMemberPath="PathFamily" Width="100" MinWidth="100"/>
+                    <DataGridTextColumn Header="Desired" Binding="{Binding DesiredVisibility}" SortMemberPath="DesiredVisibility" Width="90" MinWidth="90"/>
+                    <DataGridTextColumn Header="Actual" Binding="{Binding ActualState}" SortMemberPath="ActualState" Width="120" MinWidth="120"/>
+                    <DataGridTextColumn Header="Kind" Binding="{Binding ItemKind}" SortMemberPath="ItemKind" Width="110" MinWidth="110"/>
                 </DataGrid.Columns>
             </DataGrid>
         </Border>
