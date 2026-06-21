@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Xunit;
 
@@ -10,7 +11,12 @@ namespace PathHide.Tests;
 /// </summary>
 public sealed class MacOnlyFactAttribute : FactAttribute
 {
-    public MacOnlyFactAttribute()
+    // xUnit v3 (xUnit3003) reads source location from the base constructor's
+    // caller arguments so the skipped/failing test points back to its own line.
+    public MacOnlyFactAttribute(
+        [CallerFilePath] string? sourceFilePath = null,
+        [CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             Skip = "Runs on macOS only.";
@@ -20,7 +26,10 @@ public sealed class MacOnlyFactAttribute : FactAttribute
 /// <summary>A <see cref="FactAttribute"/> that runs only on Windows.</summary>
 public sealed class WindowsOnlyFactAttribute : FactAttribute
 {
-    public WindowsOnlyFactAttribute()
+    public WindowsOnlyFactAttribute(
+        [CallerFilePath] string? sourceFilePath = null,
+        [CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             Skip = "Runs on Windows only.";

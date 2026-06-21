@@ -32,7 +32,7 @@ public class PathScannerTests
         var scanner = new PathScanner(fake);
         var entries = new[] { Entry("/a"), Entry("/b"), Entry("/c") };
 
-        var results = await CollectAsync(scanner, entries);
+        var results = await CollectAsync(scanner, entries, token: TestContext.Current.CancellationToken);
 
         Assert.Equal(3, results.Count);
         Assert.Equal("/a", results[0].Entry.Path);
@@ -46,7 +46,7 @@ public class PathScannerTests
         var fake = new FakeVisibilityService();
         var scanner = new PathScanner(fake);
 
-        var results = await CollectAsync(scanner, new[] { Entry("not-absolute") });
+        var results = await CollectAsync(scanner, new[] { Entry("not-absolute") }, token: TestContext.Current.CancellationToken);
 
         var only = Assert.Single(results);
         Assert.Equal(ActualState.Error, only.Inspection.ActualState);
@@ -62,7 +62,7 @@ public class PathScannerTests
         fake.Set("/x", ActualState.Hidden, ItemKind.Directory);
         var scanner = new PathScanner(fake);
 
-        var results = await CollectAsync(scanner, new[] { Entry("/x") });
+        var results = await CollectAsync(scanner, new[] { Entry("/x") }, token: TestContext.Current.CancellationToken);
 
         var only = Assert.Single(results);
         Assert.Equal(ActualState.Hidden, only.Inspection.ActualState);
@@ -80,7 +80,7 @@ public class PathScannerTests
         // Synchronous IProgress avoids the SynchronizationContext post used by Progress<T>.
         var progress = new SynchronousProgress<int>(reported.Add);
 
-        await CollectAsync(scanner, new[] { Entry("/a"), Entry("/b"), Entry("/c") }, progress);
+        await CollectAsync(scanner, new[] { Entry("/a"), Entry("/b"), Entry("/c") }, progress, TestContext.Current.CancellationToken);
 
         Assert.Equal(new[] { 1, 2, 3 }, reported);
     }
