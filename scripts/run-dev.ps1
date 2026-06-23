@@ -4,8 +4,8 @@ $scriptExitCode = 0
 
 # run-dev: run the app from source with live reload, in its loosest configuration.
 # For active coding and debugging. The strict, production-faithful launchers are
-# run-built (launch the existing production build without rebuilding) and rebuild
-# (build from clean in release config, then launch).
+# run-built (launch the existing packaged app bundle without rebuilding) and
+# rebuild (build and package a fresh bundle, then launch).
 
 function Set-Utf8Console {
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -58,7 +58,7 @@ try {
     Write-Step "Restoring packages required for launch"
     Invoke-Native -FilePath "dotnet" -ArgumentList @("restore", $projectFile)
 
-    Write-Step "Starting PathHide"
+    Write-Step "Starting PathHide (Debug, from source)"
     Invoke-Native -FilePath "dotnet" -ArgumentList @("run", "--project", $projectFile) -AllowedExitCodes @(0, 130, -1073741510)
 }
 catch {
