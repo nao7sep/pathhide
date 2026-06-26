@@ -20,7 +20,7 @@ PathHide is a desktop utility for macOS and Windows that hides or shows specific
 Double-click the launcher for your platform (`scripts/run-dev.command` on macOS, `scripts/run-dev.ps1` on Windows), or run from source:
 
 ```sh
-dotnet run
+dotnet run --project src/PathHide
 ```
 
 ## License
