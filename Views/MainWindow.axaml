@@ -7,6 +7,7 @@
         x:Class="PathHide.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="PathHide"
+        Icon="/Assets/icon.png"
         Width="1280" Height="720"
         Background="{StaticResource AppBackgroundBrush}"
         DragDrop.AllowDrop="True">
