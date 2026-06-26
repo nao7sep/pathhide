@@ -10,6 +10,14 @@
     <string>PathHide</string>
     <key>CFBundleExecutable</key>
     <string>PathHide</string>
+    <!-- Dual-key icon wiring (see liquid-glass-icon-workflow). Older macOS reads
+         CFBundleIconFile -> Resources/icon.icns (classic flat tile); macOS 26 (Tahoe)
+         reads CFBundleIconName -> Resources/Assets.car (the Liquid Glass tile). Both
+         are staged into Contents/Resources by scripts/rebuild.command. -->
+    <key>CFBundleIconFile</key>
+    <string>icon</string>
+    <key>CFBundleIconName</key>
+    <string>veiled-folder-dark-fog</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>

@@ -67,8 +67,12 @@ dotnet publish "$PROJECT_FILE" \
   -o "$PUBLISH_DIR"
 
 log_step "Assembling app bundle"
-# Reset MacOS so stale assemblies from a previous build can't linger.
-rm -rf "${APP_BUNDLE:?}/Contents/MacOS"
+# Recreate the WHOLE bundle from scratch (not just Contents/MacOS): reusing the
+# existing .app directory makes macOS keep serving the icon it cached for that path
+# — so a bundle first built without an icon stays icon-less in the Dock/Finder even
+# after the icon is added. A full wipe + fresh ad-hoc signature (new cdhash) is what
+# lets Launch Services re-read the icon. (Same approach as daynote/build-macos-app.sh.)
+rm -rf "${APP_BUNDLE:?}"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
@@ -77,6 +81,15 @@ cp -R "$PUBLISH_DIR/." "$APP_BUNDLE/Contents/MacOS/"
 
 # Drop in the Info.plist so TCC has a bundle identity and usage strings.
 cp "$INFO_PLIST" "$APP_BUNDLE/Contents/Info.plist"
+
+# Drop in the app icon. Info.plist's CFBundleIconFile points to "icon" -> icon.icns
+# (the classic flat tile read by older macOS); CFBundleIconName names the Liquid Glass
+# catalog Assets.car (the Tahoe tile read by macOS 26). Both committed under macOS/ and
+# copied in fresh each build. Icon provenance: company/assets/pathhide/icons.
+cp "$REPO_DIR/macOS/icon.icns" "$APP_BUNDLE/Contents/Resources/icon.icns"
+if [[ -f "$REPO_DIR/macOS/Assets.car" ]]; then
+  cp "$REPO_DIR/macOS/Assets.car" "$APP_BUNDLE/Contents/Resources/Assets.car"
+fi
 
 log_step "Ad-hoc signing bundle"
 # `--sign -` is the ad-hoc identity. --force overwrites prior signatures (each

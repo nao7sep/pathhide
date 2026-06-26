@@ -8,6 +8,10 @@
          project use unsafe blocks themselves. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Windows: embeds icon.ico into the .exe. macOS uses macOS/icon.icns (classic,
+         CFBundleIconFile) and macOS/Assets.car (Liquid Glass, CFBundleIconName) instead;
+         see scripts/rebuild.command. Icon provenance: company/assets/pathhide/icons. -->
+    <ApplicationIcon>icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyTitle>PathHide</AssemblyTitle>
     <Product>PathHide</Product>
