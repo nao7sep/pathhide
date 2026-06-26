@@ -1,7 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <!-- xUnit v3 test projects are executables (their own in-process runner). -->
     <OutputType>Exe</OutputType>
@@ -22,6 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\PathHide.csproj" />
+    <ProjectReference Include="..\..\src\PathHide\PathHide.csproj" />
   </ItemGroup>
 </Project>

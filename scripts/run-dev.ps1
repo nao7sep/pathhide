@@ -47,7 +47,7 @@ function Invoke-Native {
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
-$projectFile = Join-Path $repoDir "PathHide.csproj"
+$projectFile = Join-Path $repoDir "src/PathHide/PathHide.csproj"
 
 try {
     Set-Utf8Console

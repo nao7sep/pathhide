@@ -12,7 +12,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PROJECT_FILE="$REPO_DIR/PathHide.csproj"
+PROJECT_FILE="$REPO_DIR/src/PathHide/PathHide.csproj"
 
 log_step() {
   printf '\n==> %s\n' "$1"

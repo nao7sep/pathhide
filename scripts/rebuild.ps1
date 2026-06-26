@@ -46,7 +46,7 @@ function Invoke-Native {
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
-$projectFile = Join-Path $repoDir "PathHide.csproj"
+$projectFile = Join-Path $repoDir "src/PathHide/PathHide.csproj"
 $publishDir = Join-Path $repoDir "bin/Release/net10.0/win-x64/publish"
 $exePath = Join-Path $publishDir "PathHide.exe"
 

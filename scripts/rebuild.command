@@ -8,7 +8,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-PROJECT_FILE="$REPO_DIR/PathHide.csproj"
+PROJECT_FILE="$REPO_DIR/src/PathHide/PathHide.csproj"
 APP_BUNDLE="$REPO_DIR/publish/PathHide.app"
 INFO_PLIST="$REPO_DIR/macOS/Info.plist"
 
