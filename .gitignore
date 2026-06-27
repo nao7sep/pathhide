@@ -10,3 +10,6 @@ publish/
 
 # macOS
 .DS_Store
+
+# Coverage reports (generated)
+coverage/

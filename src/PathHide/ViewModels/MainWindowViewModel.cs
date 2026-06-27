@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PathHide.Models;
@@ -54,9 +55,12 @@ public partial class MainWindowViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(StatusBarText))]
     private string _notification = string.Empty;
 
-    // Currently, all settings are Windows-only. When a cross-platform setting is added,
-    // change this to always return true and remove the platform check.
-    public bool HasSettings { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+    // Settings are always available now: the UI font is a cross-platform setting, so the dialog
+    // opens on every OS. The Windows hide mode is the one platform-specific setting (see below).
+    public bool HasSettings { get; } = true;
+
+    /// <summary>Whether the Windows-only hide-mode setting applies; the dialog shows it only then.</summary>
+    public bool HasWindowsHideMode { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
     /// <summary>
     /// Current Windows hide mode as a bool, used to seed the settings dialog. Read-only:
@@ -64,6 +68,10 @@ public partial class MainWindowViewModel : ViewModelBase
     /// through a bound setter, so there is no save side effect on assignment.
     /// </summary>
     public bool IsHiddenAndSystem => _settings.WindowsHideMode == WindowsHideMode.HiddenAndSystem;
+
+    /// <summary>The configured UI (chrome) font family, used to seed the settings dialog. Changed and
+    /// persisted through <see cref="SetUiFontFamily"/>.</summary>
+    public string UiFontFamily => _settings.UiFontFamily;
 
     public string ProgressText => ScanTotal > 0
         ? $"Scanning {ScanProgress} / {ScanTotal}"
@@ -115,6 +123,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _settingsStore = settingsStore;
         _settings = settings;
         _scanner = new PathScanner(visibilityService);
+        ApplyUiFont();
     }
 
     /// <summary>
@@ -135,7 +144,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     // --- Add / Remove ---
 
-    public async Task AddPathsAsync(IEnumerable<string> paths)
+    // A guarded command (parity with the sibling mutating commands): the generated async command
+    // refuses a second run while one is in flight, so two rapid drops — or a drop landing during a
+    // picker add — cannot interleave and corrupt the shared scan state (_scanCts / _scanTask). Both
+    // the pickers and drag-drop dispatch through AddPathsCommand.
+    [RelayCommand]
+    private async Task AddPathsAsync(IEnumerable<string> paths)
     {
         var scanWasActive = await PauseScanningAsync();
         var added = 0;
@@ -407,6 +421,47 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Updates and persists the UI (chrome) font, then applies it app-wide. On a save failure the
+    /// in-memory value is restored and the failure is surfaced, mirroring <see cref="SetWindowsHideMode"/>.
+    /// No-op when the family is unchanged. The string is stored trimmed; blank means the bundled default.
+    /// </summary>
+    public void SetUiFontFamily(string family)
+    {
+        family = (family ?? string.Empty).Trim();
+        if (_settings.UiFontFamily == family)
+            return;
+
+        var previous = _settings.UiFontFamily;
+        _settings.UiFontFamily = family;
+
+        try
+        {
+            _settingsStore.Save(_settings);
+            Log.Info("settings: ui font changed", new { family });
+            ApplyUiFont();
+            OnPropertyChanged(nameof(UiFontFamily));
+        }
+        catch (Exception ex)
+        {
+            _settings.UiFontFamily = previous;
+            Log.Error("settings: save failed", ex);
+            ShowNotification($"Failed to save settings: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Applies the configured UI font app-wide by overriding the <c>AppFontFamily</c> resource the
+    /// Window style binds via DynamicResource, so it takes effect live across every window.
+    /// </summary>
+    private void ApplyUiFont()
+    {
+        if (Application.Current is { } app)
+        {
+            app.Resources["AppFontFamily"] = UiFont.Resolve(_settings.UiFontFamily);
+        }
+    }
+
     [RelayCommand]
     private void CancelScan()
     {
@@ -559,6 +614,14 @@ public partial class MainWindowViewModel : ViewModelBase
         _scanCts = scanCts;
         var token = scanCts.Token;
         var entries = _entries.ToList();
+
+        // Every shared-state write below (ScanProgress, the row updates, and the finally's
+        // _scanCts/IsScanning reset) is gated on ReferenceEquals(_scanCts, scanCts) — "am I still
+        // the current scan?". The mutating commands all PauseScanningAsync (cancel + await the prior
+        // scan) before starting a new one, so two scans never run concurrently; the guard's live
+        // purpose is the cancel path, where a Progress<int> report queued just before CancelScan can
+        // still fire after this scan's finally has reset state — and must not clobber it. Cheap
+        // defense-in-depth on the pause-and-await invariant: do not drop it to "simplify".
 
         IsScanning = true;
         ScanTotal = entries.Count;

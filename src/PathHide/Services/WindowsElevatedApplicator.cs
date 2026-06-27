@@ -50,27 +50,13 @@ public static class WindowsElevatedApplicator
 
         var psi = new ProcessStartInfo(exePath)
         {
+            // The runas shell verb is what triggers the UAC elevation prompt; the "apply" subcommand
+            // and its options (built below) are the child's own command line, a separate concern.
             Verb = "runas",
             UseShellExecute = true,
         };
-        psi.ArgumentList.Add("apply");
-        if (hideList.Count > 0)
-        {
-            psi.ArgumentList.Add("--hide");
-            foreach (var p in hideList) psi.ArgumentList.Add(p);
-        }
-        if (systemList.Count > 0)
-        {
-            psi.ArgumentList.Add("--system");
-            foreach (var p in systemList) psi.ArgumentList.Add(p);
-        }
-        if (showList.Count > 0)
-        {
-            psi.ArgumentList.Add("--show");
-            foreach (var p in showList) psi.ArgumentList.Add(p);
-        }
-        psi.ArgumentList.Add("--results");
-        psi.ArgumentList.Add(resultsPath);
+        foreach (var arg in ElevatedApplyCommand.BuildArguments(hideList, systemList, showList, resultsPath))
+            psi.ArgumentList.Add(arg);
 
         var totalPaths = hideList.Count + systemList.Count + showList.Count;
 

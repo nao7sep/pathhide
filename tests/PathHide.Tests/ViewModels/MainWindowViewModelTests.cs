@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Headless.XUnit;
 using CommunityToolkit.Mvvm.Input;
 using PathHide.Models;
 using PathHide.Services;
@@ -47,7 +49,7 @@ public class MainWindowViewModelTests
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
 
-        await vm.AddPathsAsync(new[] { "/foo", "/foo", "relative" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/foo", "/foo", "relative" });
 
         var row = Assert.Single(vm.Rows);
         Assert.Equal("/foo", row.Path);
@@ -63,11 +65,11 @@ public class MainWindowViewModelTests
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
 
-        await vm.AddPathsAsync(new[] { "/existing" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/existing" });
         Assert.Single(vm.Rows);
 
         paths.ThrowOnSave = true;
-        await vm.AddPathsAsync(new[] { "/new" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/new" });
 
         // The failed add is fully rolled back: the list is unchanged and the failure surfaced.
         var row = Assert.Single(vm.Rows);
@@ -76,12 +78,69 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task AddPaths_RefusesToRunConcurrently_WhileOneIsInFlight()
+    {
+        // The guard that promoting AddPaths to a [RelayCommand] buys: while one add is running,
+        // a second cannot start — so two rapid drops (or a drop during a picker add) can't
+        // interleave their pause/resume and corrupt the shared scan state.
+        var gate = new ManualResetEventSlim(false);
+        var visibility = new FakeVisibilityService { InspectGate = gate };
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        // Start an add and hold it inside ApplyDesiredState's off-thread inspection (the gate
+        // blocks Inspect), so the command is still in flight when we probe it.
+        var inFlight = vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
+        Assert.False(vm.AddPathsCommand.CanExecute(new[] { "/y" }));
+
+        gate.Set();
+        await inFlight;
+
+        // Once it finishes, the command is runnable again.
+        Assert.True(vm.AddPathsCommand.CanExecute(new[] { "/y" }));
+        Assert.Single(vm.Rows);
+    }
+
+    [AvaloniaFact]
+    public async Task CancellingARunningScan_StopsItMidwayAndClearsTheScanningFlag()
+    {
+        // The reachable purpose of RunScanAsync's `ReferenceEquals(_scanCts, scanCts)` guards:
+        // cancelling an in-flight scan interrupts it (later entries are never inspected) and the
+        // finally block resets IsScanning — but only because the cancelled scan is still the
+        // current one. Run on the headless UI thread so scan progress marshals as it does live.
+        var gate = new ManualResetEventSlim(false);
+        var visibility = new FakeVisibilityService { InspectGate = gate };
+        visibility.Set("/a", ActualState.Hidden);
+        visibility.Set("/b", ActualState.Visible);
+        var paths = new FakeJsonStore<List<PathEntry>>
+        {
+            Value = new List<PathEntry> { Entry("/a"), Entry("/b") },
+        };
+
+        // Initialize starts the background scan, which blocks inside the first entry's inspection.
+        var vm = CreateViewModel(visibility, paths);
+        Assert.True(vm.IsScanning);
+
+        vm.CancelScanCommand.Execute(null);
+        gate.Set();
+
+        // Let the cancelled scan unwind on the UI thread.
+        for (var i = 0; i < 200 && vm.IsScanning; i++)
+            await Task.Delay(10);
+
+        Assert.False(vm.IsScanning);
+        // Cancellation took effect before the second entry: /a was inspected, /b never was.
+        Assert.Contains("/a", visibility.Inspected);
+        Assert.DoesNotContain("/b", visibility.Inspected);
+    }
+
+    [Fact]
     public async Task ShowSelected_FlipsDesiredVisibilityAndApplies()
     {
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
-        await vm.AddPathsAsync(new[] { "/x" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
         var row = Assert.Single(vm.Rows);
         row.IsSelected = true;
@@ -100,7 +159,7 @@ public class MainWindowViewModelTests
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
         vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
-        await vm.AddPathsAsync(new[] { "/x" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
         vm.Rows.Single().IsSelected = true;
         await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
@@ -116,7 +175,7 @@ public class MainWindowViewModelTests
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
         vm.ConfirmDestructiveAsync = _ => Task.FromResult(false);
-        await vm.AddPathsAsync(new[] { "/x" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
         vm.Rows.Single().IsSelected = true;
         await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
@@ -142,7 +201,7 @@ public class MainWindowViewModelTests
             return Task.FromResult(false);
         };
 
-        await vm.AddPathsAsync(Enumerable.Range(0, count).Select(i => $"/p{i}").ToArray());
+        await vm.AddPathsCommand.ExecuteAsync(Enumerable.Range(0, count).Select(i => $"/p{i}").ToArray());
         foreach (var row in vm.Rows)
             row.IsSelected = true;
 
@@ -172,7 +231,7 @@ public class MainWindowViewModelTests
             return Task.FromResult(true);
         };
 
-        await vm.AddPathsAsync(new[] { "/x" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
         // No row selected.
         await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
 
@@ -330,7 +389,7 @@ public class MainWindowViewModelTests
         var vm = CreateViewModel(visibility, paths);
 
         // A newly added entry defaults to Hidden and is applied immediately, so Hide runs.
-        await vm.AddPathsAsync(new[] { "/x" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
         Assert.Contains("1 errors", vm.Notification);
         Assert.Contains("/x", visibility.Inspected); // re-inspected after the failure
@@ -349,7 +408,7 @@ public class MainWindowViewModelTests
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
 
-        await vm.AddPathsAsync(new[] { "/x" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
         Assert.Contains("1 errors", vm.Notification);
         Assert.DoesNotContain("elevated", vm.Notification);
@@ -372,7 +431,7 @@ public class MainWindowViewModelTests
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
 
-        await vm.AddPathsAsync(new[] { "/x" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
         Assert.Contains("1 errors", vm.Notification);
         Assert.DoesNotContain("elevated", vm.Notification);

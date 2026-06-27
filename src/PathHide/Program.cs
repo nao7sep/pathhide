@@ -16,7 +16,7 @@ sealed class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (args.Length > 0 && args[0] == "apply")
+        if (args.Length > 0 && args[0] == ElevatedApplyCommand.Subcommand)
             return RunApplyMode(args);
 
         // Resolve and create the storage root before anything else reads or writes it.
@@ -83,18 +83,18 @@ sealed class Program
         Log.Start(StorageRoot.LogsDirectory);
         try
         {
-            var hideOpt = new Option<string[]>("--hide")
+            var hideOpt = new Option<string[]>(ElevatedApplyCommand.HideOption)
                 { AllowMultipleArgumentsPerToken = true, Arity = ArgumentArity.ZeroOrMore };
-            var systemOpt = new Option<string[]>("--system")
+            var systemOpt = new Option<string[]>(ElevatedApplyCommand.SystemOption)
                 { AllowMultipleArgumentsPerToken = true, Arity = ArgumentArity.ZeroOrMore };
-            var showOpt = new Option<string[]>("--show")
+            var showOpt = new Option<string[]>(ElevatedApplyCommand.ShowOption)
                 { AllowMultipleArgumentsPerToken = true, Arity = ArgumentArity.ZeroOrMore };
             // Optional sink for per-path results: stdout cannot be redirected across the
             // runas boundary, so the launcher passes a temp file path here and reads it back.
             // Absent (e.g. a standalone CLI invocation) means write nothing.
-            var resultsOpt = new Option<string?>("--results");
+            var resultsOpt = new Option<string?>(ElevatedApplyCommand.ResultsOption);
 
-            var applyCmd = new Command("apply", "Apply file attributes in batch");
+            var applyCmd = new Command(ElevatedApplyCommand.Subcommand, "Apply file attributes in batch");
             applyCmd.Add(hideOpt);
             applyCmd.Add(systemOpt);
             applyCmd.Add(showOpt);
@@ -159,14 +159,8 @@ sealed class Program
         {
             try
             {
-                var attrs = File.GetAttributes(path);
-
-                if (hide) attrs |= FileAttributes.Hidden;
-                else attrs &= ~FileAttributes.Hidden;
-
-                if (system) attrs |= FileAttributes.System;
-                else attrs &= ~FileAttributes.System;
-
+                var attrs = WindowsFileVisibility.ApplyVisibility(
+                    File.GetAttributes(path), hide, system);
                 File.SetAttributes(path, attrs);
                 results.Add(new PathApplyResult(path, Ok: true));
             }

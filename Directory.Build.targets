@@ -1,0 +1,62 @@
+<Project>
+
+  <!-- macOS application-bundle assembly.
+
+       .NET ships no first-party macOS .app bundler, so a self-contained publish for
+       an osx runtime identifier is post-processed here into a signed .app. Running it
+       as an AfterTargets="Publish" step makes `dotnet publish` the single command that
+       produces the bundle: the release workflow and the local rebuild launcher both
+       just publish, with no separate build script. See the app-release-conventions.
+
+       Inputs, committed at the repo root beside this file:
+         macOS/Info.plist   bundle identity and usage strings
+         macOS/icon.icns    classic icon (Info.plist CFBundleIconFile)
+         macOS/Assets.car   Liquid Glass catalog (Info.plist CFBundleIconName), optional
+
+       Output: <PublishDir><AssemblyName>.app, ad-hoc signed. The loose publish output
+       is folded into Contents/MacOS, so the publish directory ends up holding only the
+       bundle and the standard release archive step needs no platform special-casing. -->
+
+  <Target Name="AssembleMacAppBundle"
+          AfterTargets="Publish"
+          Condition="'$(OutputType)' != 'Library' and $(RuntimeIdentifier.StartsWith('osx'))">
+
+    <PropertyGroup>
+      <_MacBundle>$(PublishDir)$(AssemblyName).app</_MacBundle>
+      <_MacContents>$(_MacBundle)/Contents</_MacContents>
+      <_MacExecDir>$(_MacContents)/MacOS</_MacExecDir>
+      <_MacResDir>$(_MacContents)/Resources</_MacResDir>
+      <_PublishRoot>$([System.IO.Path]::GetFullPath('$(PublishDir)'))</_PublishRoot>
+    </PropertyGroup>
+
+    <!-- Capture the loose publish output before the bundle directory is created. -->
+    <ItemGroup>
+      <_PublishedFile Include="$(PublishDir)**/*" Exclude="$(_MacBundle)/**" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(_MacExecDir);$(_MacResDir)" />
+
+    <Move SourceFiles="@(_PublishedFile)"
+          DestinationFiles="@(_PublishedFile->'$(_MacExecDir)/%(RecursiveDir)%(Filename)%(Extension)')" />
+
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)macOS/Info.plist"
+          DestinationFiles="$(_MacContents)/Info.plist" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)macOS/icon.icns"
+          DestinationFolder="$(_MacResDir)" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)macOS/Assets.car"
+          DestinationFolder="$(_MacResDir)"
+          Condition="Exists('$(MSBuildThisFileDirectory)macOS/Assets.car')" />
+
+    <!-- Moving files leaves empty directory shells in the publish root for any
+         localization satellite folders; remove every top-level entry except the
+         bundle so the publish directory holds only the .app. -->
+    <Exec Command="/usr/bin/find &quot;$(_PublishRoot)&quot; -mindepth 1 -maxdepth 1 ! -name &quot;$(AssemblyName).app&quot; -exec rm -rf {} +" />
+
+    <!-- Ad-hoc sign: an arm64 binary must carry at least an ad-hoc signature to
+         launch. The deep flag re-signs Avalonia's pre-signed native dylibs so the
+         whole bundle carries one identity. -->
+    <Exec Command="codesign --force --deep --sign - &quot;$(_MacBundle)&quot;" />
+    <Exec Command="codesign --verify --verbose=1 &quot;$(_MacBundle)&quot;" />
+  </Target>
+
+</Project>

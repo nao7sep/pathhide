@@ -103,11 +103,14 @@ public partial class MainWindow : Window
 
     private async Task OpenSettingsAsync()
     {
-        var dialog = new SettingsDialog(ViewModel.IsHiddenAndSystem);
+        var dialog = new SettingsDialog(ViewModel.UiFontFamily, ViewModel.IsHiddenAndSystem, ViewModel.HasWindowsHideMode);
         await dialog.ShowDialog(this);
 
         if (dialog.Accepted)
+        {
+            ViewModel.SetUiFontFamily(dialog.UiFontFamily);
             ViewModel.SetWindowsHideMode(dialog.IsHiddenAndSystem);
+        }
     }
 
     private async void OnAddFilesClick(object? sender, RoutedEventArgs e) => await AddFilesAsync();
@@ -121,7 +124,7 @@ public partial class MainWindow : Window
         });
 
         if (files.Count > 0)
-            await ViewModel.AddPathsAsync(files.Select(f => f.Path.LocalPath));
+            await ViewModel.AddPathsCommand.ExecuteAsync(files.Select(f => f.Path.LocalPath));
     }
 
     private async void OnAddFoldersClick(object? sender, RoutedEventArgs e) => await AddFoldersAsync();
@@ -135,7 +138,7 @@ public partial class MainWindow : Window
         });
 
         if (folders.Count > 0)
-            await ViewModel.AddPathsAsync(folders.Select(f => f.Path.LocalPath));
+            await ViewModel.AddPathsCommand.ExecuteAsync(folders.Select(f => f.Path.LocalPath));
     }
 
     private void OnDragOver(object? sender, DragEventArgs e)
@@ -152,7 +155,7 @@ public partial class MainWindow : Window
             return;
 
         var paths = items.Select(i => i.Path.LocalPath);
-        await ViewModel.AddPathsAsync(paths);
+        await ViewModel.AddPathsCommand.ExecuteAsync(paths);
     }
 
     private void OnGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -184,16 +187,25 @@ public partial class MainWindow : Window
         }
     }
 
-    private bool TryRunShortcut(ShortcutAction action) => action switch
+    private bool TryRunShortcut(ShortcutAction action)
+    {
+        if (ShortcutRouter.IsViewAction(action))
+            return RunViewAction(action);
+
+        // Esc cancels only while a scan is running; otherwise it stays unhandled.
+        if (action == ShortcutAction.CancelScan && !ViewModel.IsScanning)
+            return false;
+
+        var command = ShortcutRouter.CommandFor(ViewModel, action);
+        return command is not null && TryExecute(command);
+    }
+
+    // The actions the window dispatches itself: each opens a file/folder picker or a dialog rather
+    // than running a view-model command.
+    private bool RunViewAction(ShortcutAction action) => action switch
     {
         ShortcutAction.AddFiles => Run(AddFilesAsync),
         ShortcutAction.AddDirectories => Run(AddFoldersAsync),
-        ShortcutAction.HideSelected => TryExecute(ViewModel.HideSelectedCommand),
-        ShortcutAction.ShowSelected => TryExecute(ViewModel.ShowSelectedCommand),
-        ShortcutAction.ReapplyAll => TryExecute(ViewModel.ReapplyAllCommand),
-        ShortcutAction.Reload => TryExecute(ViewModel.ReloadCommand),
-        // Esc cancels only while a scan is running; otherwise it stays unhandled.
-        ShortcutAction.CancelScan => ViewModel.IsScanning && TryExecute(ViewModel.CancelScanCommand),
         // Defensive: the catalog already omits this row off Windows, so it cannot be reached there.
         ShortcutAction.OpenSettings => ViewModel.HasSettings && Run(OpenSettingsAsync),
         ShortcutAction.ShowShortcuts => Run(ShowShortcutsAsync),
@@ -245,7 +257,8 @@ public partial class MainWindow : Window
     // row) and return focus to the grid so the keyboard stays live.
     private async Task RemoveSelectedWithRecoveryAsync()
     {
-        var anchor = LowestSelectedRowIndex();
+        var anchor = SelectionRecovery.Anchor(
+            PathGrid.SelectedItems.OfType<PathRowViewModel>().Select(row => ViewModel.Rows.IndexOf(row)));
         await ViewModel.RemoveSelectedCommand.ExecuteAsync(null);
 
         // Nothing removed (e.g. the confirm was cancelled, or a selection still stands), or
@@ -253,32 +266,17 @@ public partial class MainWindow : Window
         if (ViewModel.Rows.Count == 0 || PathGrid.SelectedIndex >= 0)
             return;
 
-        var target = Math.Clamp(anchor, 0, ViewModel.Rows.Count - 1);
+        var target = SelectionRecovery.TargetIndex(anchor, ViewModel.Rows.Count);
         // Defer past the grid's own handling of the collection change (which clears the
         // selection), so this set is the last word — matching OnLoaded's focus pattern.
         Dispatcher.UIThread.Post(() =>
         {
-            if (target < ViewModel.Rows.Count)
+            if (target >= 0 && target < ViewModel.Rows.Count)
             {
                 PathGrid.SelectedIndex = target;
                 PathGrid.Focus();
             }
         });
-    }
-
-    private int LowestSelectedRowIndex()
-    {
-        var lowest = int.MaxValue;
-        foreach (var item in PathGrid.SelectedItems)
-        {
-            if (item is PathRowViewModel row)
-            {
-                var index = ViewModel.Rows.IndexOf(row);
-                if (index >= 0 && index < lowest)
-                    lowest = index;
-            }
-        }
-        return lowest == int.MaxValue ? 0 : lowest;
     }
 
     // The action buttons are independent, individually Tab-reachable controls. As a keyboard
@@ -300,8 +298,7 @@ public partial class MainWindow : Window
             return;
 
         e.Handled = true;
-        var next = current + (e.Key == Key.Right ? 1 : -1);
-        if (next >= 0 && next < buttons.Count)
+        if (ActionButtonNavigation.NextIndex(current, e.Key == Key.Right, buttons.Count) is { } next)
             buttons[next].Focus(NavigationMethod.Directional);
     }
 }

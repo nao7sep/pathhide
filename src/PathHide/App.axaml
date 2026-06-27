@@ -69,11 +69,22 @@
         <SolidColorBrush x:Key="StatusBackgroundBrush" Color="{StaticResource StatusBackground}"/>
         <SolidColorBrush x:Key="StatusBorderBrush" Color="{StaticResource StatusBorder}"/>
         <SolidColorBrush x:Key="StatusAccentBrush" Color="{StaticResource StatusAccent}"/>
+
+        <!-- The app-wide UI (chrome) font. The default is the bundled Inter; the view model overrides
+             this resource at runtime from the configured UI font, and the Window style below binds it
+             via DynamicResource so the change applies live across every window. -->
+        <FontFamily x:Key="AppFontFamily">Inter</FontFamily>
     </Application.Resources>
 
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+
+        <!-- Every window (main + dialogs) takes the configured UI font; FontFamily inherits to child
+             controls. PathHide has no content/editing surface, so the UI font is the whole story. -->
+        <Style Selector="Window">
+            <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}"/>
+        </Style>
 
         <!-- Keep DataGrid cell navigation active without drawing a harsh current-cell box. -->
         <Style Selector="DataGridCell">

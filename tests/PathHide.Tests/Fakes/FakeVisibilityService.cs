@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using PathHide.Models;
 using PathHide.Services;
 
@@ -27,6 +28,13 @@ public sealed class FakeVisibilityService : IVisibilityService
     /// <summary>When set and it returns non-null, <see cref="Hide"/> throws instead of recording.</summary>
     public Func<string, Exception?>? OnHide { get; set; }
 
+    /// <summary>
+    /// When set, <see cref="Inspect"/> blocks on this gate before returning, letting a test hold a
+    /// scan or apply pass mid-flight (the call runs on a thread-pool thread via the scanner/apply's
+    /// <c>Task.Run</c>, so blocking it does not stall the test thread).
+    /// </summary>
+    public ManualResetEventSlim? InspectGate { get; set; }
+
     public void Set(string path, ActualState state, ItemKind kind = ItemKind.File)
         => _byPath[path] = new PathInspection(state, kind);
 
@@ -37,6 +45,8 @@ public sealed class FakeVisibilityService : IVisibilityService
         var thrown = OnInspect?.Invoke(path);
         if (thrown is not null)
             throw thrown;
+
+        InspectGate?.Wait();
 
         return _byPath.TryGetValue(path, out var inspection) ? inspection : Default;
     }
