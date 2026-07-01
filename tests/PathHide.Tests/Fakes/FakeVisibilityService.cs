@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using PathHide.Models;
 using PathHide.Services;
 
@@ -35,6 +36,14 @@ public sealed class FakeVisibilityService : IVisibilityService
     /// </summary>
     public ManualResetEventSlim? InspectGate { get; set; }
 
+    /// <summary>
+    /// Completes the first time <see cref="Inspect"/> is entered — just before it parks on
+    /// <see cref="InspectGate"/>. Lets a test wait until an inspection is genuinely in-flight before
+    /// acting, closing the race where the scanner's <c>Task.Run</c> has not yet been picked up by a
+    /// thread-pool thread (cancelling before then would skip the delegate and never inspect the path).
+    /// </summary>
+    public TaskCompletionSource InspectEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public void Set(string path, ActualState state, ItemKind kind = ItemKind.File)
         => _byPath[path] = new PathInspection(state, kind);
 
@@ -46,6 +55,7 @@ public sealed class FakeVisibilityService : IVisibilityService
         if (thrown is not null)
             throw thrown;
 
+        InspectEntered.TrySetResult();
         InspectGate?.Wait();
 
         return _byPath.TryGetValue(path, out var inspection) ? inspection : Default;

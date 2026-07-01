@@ -40,7 +40,7 @@ public partial class App : Application
     private static MainWindowViewModel CreateMainViewModel()
     {
         var pathListStore = new JsonStore<List<PathEntry>>("paths.json", "paths");
-        var settingsStore = new JsonStore<AppSettings>("settings.json", "settings");
+        var settingsStore = new JsonStore<AppSettings>("config.json", "settings");
         var settings = settingsStore.Load();
 
         // Key effective configuration at startup (the conventions' baseline). The hide

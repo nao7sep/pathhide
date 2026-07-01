@@ -121,12 +121,16 @@ public class MainWindowViewModelTests
         var vm = CreateViewModel(visibility, paths);
         Assert.True(vm.IsScanning);
 
+        // Wait until /a's inspection is genuinely in-flight and parked on the gate before cancelling.
+        // This is the load-bearing synchronization: without it, cancel can land before the scanner's
+        // Task.Run is picked up, which skips the delegate entirely and /a is never inspected.
+        await visibility.InspectEntered.Task;
+
         vm.CancelScanCommand.Execute(null);
         gate.Set();
 
-        // Let the cancelled scan unwind on the UI thread.
-        for (var i = 0; i < 200 && vm.IsScanning; i++)
-            await Task.Delay(10);
+        // Await the scan to unwind rather than polling IsScanning on a wall-clock budget.
+        await vm.ScanTask;
 
         Assert.False(vm.IsScanning);
         // Cancellation took effect before the second entry: /a was inspected, /b never was.

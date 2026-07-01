@@ -29,6 +29,11 @@ public partial class MainWindowViewModel : ViewModelBase
     private List<PathEntry> _entries = [];
     private CancellationTokenSource? _scanCts;
     private Task _scanTask = Task.CompletedTask;
+
+    // Test seam (PathHide.Tests via InternalsVisibleTo): await the in-flight background scan
+    // deterministically instead of polling IsScanning on a wall-clock budget. Returns whatever
+    // scan is current, or Task.CompletedTask when none is running.
+    internal Task ScanTask => _scanTask;
     private bool _initialized;
 
     /// <summary>
