@@ -8,7 +8,6 @@ PathHide is a desktop utility for macOS and Windows that hides or shows specific
 - Remember the desired visibility per entry and reapply in bulk (hide all, show all, reapply all)
 - Add paths via pickers or drag and drop
 - Windows: optional stronger hiding (HIDDEN + SYSTEM), with automatic UAC elevation for access-protected paths
-- Per-user storage with backups for path and settings recovery
 
 ## Requirements
 
