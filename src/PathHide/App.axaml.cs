@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Avalonia;
@@ -42,6 +43,22 @@ public partial class App : Application
         var pathListStore = new JsonStore<List<PathEntry>>("paths.json", "paths");
         var settingsStore = new JsonStore<AppSettings>("config.json", "settings");
         var settings = settingsStore.Load();
+
+        // Create config.json on first run so the settings file exists on disk immediately, not only
+        // after the first save (storage-path conventions, "Materializing settings on first run"). This
+        // runs here — right after the load populates `settings`, before the visibility service and the
+        // view model read it — and only creates the file when absent, so an existing or backup-recovered
+        // file is never overwritten. paths.json is user content (empty by default), not a defaults-
+        // bearing settings file, so it is left to be created when the user first adds a path. A first-run
+        // write failure is logged and tolerated rather than crashing startup.
+        try
+        {
+            settingsStore.CreateIfMissing(settings);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("config: first-run create failed", ex, new { file = "config.json" });
+        }
 
         // Key effective configuration at startup (the conventions' baseline). The hide
         // mode is the one user-tunable setting; it lives here, loaded above.

@@ -16,6 +16,10 @@ public sealed class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
     public int LoadCount { get; private set; }
     public T? LastSaved { get; private set; }
 
+    /// <summary>Whether a live file "exists" — set by any successful <see cref="Save"/>, so
+    /// <see cref="CreateIfMissing"/> models the real store's absence-only trigger.</summary>
+    public bool FileExists { get; set; }
+
     public T Load()
     {
         LoadCount++;
@@ -30,5 +34,15 @@ public sealed class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
         SaveCount++;
         LastSaved = value;
         Value = value;
+        FileExists = true;
+    }
+
+    public bool CreateIfMissing(T value)
+    {
+        if (FileExists)
+            return false;
+
+        Save(value);
+        return true;
     }
 }

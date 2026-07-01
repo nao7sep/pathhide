@@ -159,6 +159,36 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
+    public void CreateIfMissing_WritesDefaultsOnFirstRun()
+    {
+        var store = new JsonStore<AppSettings>("config.json", "settings");
+
+        var created = store.CreateIfMissing(new AppSettings());
+
+        Assert.True(created);
+        Assert.True(File.Exists(PathOf("config.json")));
+        // Produced through Save (the real serializer), so it round-trips and carries the on-disk shape.
+        Assert.Contains("\"windowsHideMode\"", File.ReadAllText(PathOf("config.json")));
+        Assert.Equal(WindowsHideMode.HiddenOnly, store.Load().WindowsHideMode);
+    }
+
+    [Fact]
+    public void CreateIfMissing_NeverTouchesAnExistingFile()
+    {
+        var store = new JsonStore<AppSettings>("config.json", "settings");
+        store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
+        var before = File.ReadAllText(PathOf("config.json"));
+
+        // A different value must not overwrite: absence is the single trigger, so a good (possibly
+        // hand-edited) file is left byte-for-byte as it was.
+        var created = store.CreateIfMissing(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenOnly });
+
+        Assert.False(created);
+        Assert.Equal(before, File.ReadAllText(PathOf("config.json")));
+        Assert.Equal(WindowsHideMode.HiddenAndSystem, store.Load().WindowsHideMode);
+    }
+
+    [Fact]
     public void SettingsAndPaths_ResolveToDistinctFiles()
     {
         // The durable settings live in config.json; the user's path list lives in

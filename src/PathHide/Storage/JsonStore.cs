@@ -70,6 +70,19 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         }
     }
 
+    public bool CreateIfMissing(T value)
+    {
+        // Absence is the single trigger. An existing file — including one recovered from its .bak or one
+        // that is present but unparseable — is never overwritten, so a good (possibly hand-edited) file
+        // can never be lost to a bug here. The file is produced through Save (the same serializer the
+        // normal save path uses), not a hand-built literal.
+        if (File.Exists(_filePath))
+            return false;
+
+        Save(value);
+        return true;
+    }
+
     private bool TryLoadFile(string filePath, out T value)
     {
         value = new T();

@@ -10,4 +10,13 @@ public interface IJsonStore<T> where T : class, new()
 {
     T Load();
     void Save(T value);
+
+    /// <summary>
+    /// Writes <paramref name="value"/> only when the live file does not yet exist, so a built-in
+    /// defaultable file (config.json) is present on disk after the first run rather than only after the
+    /// first save. The single trigger is absence: an existing file is never inspected or overwritten.
+    /// Returns true when a file was created. See the storage-path conventions' "Materializing settings
+    /// on first run".
+    /// </summary>
+    bool CreateIfMissing(T value);
 }
