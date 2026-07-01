@@ -23,8 +23,6 @@ public sealed class HomeRootExclusionsTests
     [InlineData("backups/index.json")]
     [InlineData("backups/backup-20260701-000000-utc.zip")]
     [InlineData("config.json.tmp")]
-    [InlineData("config.json.bak")]
-    [InlineData("paths.json.bak")]
     [InlineData(".DS_Store")]
     [InlineData("Thumbs.db")]
     [InlineData("desktop.ini")]
@@ -35,7 +33,6 @@ public sealed class HomeRootExclusionsTests
     [Theory]
     [InlineData("BACKUPS/index.json")]
     [InlineData("Logs/session.log")]
-    [InlineData("CONFIG.JSON.BAK")]
     [InlineData("thumbs.DB")]
     [InlineData("Desktop.ini")]
     public void Exclusions_AreCaseInsensitive(string path) =>

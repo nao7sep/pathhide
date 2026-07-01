@@ -86,7 +86,6 @@ public sealed class BackupEngineTests : IDisposable
     public void Feature_Owned_And_Excluded_Paths_Are_Not_Captured()
     {
         WriteHomeFile("config.json", "{\"a\":1}");
-        WriteHomeFile("config.json.bak", "legacy sidecar");
         WriteHomeFile(".DS_Store", "junk");
         Directory.CreateDirectory(StorageRoot.LogsDirectory);
         File.WriteAllText(Path.Combine(StorageRoot.LogsDirectory, "session.log"), "log");

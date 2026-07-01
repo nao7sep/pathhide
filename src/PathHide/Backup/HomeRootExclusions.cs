@@ -18,8 +18,6 @@ public static class HomeRootExclusions
     /// <item><c>backups/</c> — the feature's own archives and index; backing them up would recurse.</item>
     /// <item><c>logs/</c> — per-session logs, recreatable and noisy.</item>
     /// <item><c>*.tmp</c> — atomic-write temporaries (they never outlive a write, but a crash can leave one).</item>
-    /// <item><c>*.bak</c> — the retired last-good sidecar; excluded defensively so a stray legacy copy
-    /// (or one written by an older build) is never captured.</item>
     /// <item><c>.DS_Store</c>, <c>Thumbs.db</c> — OS-generated directory metadata, never user data.</item>
     /// </list>
     /// The comparisons are case-insensitive so the exclusions hold on case-insensitive filesystems
@@ -35,8 +33,7 @@ public static class HomeRootExclusions
             return true;
         }
 
-        if (path.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) ||
-            path.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))
+        if (path.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

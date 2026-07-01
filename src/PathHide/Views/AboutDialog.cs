@@ -15,7 +15,7 @@ public sealed class AboutDialog : DialogBase
         Width = 400;
         Title = "About PathHide";
 
-        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown";
 
         var githubButton = new Button
         {
