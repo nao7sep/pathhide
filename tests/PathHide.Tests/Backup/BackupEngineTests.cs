@@ -73,8 +73,9 @@ public sealed class BackupEngineTests : IDisposable
 
         Assert.True(File.Exists(_paths.BackupIndexFile));
         var indexJson = File.ReadAllText(_paths.BackupIndexFile);
-        // The index is a bare JSON array with camelCase keys and the conventional field order.
-        Assert.StartsWith("[", indexJson.TrimStart());
+        // The index is a JSON object with an `entries` array, camelCase keys, conventional field order.
+        Assert.StartsWith("{", indexJson.TrimStart());
+        Assert.Contains("\"entries\"", indexJson);
         Assert.Contains("\"archivedAt\": \"20260701-000000-utc\"", indexJson);
         Assert.Contains("\"archivePath\": \"config.json\"", indexJson);
         Assert.Contains("\"sizeBytes\"", indexJson);

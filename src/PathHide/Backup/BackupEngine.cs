@@ -68,7 +68,7 @@ public sealed class BackupEngine
         }
 
         // Index second: the archive is already safely in place, so a crash here just re-captures next run.
-        IndexStore().Save(index);
+        IndexStore().Save(new BackupIndex { Entries = index });
 
         return new BackupReport
         {
@@ -79,10 +79,10 @@ public sealed class BackupEngine
         };
     }
 
-    // The index is a bare JSON array (see the data-backup conventions), so it is stored as a List, whose
-    // JsonStore serialization is the array itself. "backups/index.json" is relative to the backups dir,
-    // which lives under the storage root, so the store's file-name-under-root convention resolves it.
-    private static JsonStore<List<BackupIndexEntry>> IndexStore() =>
+    // The index is a JSON object wrapping an `entries` array (see the data-backup conventions), stored via
+    // a JsonStore over BackupIndex. "backups/index.json" is relative to the backups dir, which lives under
+    // the storage root, so the store's file-name-under-root convention resolves it.
+    private static JsonStore<BackupIndex> IndexStore() =>
         new(Path.Combine("backups", "index.json"), "backup index");
 
     private (List<BackupIndexEntry> Index, bool Reset) LoadIndex()
@@ -90,20 +90,20 @@ public sealed class BackupEngine
         if (!File.Exists(_paths.BackupIndexFile))
         {
             // Missing index is the normal first run: an empty ledger, everything is new. Not a reset.
-            return (BackupIndex.Empty(), false);
+            return (new List<BackupIndexEntry>(), false);
         }
 
         try
         {
             var json = File.ReadAllText(_paths.BackupIndexFile);
-            var entries = JsonSerializer.Deserialize<List<BackupIndexEntry>>(json, JsonOptions.Default);
-            return (entries ?? BackupIndex.Empty(), false);
+            var index = JsonSerializer.Deserialize<BackupIndex>(json, JsonOptions.Default);
+            return (index?.Entries ?? new List<BackupIndexEntry>(), false);
         }
         catch
         {
             // A corrupt index is reset to empty: the run becomes a full backup, which costs one redundant
             // archive, never data. The stale file is left to be atomically overwritten by this run's save.
-            return (BackupIndex.Empty(), true);
+            return (new List<BackupIndexEntry>(), true);
         }
     }
 

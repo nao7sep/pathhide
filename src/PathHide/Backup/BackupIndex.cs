@@ -3,17 +3,16 @@ using System.Collections.Generic;
 namespace PathHide.Backup;
 
 /// <summary>
-/// The backup change ledger, serialized to <c>~/.pathhide/backups/index.json</c>. On disk it is a bare
-/// JSON array of <see cref="BackupIndexEntry"/> (a <see cref="Storage.JsonStore{T}"/> over a
-/// <see cref="List{T}"/> serializes the list itself, with no wrapper object) — one entry per captured
-/// file state. It is at once the change ledger (deciding what a run must capture) and the table used to
-/// locate a lost file later. See the data-backup conventions. <see cref="BackupIndex"/> is a static
-/// helper namespace for that list; the list is the model.
+/// The backup change ledger, serialized to <c>~/.pathhide/backups/index.json</c> as a JSON <b>object</b>
+/// with an <see cref="Entries"/> array — one entry per captured file state. The object wrapper (rather
+/// than a bare array) leaves room for future top-level metadata, e.g. a schema <c>version</c>, without
+/// disturbing the records (the fleet-wide shape, per the data-backup conventions). It is at once the
+/// change ledger (deciding what a run must capture) and the table used to locate a lost file later.
 /// </summary>
-public static class BackupIndex
+public sealed class BackupIndex
 {
-    /// <summary>An empty ledger — the normal state on a first run.</summary>
-    public static List<BackupIndexEntry> Empty() => new();
+    /// <summary>The captured file states; empty on a first run.</summary>
+    public List<BackupIndexEntry> Entries { get; set; } = new();
 }
 
 /// <summary>

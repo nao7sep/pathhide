@@ -27,6 +27,7 @@ public sealed class HomeRootExclusionsTests
     [InlineData("paths.json.bak")]
     [InlineData(".DS_Store")]
     [InlineData("Thumbs.db")]
+    [InlineData("desktop.ini")]
     [InlineData("sub/.DS_Store")]
     public void ThrowawayAndFeatureOwnedPaths_AreExcluded(string path) =>
         Assert.True(HomeRootExclusions.IsExcluded(path));
@@ -36,6 +37,7 @@ public sealed class HomeRootExclusionsTests
     [InlineData("Logs/session.log")]
     [InlineData("CONFIG.JSON.BAK")]
     [InlineData("thumbs.DB")]
+    [InlineData("Desktop.ini")]
     public void Exclusions_AreCaseInsensitive(string path) =>
         Assert.True(HomeRootExclusions.IsExcluded(path));
 }
