@@ -12,8 +12,10 @@ namespace PathHide.Tests.Storage;
 /// Exercises the real file I/O of <see cref="JsonStore{T}"/> against a temp
 /// directory redirected via the <c>PATHHIDE_HOME</c> environment variable — the one
 /// relocation seam, used the same way in tests and production. These touch the
-/// disk on purpose: atomic-write and backup-recovery are the behaviours that
-/// protect the user's saved data, and a fake filesystem would not exercise them.
+/// disk on purpose: the atomic write is the behaviour that protects the user's
+/// saved data, and a fake filesystem would not exercise it. There is no longer a
+/// <c>.bak</c> sidecar (retired per the data-backup conventions); several tests
+/// assert that no such file is ever created.
 /// </summary>
 [Collection(StorageRootEnvironment.CollectionName)]
 public sealed class JsonStoreTests : IDisposable
@@ -63,11 +65,12 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_CorruptPrimary_RecoversFromBackup()
+    public void Load_CorruptPrimary_ReturnsDefault_WithNoBakFallback()
     {
+        // The .bak last-good sidecar is retired: an unreadable live file falls back to defaults, and its
+        // earlier content is recovered, if ever needed, from the data-backup archives — never a .bak.
         var store = new JsonStore<List<PathEntry>>("paths.json", "paths");
         store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
-        // A second save promotes the first version into paths.json.bak.
         store.Save([
             new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden },
             new PathEntry { Path = "/b", DesiredVisibility = DesiredVisibility.Shown },
@@ -77,23 +80,8 @@ public sealed class JsonStoreTests : IDisposable
 
         var loaded = store.Load();
 
-        // The backup holds the single-entry first version.
-        Assert.Single(loaded);
-        Assert.Equal("/a", loaded[0].Path);
-    }
-
-    [Fact]
-    public void Load_PrimaryAndBackupBothCorrupt_ReturnsDefault()
-    {
-        var store = new JsonStore<List<PathEntry>>("paths.json", "paths");
-        store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
-
-        File.WriteAllText(PathOf("paths.json"), "garbage");
-        File.WriteAllText(PathOf("paths.json.bak"), "also garbage");
-
-        var loaded = store.Load();
-
         Assert.Empty(loaded);
+        Assert.False(File.Exists(PathOf("paths.json.bak")));
     }
 
     [Fact]
@@ -108,28 +96,29 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Save_FirstTime_CreatesBothLiveAndBackup()
+    public void Save_FirstTime_CreatesLiveFileAndNoBak()
     {
         var store = new JsonStore<AppSettings>("config.json", "settings");
 
         store.Save(new AppSettings());
 
         Assert.True(File.Exists(PathOf("config.json")));
-        Assert.True(File.Exists(PathOf("config.json.bak")));
+        // The .bak sidecar is retired: a first save writes exactly the live file.
+        Assert.False(File.Exists(PathOf("config.json.bak")));
     }
 
     [Fact]
-    public void Save_SecondTime_BackupHoldsPreviousVersion()
+    public void Save_SecondTime_ReplacesLiveFileAndWritesNoBak()
     {
         var store = new JsonStore<AppSettings>("config.json", "settings");
         store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenOnly });
         store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
 
-        var backupJson = File.ReadAllText(PathOf("config.json.bak"));
         var liveJson = File.ReadAllText(PathOf("config.json"));
 
-        Assert.Contains("hidden_only", backupJson);
+        // The second save atomically replaces the live file with no last-good copy left beside it.
         Assert.Contains("hidden_and_system", liveJson);
+        Assert.False(File.Exists(PathOf("config.json.bak")));
     }
 
     [Fact]
@@ -192,8 +181,8 @@ public sealed class JsonStoreTests : IDisposable
     public void SettingsAndPaths_ResolveToDistinctFiles()
     {
         // The durable settings live in config.json; the user's path list lives in
-        // paths.json. They are separate roles and must never collapse onto one file
-        // (including their .bak sidecars). This guards the settings-file rename.
+        // paths.json. They are separate roles and must never collapse onto one file.
+        // This guards the settings-file rename.
         var settingsStore = new JsonStore<AppSettings>("config.json", "settings");
         var pathListStore = new JsonStore<List<PathEntry>>("paths.json", "paths");
 
@@ -201,9 +190,11 @@ public sealed class JsonStoreTests : IDisposable
         pathListStore.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
 
         Assert.True(File.Exists(PathOf("config.json")));
-        Assert.True(File.Exists(PathOf("config.json.bak")));
         Assert.True(File.Exists(PathOf("paths.json")));
-        Assert.True(File.Exists(PathOf("paths.json.bak")));
+
+        // The .bak sidecar is retired: neither store leaves one behind.
+        Assert.False(File.Exists(PathOf("config.json.bak")));
+        Assert.False(File.Exists(PathOf("paths.json.bak")));
 
         // No stale settings.json is produced by the settings store any longer.
         Assert.False(File.Exists(PathOf("settings.json")));

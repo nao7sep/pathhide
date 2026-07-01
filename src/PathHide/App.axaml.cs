@@ -23,6 +23,8 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Builds the view model, which materializes config.json (CreateIfMissing) before the window,
+            // so by the time the backup runs below the durable files it captures are on disk.
             desktop.MainWindow = new MainWindow
             {
                 DataContext = CreateMainViewModel(),
@@ -30,6 +32,10 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+
+        // Kick off the just-in-case data backup on a background thread so the window never waits on it. It
+        // runs after config is materialized; a launch that changed nothing writes no archive at all.
+        BackupService.RunInBackground();
     }
 
     /// <summary>
@@ -47,8 +53,8 @@ public partial class App : Application
         // Create config.json on first run so the settings file exists on disk immediately, not only
         // after the first save (storage-path conventions, "Materializing settings on first run"). This
         // runs here — right after the load populates `settings`, before the visibility service and the
-        // view model read it — and only creates the file when absent, so an existing or backup-recovered
-        // file is never overwritten. paths.json is user content (empty by default), not a defaults-
+        // view model read it — and only creates the file when absent, so an existing file is never
+        // overwritten. paths.json is user content (empty by default), not a defaults-
         // bearing settings file, so it is left to be created when the user first adds a path. A first-run
         // write failure is logged and tolerated rather than crashing startup.
         try

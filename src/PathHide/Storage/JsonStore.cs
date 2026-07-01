@@ -6,12 +6,18 @@ using PathHide.Services;
 namespace PathHide.Storage;
 
 /// <summary>
-/// Generic JSON-backed store with atomic replace, sidecar backup, and
-/// backup-fallback recovery on load. Two files are written: <c>{file}</c>
-/// is the live document; <c>{file}.bak</c> holds the previous successful
-/// version. If the live document is missing or unparseable on load, the
-/// backup is tried before the type's default-constructed value is returned.
+/// Generic JSON-backed store with atomic replace. One file is written:
+/// <c>{file}</c>, the live document, updated by a write-to-temp-then-rename
+/// so a crash mid-write never tears it. If the live document is missing or
+/// unparseable on load, the type's default-constructed value is returned.
 /// </summary>
+/// <remarks>
+/// There is no <c>.bak</c> last-good sidecar: its only job was recovery, and
+/// recovery is now split cleanly (per the data-backup conventions) — the
+/// atomic write prevents the torn write the sidecar guarded against, and the
+/// point-in-time history it approximated with a single previous copy lives in
+/// the startup data-backup archives under <c>~/.pathhide/backups/</c>.
+/// </remarks>
 /// <remarks>
 /// Caller responsibilities: this store does not impose any ordering or
 /// canonicalisation on the value it receives. If on-disk ordering matters
@@ -22,7 +28,6 @@ namespace PathHide.Storage;
 public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 {
     private readonly string _filePath;
-    private readonly string _backupPath;
     private readonly string _label;
 
     /// <summary>
@@ -33,23 +38,18 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     public JsonStore(string fileName, string label)
     {
         _filePath = Path.Combine(StorageRoot.Directory, fileName);
-        _backupPath = _filePath + ".bak";
         _label = label;
     }
 
     public T Load()
     {
-        if (TryLoadFile(_filePath, out var value))
+        if (TryLoadFile(out var value))
             return value;
 
-        if (TryLoadFile(_backupPath, out value))
-        {
-            Log.Warn("store: recovered from backup", new { label = _label, path = _backupPath });
-            return value;
-        }
-
-        // Reached on first run (no files yet — normal) or after both the live file and
-        // its backup were unreadable (each already logged a warn above).
+        // Reached on first run (no file yet — normal) or after the live file was present but
+        // unreadable (already logged a warn above). There is no .bak fallback: a live file that
+        // will not parse falls back to defaults, and its earlier content is recovered, if ever
+        // needed, from the data-backup archives (see the data-backup conventions).
         Log.Info("store: no existing data, using defaults", new { label = _label });
         return new T();
     }
@@ -72,10 +72,10 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
     public bool CreateIfMissing(T value)
     {
-        // Absence is the single trigger. An existing file — including one recovered from its .bak or one
-        // that is present but unparseable — is never overwritten, so a good (possibly hand-edited) file
-        // can never be lost to a bug here. The file is produced through Save (the same serializer the
-        // normal save path uses), not a hand-built literal.
+        // Absence is the single trigger. An existing file — including one that is present but
+        // unparseable — is never overwritten, so a good (possibly hand-edited) file can never be lost to
+        // a bug here. The file is produced through Save (the same serializer the normal save path uses),
+        // not a hand-built literal.
         if (File.Exists(_filePath))
             return false;
 
@@ -83,27 +83,27 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         return true;
     }
 
-    private bool TryLoadFile(string filePath, out T value)
+    private bool TryLoadFile(out T value)
     {
         value = new T();
 
-        // An absent file is normal (first run, or no backup yet): not a failure, so it
-        // is not logged here — the caller decides what the absence means.
-        if (!File.Exists(filePath))
+        // An absent file is normal (first run): not a failure, so it is not logged here — the
+        // caller decides what the absence means.
+        if (!File.Exists(_filePath))
             return false;
 
         try
         {
-            var json = File.ReadAllText(filePath);
+            var json = File.ReadAllText(_filePath);
             value = JsonSerializer.Deserialize<T>(json, JsonOptions.Default) ?? new T();
-            Log.Info("store: loaded", new { label = _label, path = filePath });
+            Log.Info("store: loaded", new { label = _label, path = _filePath });
             return true;
         }
         catch (Exception ex)
         {
-            // The file exists but will not parse — unexpected, yet recoverable (the
-            // caller falls back to the backup or to defaults), so warn rather than error.
-            Log.Warn("store: file unreadable", ex, new { label = _label, path = filePath });
+            // The file exists but will not parse — unexpected, yet recoverable (the caller falls back
+            // to defaults, and history lives in the data-backup archives), so warn rather than error.
+            Log.Warn("store: file unreadable", ex, new { label = _label, path = _filePath });
             return false;
         }
     }
@@ -116,14 +116,16 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         {
             File.WriteAllText(tempPath, json);
 
+            // A pure atomic temp-then-rename with no .bak sidecar: replace the existing file in place, or
+            // move the temp into a fresh one. This is the durability floor (the storage-path conventions);
+            // point-in-time history lives in the data-backup archives, not a last-good copy beside the file.
             if (File.Exists(_filePath))
             {
-                File.Replace(tempPath, _filePath, _backupPath, ignoreMetadataErrors: true);
+                File.Replace(tempPath, _filePath, null, ignoreMetadataErrors: true);
             }
             else
             {
                 File.Move(tempPath, _filePath);
-                File.Copy(_filePath, _backupPath, overwrite: true);
             }
         }
         finally
