@@ -43,7 +43,8 @@ public static class HomeRootExclusions
 
         var name = LastSegment(path);
         return string.Equals(name, ".DS_Store", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(name, "Thumbs.db", StringComparison.OrdinalIgnoreCase);
+               string.Equals(name, "Thumbs.db", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(name, "desktop.ini", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string LastSegment(string path)

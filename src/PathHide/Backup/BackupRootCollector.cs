@@ -58,8 +58,27 @@ public sealed class BackupRootCollector
 
         foreach (var entry in entries)
         {
+            FileAttributes attributes;
+            try
+            {
+                attributes = File.GetAttributes(entry);
+            }
+            catch (Exception ex)
+            {
+                skips.Add(new BackupSkip(entry, "could not stat: " + ex.Message));
+                continue;
+            }
+
+            // Never follow a symlink/junction — silently skip it (it is not the app's own data, and
+            // following it risks a walk loop or an escape outside the root). Only real directories and
+            // regular files are considered (data-backup conventions' traversal rules).
+            if (attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                continue;
+            }
+
             var relative = BackupArchivePaths.Normalize(Path.GetRelativePath(root, entry));
-            if (Directory.Exists(entry))
+            if (attributes.HasFlag(FileAttributes.Directory))
             {
                 // Prune an excluded subtree (logs/, backups/) instead of descending into it.
                 if (!HomeRootExclusions.IsExcluded(relative + "/"))
