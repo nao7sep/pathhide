@@ -153,27 +153,12 @@ public sealed class BackupEngine
         }
     }
 
-    /// <summary>Creates <c>backups/</c> lazily and, where the platform supports it, makes it owner-only
-    /// (0700) so an archive can never be more readable than the secrets it may contain (see the
-    /// data-backup conventions; skipped on Windows, exactly as a secrets file's protection is).</summary>
+    /// <summary>Creates <c>backups/</c> lazily with the platform's default mode. Secrets are excluded from
+    /// backups fleet-wide, so no archive can contain a secret and the directory needs no permission
+    /// hardening (see the data-backup conventions).</summary>
     private void EnsureBackupsDirectory()
     {
         Directory.CreateDirectory(_paths.BackupsDirectory);
-
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            try
-            {
-                File.SetUnixFileMode(
-                    _paths.BackupsDirectory,
-                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            }
-            catch
-            {
-                // Best effort: a filesystem that rejects the mode (a network/FAT mount) is not a reason to
-                // skip the backup. The archive still lands under the same root as the data it mirrors.
-            }
-        }
     }
 
     private static string ArchiveFileName(string archivedAt) => "backup-" + archivedAt + ".zip";

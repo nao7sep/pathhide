@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Runtime.InteropServices;
 using PathHide.Backup;
 using PathHide.Storage;
 using PathHide.Tests.Storage;
@@ -157,25 +156,6 @@ public sealed class BackupEngineTests : IDisposable
         Assert.False(report.NothingChanged);
         Assert.Equal(1, report.FilesArchived);
         Assert.Contains(report.Skips, s => s.Reason.Contains("collision", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void BackupsDirectory_Is_Owner_Only_On_Posix()
-    {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return;
-        }
-
-        WriteHomeFile("config.json", "{\"a\":1}");
-        new BackupEngine(_paths).Run(Run1);
-
-        var mode = File.GetUnixFileMode(_paths.BackupsDirectory);
-        var groupOrOther =
-            UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
-            UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
-
-        Assert.Equal((UnixFileMode)0, mode & groupOrOther);
     }
 
     private bool FilesystemIsCaseSensitive()
