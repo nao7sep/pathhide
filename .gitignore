@@ -2,6 +2,8 @@
 [Bb]in/
 [Oo]bj/
 publish/
+publish-win/
+dist/
 
 # IDE and editor
 .vs/
