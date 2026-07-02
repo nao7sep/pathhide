@@ -22,13 +22,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.0.4" />
-    <!-- DataGrid's published versions lag the core package; 12.0.0 is its latest and is
-         forward-compatible with the 12.0.4 core (its dependency floor is Avalonia >= 12.0.0). -->
-    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.0.4" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.4" />
+    <PackageReference Include="Avalonia" Version="12.0.5" />
+    <!-- DataGrid's published versions lag the core package; 12.0.1 is its latest and is
+         forward-compatible with the 12.0.5 core (its dependency floor is Avalonia >= 12.0.0). -->
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.5" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="System.CommandLine" Version="2.0.9" />
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.2" />
