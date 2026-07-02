@@ -123,8 +123,8 @@ public static class ShortcutCatalog
             // List — scan-lifecycle commands first, the destructive Remove last (mirrors the toolbar's
             // Reload-before-Remove order; Cancel sits with Reload since both act on the scan).
             Command(ShortcutGroup.List, "Reload entries and rescan disk state", cmd, cmdLabel, shift: false, Key.R, "R", ShortcutAction.Reload),
-            // Esc is a plain-key accelerator (no command modifier), active only while a scan runs.
-            new ShortcutItem(ShortcutGroup.List, "Cancel the running scan", "Esc",
+            // Escape is a plain-key accelerator (no command modifier), active only while a scan runs.
+            new ShortcutItem(ShortcutGroup.List, "Cancel the running scan", "Escape",
                 new KeyGesture(Key.Escape), ShortcutAction.CancelScan),
             Display(ShortcutGroup.List, "Remove the selected entries", "Delete"),
 
