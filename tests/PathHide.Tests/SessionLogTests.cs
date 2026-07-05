@@ -55,7 +55,7 @@ public sealed class SessionLogTests
             Path = System.IO.Path.Combine(
                 System.IO.Path.GetTempPath(),
                 "pathhide-sessionlog-tests",
-                Guid.NewGuid().ToString("N"));
+                NanoId.New());
             System.IO.Directory.CreateDirectory(Path);
         }
 

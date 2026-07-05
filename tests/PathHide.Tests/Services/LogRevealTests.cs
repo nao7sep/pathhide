@@ -41,7 +41,7 @@ public sealed class LogRevealTests
             Path = System.IO.Path.Combine(
                 System.IO.Path.GetTempPath(),
                 "pathhide-logreveal-tests",
-                Guid.NewGuid().ToString("N"));
+                NanoId.New());
         }
 
         public string Path { get; }

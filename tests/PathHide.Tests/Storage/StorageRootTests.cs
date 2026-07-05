@@ -37,7 +37,7 @@ public sealed class StorageRootTests : IDisposable
     [Fact]
     public void Override_Relocates_The_Whole_Root()
     {
-        var target = Path.Combine(Path.GetTempPath(), "pathhide-home-tests-" + Guid.NewGuid().ToString("N"));
+        var target = Path.Combine(Path.GetTempPath(), "pathhide-home-tests-" + NanoId.New());
         Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, target);
 
         Assert.Equal(Path.GetFullPath(target), Path.GetFullPath(StorageRoot.Directory));
@@ -57,7 +57,7 @@ public sealed class StorageRootTests : IDisposable
     [Fact]
     public void Relative_Override_Resolves_Against_Home_Not_Working_Directory()
     {
-        var relative = "pathhide-relative-" + Guid.NewGuid().ToString("N");
+        var relative = "pathhide-relative-" + NanoId.New();
         Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, relative);
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -79,7 +79,7 @@ public sealed class StorageRootTests : IDisposable
     [Fact]
     public void Tilde_Slash_Override_Expands_Against_Home()
     {
-        var leaf = "pathhide-tilde-" + Guid.NewGuid().ToString("N");
+        var leaf = "pathhide-tilde-" + NanoId.New();
         Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "~/" + leaf);
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -91,9 +91,11 @@ public sealed class StorageRootTests : IDisposable
     {
         // A uniquely-named variable avoids colliding with anything in the real environment; it is
         // restored (cleared) in the finally so the process-wide env stays clean for sibling tests.
-        var probeVariable = "PATHHIDE_OVERRIDE_PROBE_" + Guid.NewGuid().ToString("N");
+        // The env-reference regex only accepts [A-Za-z_][A-Za-z0-9_]* — nanoid's alphabet includes '-',
+        // so it is remapped to '_' here to keep this a legal, always-parseable variable name.
+        var probeVariable = "PATHHIDE_OVERRIDE_PROBE_" + NanoId.New().Replace('-', '_');
         var previousProbe = Environment.GetEnvironmentVariable(probeVariable);
-        var target = Path.Combine(Path.GetTempPath(), "pathhide-percent-" + Guid.NewGuid().ToString("N"));
+        var target = Path.Combine(Path.GetTempPath(), "pathhide-percent-" + NanoId.New());
         try
         {
             Environment.SetEnvironmentVariable(probeVariable, target);
@@ -112,9 +114,9 @@ public sealed class StorageRootTests : IDisposable
     [Fact]
     public void Dollar_Environment_References_In_Override_Expand()
     {
-        var probeVariable = "PATHHIDE_OVERRIDE_PROBE_" + Guid.NewGuid().ToString("N");
+        var probeVariable = "PATHHIDE_OVERRIDE_PROBE_" + NanoId.New().Replace('-', '_');
         var previousProbe = Environment.GetEnvironmentVariable(probeVariable);
-        var target = Path.Combine(Path.GetTempPath(), "pathhide-dollar-" + Guid.NewGuid().ToString("N"));
+        var target = Path.Combine(Path.GetTempPath(), "pathhide-dollar-" + NanoId.New());
         try
         {
             Environment.SetEnvironmentVariable(probeVariable, target);
@@ -136,7 +138,7 @@ public sealed class StorageRootTests : IDisposable
     {
         // A reference to a variable that is definitely unset expands to empty; that is a
         // misconfiguration, reported rather than silently collapsing onto the home directory.
-        var unsetVariable = "PATHHIDE_UNSET_PROBE_" + Guid.NewGuid().ToString("N");
+        var unsetVariable = "PATHHIDE_UNSET_PROBE_" + NanoId.New().Replace('-', '_');
         Environment.SetEnvironmentVariable(unsetVariable, null);
         Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "$" + unsetVariable);
 

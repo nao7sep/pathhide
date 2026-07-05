@@ -25,7 +25,7 @@ public sealed class JsonStoreTests : IDisposable
 
     public JsonStoreTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "pathhide-tests", Guid.NewGuid().ToString("N"));
+        _root = Path.Combine(Path.GetTempPath(), "pathhide-tests", NanoId.New());
         Directory.CreateDirectory(_root);
 
         _previousHome = Environment.GetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable);
@@ -65,10 +65,11 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_CorruptPrimary_ReturnsDefault_WithNoBakFallback()
+    public void Load_CorruptPrimary_QuarantinesFileAndReturnsDefault_WithNoBakFallback()
     {
-        // The .bak last-good sidecar is retired: an unreadable live file falls back to defaults, and its
-        // earlier content is recovered, if ever needed, from the data-backup archives — never a .bak.
+        // The .bak last-good sidecar is retired: an unreadable live file is quarantined (moved aside,
+        // bytes preserved) rather than reset over — the storage-path conventions' quarantine-then-reset
+        // path — and the caller falls back to defaults. Never a .bak.
         var store = new JsonStore<List<PathEntry>>("paths.json", "paths");
         store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
         store.Save([
@@ -76,12 +77,53 @@ public sealed class JsonStoreTests : IDisposable
             new PathEntry { Path = "/b", DesiredVisibility = DesiredVisibility.Shown },
         ]);
 
-        File.WriteAllText(PathOf("paths.json"), "{ not valid json");
+        const string corrupt = "{ not valid json";
+        File.WriteAllText(PathOf("paths.json"), corrupt);
 
         var loaded = store.Load();
 
         Assert.Empty(loaded);
+        Assert.False(File.Exists(PathOf("paths.json")));
         Assert.False(File.Exists(PathOf("paths.json.bak")));
+
+        // Quarantined under the grammar-shaped name <stem>-<millisecond-utc-stamp>.invalid, in the
+        // same directory, with the original (corrupt) bytes intact.
+        var quarantined = Directory.EnumerateFiles(_root, "paths-*.invalid").ToList();
+        Assert.Single(quarantined);
+        Assert.Matches(@"^paths-\d{8}-\d{6}-\d{3}-utc\.invalid$", Path.GetFileName(quarantined[0]));
+        Assert.Equal(corrupt, File.ReadAllText(quarantined[0]));
+    }
+
+    [Fact]
+    public void Save_AfterQuarantine_RecreatesLiveFileAndNeverTouchesTheQuarantinedFile()
+    {
+        var store = new JsonStore<List<PathEntry>>("paths.json", "paths");
+        const string corrupt = "{ not valid json";
+        File.WriteAllText(PathOf("paths.json"), corrupt);
+
+        store.Load();
+        var quarantinedPath = Directory.EnumerateFiles(_root, "paths-*.invalid").Single();
+
+        store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
+
+        // The next save recreates the live file (the first-run materialization path's counterpart for an
+        // in-flight store) without ever touching the quarantined file sitting beside it.
+        Assert.True(File.Exists(PathOf("paths.json")));
+        Assert.Single(store.Load());
+        Assert.Equal(corrupt, File.ReadAllText(quarantinedPath));
+    }
+
+    [Fact]
+    public void QuarantinePath_IsStemHyphenMillisecondUtcStampDotInvalid_InTheSameDirectory()
+    {
+        // Derived-filename grammar: <stem>-<discriminator>.invalid, one role extension, the same
+        // millisecond UTC stamp form the data-backup engine's archive names use.
+        var targetPath = PathOf("config.json");
+        var timestamp = new DateTimeOffset(2026, 7, 1, 2, 22, 20, 7, TimeSpan.Zero);
+
+        var quarantinePath = JsonStore<AppSettings>.QuarantinePath(targetPath, timestamp);
+
+        Assert.Equal(PathOf("config-20260701-022220-007-utc.invalid"), quarantinePath);
     }
 
     [Fact]

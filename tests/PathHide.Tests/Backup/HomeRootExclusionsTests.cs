@@ -23,6 +23,7 @@ public sealed class HomeRootExclusionsTests
     [InlineData("backups/index.json")]
     [InlineData("backups/backup-20260701-000000-utc.zip")]
     [InlineData("config.json.tmp")]
+    [InlineData("config-20260701-022220-007-utc.invalid")]
     [InlineData(".DS_Store")]
     [InlineData("Thumbs.db")]
     [InlineData("desktop.ini")]
@@ -35,6 +36,7 @@ public sealed class HomeRootExclusionsTests
     [InlineData("Logs/session.log")]
     [InlineData("thumbs.DB")]
     [InlineData("Desktop.ini")]
+    [InlineData("paths-20260701-022220-007-UTC.INVALID")]
     public void Exclusions_AreCaseInsensitive(string path) =>
         Assert.True(HomeRootExclusions.IsExcluded(path));
 }

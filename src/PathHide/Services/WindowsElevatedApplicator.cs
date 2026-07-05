@@ -46,7 +46,7 @@ public static class WindowsElevatedApplicator
         // directory; the elevated child runs as the same user (a higher-integrity token of
         // the same account), so the file it writes stays readable here. It is deleted in the
         // finally regardless of outcome.
-        var resultsPath = Path.Combine(Path.GetTempPath(), $"pathhide-apply-{Guid.NewGuid():N}.jsonl");
+        var resultsPath = Path.Combine(Path.GetTempPath(), $"pathhide-apply-{NanoId.New()}.jsonl");
 
         var psi = new ProcessStartInfo(exePath)
         {

@@ -29,7 +29,7 @@ public sealed class BackupEngineTests : IDisposable
     public BackupEngineTests()
     {
         _previousHome = Environment.GetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable);
-        _home = Path.Combine(Path.GetTempPath(), "pathhide-backup-tests", Guid.NewGuid().ToString("N"));
+        _home = Path.Combine(Path.GetTempPath(), "pathhide-backup-tests", NanoId.New());
         Directory.CreateDirectory(_home);
         Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _home);
 

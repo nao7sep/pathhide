@@ -23,7 +23,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
 
     public MacVisibilityServiceTests()
     {
-        _dir = Path.Combine(Path.GetTempPath(), "pathhide-mac-tests", Guid.NewGuid().ToString("N"));
+        _dir = Path.Combine(Path.GetTempPath(), "pathhide-mac-tests", NanoId.New());
         Directory.CreateDirectory(_dir);
     }
 

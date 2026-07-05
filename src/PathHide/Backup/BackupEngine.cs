@@ -115,7 +115,7 @@ public sealed class BackupEngine
         EnsureBackupsDirectory();
         var tempPath = TempPath(
             Path.Combine(_paths.BackupsDirectory, ArchiveFileName(BackupTime.FileStamp(now))),
-            Guid.NewGuid().ToString("N"));
+            NanoId.New());
 
         var archived = new List<BackupCandidate>();
         try
@@ -185,9 +185,8 @@ public sealed class BackupEngine
     /// <summary>
     /// The atomic-write temp path for <paramref name="finalPath"/>: the target's stem plus
     /// <paramref name="discriminator"/>, one role extension (<c>.tmp</c>), in the same directory as the
-    /// target — the derived-filename grammar, never a dot-appended suffix. This app has no nanoid utility
-    /// yet, so the discriminator is a GUID; internal so the shape is directly unit-testable without
-    /// touching disk.
+    /// target — the derived-filename grammar, never a dot-appended suffix. The discriminator is a
+    /// <see cref="NanoId"/>; internal so the shape is directly unit-testable without touching disk.
     /// </summary>
     internal static string TempPath(string finalPath, string discriminator) =>
         Path.Combine(
