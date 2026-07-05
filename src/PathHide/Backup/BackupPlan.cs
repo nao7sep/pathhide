@@ -61,8 +61,8 @@ public static class BackupPlan
         return delta > MtimeMatchToleranceSeconds;
     }
 
-    /// <summary>The latest entry per archive path. <c>archivedAt</c> is a <c>yyyyMMdd-HHmmss-utc</c> stamp,
-    /// so ordinal string comparison is chronological.</summary>
+    /// <summary>The latest entry per archive path. <c>archivedAt</c> is a <c>yyyyMMdd-HHmmss-fff-utc</c>
+    /// stamp, so ordinal string comparison is chronological.</summary>
     private static Dictionary<string, BackupIndexEntry> LatestByPath(IReadOnlyList<BackupIndexEntry> index)
     {
         var latest = new Dictionary<string, BackupIndexEntry>(StringComparer.Ordinal);

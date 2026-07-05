@@ -34,13 +34,13 @@ public sealed class BackupPaths
 /// <summary>
 /// UTC timestamp formatting for the backup feature, matching the fleet's timestamp conventions and the
 /// <see cref="PathHide.Services.SessionLog"/> filename pattern. The archive stem is the
-/// <c>yyyyMMdd-HHmmss-utc</c> file stamp; the index stores each file's last-write time as a whole-second
+/// <c>yyyyMMdd-HHmmss-fff-utc</c> file stamp; the index stores each file's last-write time as a whole-second
 /// ISO-8601 UTC value (sub-second precision is deliberately dropped, since change is compared with a
 /// two-second tolerance).
 /// </summary>
 public static class BackupTime
 {
-    private const string FileStampFormat = "yyyyMMdd-HHmmss";
+    private const string FileStampFormat = "yyyyMMdd-HHmmss-fff";
     private const string IsoSecondsFormat = "yyyy-MM-ddTHH:mm:ss'Z'";
 
     private static readonly string[] AcceptedIsoFormats =
@@ -51,7 +51,9 @@ public static class BackupTime
         "yyyy-MM-ddTHH:mm:ss.fffzzz",
     };
 
-    /// <summary>Filename-safe UTC stamp in the <c>yyyyMMdd-HHmmss-utc</c> convention (the archive stem).</summary>
+    /// <summary>Filename-safe UTC stamp in the <c>yyyyMMdd-HHmmss-fff-utc</c> convention (the archive
+    /// stem). A pre-rollout index entry may still carry the older whole-second <c>yyyyMMdd-HHmmss-utc</c>
+    /// form; both are accepted as opaque stamps and are never migrated or rewritten.</summary>
     public static string FileStamp(DateTimeOffset value) =>
         value.ToUniversalTime().ToString(FileStampFormat, CultureInfo.InvariantCulture) + "-utc";
 

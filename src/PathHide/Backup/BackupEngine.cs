@@ -48,8 +48,7 @@ public sealed class BackupEngine
             return new BackupReport { NothingChanged = true, Skips = skips, IndexWasReset = indexReset };
         }
 
-        var archivedAt = BackupTime.FileStamp(now);
-        var archived = WriteArchive(archivedAt, changed, skips);
+        var (archivedAt, archived) = WriteArchive(now, changed, skips);
         if (archived.Count == 0)
         {
             // Every changed file failed to read at archive time; nothing was written, so nothing is recorded.
@@ -107,14 +106,16 @@ public sealed class BackupEngine
         }
     }
 
-    /// <summary>Writes the changed files to a temp zip and moves it into place, returning the files that
-    /// were actually archived (a file unreadable at archive time is skipped, not recorded).</summary>
-    private List<BackupCandidate> WriteArchive(
-        string archivedAt, IReadOnlyList<BackupCandidate> changed, List<BackupSkip> skips)
+    /// <summary>Writes the changed files to a temp zip and moves it into place under a free
+    /// <c>backup-&lt;archivedAt&gt;.zip</c> name, returning the winning stamp alongside the files that were
+    /// actually archived (a file unreadable at archive time is skipped, not recorded).</summary>
+    private (string ArchivedAt, List<BackupCandidate> Archived) WriteArchive(
+        DateTimeOffset now, IReadOnlyList<BackupCandidate> changed, List<BackupSkip> skips)
     {
         EnsureBackupsDirectory();
-        var finalPath = Path.Combine(_paths.BackupsDirectory, ArchiveFileName(archivedAt));
-        var tempPath = finalPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        var tempPath = TempPath(
+            Path.Combine(_paths.BackupsDirectory, ArchiveFileName(BackupTime.FileStamp(now))),
+            Guid.NewGuid().ToString("N"));
 
         var archived = new List<BackupCandidate>();
         try
@@ -138,13 +139,31 @@ public sealed class BackupEngine
             if (archived.Count == 0)
             {
                 TryDelete(tempPath);
-                return archived;
+                return (BackupTime.FileStamp(now), archived);
             }
 
-            // Atomic publish: move the fully written temp zip over the final name (replacing a same-second
-            // rerun's file if one exists) so a reader never sees a half-written archive.
-            File.Move(tempPath, finalPath, overwrite: true);
-            return archived;
+            // No-clobber publish: if backup-<archivedAt>.zip is already taken — a same-millisecond rerun,
+            // or another instance — advance the instant a millisecond at a time until a free name turns
+            // up, and record whichever stamp won for both the zip name and the new index entries.
+            var candidate = now;
+            string archivedAt;
+            string finalPath;
+            while (true)
+            {
+                archivedAt = BackupTime.FileStamp(candidate);
+                finalPath = Path.Combine(_paths.BackupsDirectory, ArchiveFileName(archivedAt));
+                if (!File.Exists(finalPath))
+                {
+                    break;
+                }
+
+                candidate = candidate.AddMilliseconds(1);
+            }
+
+            // Non-overwriting move: the loop above already found a free name, so this throws only on a
+            // genuine last-instant race with another instance, which is left to fail rather than clobber.
+            File.Move(tempPath, finalPath);
+            return (archivedAt, archived);
         }
         catch
         {
@@ -162,6 +181,18 @@ public sealed class BackupEngine
     }
 
     private static string ArchiveFileName(string archivedAt) => "backup-" + archivedAt + ".zip";
+
+    /// <summary>
+    /// The atomic-write temp path for <paramref name="finalPath"/>: the target's stem plus
+    /// <paramref name="discriminator"/>, one role extension (<c>.tmp</c>), in the same directory as the
+    /// target — the derived-filename grammar, never a dot-appended suffix. This app has no nanoid utility
+    /// yet, so the discriminator is a GUID; internal so the shape is directly unit-testable without
+    /// touching disk.
+    /// </summary>
+    internal static string TempPath(string finalPath, string discriminator) =>
+        Path.Combine(
+            Path.GetDirectoryName(finalPath) ?? string.Empty,
+            $"{Path.GetFileNameWithoutExtension(finalPath)}-{discriminator}.tmp");
 
     private static void TryDelete(string path)
     {

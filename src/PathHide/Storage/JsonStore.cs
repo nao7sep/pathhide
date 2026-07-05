@@ -110,7 +110,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
     private void WriteAtomically(string json)
     {
-        var tempPath = $"{_filePath}.{Guid.NewGuid():N}.tmp";
+        var tempPath = TempPath(_filePath, Guid.NewGuid().ToString("N"));
 
         try
         {
@@ -134,4 +134,17 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
                 File.Delete(tempPath);
         }
     }
+
+    /// <summary>
+    /// The atomic-write temp path for <paramref name="targetPath"/>: the target's stem plus
+    /// <paramref name="discriminator"/>, one role extension (<c>.tmp</c>), in the same directory as the
+    /// target — the derived-filename grammar, never a dot-appended suffix (e.g. never
+    /// <c>config.json.&lt;x&gt;.tmp</c>). This app has no nanoid utility yet, so the discriminator is a
+    /// GUID (see <see cref="WriteAtomically"/>); internal so the shape is directly unit-testable without
+    /// touching disk.
+    /// </summary>
+    internal static string TempPath(string targetPath, string discriminator) =>
+        Path.Combine(
+            Path.GetDirectoryName(targetPath) ?? string.Empty,
+            $"{Path.GetFileNameWithoutExtension(targetPath)}-{discriminator}.tmp");
 }

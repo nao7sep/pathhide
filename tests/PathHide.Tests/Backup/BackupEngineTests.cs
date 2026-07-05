@@ -64,9 +64,9 @@ public sealed class BackupEngineTests : IDisposable
         Assert.Null(report.Fatal);
         Assert.False(report.NothingChanged);
         Assert.Equal(2, report.FilesArchived);
-        Assert.Equal("backup-20260701-000000-utc.zip", report.ArchiveFileName);
+        Assert.Equal("backup-20260701-000000-000-utc.zip", report.ArchiveFileName);
 
-        var entries = ArchiveEntries("backup-20260701-000000-utc.zip");
+        var entries = ArchiveEntries("backup-20260701-000000-000-utc.zip");
         Assert.Contains("config.json", entries);
         Assert.Contains("paths.json", entries);
 
@@ -75,7 +75,7 @@ public sealed class BackupEngineTests : IDisposable
         // The index is a JSON object with an `entries` array, camelCase keys, conventional field order.
         Assert.StartsWith("{", indexJson.TrimStart());
         Assert.Contains("\"entries\"", indexJson);
-        Assert.Contains("\"archivedAt\": \"20260701-000000-utc\"", indexJson);
+        Assert.Contains("\"archivedAt\": \"20260701-000000-000-utc\"", indexJson);
         Assert.Contains("\"archivePath\": \"config.json\"", indexJson);
         Assert.Contains("\"sizeBytes\"", indexJson);
         Assert.Contains("\"lastWriteUtc\"", indexJson);
@@ -92,7 +92,7 @@ public sealed class BackupEngineTests : IDisposable
         var report = new BackupEngine(_paths).Run(Run1);
 
         Assert.Equal(1, report.FilesArchived);
-        Assert.Equal(new[] { "config.json" }, ArchiveEntries("backup-20260701-000000-utc.zip"));
+        Assert.Equal(new[] { "config.json" }, ArchiveEntries("backup-20260701-000000-000-utc.zip"));
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public sealed class BackupEngineTests : IDisposable
 
         Assert.True(report.NothingChanged);
         Assert.Null(report.ArchiveFileName);
-        Assert.False(File.Exists(Path.Combine(_paths.BackupsDirectory, "backup-20260701-010000-utc.zip")));
+        Assert.False(File.Exists(Path.Combine(_paths.BackupsDirectory, "backup-20260701-010000-000-utc.zip")));
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public sealed class BackupEngineTests : IDisposable
 
         Assert.False(report.NothingChanged);
         Assert.Equal(1, report.FilesArchived);
-        Assert.Equal(new[] { "config.json" }, ArchiveEntries("backup-20260701-010000-utc.zip"));
+        Assert.Equal(new[] { "config.json" }, ArchiveEntries("backup-20260701-010000-000-utc.zip"));
     }
 
     [Fact]
@@ -156,6 +156,44 @@ public sealed class BackupEngineTests : IDisposable
         Assert.False(report.NothingChanged);
         Assert.Equal(1, report.FilesArchived);
         Assert.Contains(report.Skips, s => s.Reason.Contains("collision", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void An_Existing_Archive_At_The_Stamp_Advances_To_The_Next_Free_Millisecond()
+    {
+        // Pre-create the archive the run would otherwise claim (a same-millisecond rerun, or another
+        // instance) so the no-clobber loop must advance rather than overwrite it.
+        WriteHomeFile("config.json", "{\"a\":1}");
+        Directory.CreateDirectory(_paths.BackupsDirectory);
+        var claimedPath = Path.Combine(_paths.BackupsDirectory, "backup-20260701-000000-000-utc.zip");
+        File.WriteAllText(claimedPath, "not a zip - must survive untouched");
+
+        var report = new BackupEngine(_paths).Run(Run1);
+
+        Assert.Null(report.Fatal);
+        Assert.False(report.NothingChanged);
+        Assert.Equal("backup-20260701-000000-001-utc.zip", report.ArchiveFileName);
+        Assert.Equal("not a zip - must survive untouched", File.ReadAllText(claimedPath));
+
+        var entries = ArchiveEntries("backup-20260701-000000-001-utc.zip");
+        Assert.Contains("config.json", entries);
+
+        var indexJson = File.ReadAllText(_paths.BackupIndexFile);
+        Assert.Contains("\"archivedAt\": \"20260701-000000-001-utc\"", indexJson);
+    }
+
+    [Fact]
+    public void TempPath_IsStemHyphenDiscriminatorDotTmp_InTheSameDirectory()
+    {
+        // Derived-filename grammar: <stem>-<discriminator>.tmp, one role extension, never a
+        // dot-appended suffix like "backup-<archivedAt>.zip.<x>.tmp".
+        var finalPath = Path.Combine(_paths.BackupsDirectory, "backup-20260701-000000-000-utc.zip");
+
+        var tempPath = BackupEngine.TempPath(finalPath, "abc123");
+
+        Assert.Equal(
+            Path.Combine(_paths.BackupsDirectory, "backup-20260701-000000-000-utc-abc123.tmp"),
+            tempPath);
     }
 
     private bool FilesystemIsCaseSensitive()

@@ -23,8 +23,10 @@ public sealed class BackupIndex
 /// </summary>
 public sealed class BackupIndexEntry
 {
-    /// <summary>The capturing run's UTC file stamp (<c>yyyyMMdd-HHmmss-utc</c>). Also the stem of that run's
-    /// archive, so the zip holding this entry is <c>backup-&lt;archivedAt&gt;.zip</c> — derived, never stored.</summary>
+    /// <summary>The capturing run's UTC file stamp (<c>yyyyMMdd-HHmmss-fff-utc</c>; a pre-rollout entry may
+    /// carry the older whole-second <c>yyyyMMdd-HHmmss-utc</c> form, left as-is). Also the stem of that
+    /// run's archive, so the zip holding this entry is <c>backup-&lt;archivedAt&gt;.zip</c> — derived, never
+    /// stored.</summary>
     public string ArchivedAt { get; set; } = string.Empty;
 
     /// <summary>The file's full entry path within the zip, e.g. <c>paths.json</c> or <c>config.json</c>.</summary>

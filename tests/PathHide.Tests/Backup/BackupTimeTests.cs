@@ -5,24 +5,25 @@ using Xunit;
 namespace PathHide.Tests.Backup;
 
 /// <summary>
-/// UTC timestamp formatting: the archive stem is the <c>yyyyMMdd-HHmmss-utc</c> file stamp, and the index
-/// stores whole-second ISO-8601 UTC values that round-trip back through the parser.
+/// UTC timestamp formatting: the archive stem is the <c>yyyyMMdd-HHmmss-fff-utc</c> file stamp, and the
+/// index stores whole-second ISO-8601 UTC values that round-trip back through the parser.
 /// </summary>
 public sealed class BackupTimeTests
 {
     [Fact]
-    public void FileStamp_IsUtcSecondPrecisionWithSuffix()
+    public void FileStamp_IsUtcMillisecondPrecisionWithSuffix()
     {
-        var value = new DateTimeOffset(2026, 7, 1, 2, 22, 20, TimeSpan.Zero);
-        Assert.Equal("20260701-022220-utc", BackupTime.FileStamp(value));
+        // ms = 7 also pins the zero-padding to three digits ("007"), not a bare "7".
+        var value = new DateTimeOffset(2026, 7, 1, 2, 22, 20, 7, TimeSpan.Zero);
+        Assert.Equal("20260701-022220-007-utc", BackupTime.FileStamp(value));
     }
 
     [Fact]
     public void FileStamp_ConvertsToUtc()
     {
-        // 11:22:20 at +09:00 is 02:22:20 UTC — the stamp must not carry the local offset.
-        var value = new DateTimeOffset(2026, 7, 1, 11, 22, 20, TimeSpan.FromHours(9));
-        Assert.Equal("20260701-022220-utc", BackupTime.FileStamp(value));
+        // 11:22:20.045 at +09:00 is 02:22:20.045 UTC — the stamp must not carry the local offset.
+        var value = new DateTimeOffset(2026, 7, 1, 11, 22, 20, 45, TimeSpan.FromHours(9));
+        Assert.Equal("20260701-022220-045-utc", BackupTime.FileStamp(value));
     }
 
     [Fact]

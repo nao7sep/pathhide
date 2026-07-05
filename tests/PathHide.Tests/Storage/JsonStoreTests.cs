@@ -134,6 +134,18 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
+    public void TempPath_IsStemHyphenDiscriminatorDotTmp_InTheSameDirectory()
+    {
+        // Derived-filename grammar: <stem>-<discriminator>.tmp, one role extension, never a
+        // dot-appended suffix like "config.json.<x>.tmp".
+        var targetPath = PathOf("config.json");
+
+        var tempPath = JsonStore<AppSettings>.TempPath(targetPath, "abc123");
+
+        Assert.Equal(PathOf("config-abc123.tmp"), tempPath);
+    }
+
+    [Fact]
     public void Save_WritesCamelCasePropertiesAndSnakeCaseEnums()
     {
         var store = new JsonStore<AppSettings>("config.json", "settings");

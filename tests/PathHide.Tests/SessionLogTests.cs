@@ -12,18 +12,18 @@ public sealed class SessionLogTests
         var name = SessionLog.FileName(
             new DateTimeOffset(2026, 6, 10, 9, 30, 15, 123, TimeSpan.Zero));
 
-        Assert.Equal("20260610-093015-utc.log", name);
+        Assert.Equal("20260610-093015-123-utc.log", name);
     }
 
     [Fact]
     public void FileName_converts_a_nonzero_offset_to_utc()
     {
-        // 18:30:15 +09:00 is the same instant as 09:30:15Z, so the name must be the
-        // UTC one — proving the stamp is zone-independent, not local.
+        // 18:30:15.456 +09:00 is the same instant as 09:30:15.456Z, so the name must be
+        // the UTC one — proving the stamp is zone-independent, not local.
         var name = SessionLog.FileName(
             new DateTimeOffset(2026, 6, 10, 18, 30, 15, 456, TimeSpan.FromHours(9)));
 
-        Assert.Equal("20260610-093015-utc.log", name);
+        Assert.Equal("20260610-093015-456-utc.log", name);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public sealed class SessionLogTests
             writer.WriteLine("first");
         }
 
-        // A second launch resolving to the same UTC second collides on the name;
+        // A second launch resolving to the same UTC millisecond collides on the name;
         // the exclusive create throws rather than appending into the first session.
         // (Log.Start catches this and degrades to console logging.)
         var ex = Assert.Throws<System.IO.IOException>(() => SessionLog.OpenWriter(temp.Path, timestamp));
