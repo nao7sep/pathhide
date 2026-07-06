@@ -1,13 +1,14 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using PathHide.Controls;
 using PathHide.Models;
 
 namespace PathHide.Views;
 
 public sealed class SettingsDialog : DialogBase
 {
-    private readonly TextBox _uiFontBox;
+    private readonly ImeTextBox _uiFontBox;
     private readonly CheckBox _hiddenAndSystemCheckBox;
     private readonly string _originalUiFont;
     private readonly bool _originalIsHiddenAndSystem;
@@ -24,7 +25,7 @@ public sealed class SettingsDialog : DialogBase
         Width = 500;
         Title = "Settings";
 
-        _uiFontBox = new TextBox { Text = uiFontFamily, PlaceholderText = AppSettings.DefaultUiFontFamily };
+        _uiFontBox = new ImeTextBox { Text = uiFontFamily, PlaceholderText = AppSettings.DefaultUiFontFamily };
         _hiddenAndSystemCheckBox = new CheckBox
         {
             Content = "Also set System attribute when hiding (Windows)",
