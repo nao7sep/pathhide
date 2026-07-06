@@ -40,6 +40,10 @@ public static class SessionLog
     {
         Directory.CreateDirectory(logsDirectory);
 
+        // not recorded: per-session logs under ~/.pathhide/logs/ are excluded by construction — they are
+        // opened as a streamed, append-style file, never written through the atomic temp-then-rename path,
+        // so they never reach the backup hook (data-backup conventions). They are also recreatable and
+        // noisy, not durable user text.
         var path = Path.Combine(logsDirectory, FileName(timestamp));
         var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
         return new StreamWriter(stream) { AutoFlush = false };

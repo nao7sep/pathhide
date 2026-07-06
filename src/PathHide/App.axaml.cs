@@ -23,8 +23,9 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Builds the view model, which materializes config.json (CreateIfMissing) before the window,
-            // so by the time the backup runs below the durable files it captures are on disk.
+            // Builds the view model, which materializes config.json (CreateIfMissing) before the window.
+            // The data backup is now write-through — recorded the instant each managed save's atomic rename
+            // lands (see JsonStore/BackupStore) — so there is no startup backup pass to kick off here.
             desktop.MainWindow = new MainWindow
             {
                 DataContext = CreateMainViewModel(),
@@ -32,10 +33,6 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
-
-        // Kick off the just-in-case data backup on a background thread so the window never waits on it. It
-        // runs after config is materialized; a launch that changed nothing writes no archive at all.
-        BackupService.RunInBackground();
     }
 
     /// <summary>

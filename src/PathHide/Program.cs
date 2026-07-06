@@ -186,6 +186,10 @@ sealed class Program
 
         try
         {
+            // not recorded: a transient elevated-IPC results file in the OS temp directory
+            // (%TEMP%/pathhide-apply-<nanoid>.jsonl), not under ~/.pathhide/ and deleted right after the
+            // parent reads it back. It is ephemeral output the app never reloads as state, so it is neither
+            // managed data nor written through the atomic-write choke point (data-backup conventions).
             File.WriteAllText(resultsPath, ElevatedApplyResults.Serialize(results));
         }
         catch (Exception ex)

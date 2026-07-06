@@ -30,6 +30,15 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.5" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- SQLite binding for the write-through data-backup store (Backup/BackupStore.cs). The ADO.NET
+         provider bundles SQLitePCLRaw's native library, so it needs no separate native rebuild and adds no
+         packaging churn on a runtime bump (data-backup conventions: lowest-friction SQLite binding). -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <!-- Microsoft.Data.Sqlite 10.0.9 still pulls SQLitePCLRaw 2.1.11 transitively, whose bundled native
+         e_sqlite3 carries a high-severity advisory (GHSA-2m69-gcr7-jv3q). A direct top-level reference to
+         the fixed 3.0.x bundle overrides that transitive pin (direct wins), so the app ships the patched
+         native SQLite. Drop this pin once Microsoft.Data.Sqlite's floor moves to SQLitePCLRaw 3.x. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageReference Include="System.CommandLine" Version="2.0.9" />
     <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.2" />
   </ItemGroup>
