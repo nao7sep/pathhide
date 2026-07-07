@@ -1,0 +1,141 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PathHide.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="720"
+        x:Class="PathHide.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="PathHide"
+        Icon="/Assets/icon.png"
+        Width="1280" Height="720"
+        Background="{StaticResource AppBackgroundBrush}"
+        DragDrop.AllowDrop="True">
+
+    <DockPanel>
+
+        <!-- Toolbar -->
+        <Border DockPanel.Dock="Top"
+                x:Name="Toolbar"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="12,8">
+            <DockPanel>
+                <!-- Hamburger menu (right-aligned) -->
+                <Button DockPanel.Dock="Right"
+                        Classes="utility"
+                        Padding="14,2"
+                        VerticalAlignment="Stretch"
+                        x:Name="MenuButton"
+                        AutomationProperties.Name="Menu"
+                        ToolTip.Tip="Menu">
+                    <!-- Hamburger drawn as a vector (three equal strokes) rather than the
+                         ☰ glyph, whose strokes render with uneven weight across fonts. -->
+                    <Path Width="18" Height="14"
+                          VerticalAlignment="Center" HorizontalAlignment="Center"
+                          Stroke="{Binding $parent[Button].Foreground}"
+                          StrokeThickness="2"
+                          StrokeLineCap="Round"
+                          UseLayoutRounding="True"
+                          Data="M0,1 H18 M0,7 H18 M0,13 H18"/>
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <MenuItem Header="Open Log File" x:Name="OpenLogMenuItem"/>
+                            <MenuItem Header="Settings"
+                                      x:Name="SettingsMenuItem"
+                                      IsVisible="{Binding HasSettings}"/>
+                            <MenuItem Header="Keyboard Shortcuts" x:Name="ShortcutsMenuItem"/>
+                            <MenuItem Header="About" x:Name="AboutMenuItem"/>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+
+                <!-- Action buttons (left, single row — never wrap. Wrapping made the rows
+                     touch and doubled the hamburger's height; instead the window minimum
+                     reserves the toolbar's full width so a second line never happens. -->
+                <StackPanel Orientation="Horizontal"
+                            x:Name="ActionButtons"
+                            AutomationProperties.Name="Actions">
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                        <Button Content="Add Files" Classes="add" x:Name="AddFilesButton"/>
+                        <Button Content="Add Directories" Classes="add" x:Name="AddFoldersButton"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                        <Button Content="Hide All" Classes="hide" Command="{Binding HideAllCommand}"/>
+                        <Button Content="Hide Selected" Classes="hide" Command="{Binding HideSelectedCommand}"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                        <Button Content="Show All" Classes="show" Command="{Binding ShowAllCommand}"/>
+                        <Button Content="Show Selected" Classes="show" Command="{Binding ShowSelectedCommand}"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                        <Button Content="Reload" Classes="reload" Command="{Binding ReloadCommand}"/>
+                        <Button Content="Reapply All" Classes="reapply" Command="{Binding ReapplyAllCommand}"/>
+                        <!-- Remove is wired in code-behind (not Command-bound) so it shares the
+                             grid's post-delete selection recovery with the Delete key. -->
+                        <Button Content="Remove" Classes="destructive" x:Name="RemoveButton"/>
+                        <Button Content="Cancel" Classes="cancel"
+                                Command="{Binding CancelScanCommand}"
+                                IsVisible="{Binding IsScanning}"/>
+                    </StackPanel>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom"
+                Background="{StaticResource StatusBackgroundBrush}"
+                BorderBrush="{StaticResource StatusBorderBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="12,6">
+            <Panel>
+                <TextBlock Text="{Binding ProgressText}"
+                           IsVisible="{Binding IsScanning}"
+                           Foreground="{StaticResource StatusAccentBrush}"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding StatusBarText}"
+                           IsVisible="{Binding !IsScanning}"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           VerticalAlignment="Center"/>
+            </Panel>
+        </Border>
+
+        <!-- Path list -->
+        <Border Margin="12" CornerRadius="8"
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                Background="{StaticResource SurfaceBrush}"
+                ClipToBounds="True">
+            <DataGrid x:Name="PathGrid"
+                      AutomationProperties.Name="Path entries"
+                      ItemsSource="{Binding Rows}"
+                      AutoGenerateColumns="False"
+                      CanUserReorderColumns="True"
+                      CanUserResizeColumns="True"
+                      CanUserSortColumns="True"
+                      SelectionMode="Extended"
+                      IsReadOnly="True"
+                      GridLinesVisibility="Horizontal"
+                      BorderThickness="0"
+                      Background="Transparent"
+                      RowBackground="{StaticResource SurfaceBrush}">
+                <DataGrid.Columns>
+                    <!-- Each column carries a real minimum width; WindowMetrics sums these
+                         (read from the live columns) to derive the window's MinWidth, so the
+                         window and its columns can never drift apart. -->
+                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" SortMemberPath="Path" Width="*" MinWidth="240"/>
+                    <DataGridTextColumn Header="Family" Binding="{Binding PathFamily}" SortMemberPath="PathFamily" Width="100" MinWidth="100"/>
+                    <DataGridTextColumn Header="Desired" Binding="{Binding DesiredVisibility}" SortMemberPath="DesiredVisibility" Width="90" MinWidth="90"/>
+                    <DataGridTextColumn Header="Actual" Binding="{Binding ActualState}" SortMemberPath="ActualState" Width="120" MinWidth="120"/>
+                    <DataGridTextColumn Header="Kind" Binding="{Binding ItemKind}" SortMemberPath="ItemKind" Width="110" MinWidth="110"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+    </DockPanel>
+
+</Window>

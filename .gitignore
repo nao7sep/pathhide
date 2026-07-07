@@ -1,0 +1,17 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+publish/
+publish-win/
+dist/
+
+# IDE and editor
+.vs/
+.idea/
+*.user
+
+# macOS
+.DS_Store
+
+# Coverage reports (generated)
+coverage/

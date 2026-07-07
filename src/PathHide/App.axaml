@@ -1,0 +1,237 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="PathHide.App"
+             xmlns:local="using:PathHide"
+             RequestedThemeVariant="Light">
+
+    <Application.DataTemplates>
+        <local:ViewLocator/>
+    </Application.DataTemplates>
+
+    <Application.Resources>
+        <!-- Semantic UI palette -->
+        <Color x:Key="AppBackground">#F6F8FA</Color>
+        <Color x:Key="Surface">#FFFFFF</Color>
+        <Color x:Key="Border">#D8DEE8</Color>
+        <Color x:Key="TextPrimary">#1F2430</Color>
+        <Color x:Key="TextSecondary">#586070</Color>
+
+        <Color x:Key="Add">#047857</Color>
+        <Color x:Key="AddHover">#065F46</Color>
+        <Color x:Key="Hide">#BE185D</Color>
+        <Color x:Key="HideHover">#9D174D</Color>
+        <Color x:Key="Show">#6D28D9</Color>
+        <Color x:Key="ShowHover">#5B21B6</Color>
+        <Color x:Key="Reload">#1D4ED8</Color>
+        <Color x:Key="ReloadHover">#1E40AF</Color>
+        <Color x:Key="Reapply">#0E7490</Color>
+        <Color x:Key="ReapplyHover">#155E75</Color>
+        <Color x:Key="Danger">#DC2626</Color>
+        <Color x:Key="DangerHover">#B91C1C</Color>
+        <Color x:Key="Cancel">#B45309</Color>
+        <Color x:Key="CancelHover">#92400E</Color>
+        <Color x:Key="About">#4A044E</Color>
+        <Color x:Key="AboutHover">#3B0764</Color>
+        <Color x:Key="AboutForeground">#FFF7FE</Color>
+
+        <Color x:Key="Utility">#374151</Color>
+        <Color x:Key="UtilityHover">#1F2937</Color>
+        <Color x:Key="StatusBackground">#F8FAFC</Color>
+        <Color x:Key="StatusBorder">#D8DEE8</Color>
+        <Color x:Key="StatusAccent">#1D4ED8</Color>
+
+        <SolidColorBrush x:Key="AppBackgroundBrush" Color="{StaticResource AppBackground}"/>
+        <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource Surface}"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource Border}"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}"/>
+        <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
+
+        <SolidColorBrush x:Key="AddBrush" Color="{StaticResource Add}"/>
+        <SolidColorBrush x:Key="AddHoverBrush" Color="{StaticResource AddHover}"/>
+        <SolidColorBrush x:Key="HideBrush" Color="{StaticResource Hide}"/>
+        <SolidColorBrush x:Key="HideHoverBrush" Color="{StaticResource HideHover}"/>
+        <SolidColorBrush x:Key="ShowBrush" Color="{StaticResource Show}"/>
+        <SolidColorBrush x:Key="ShowHoverBrush" Color="{StaticResource ShowHover}"/>
+        <SolidColorBrush x:Key="ReloadBrush" Color="{StaticResource Reload}"/>
+        <SolidColorBrush x:Key="ReloadHoverBrush" Color="{StaticResource ReloadHover}"/>
+        <SolidColorBrush x:Key="ReapplyBrush" Color="{StaticResource Reapply}"/>
+        <SolidColorBrush x:Key="ReapplyHoverBrush" Color="{StaticResource ReapplyHover}"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource Danger}"/>
+        <SolidColorBrush x:Key="DangerHoverBrush" Color="{StaticResource DangerHover}"/>
+        <SolidColorBrush x:Key="CancelBrush" Color="{StaticResource Cancel}"/>
+        <SolidColorBrush x:Key="CancelHoverBrush" Color="{StaticResource CancelHover}"/>
+        <SolidColorBrush x:Key="AboutBrush" Color="{StaticResource About}"/>
+        <SolidColorBrush x:Key="AboutHoverBrush" Color="{StaticResource AboutHover}"/>
+        <SolidColorBrush x:Key="AboutForegroundBrush" Color="{StaticResource AboutForeground}"/>
+
+        <SolidColorBrush x:Key="UtilityBrush" Color="{StaticResource Utility}"/>
+        <SolidColorBrush x:Key="UtilityHoverBrush" Color="{StaticResource UtilityHover}"/>
+        <SolidColorBrush x:Key="StatusBackgroundBrush" Color="{StaticResource StatusBackground}"/>
+        <SolidColorBrush x:Key="StatusBorderBrush" Color="{StaticResource StatusBorder}"/>
+        <SolidColorBrush x:Key="StatusAccentBrush" Color="{StaticResource StatusAccent}"/>
+
+        <!-- The app-wide UI (chrome) font. The default is the bundled Inter; the view model overrides
+             this resource at runtime from the configured UI font, and the Window style below binds it
+             via DynamicResource so the change applies live across every window. -->
+        <FontFamily x:Key="AppFontFamily">Inter</FontFamily>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+
+        <!-- Every window (main + dialogs) takes the configured UI font; FontFamily inherits to child
+             controls. PathHide has no content/editing surface, so the UI font is the whole story. -->
+        <Style Selector="Window">
+            <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}"/>
+        </Style>
+
+        <!-- Keep DataGrid cell navigation active without drawing a harsh current-cell box. -->
+        <Style Selector="DataGridCell">
+            <Setter Property="FocusAdorner" Value="{x:Null}"/>
+        </Style>
+        <Style Selector="DataGridCell:current /template/ Rectangle#CurrencyVisual">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="DataGridCell:focus /template/ Grid#FocusVisual">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+
+        <!-- Add buttons -->
+        <Style Selector="Button.add">
+            <Setter Property="Background" Value="{StaticResource AddBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.add:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource AddHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Hide buttons -->
+        <Style Selector="Button.hide">
+            <Setter Property="Background" Value="{StaticResource HideBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.hide:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource HideHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Show buttons -->
+        <Style Selector="Button.show">
+            <Setter Property="Background" Value="{StaticResource ShowBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.show:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ShowHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Reload button -->
+        <Style Selector="Button.reload">
+            <Setter Property="Background" Value="{StaticResource ReloadBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.reload:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Reapply button -->
+        <Style Selector="Button.reapply">
+            <Setter Property="Background" Value="{StaticResource ReapplyBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.reapply:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReapplyHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Destructive buttons -->
+        <Style Selector="Button.destructive">
+            <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.destructive:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Cancellation button -->
+        <Style Selector="Button.cancel">
+            <Setter Property="Background" Value="{StaticResource CancelBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.cancel:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource CancelHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- About button -->
+        <Style Selector="Button.about">
+            <Setter Property="Background" Value="{StaticResource AboutBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource AboutForegroundBrush}"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.about:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource AboutHoverBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource AboutForegroundBrush}"/>
+        </Style>
+
+        <!-- Utility buttons: a dark-gray neutral (clearly not black) with a white icon/label — a
+             deliberate dark control, without the near-black weight the hamburger originally had -->
+        <Style Selector="Button.utility">
+            <Setter Property="Background" Value="{StaticResource UtilityBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.utility:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource UtilityHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- Dialog accent button -->
+        <Style Selector="Button.accent">
+            <Setter Property="Background" Value="{StaticResource ReloadBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- The accent commit button carries an explicit background, so dim it when disabled
+             to read as unavailable — e.g. Save before a setting is changed. -->
+        <Style Selector="Button.accent:disabled">
+            <Setter Property="Opacity" Value="0.45"/>
+        </Style>
+    </Application.Styles>
+</Application>
