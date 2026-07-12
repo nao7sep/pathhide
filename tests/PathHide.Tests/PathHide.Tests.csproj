@@ -24,7 +24,7 @@
     <!-- Official xUnit headless integration ([AvaloniaFact]); depends on xunit.v3. Lets the
          scan-lifecycle tests run on a real dispatcher/UI thread, matching how the view model
          marshals scan progress in the app. -->
-    <PackageReference Include="Avalonia.Headless.XUnit" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Headless.XUnit" Version="12.1.0" />
   </ItemGroup>
 
   <ItemGroup>
