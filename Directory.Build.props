@@ -6,6 +6,12 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <!-- Measured 2026-08-15: a clean build of every project in this solution
+         emits zero warnings, so this costs nothing today and is here to keep it
+         that way — a warning introduced later fails the build instead of
+         scrolling past. The gate is on the shipping path (release.yml builds
+         with it), per the app-release-conventions. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
     <Authors>Yoshinao Inoguchi</Authors>
     <Company>Yoshinao Inoguchi</Company>
