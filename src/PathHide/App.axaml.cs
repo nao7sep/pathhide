@@ -26,9 +26,28 @@ public partial class App : Application
             // Builds the view model, which materializes config.json (CreateIfMissing) before the window.
             // The data backup is now write-through — recorded the instant each managed save's atomic rename
             // lands (see JsonStore/BackupStore) — so there is no startup backup pass to kick off here.
-            desktop.MainWindow = new MainWindow
+            var mainWindow = new MainWindow
             {
                 DataContext = CreateMainViewModel(),
+            };
+            desktop.MainWindow = mainWindow;
+
+            // Report any quarantine the startup loads performed: the store was
+            // set aside with its bytes preserved and defaults took over — the
+            // user hears it from a dialog, never only from the log
+            // (storage-path conventions: both branches report).
+            mainWindow.Opened += async (_, _) =>
+            {
+                var quarantined = Storage.QuarantineJournal.Drain();
+                if (quarantined.Count > 0)
+                {
+                    await Views.NoticeDialog.ShowAsync(
+                        mainWindow,
+                        "A settings file was reset",
+                        "A file was unreadable and has been set aside so nothing is lost:\n\n" +
+                        string.Join("\n", quarantined) +
+                        "\n\nPathHide started with defaults for it. Your hidden-path list is preserved in the file above if you need it.");
+                }
             };
         }
 

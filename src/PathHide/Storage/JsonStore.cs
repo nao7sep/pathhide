@@ -151,13 +151,17 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         }
         catch (Exception moveEx)
         {
-            Log.Warn("store: file unreadable; quarantine move failed, left in place", moveEx,
+            Log.Warn("store: file unreadable; quarantine move failed", moveEx,
                 new { label = _label, path = _filePath, quarantinePath, readError = ex.Message });
-            return;
+            // The move either lands or its failure propagates — returning here
+            // would let the recovered-to-defaults save overwrite the very bytes
+            // quarantine exists to preserve (storage-path conventions).
+            throw;
         }
 
         Log.Warn("store: file unreadable, quarantined", ex,
             new { label = _label, path = _filePath, quarantinePath });
+        QuarantineJournal.Record(quarantinePath);
     }
 
     private void WriteAtomically(byte[] bytes)
