@@ -29,4 +29,14 @@ public sealed class NoticeDialog : DialogBase
 
     public static Task ShowAsync(Window owner, string title, string message) =>
         new NoticeDialog(title, message).ShowDialog(owner);
+
+    /// <summary>
+    /// The same notice, built to stand alone as the application's main window. Used when a
+    /// store cannot be loaded AND cannot be set aside: the app must not reset over the
+    /// preserved bytes, so it halts — and a halt has to reach the user, which before a main
+    /// window exists means becoming one (storage-path conventions: both branches report).
+    /// Closing it ends the app, since the lifetime shuts down with its last window.
+    /// </summary>
+    public static Window CreateStartupFailure(string title, string message) =>
+        new NoticeDialog(title, message);
 }

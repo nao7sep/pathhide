@@ -26,9 +26,33 @@ public partial class App : Application
             // Builds the view model, which materializes config.json (CreateIfMissing) before the window.
             // The data backup is now write-through — recorded the instant each managed save's atomic rename
             // lands (see JsonStore/BackupStore) — so there is no startup backup pass to kick off here.
+            //
+            // A store that is unreadable AND cannot be set aside throws out of here: PathHide must not
+            // reset over bytes it failed to preserve, so it halts. A halt has to reach the user, and
+            // before a main window exists the report becomes the main window — a silent exit is not a
+            // halt (storage-path conventions).
+            MainWindowViewModel viewModel;
+            try
+            {
+                viewModel = CreateMainViewModel();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("startup: a settings file could not be read or set aside", ex);
+                desktop.MainWindow = NoticeDialog.CreateStartupFailure(
+                    "PathHide could not start",
+                    "A settings file could not be read, and PathHide could not set it aside either — so it has been "
+                    + "left exactly where it is rather than risk overwriting it.\n\n"
+                    + ex.Message
+                    + "\n\nYour files are not affected: nothing was hidden or unhidden by this. "
+                    + "Repair or move the file under the PathHide data folder, then start PathHide again.");
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
+
             var mainWindow = new MainWindow
             {
-                DataContext = CreateMainViewModel(),
+                DataContext = viewModel,
             };
             desktop.MainWindow = mainWindow;
 
