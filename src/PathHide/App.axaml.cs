@@ -27,14 +27,15 @@ public partial class App : Application
             // The data backup is now write-through — recorded the instant each managed save's atomic rename
             // lands (see JsonStore/BackupStore) — so there is no startup backup pass to kick off here.
             //
-            // A store that is unreadable AND cannot be set aside throws out of here: PathHide must not
-            // reset over bytes it failed to preserve, so it halts. A halt has to reach the user, and
-            // before a main window exists the report becomes the main window — a silent exit is not a
-            // halt (storage-path conventions).
+            // If an unreadable store cannot be set aside, stop before any defaults can overwrite it.
             MainWindowViewModel viewModel;
             try
             {
                 viewModel = CreateMainViewModel();
+                // paths.json normally loads from the window's Loaded handler. Do
+                // the read now so its recovery and any failed quarantine share
+                // the same startup report/catch as config.json.
+                viewModel.LoadPersistedState();
             }
             catch (Exception ex)
             {
@@ -56,10 +57,7 @@ public partial class App : Application
             };
             desktop.MainWindow = mainWindow;
 
-            // Report any quarantine the startup loads performed: the store was
-            // set aside with its bytes preserved and defaults took over — the
-            // user hears it from a dialog, never only from the log
-            // (storage-path conventions: both branches report).
+            // Report material recovery once the main window can own the dialog.
             mainWindow.Opened += async (_, _) =>
             {
                 var quarantined = Storage.QuarantineJournal.Drain();

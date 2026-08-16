@@ -35,6 +35,7 @@ public partial class MainWindowViewModel : ViewModelBase
     // scan is current, or Task.CompletedTask when none is running.
     internal Task ScanTask => _scanTask;
     private bool _initialized;
+    private bool _persistedStateLoaded;
 
     /// <summary>
     /// Set by the view to show a destructive-action confirmation dialog. Returns true if the
@@ -142,9 +143,18 @@ public partial class MainWindowViewModel : ViewModelBase
             return;
         _initialized = true;
 
+        LoadPersistedState();
+        StartBackgroundScan();
+    }
+
+    /// <summary>Loads the path registry once, before either startup reporting or scanning.</summary>
+    public void LoadPersistedState()
+    {
+        if (_persistedStateLoaded)
+            return;
+        _persistedStateLoaded = true;
         _entries = _pathListStore.Load();
         SyncRowsWithEntries();
-        StartBackgroundScan();
     }
 
     // --- Add / Remove ---
