@@ -131,11 +131,11 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     /// <summary>
     /// Moves the unparseable live file aside to its quarantine name — the derived-filename grammar's
     /// <c>&lt;stem&gt;-&lt;millisecond-utc-stamp&gt;.invalid</c> (see <see cref="QuarantinePath"/>) —
-    /// preserving its original bytes, then logs the one warning for this event naming both paths. Never
-    /// throws: if the move itself fails (unexpected for a same-directory rename), the corrupt file is left
-    /// in place rather than lost, and the warning still fires so the situation stays visible in the log —
-    /// a present-but-corrupt file must never block startup (quarantine over halt, per the storage-path
-    /// conventions).
+    /// preserving its original bytes, then logs the one warning for this event naming both paths. The move
+    /// either lands or its failure PROPAGATES: swallowing it would leave the corrupt file in place for the
+    /// caller's reset to overwrite, the silent reset the storage-path conventions forbid. The composition
+    /// root catches that propagation and reports it as a startup halt, so the failure is visible to the
+    /// user rather than only to the log.
     /// </summary>
     private void Quarantine(Exception ex)
     {
