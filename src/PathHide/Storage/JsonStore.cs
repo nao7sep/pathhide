@@ -8,34 +8,21 @@ using PathHide.Services;
 namespace PathHide.Storage;
 
 /// <summary>
-/// Generic JSON-backed store with atomic replace. One file is written:
-/// <c>{file}</c>, the live document, updated by a write-to-temp-then-rename
-/// so a crash mid-write never tears it. If the live document is missing, the
-/// type's default-constructed value is returned; if it is present but
-/// unparseable, it is quarantined (moved aside, original bytes preserved)
-/// rather than reset over, and the default-constructed value is returned —
-/// see the storage-path conventions' quarantine-then-reset path.
+/// Generic JSON-backed store with atomic replace (write-to-temp-then-rename).
+/// A missing file yields the type's default-constructed value; a present but
+/// unparseable file is quarantined aside, bytes preserved, before the default
+/// is returned (storage-path conventions).
 /// </summary>
 /// <remarks>
-/// This is the app's single managed-text atomic-write choke point, and so the
-/// one place the data-backup hook lives. <see cref="WriteAtomically"/> records
-/// the exact bytes it just wrote into <see cref="BackupStore"/> strictly AFTER
-/// the rename lands; a managed-text write that bypasses this store is a silent
-/// backup gap, so there is deliberately no second atomic-write path in the app.
+/// The app's single managed-text atomic-write choke point, and so the one place
+/// the data-backup hook lives: <see cref="WriteAtomically"/> records the exact
+/// bytes it just wrote into <see cref="BackupStore"/> strictly AFTER the rename
+/// lands. A managed-text write that bypasses this store is a silent backup gap.
 /// </remarks>
 /// <remarks>
-/// There is no <c>.bak</c> last-good sidecar: its only job was recovery, and
-/// recovery is now split cleanly (per the data-backup conventions) — the
-/// atomic write prevents the torn write the sidecar guarded against, and the
-/// point-in-time version history it approximated with a single previous copy
-/// lives in the write-through store <c>~/.pathhide/backups.sqlite3</c>.
-/// </remarks>
-/// <remarks>
-/// Caller responsibilities: this store does not impose any ordering or
-/// canonicalisation on the value it receives. If on-disk ordering matters
-/// (for diff stability or hand-editing), the caller must sort before
-/// calling <see cref="Save"/> — and should sort a copy rather than the
-/// live in-memory collection to avoid surprising callers that share it.
+/// The store imposes no ordering on the value it receives. If on-disk ordering
+/// matters (diff stability, hand-editing), the caller sorts a copy before
+/// <see cref="Save"/>.
 /// </remarks>
 public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 {
@@ -118,24 +105,18 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         }
         catch (Exception ex)
         {
-            // The file exists but will not parse — unexpected, yet recoverable. Quarantine it (move it
-            // aside, preserving its bytes) rather than silently falling back to defaults over it, so a
-            // later save can never overwrite the user's original bytes — the storage-path conventions'
-            // quarantine-then-reset path. The caller falls back to defaults; the file is recreated by the
-            // normal first-run materialization path (CreateIfMissing) or the next Save.
+            // Present but unparseable: quarantine aside (bytes preserved) before the caller
+            // falls back to defaults; the next Save or CreateIfMissing recreates the file.
             Quarantine(ex);
             return false;
         }
     }
 
     /// <summary>
-    /// Moves the unparseable live file aside to its quarantine name — the derived-filename grammar's
-    /// <c>&lt;stem&gt;-&lt;millisecond-utc-stamp&gt;.invalid</c> (see <see cref="QuarantinePath"/>) —
-    /// preserving its original bytes, then logs the one warning for this event naming both paths. The move
-    /// either lands or its failure PROPAGATES: swallowing it would leave the corrupt file in place for the
-    /// caller's reset to overwrite, the silent reset the storage-path conventions forbid. The composition
-    /// root catches that propagation and reports it as a startup halt, so the failure is visible to the
-    /// user rather than only to the log.
+    /// Moves the unparseable live file aside to its timestamped <c>.invalid</c> quarantine name,
+    /// preserving its bytes, and logs one warning naming both paths. The move either lands or its
+    /// failure propagates — swallowing it would leave the corrupt file in place for the caller's
+    /// reset to overwrite. The composition root catches the propagation and reports a startup halt.
     /// </summary>
     private void Quarantine(Exception ex)
     {
@@ -143,19 +124,14 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
         try
         {
-            // not recorded: this is a move-aside of an already-unreadable managed file, not a managed-text
-            // write — no new content is produced here, and the corrupt bytes are not a version to preserve
-            // (the store never captured them, so there is nothing to add). The subsequent fresh save through
-            // WriteAtomically is what records the recovered-to-defaults content (data-backup conventions).
+            // not recorded: a move-aside of an already-unreadable file, not a managed-text write.
+            // The subsequent fresh save through WriteAtomically records the recovered content.
             File.Move(_filePath, quarantinePath);
         }
         catch (Exception moveEx)
         {
             Log.Warn("store: file unreadable; quarantine move failed", moveEx,
                 new { label = _label, path = _filePath, quarantinePath, readError = ex.Message });
-            // The move either lands or its failure propagates — returning here
-            // would let the recovered-to-defaults save overwrite the very bytes
-            // quarantine exists to preserve (storage-path conventions).
             throw;
         }
 
