@@ -45,4 +45,25 @@ public sealed class UiFontTests
         var restored = JsonSerializer.Deserialize<AppSettings>(json, options)!;
         Assert.Equal("Iosevka, monospace", restored.UiFontFamily);
     }
+
+    [Fact]
+    public void UiFontFamilyValue_FlattensAPastedLineBreak()
+    {
+        // A single-line control does not keep its value single-line - a paste
+        // carries whatever it carried. Trimming the ends only left an interior
+        // break to be persisted verbatim, match no installed family, and come
+        // back as a multi-line value in the settings box.
+        Assert.Equal("Hiragino Sans, Inter", UiFontFamilyValue.Normalize("Hiragino Sans,\nInter"));
+        Assert.Equal("Hiragino Sans", UiFontFamilyValue.Normalize("  Hiragino Sans\r\n"));
+        Assert.Equal("A B", UiFontFamilyValue.Normalize("A\t\tB"));
+    }
+
+    [Fact]
+    public void UiFontFamilyValue_LeavesAnOrdinaryValueAlone()
+    {
+        Assert.Equal("Inter", UiFontFamilyValue.Normalize("Inter"));
+        Assert.Equal("Hiragino Sans, Inter", UiFontFamilyValue.Normalize("Hiragino Sans, Inter"));
+        Assert.Equal(string.Empty, UiFontFamilyValue.Normalize(null));
+        Assert.Equal(string.Empty, UiFontFamilyValue.Normalize("   "));
+    }
 }

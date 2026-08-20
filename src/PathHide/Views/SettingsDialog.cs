@@ -16,11 +16,11 @@ public sealed class SettingsDialog : DialogBase
 
     public bool Accepted => ResultTag == "save";
     public bool IsHiddenAndSystem => _hiddenAndSystemCheckBox.IsChecked == true;
-    public string UiFontFamily => (_uiFontBox.Text ?? string.Empty).Trim();
+    public string UiFontFamily => UiFontFamilyValue.Normalize(_uiFontBox.Text);
 
     public SettingsDialog(string uiFontFamily, bool isHiddenAndSystem, bool showWindowsHideMode)
     {
-        _originalUiFont = (uiFontFamily ?? string.Empty).Trim();
+        _originalUiFont = UiFontFamilyValue.Normalize(uiFontFamily);
         _originalIsHiddenAndSystem = isHiddenAndSystem;
         Width = 500;
         Title = "Settings";

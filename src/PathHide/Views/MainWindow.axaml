@@ -41,7 +41,11 @@
                           Data="M0,1 H18 M0,7 H18 M0,13 H18"/>
                     <Button.Flyout>
                         <MenuFlyout Placement="BottomEdgeAlignedRight">
-                            <MenuItem Header="Open Log File" x:Name="OpenLogMenuItem"/>
+                            <!-- Header set in code: it reveals rather than opens (LogReveal runs
+                                 `open -R` / `explorer /select,`), and it names the running
+                                 platform's file browser. "Open Log File" sent a user expecting
+                                 to read the log to a Finder window instead. -->
+                            <MenuItem x:Name="OpenLogMenuItem"/>
                             <MenuItem Header="Settings"
                                       x:Name="SettingsMenuItem"/>
                             <MenuItem Header="Keyboard Shortcuts" x:Name="ShortcutsMenuItem"/>

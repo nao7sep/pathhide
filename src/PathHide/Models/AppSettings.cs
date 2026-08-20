@@ -1,4 +1,22 @@
+using System;
 namespace PathHide.Models;
+
+public static class UiFontFamilyValue
+{
+    /// <summary>
+    /// Normalizes a UI-font value to the single line the field is meant to hold: interior line
+    /// breaks flattened to spaces, runs of whitespace collapsed, then trimmed.
+    /// </summary>
+    /// <remarks>
+    /// A single-line control does not reliably keep its value single-line — a paste carries
+    /// whatever it carried. Trimming the ends only meant an interior break survived, was persisted
+    /// verbatim into config.json, matched no installed family, and came back as a multi-line value
+    /// in the settings box. Applied on commit, which is where the text-cleanup conventions put it
+    /// rather than assuming the control enforces it.
+    /// </remarks>
+    public static string Normalize(string? value) =>
+        string.Join(' ', (value ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+}
 
 public sealed class AppSettings
 {

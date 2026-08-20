@@ -81,8 +81,23 @@ sealed class Program
         // The elevated apply pass is a genuinely separate OS process, so it gets its
         // own per-session log file (co-located with the GUI process's logs).
         Log.Start(StorageRoot.LogsDirectory);
+        var clean = true;
         try
         {
+            // The same baseline the GUI writes. This log sits beside the GUI's, and it is the
+            // one session where "which binary ran elevated, and did it finish?" is the question
+            // you need answered — so it carries the build and the outcome too, rather than three
+            // apply lines with no version and no ending.
+            Log.Info("startup", new
+            {
+                mode = "apply",
+                version = AppVersion(),
+                os = RuntimeInformation.OSDescription,
+                arch = RuntimeInformation.OSArchitecture,
+                storageDir = StorageRoot.Directory,
+                debugLogging = Log.DebugEnabled,
+            });
+
             var hideOpt = new Option<string[]>(ElevatedApplyCommand.HideOption)
                 { AllowMultipleArgumentsPerToken = true, Arity = ArgumentArity.ZeroOrMore };
             var systemOpt = new Option<string[]>(ElevatedApplyCommand.SystemOption)
@@ -127,10 +142,12 @@ sealed class Program
         catch (Exception ex)
         {
             Log.Error("apply mode: failed", ex);
+            clean = false;
             return 3;
         }
         finally
         {
+            Log.Info("shutdown", new { clean });
             Log.Shutdown();
         }
     }

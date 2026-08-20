@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.ComponentModel;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
@@ -35,6 +36,9 @@ public partial class MainWindow : Window
         AddFoldersButton.Click += OnAddFoldersClick;
         RemoveButton.Click += OnRemoveClick;
 
+        OpenLogMenuItem.Header = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? "Show Log File in Explorer"
+            : "Show Log File in Finder";
         OpenLogMenuItem.Click += OnOpenLogClick;
         SettingsMenuItem.Click += OnSettingsClick;
         AboutMenuItem.Click += OnAboutClick;

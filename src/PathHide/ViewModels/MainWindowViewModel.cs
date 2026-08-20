@@ -445,7 +445,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public void SetUiFontFamily(string family)
     {
-        family = (family ?? string.Empty).Trim();
+        family = UiFontFamilyValue.Normalize(family);
         if (_settings.UiFontFamily == family)
             return;
 
