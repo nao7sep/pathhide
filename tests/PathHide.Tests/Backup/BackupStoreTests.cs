@@ -213,6 +213,36 @@ public sealed class BackupStoreTests : IDisposable
     }
 
     [Fact]
+    public void Record_BestEffort_DoesNotThrowWhenTheStorageRootItselfCannotBeResolved()
+    {
+        // The harder half of the same contract. An open failure was already handled; a root that
+        // cannot be RESOLVED throws from StorageRoot.Directory, and EnsureOpen used to call it
+        // again from inside its own catch to name the file it failed on - so that second throw
+        // escaped EnsureOpen, escaped Record, and surfaced in JsonStore's atomic write. The save
+        // was already on disk by then, so the user saw "Failed to save" for a save that succeeded
+        // and the in-memory list rolled back, leaving memory disagreeing with disk.
+        var previousHome = Environment.GetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable);
+        try
+        {
+            BackupStore.Close();
+            // Expands to nothing, which the resolver rejects rather than falling back.
+            Environment.SetEnvironmentVariable(
+                StorageRoot.HomeEnvironmentVariable, "$PATHHIDE_DEFINITELY_UNSET_FOR_TEST");
+
+            Assert.Throws<InvalidOperationException>(() => _ = StorageRoot.Directory);
+
+            var exception = Record.Exception(() =>
+                BackupStore.Record("/somewhere/config.json", Encoding.UTF8.GetBytes("x")));
+            Assert.Null(exception);
+        }
+        finally
+        {
+            BackupStore.Close();
+            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, previousHome);
+        }
+    }
+
+    [Fact]
     public void Record_BestEffort_OpenFailureDisablesRecordingWithoutThrowing()
     {
         // Point PATHHIDE_HOME at a location the store cannot open a DB in: a *file* standing where the root

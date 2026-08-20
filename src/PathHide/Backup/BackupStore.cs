@@ -78,9 +78,13 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
             return _connection;
         _initialized = true;
 
+        // Resolved once, before the try, so the catch below can name it without re-running a
+        // resolution that may itself throw.
+        var storeFile = "(unresolved)";
         try
         {
             var file = StoreFile();
+            storeFile = file;
             // not recorded: backups.sqlite3 is the store itself — binary, and written by this backup layer,
             // not through the managed-text atomic-write path — so it never records itself. No recursion, no
             // special case (data-backup conventions: "A binary store, excluded from itself").
@@ -116,8 +120,11 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
         }
         catch (Exception ex)
         {
+            // `file` is the path captured before the attempt, never a fresh StoreFile() call:
+            // re-resolving inside the catch could throw again (an unresolvable home, an empty
+            // PATHHIDE_HOME) and that second throw would escape EnsureOpen entirely.
             Log.Warn("backup store: could not open; recording disabled for this session", ex,
-                new { file = StoreFile() });
+                new { file = storeFile });
             _connection = null;
         }
 
@@ -146,12 +153,17 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
     {
         lock (Gate)
         {
-            var connection = EnsureOpen();
-            if (connection is null)
-                return; // open failed earlier; disabled for the session (already warned once)
-
+            // EnsureOpen is INSIDE the try. The save this records has already landed on disk, so
+            // a throw escaping here would surface to the user as "Failed to save" for a save that
+            // succeeded — and roll the in-memory list back, leaving memory disagreeing with disk.
+            // The never-breaks-a-save rule is an absolute must, not a best effort, so the guard
+            // covers the whole body rather than the part that seemed likeliest to fail.
             try
             {
+                var connection = EnsureOpen();
+                if (connection is null)
+                    return; // open failed earlier; disabled for the session (already warned once)
+
                 var hash = Sha256(bytes);
 
                 using (var latest = connection.CreateCommand())
