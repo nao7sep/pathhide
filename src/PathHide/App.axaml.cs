@@ -125,9 +125,15 @@ public partial class App : Application
             Log.Warn("config: first-run create failed", ex, new { file = "config.json" });
         }
 
-        // Key effective configuration at startup (the conventions' baseline). The hide
-        // mode is the one user-tunable setting; it lives here, loaded above.
-        Log.Info("config", new { hideMode = settings.WindowsHideMode });
+        // Key effective configuration at startup (the conventions' baseline): every user-tunable
+        // setting, not a subset. Logging only the hide mode meant a session log could not answer
+        // which UI font was in effect — the one setting that plausibly explains a rendering
+        // complaint.
+        Log.Info("config", new
+        {
+            hideMode = settings.WindowsHideMode,
+            uiFontFamily = settings.UiFontFamily,
+        });
 
         IVisibilityService visibilityService = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? new WindowsVisibilityService(() => settings.WindowsHideMode)

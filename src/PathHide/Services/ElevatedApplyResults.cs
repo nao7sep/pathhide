@@ -63,9 +63,14 @@ public static class ElevatedApplyResults
                 if (result is not null && !string.IsNullOrEmpty(result.Path))
                     results.Add(result);
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
-                // Tolerate one malformed line; the rest of the file is still usable.
+                // Tolerate one malformed line; the rest of the file is still usable. The child is
+                // our own code writing well-formed JSONL, so a malformed line means it was cut off
+                // — killed mid-write, or a full disk. Without this line the parent silently
+                // under-counts successes and the log shows only a short reported count with no
+                // explanation for it.
+                Log.Warn("elevated apply: skipping a malformed result line", ex);
             }
         }
 

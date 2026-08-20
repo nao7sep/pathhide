@@ -196,7 +196,7 @@ public sealed class SessionLogger : IDisposable
     {
         var root = new JsonObject
         {
-            ["time"] = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture),
+            ["time"] = Storage.FileTimestamp.SerializedStamp(DateTimeOffset.UtcNow),
             ["level"] = LevelName(level),
             ["message"] = message,
         };
@@ -273,16 +273,18 @@ public sealed class SessionLogger : IDisposable
 
     private static string FallbackLine(LogLevel level, string message, Exception serializeError)
     {
-        // Last resort: even serialization failed. Build a valid line by hand from the
-        // few values we fully control, escaping the message defensively.
-        var safeMessage = message
-            .Replace("\\", "\\\\")
-            .Replace("\"", "\\\"")
-            .Replace("\n", "\\n")
-            .Replace("\r", "\\r");
-        var time = DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
-        return $"{{\"time\":\"{time}\",\"level\":\"{LevelName(level)}\",\"message\":\"{safeMessage}\","
-             + $"\"logError\":\"{serializeError.GetType().Name}\"}}";
+        // Last resort: even serialization failed. This line is the one worth reading, so it must
+        // still parse — hand-escaping four characters did not guarantee that, since any other C0
+        // control character (a tab, a \u0001 out of a native error string) went in raw and JSON
+        // forbids those unescaped. Serializing the string values gets it right for every input.
+        var line = new JsonObject
+        {
+            ["time"] = Storage.FileTimestamp.SerializedStamp(DateTimeOffset.UtcNow),
+            ["level"] = LevelName(level),
+            ["message"] = message,
+            ["logError"] = serializeError.GetType().Name,
+        };
+        return line.ToJsonString(LineOptions);
     }
 
     private static void EmitToConsole(string text)

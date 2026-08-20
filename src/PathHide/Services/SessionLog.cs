@@ -14,16 +14,16 @@ namespace PathHide.Services;
 /// </summary>
 public static class SessionLog
 {
-    private const string TimestampFormat = "yyyyMMdd-HHmmss-fff";
-
     /// <summary>
     /// The log file name for a launch at <paramref name="timestamp"/>. The instant
     /// is converted to UTC, so the name does not depend on the local time zone.
     /// </summary>
     public static string FileName(DateTimeOffset timestamp)
     {
-        var utc = timestamp.ToUniversalTime();
-        return utc.ToString(TimestampFormat, CultureInfo.InvariantCulture) + "-utc.log";
+        // Through FileTimestamp, which is what its own doc says this file does —
+        // it kept a private copy of the same format string, so editing one left
+        // log filenames on the old form while the doc pointed at the other.
+        return Storage.FileTimestamp.FileStamp(timestamp) + ".log";
     }
 
     /// <summary>

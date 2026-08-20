@@ -35,7 +35,6 @@ public static class BackupStore
 {
     // Serialized ISO-8601 with exactly three fractional digits and a Z suffix (2026-07-06T04:05:12.345Z) —
     // the timestamp conventions' stored-value form, NEVER the yyyyMMdd-HHmmss-fff-utc filename stamp.
-    private const string SerializedUtcFormat = "yyyy-MM-dd'T'HH:mm:ss.fff'Z'";
 
     /// <summary>The one add-only table. <c>content</c> is a BLOB of the exact bytes written — never decoded
     /// text, so CR/LF, a BOM, and non-UTF-8 bytes are stored byte-identically. <c>written_at_utc</c> is the
@@ -178,7 +177,7 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
                     insert.Parameters.AddWithValue("$size", bytes.LongLength);
                     insert.Parameters.AddWithValue(
                         "$writtenAt",
-                        DateTimeOffset.UtcNow.ToString(SerializedUtcFormat, CultureInfo.InvariantCulture));
+                        Storage.FileTimestamp.SerializedStamp(DateTimeOffset.UtcNow));
                     insert.ExecuteNonQuery();
                 }
             }
@@ -201,9 +200,11 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
                 _connection?.Close();
                 _connection?.Dispose();
             }
-            catch
+            catch (Exception ex)
             {
-                // best-effort: a close failure on shutdown/teardown is harmless
+                // Best-effort: a close failure on shutdown or teardown is harmless, but it is
+                // still a failure that was recovered from, so it gets a line rather than silence.
+                Log.Warn("backup store: close failed", ex);
             }
 
             _connection = null;

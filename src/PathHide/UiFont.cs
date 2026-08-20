@@ -1,4 +1,5 @@
 using System;
+using PathHide.Services;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
@@ -55,10 +56,13 @@ public static class UiFont
             return FontManager.Current.SystemFonts.Any(
                 family => string.Equals(family.Name, name, StringComparison.OrdinalIgnoreCase));
         }
-        catch
+        catch (Exception ex)
         {
             // A font-manager hiccup must never crash settings; treat the family as absent so the
-            // caller falls back to the bundled default.
+            // caller falls back to the bundled default. Logged, not swallowed: without a line here
+            // a user whose font never applies leaves a log reading "ui font changed" followed by
+            // silence, and the reason is unrecoverable afterwards.
+            Log.Warn("ui font: could not enumerate system fonts", ex, new { name });
             return false;
         }
     }

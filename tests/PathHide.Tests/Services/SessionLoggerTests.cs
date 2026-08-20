@@ -1,4 +1,6 @@
 using System;
+using System.Reflection;
+using System.Text.Json;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json.Nodes;
@@ -282,5 +284,33 @@ public sealed class SessionLoggerTests
     {
         public override void Flush() =>
             throw new IOException("disk full");
+    }
+
+    [Fact]
+    public void The_serialization_fallback_line_is_still_valid_json()
+    {
+        // This is the line written AFTER serialization already failed - the one
+        // most worth reading. Hand-escaping four characters left every other C0
+        // control character raw inside a JSON string, which JSON forbids, so a
+        // JSONL reader would reject exactly that line.
+        var withControls = "tab\there, bell\u0001, quote\", slash\\ and\nnewline";
+
+        var line = InvokeFallbackLine(LogLevel.Error, withControls);
+
+        var parsed = JsonDocument.Parse(line);
+        Assert.Equal(withControls, parsed.RootElement.GetProperty("message").GetString());
+        Assert.Equal("error", parsed.RootElement.GetProperty("level").GetString());
+        Assert.False(string.IsNullOrEmpty(parsed.RootElement.GetProperty("time").GetString()));
+        Assert.Equal("InvalidOperationException", parsed.RootElement.GetProperty("logError").GetString());
+    }
+
+    private static string InvokeFallbackLine(LogLevel level, string message)
+    {
+        var method = typeof(SessionLogger).GetMethod(
+            "FallbackLine",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        return (string)method.Invoke(
+            null,
+            [level, message, new InvalidOperationException("boom")])!;
     }
 }
