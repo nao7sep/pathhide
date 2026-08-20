@@ -25,10 +25,10 @@ public static class WindowMetrics
     // behind it at the minimum width — Fluent's bar is a slim ~12px gutter.
     private const double VerticalScrollBarGutter = 12;
 
-    // Fixed chrome heights (toolbar and status-bar Borders), and a real content minimum tall
-    // enough to show a few data rows plus the column header — not an arbitrary number.
-    private const double ToolbarHeight = 52;
-    private const double StatusBarHeight = 33;
+    // A real content minimum, tall enough to show a few data rows plus the column header — a
+    // declared pane minimum, not an arbitrary number. The chrome heights are NOT declared here:
+    // they are measured from the live controls and passed in, because both depend on the
+    // user-configurable UI font, and this file already measures the toolbar for the width.
     private const double ContentMinHeight = 180;
 
     /// <summary>
@@ -39,9 +39,9 @@ public static class WindowMetrics
         => columnMinWidths.Sum() + GridHorizontalMargin + VerticalScrollBarGutter;
 
     /// <summary>
-    /// The minimum window height: the fixed chrome (toolbar + status bar) plus a content
+    /// The minimum window height: the measured chrome (toolbar + status bar) plus a content
     /// minimum that keeps several data rows visible.
     /// </summary>
-    public static double MinHeight()
-        => ToolbarHeight + StatusBarHeight + ContentMinHeight;
+    public static double MinHeightFor(double toolbarHeight, double statusBarHeight)
+        => toolbarHeight + statusBarHeight + ContentMinHeight;
 }

@@ -92,6 +92,7 @@
 
         <!-- Status bar -->
         <Border DockPanel.Dock="Bottom"
+                x:Name="StatusBar"
                 Background="{StaticResource StatusBackgroundBrush}"
                 BorderBrush="{StaticResource StatusBorderBrush}"
                 BorderThickness="0,1,0,0"

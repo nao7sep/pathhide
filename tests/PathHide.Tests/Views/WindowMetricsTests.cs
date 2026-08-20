@@ -45,11 +45,17 @@ public sealed class WindowMetricsTests
     }
 
     [Fact]
-    public void MinHeight_IsPositive()
+    public void MinHeight_IsTheMeasuredChromePlusTheContentMinimum()
     {
-        // The height minimum reserves both chrome bars plus a real content minimum; the exact
-        // value is an implementation detail, but it must be a sane positive reservation.
-        Assert.True(WindowMetrics.MinHeight() > 0);
+        // The chrome heights are measured from the live controls and passed in, because both
+        // depend on the user-configurable UI font — the same reason the width is measured.
+        var withSmallChrome = WindowMetrics.MinHeightFor(toolbarHeight: 52, statusBarHeight: 33);
+        var withLargeChrome = WindowMetrics.MinHeightFor(toolbarHeight: 72, statusBarHeight: 44);
+
+        Assert.True(withSmallChrome > 0);
+        // A taller chrome raises the minimum by exactly its extra height, so the content pane
+        // keeps its declared minimum rather than being squeezed by a bigger font.
+        Assert.Equal(withSmallChrome + 31, withLargeChrome);
     }
 
     [Fact]

@@ -56,17 +56,7 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        // Derive the window minimum from the live grid columns plus fixed chrome (see
-        // WindowMetrics) rather than a hand-typed constant, so the window can never be shrunk
-        // small enough to hide the toolbar, list, or status bar — and so adding or resizing a
-        // column moves the minimum with it. The toolbar is a single non-wrapping row, so its
-        // natural width is measured and folded in: without this the window could shrink below
-        // the buttons' width and they would wrap onto a second line.
-        Toolbar.Measure(Size.Infinity);
-        MinWidth = Math.Max(
-            WindowMetrics.MinWidthFor(PathGrid.Columns.Select(c => c.MinWidth)),
-            Toolbar.DesiredSize.Width);
-        MinHeight = WindowMetrics.MinHeight();
+        ApplyWindowMinimums();
 
         // Build the catalog now that PlatformSettings (the platform command key) and the view model
         // are both available, then point the accelerator-bearing menu items at the live gestures so
@@ -97,6 +87,33 @@ public partial class MainWindow : Window
 
     private async void OnShortcutsClick(object? sender, RoutedEventArgs e) => await ShowShortcutsAsync();
 
+    /// <summary>
+    /// Derives the window minimum from the live layout: the grid's column minimums plus the
+    /// measured chrome.
+    /// </summary>
+    /// <remarks>
+    /// Never a hand-typed constant, so adding or resizing a column moves the minimum with it and
+    /// the window can never shrink small enough to hide the toolbar, list, or status bar.
+    /// <para>Re-run whenever the UI font changes. The font is user-changeable at runtime and
+    /// applies live through a DynamicResource, so a minimum measured once at load went stale:
+    /// switch to a wider family and the toolbar's natural width exceeded it, letting the window
+    /// be dragged down until the rightmost action buttons clipped under the hamburger — the very
+    /// truncation the minimum exists to prevent. Both chrome heights are measured for the same
+    /// reason, rather than the pixel constants they used to be.</para>
+    /// </remarks>
+    private void ApplyWindowMinimums()
+    {
+        Toolbar.Measure(Size.Infinity);
+        StatusBar.Measure(Size.Infinity);
+
+        MinWidth = Math.Max(
+            WindowMetrics.MinWidthFor(PathGrid.Columns.Select(c => c.MinWidth)),
+            Toolbar.DesiredSize.Width);
+        MinHeight = WindowMetrics.MinHeightFor(
+            Toolbar.DesiredSize.Height,
+            StatusBar.DesiredSize.Height);
+    }
+
     private Task ShowShortcutsAsync() => new ShortcutsDialog(_shortcuts).ShowDialog(this);
 
     private void OnOpenLogClick(object? sender, RoutedEventArgs e)
@@ -115,6 +132,10 @@ public partial class MainWindow : Window
         {
             ViewModel.SetUiFontFamily(dialog.UiFontFamily);
             ViewModel.SetWindowsHideMode(dialog.IsHiddenAndSystem);
+
+            // The font applies live through a DynamicResource, so the chrome's natural size
+            // changes with it. Re-derive after the layout pass has taken the new family.
+            Dispatcher.UIThread.Post(ApplyWindowMinimums, DispatcherPriority.Loaded);
         }
     }
 
