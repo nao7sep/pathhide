@@ -14,7 +14,7 @@ using PathHide.Storage;
 
 namespace PathHide.ViewModels;
 
-public partial class MainWindowViewModel : ViewModelBase
+public partial class MainWindowViewModel : ObservableObject
 {
     private readonly IJsonStore<List<PathEntry>> _pathListStore;
     private readonly IJsonStore<AppSettings> _settingsStore;
@@ -68,8 +68,6 @@ public partial class MainWindowViewModel : ViewModelBase
     private string _notification = string.Empty;
 
     // Settings are always available now: the UI font is a cross-platform setting, so the dialog
-    // opens on every OS. The Windows hide mode is the one platform-specific setting (see below).
-    public bool HasSettings { get; } = true;
 
     /// <summary>Whether the Windows-only hide-mode setting applies; the dialog shows it only then.</summary>
     public bool HasWindowsHideMode { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);

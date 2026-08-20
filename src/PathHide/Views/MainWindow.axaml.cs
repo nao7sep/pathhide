@@ -67,7 +67,7 @@ public partial class MainWindow : Window
         // Build the catalog now that PlatformSettings (the platform command key) and the view model
         // are both available, then point the accelerator-bearing menu items at the live gestures so
         // their visible hint always matches what OnKeyDown actually binds.
-        _shortcuts = ShortcutCatalog.Build(this, ViewModel.HasSettings);
+        _shortcuts = ShortcutCatalog.Build(this);
         SettingsMenuItem.InputGesture = GestureFor(ShortcutAction.OpenSettings);
         ShortcutsMenuItem.InputGesture = GestureFor(ShortcutAction.ShowShortcuts);
 
@@ -207,8 +207,7 @@ public partial class MainWindow : Window
     {
         ShortcutAction.AddFiles => Run(AddFilesAsync),
         ShortcutAction.AddDirectories => Run(AddFoldersAsync),
-        // Defensive: the catalog already omits this row off Windows, so it cannot be reached there.
-        ShortcutAction.OpenSettings => ViewModel.HasSettings && Run(OpenSettingsAsync),
+        ShortcutAction.OpenSettings => Run(OpenSettingsAsync),
         ShortcutAction.ShowShortcuts => Run(ShowShortcutsAsync),
         _ => false,
     };

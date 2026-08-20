@@ -1,13 +1,8 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="PathHide.App"
-             xmlns:local="using:PathHide"
              Name="PathHide"
              RequestedThemeVariant="Light">
-
-    <Application.DataTemplates>
-        <local:ViewLocator/>
-    </Application.DataTemplates>
 
     <Application.Resources>
         <!-- Semantic UI palette -->

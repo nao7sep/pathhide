@@ -43,8 +43,7 @@
                         <MenuFlyout Placement="BottomEdgeAlignedRight">
                             <MenuItem Header="Open Log File" x:Name="OpenLogMenuItem"/>
                             <MenuItem Header="Settings"
-                                      x:Name="SettingsMenuItem"
-                                      IsVisible="{Binding HasSettings}"/>
+                                      x:Name="SettingsMenuItem"/>
                             <MenuItem Header="Keyboard Shortcuts" x:Name="ShortcutsMenuItem"/>
                             <MenuItem Header="About" x:Name="AboutMenuItem"/>
                         </MenuFlyout>

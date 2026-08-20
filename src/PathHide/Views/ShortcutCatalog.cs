@@ -95,11 +95,8 @@ public static class ShortcutCatalog
     public static string CommandModifierLabel(TopLevel top) =>
         CommandModifier(top) == KeyModifiers.Meta ? "Cmd" : "Ctrl";
 
-    /// <summary>
-    /// Builds the ordered catalog. The Windows-only Settings row is omitted entirely when
-    /// <paramref name="hasSettings"/> is false, so macOS never advertises an unreachable shortcut.
-    /// </summary>
-    public static IReadOnlyList<ShortcutItem> Build(TopLevel top, bool hasSettings)
+    /// <summary>Builds the ordered catalog.</summary>
+    public static IReadOnlyList<ShortcutItem> Build(TopLevel top)
     {
         var cmd = CommandModifier(top);
         var cmdLabel = CommandModifierLabel(top);
@@ -112,8 +109,8 @@ public static class ShortcutCatalog
 
             // Navigation — owned by the action-button group and the grid, listed here for discoverability.
             // Buttons first, then the list, matching their top-to-bottom layout in the window.
-            Display(ShortcutGroup.Navigation, "Move focus between the action buttons", "Left / Right"),
-            Display(ShortcutGroup.Navigation, "Move the selection up or down the list", "Up / Down"),
+            Display(ShortcutGroup.Navigation, "Move focus between the action buttons", "Left/Right"),
+            Display(ShortcutGroup.Navigation, "Move the selection up or down the list", "Up/Down"),
 
             // Visibility — Shift on the letter keys avoids the macOS Cmd+H / Cmd+S system collisions.
             Command(ShortcutGroup.Visibility, "Hide the selected entries", cmd, cmdLabel, shift: true, Key.H, "H", ShortcutAction.HideSelected),
@@ -128,17 +125,12 @@ public static class ShortcutCatalog
                 new KeyGesture(Key.Escape), ShortcutAction.CancelScan),
             Display(ShortcutGroup.List, "Remove the selected entries", "Delete"),
 
-            // App
+            // App. Settings is cross-platform — it was Windows-only until the UI-font
+            // setting was added; HasWindowsHideMode is the platform-specific flag now,
+            // and it gates a section INSIDE the dialog rather than the dialog itself.
+            Command(ShortcutGroup.App, "Open Settings", cmd, cmdLabel, shift: false, Key.OemComma, "Comma", ShortcutAction.OpenSettings),
             Command(ShortcutGroup.App, "Show this shortcuts list", cmd, cmdLabel, shift: false, Key.OemQuestion, "Slash", ShortcutAction.ShowShortcuts),
         };
-
-        if (hasSettings)
-        {
-            // Settings is Windows-only; insert it before the always-present shortcuts row so the
-            // App section reads Settings, then Shortcuts.
-            items.Insert(items.Count - 1, Command(
-                ShortcutGroup.App, "Open Settings", cmd, cmdLabel, shift: false, Key.OemComma, "Comma", ShortcutAction.OpenSettings));
-        }
 
         return items;
     }
