@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
@@ -33,6 +34,60 @@ public sealed class ImeTextBoxTests
         };
         box.RaiseEvent(e);
         return Assert.IsAssignableFrom<TextInputMethodClient>(e.Client);
+    }
+
+    /// <summary>
+    /// Pins the upstream premise the macOS adapter exists to correct: Avalonia's stock TextBox
+    /// client reports the inner TextPresenter as its coordinate visual, while the cursor rectangle
+    /// it returns is measured from the TEXT BOX. Avalonia.Native takes the rectangle as relative to
+    /// the reported visual, so the presenter's own offset — border plus padding — is applied twice
+    /// when placing the IME candidate window, and the adapter's whole job is to report the text box
+    /// instead.
+    /// </summary>
+    /// <remarks>
+    /// <para>Deliberately built on a STOCK TextBox: the subject is Avalonia's contract, not
+    /// PathHide's control. If this test fails after an Avalonia upgrade, the mismatch was corrected
+    /// (or changed) upstream — at which point the adapter is no longer a correction but a second
+    /// displacement, and <see cref="MacOsTextInputMethodClient"/> must be re-audited by hand against
+    /// a real Japanese input method before it is kept.</para>
+    /// <para>Runs everywhere, because the premise is Avalonia's cross-platform TextBox client;
+    /// only the consumption of it is macOS-only.</para>
+    /// </remarks>
+    [AvaloniaFact]
+    public void Stock_text_box_measures_its_cursor_rectangle_from_the_box_not_the_presenter()
+    {
+        var box = Host(new TextBox
+        {
+            Text = "abc",
+            BorderThickness = new Thickness(2),
+            Padding = new Thickness(17, 11, 3, 3),
+        });
+        box.Focus();
+        box.CaretIndex = 0;
+        Dispatcher.UIThread.RunJobs();
+
+        var presenter = box.GetVisualDescendants().OfType<TextPresenter>().Single(p => p.Name == "PART_TextPresenter");
+        var presenterInBox = presenter.TranslatePoint(new Point(0, 0), box)!.Value;
+
+        // Without a real offset between the two visuals the coordinate spaces coincide and this
+        // test would pass whichever one the rectangle is measured from.
+        Assert.True(presenterInBox.X > 0 && presenterInBox.Y > 0,
+            $"the padding must actually offset the presenter; it sits at {presenterInBox}");
+
+        var e = new TextInputMethodClientRequestedEventArgs
+        {
+            RoutedEvent = InputElement.TextInputMethodClientRequestedEvent,
+        };
+        // Raised on the stock box, so no PathHide adapter is in the way.
+        box.RaiseEvent(e);
+        var client = Assert.IsAssignableFrom<TextInputMethodClient>(e.Client);
+
+        Assert.Same(presenter, client.TextViewVisual);
+
+        // The caret is at index 0: presenter-relative that is the origin, text-box-relative it is
+        // exactly where the presenter starts.
+        Assert.Equal(presenterInBox.X, client.CursorRectangle.X, 3);
+        Assert.Equal(presenterInBox.Y, client.CursorRectangle.Y, 3);
     }
 
     [AvaloniaFact]
