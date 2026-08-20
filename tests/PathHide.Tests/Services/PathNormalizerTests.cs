@@ -139,4 +139,45 @@ public class PathNormalizerTests
     {
         Assert.False(PathNormalizer.AreEqual("/foo", "foo"));
     }
+
+    // --- Normalizing never leaves a path that is not absolute ---
+
+    [Fact]
+    public void Normalizing_NeverEmptiesAPosixPath()
+    {
+        // "//" trimmed to "" and TryNormalize still said true, so an entry with
+        // an empty path was persisted and its row stuck at Error, clearable only
+        // by removing it.
+        Assert.True(PathNormalizer.TryNormalize("//", out var normalized, out var family));
+        Assert.Equal("/", normalized);
+        Assert.Equal(PathFamily.Posix, family);
+
+        Assert.True(PathNormalizer.TryNormalize("///", out normalized, out _));
+        Assert.Equal("/", normalized);
+    }
+
+    [Fact]
+    public void Normalizing_NeverLeavesABareWindowsDrive()
+    {
+        // "C:" is drive-RELATIVE: a later GetAttributes/SetAttributes resolves it
+        // against the process's current directory on that drive, so a Hide would
+        // touch something the user never selected.
+        Assert.True(PathNormalizer.TryNormalize("C://", out var normalized, out var family));
+        Assert.Equal(@"C:\", normalized);
+        Assert.Equal(PathFamily.Windows, family);
+
+        Assert.True(PathNormalizer.TryNormalize(@"C:\\", out normalized, out _));
+        Assert.Equal(@"C:\", normalized);
+    }
+
+    [Fact]
+    public void Normalizing_StillStripsTrailingSeparatorsFromRealPaths()
+    {
+        // The repair above must not swallow the ordinary case.
+        Assert.True(PathNormalizer.TryNormalize("/foo/bar///", out var normalized, out _));
+        Assert.Equal("/foo/bar", normalized);
+
+        Assert.True(PathNormalizer.TryNormalize(@"C:\foo\bar\", out normalized, out _));
+        Assert.Equal(@"C:\foo\bar", normalized);
+    }
 }

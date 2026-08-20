@@ -39,6 +39,19 @@ public sealed class SettingsDialog : DialogBase
         };
         fontHint[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("TextSecondaryBrush");
 
+        // The checkbox label only covers the setting's ON behaviour. Hiding with it OFF
+        // CLEARS the System attribute, and showing clears it unconditionally — so a path that
+        // carried System for its own reasons loses it, and PathHide keeps no record to put it
+        // back. Advertising the operation as reversible without saying this was the gap.
+        var hideModeHint = new TextBlock
+        {
+            Text = "PathHide clears the System attribute when showing, and when hiding with this "
+                 + "off. A file that already had it will not get it back.",
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        hideModeHint[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("TextSecondaryBrush");
+
         // UI font (cross-platform appearance) leads; the Windows-only hide mode follows and shows only
         // where it applies, so the dialog is never cluttered with a setting that does nothing here.
         var panel = new StackPanel
@@ -61,6 +74,7 @@ public sealed class SettingsDialog : DialogBase
                 FontSize = 14,
             });
             panel.Children.Add(_hiddenAndSystemCheckBox);
+            panel.Children.Add(hideModeHint);
         }
 
         SetContent(panel);

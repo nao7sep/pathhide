@@ -24,7 +24,7 @@ public static class PathNormalizer
             input[2] != '\\' && input[2] != '/')
         {
             family = PathFamily.Unc;
-            normalized = NormalizeUnc(input);
+            normalized = NormalizeBackslash(input);
             return true;
         }
 
@@ -35,7 +35,7 @@ public static class PathNormalizer
             (input[2] == '\\' || input[2] == '/'))
         {
             family = PathFamily.Windows;
-            normalized = NormalizeWindows(input);
+            normalized = NormalizeBackslash(input);
             return true;
         }
 
@@ -55,36 +55,18 @@ public static class PathNormalizer
         return StripTrailingSeparator(input, '/');
     }
 
-    private static string NormalizeWindows(string input)
-    {
-        var result = input.Replace('/', '\\');
-        return StripTrailingSeparator(result, '\\');
-    }
-
-    private static string NormalizeUnc(string input)
-    {
-        var result = input.Replace('/', '\\');
-        return StripTrailingSeparator(result, '\\');
-    }
+    /// <summary>Windows and UNC normalize identically: forward slashes to backslashes, then strip
+    /// trailing separators. They were two byte-identical methods, which let the two rules drift
+    /// apart when only one was edited.</summary>
+    private static string NormalizeBackslash(string input) =>
+        StripTrailingSeparator(input.Replace('/', '\\'), '\\');
 
     private static string StripTrailingSeparator(string path, char separator)
     {
         if (path.Length <= 1)
             return path;
 
-        // Don't strip if the path is a root:
-        //   POSIX: "/"
-        //   Windows: "C:\"
-        //   UNC: "\\server\share" — keep at least \\x\y
         if (path[^1] != separator)
-            return path;
-
-        // POSIX root
-        if (path.Length == 1)
-            return path;
-
-        // Windows root like "C:\"
-        if (path.Length == 3 && path[1] == ':')
             return path;
 
         // UNC root like "\\server\share\" — after the leading "\\", count separators.
@@ -98,7 +80,22 @@ public static class PathNormalizer
                 return path;
         }
 
-        return path.TrimEnd(separator);
+        var trimmed = path.TrimEnd(separator);
+
+        // Stripping must never leave something that is no longer an absolute path, which is what
+        // TryNormalize's [NotNullWhen(true)] contract promises its callers.
+        //
+        // "//" trimmed to "" was persisted as an entry with an empty path and a row stuck at
+        // Error that could only be cleared by removing it. "C://" trimmed to "C:" is worse on
+        // Windows: a bare drive is drive-RELATIVE, so a later GetAttributes/SetAttributes resolves
+        // it against the process's current directory on that drive — a Hide would set +h on
+        // something the user never selected.
+        if (trimmed.Length == 0)
+            return separator.ToString();
+        if (trimmed.Length == 2 && trimmed[1] == ':')
+            return trimmed + separator;
+
+        return trimmed;
     }
 
     public static bool AreEqual(string a, string b)
