@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace PathHide.Services;
@@ -23,6 +24,23 @@ public static class WindowsElevatedApplicator
 {
     private static readonly IReadOnlyDictionary<string, bool> EmptyResults =
         new Dictionary<string, bool>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// How long the elevated child may run before the parent stops waiting on it.
+    /// <para>
+    /// UAC refusal is handled below and is fast, but once the child STARTS it can stall
+    /// indefinitely: setting +h/+s on a path whose network share has stopped answering, or
+    /// on a removable volume being pulled, blocks inside the file-system call. The wait had
+    /// no bound and no cancellation, and every Hide / Show / Apply-All awaits it — so the
+    /// apply never finished, no row updated, no summary appeared, and the only way out was
+    /// to force-quit the app, which also stranded the temp results file.
+    /// </para>
+    /// <para>
+    /// Generous: this covers a whole batch of paths, each of which may touch slow storage.
+    /// It exists to end a wedge, not to police a large but healthy apply.
+    /// </para>
+    /// </summary>
+    private static readonly TimeSpan ChildTimeout = TimeSpan.FromMinutes(5);
 
     public static async Task<ElevatedApplyOutcome> ApplyAsync(
         IEnumerable<string> toHide,
@@ -76,7 +94,27 @@ public static class WindowsElevatedApplicator
                 return new ElevatedApplyOutcome(-1, EmptyResults);
             }
 
-            await process.WaitForExitAsync();
+            using var timeout = new CancellationTokenSource(ChildTimeout);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // The child is elevated, so this process cannot kill it — a higher-integrity
+                // token is not ours to signal. Stop waiting and report what it managed to
+                // write: partial results are still authoritative for the paths they name,
+                // and the caller already treats an unreported path as unknown.
+                var partial = ReadResults(resultsPath);
+                Log.Error("elevated apply: child did not exit within the timeout", new
+                {
+                    timeoutSeconds = (int)ChildTimeout.TotalSeconds,
+                    reported = partial.Count,
+                    totalPaths,
+                });
+                return new ElevatedApplyOutcome(-1, partial);
+            }
+
             var results = ReadResults(resultsPath);
             Log.Info("elevated apply: exited", new { exitCode = process.ExitCode, reported = results.Count });
             return new ElevatedApplyOutcome(process.ExitCode, results);
