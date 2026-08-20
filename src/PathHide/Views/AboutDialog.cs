@@ -86,17 +86,14 @@ public sealed class AboutDialog : DialogBase
     }
 
     /// <summary>
-    /// A button label with a trailing external-link mark drawn as a vector rather than
-    /// the ↗ glyph, whose weight and size vary by font. The mark binds to the button's
-    /// own foreground, so it follows theme and hover exactly as the text does.
+    /// A button label with a trailing external-link mark drawn as a vector rather than the
+    /// ↗ glyph, whose weight and size vary by font. The mark binds to the button's own
+    /// foreground, so it follows theme and hover exactly as the text does.
     ///
-    /// The mark rides INSIDE the text as an inline, not beside it in a StackPanel:
-    /// stacking centres it on the line box, which includes descender space, so it sits
-    /// visibly below the capitals. An inline is placed against the text baseline, which
-    /// is the only datum that holds whatever font the app is set to.
-    ///
-    /// Coordinates are written at the target pixel size rather than stretched, so the
-    /// stroke keeps one weight — the pattern the app's XAML hamburger already uses.
+    /// It rides INSIDE the text as an inline rather than beside it in a panel, so it is
+    /// positioned against the text baseline — the one datum that holds whatever font the
+    /// app is set to. Coordinates are written at the target pixel size rather than
+    /// stretched, so the stroke keeps one weight, matching the app's XAML icons.
     /// </summary>
     private static Control ExternalLinkLabel(string text)
     {
