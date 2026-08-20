@@ -211,6 +211,40 @@ public sealed class MacVisibilityServiceTests : IDisposable
         Assert.Equal(ActualState.Visible, _service.Inspect(target).ActualState);
     }
 
+    [Fact]
+    public void IsDotPrefixed_RecognizesNameHiddenItems()
+    {
+        // macOS hides an item if it is dot-prefixed OR carries UF_HIDDEN.
+        Assert.True(MacVisibilityService.IsDotPrefixed("/Users/x/.ssh"));
+        Assert.True(MacVisibilityService.IsDotPrefixed("/Users/x/.config/"));
+        Assert.True(MacVisibilityService.IsDotPrefixed("/Users/x/.gitignore"));
+
+        Assert.False(MacVisibilityService.IsDotPrefixed("/Users/x/Documents"));
+        // A dot elsewhere in the name hides nothing.
+        Assert.False(MacVisibilityService.IsDotPrefixed("/Users/x/notes.txt"));
+        // "." and ".." are the directory entries themselves, not hidden items.
+        Assert.False(MacVisibilityService.IsDotPrefixed("/Users/x/."));
+    }
+
+    [MacOnlyFact]
+    public void Inspect_DotPrefixedPath_ReportsHiddenEvenWithoutTheFlag()
+    {
+        // The app cannot rename a file, so it cannot un-hide this kind — but
+        // reporting it Visible told the user a path was showing while Finder
+        // and ls did not list it, and a Show on it was counted as applied.
+        var dotFile = Path.Combine(_dir, ".secret");
+        File.WriteAllText(dotFile, "x");
+
+        var inspection = _service.Inspect(dotFile);
+        Assert.Equal(ActualState.Hidden, inspection.ActualState);
+
+        // Showing it clears any flag but cannot change the name, so it stays
+        // hidden — and the inspection keeps saying so rather than claiming
+        // success.
+        _service.Show(dotFile);
+        Assert.Equal(ActualState.Hidden, _service.Inspect(dotFile).ActualState);
+    }
+
     [MacOnlyFact]
     public void Hide_SymlinkToDirectory_AffectsLinkNotTarget()
     {

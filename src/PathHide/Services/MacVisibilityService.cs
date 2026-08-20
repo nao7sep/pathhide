@@ -28,7 +28,7 @@ public sealed class MacVisibilityService : IVisibilityService
                 return new PathInspection(ActualState.Error, ItemKind.Unknown);
             }
 
-            var hidden = (flags & MacFs.UF_HIDDEN) != 0;
+            var hidden = (flags & MacFs.UF_HIDDEN) != 0 || IsDotPrefixed(path);
             var state = hidden ? ActualState.Hidden : ActualState.Visible;
             return new PathInspection(state, DetectKind(path));
         }
@@ -85,6 +85,23 @@ public sealed class MacVisibilityService : IVisibilityService
 
         if (MacFs.SetFlags(path, updated, followSymlinks: false) != 0)
             ThrowErrno($"lchflags({path})");
+    }
+
+    /// <summary>
+    /// Whether macOS hides this item because of its NAME rather than its flags.
+    /// </summary>
+    /// <remarks>
+    /// macOS hides an item if it is dot-prefixed OR carries <c>UF_HIDDEN</c>.
+    /// Reading only the flag made <c>~/.ssh</c> and friends — exactly the
+    /// clutter this app is pointed at — report Visible for something Finder and
+    /// <c>ls</c> do not show, and a Show on one then found nothing to change,
+    /// re-inspected as Visible, and was counted as applied. The app cannot
+    /// rename a file, so it cannot un-hide this kind; it can and must say so.
+    /// </remarks>
+    internal static bool IsDotPrefixed(string path)
+    {
+        var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar));
+        return name.Length > 1 && name[0] == '.';
     }
 
     private static void ThrowErrno(string operation)

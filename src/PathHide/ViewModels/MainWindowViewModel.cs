@@ -686,6 +686,7 @@ public partial class MainWindowViewModel : ViewModelBase
         Log.Info("apply: start", new { count = targets.Count });
 
         var applied = 0;
+        var unchanged = 0;
         var missing = 0;
         var errors = 0;
         var retryBucket = new List<PathRowViewModel>();
@@ -735,7 +736,31 @@ public partial class MainWindowViewModel : ViewModelBase
 
                 var updated = await Task.Run(() => _visibilityService.Inspect(row.Path));
                 row.ApplyScanResult(updated, row.PathFamily);
-                applied++;
+
+                // Count what actually moved, not what was attempted. A write can
+                // run without changing the state the user asked for — on macOS a
+                // dot-prefixed path stays hidden by its name whatever the flags
+                // say, and this app cannot rename files. Reporting it as applied
+                // told the user a path had been revealed while it was still
+                // invisible in Finder. The row already shows the mismatch; this
+                // keeps the summary honest about it.
+                var desiredState = row.Entry.DesiredVisibility == DesiredVisibility.Hidden
+                    ? ActualState.Hidden
+                    : ActualState.Visible;
+                if (updated.ActualState == desiredState)
+                {
+                    applied++;
+                }
+                else
+                {
+                    unchanged++;
+                    Log.Info("apply: state unchanged", new
+                    {
+                        path = row.Path,
+                        desired = desiredState,
+                        actual = updated.ActualState,
+                    });
+                }
             }
             catch (UnauthorizedAccessException) when (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
@@ -798,10 +823,11 @@ public partial class MainWindowViewModel : ViewModelBase
 
         // elevationExitCode is a coarse diagnostic kept in the structured log; the user-facing
         // tally below is built per-path, so the raw child exit code is not surfaced to the UI.
-        Log.Info("apply: done", new { applied, missing, errors, elevationExitCode });
+        Log.Info("apply: done", new { applied, unchanged, missing, errors, elevationExitCode });
 
         var parts = new List<string>();
         if (applied > 0) parts.Add($"{applied} applied");
+        if (unchanged > 0) parts.Add($"{unchanged} unchanged");
         if (missing > 0) parts.Add($"{missing} missing");
         if (errors > 0) parts.Add($"{errors} errors");
 
