@@ -258,8 +258,14 @@ public partial class MainWindow : Window
     // row) and return focus to the grid so the keyboard stays live.
     private async Task RemoveSelectedWithRecoveryAsync()
     {
+        // In the grid's VISIBLE order — the recovered index is applied as a grid
+        // index, and the grid is sorted from startup and re-sortable on five
+        // columns, so the model's insertion order names different rows.
+        var viewOrder = PathGrid.CollectionView?.OfType<PathRowViewModel>().ToList()
+            ?? ViewModel.Rows.ToList();
         var anchor = SelectionRecovery.Anchor(
-            PathGrid.SelectedItems.OfType<PathRowViewModel>().Select(row => ViewModel.Rows.IndexOf(row)));
+            viewOrder,
+            PathGrid.SelectedItems.OfType<PathRowViewModel>());
         await ViewModel.RemoveSelectedCommand.ExecuteAsync(null);
 
         // Nothing removed (e.g. the confirm was cancelled, or a selection still stands), or
