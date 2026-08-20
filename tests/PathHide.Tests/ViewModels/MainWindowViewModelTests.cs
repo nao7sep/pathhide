@@ -18,7 +18,7 @@ namespace PathHide.Tests.ViewModels;
 /// <summary>
 /// Orchestration tests for <see cref="MainWindowViewModel"/> through its public
 /// constructor, with in-memory fakes for the visibility service and both stores.
-/// Covers add/dedup, save-failure rollback, apply summary strings, the status-bar
+/// Covers add/dedup, the commit-after-save contract, apply summary strings, the status-bar
 /// summary, the settings (Windows hide mode) flow, and the construct/initialize split.
 /// </summary>
 public class MainWindowViewModelTests
@@ -59,7 +59,7 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public async Task AddPaths_WhenSaveFails_RollsBackEntriesAndRows()
+    public async Task AddPaths_WhenSaveFails_LeavesTheListExactlyAsItWas()
     {
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>();
@@ -71,9 +71,33 @@ public class MainWindowViewModelTests
         paths.ThrowOnSave = true;
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/new" });
 
-        // The failed add is fully rolled back: the list is unchanged and the failure surfaced.
+        // Nothing is committed until the save lands, so the failed add leaves no trace:
+        // the list is what it was and the failure is surfaced.
         var row = Assert.Single(vm.Rows);
         Assert.Equal("/existing", row.Path);
+        Assert.Contains("Failed to save", vm.Notification);
+    }
+
+    [Fact]
+    public async Task ShowSelected_WhenSaveFails_LeavesTheRowAloneAndTouchesNoFile()
+    {
+        // The visibility commands used to stamp the new value onto the live entry and the row
+        // first and undo it in the catch. They now build the new list as a value, so a failed
+        // save cannot leave the row showing a desired state that is not on disk - and, since
+        // the apply runs only after the commit, cannot change a file either.
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
+
+        var row = Assert.Single(vm.Rows);
+        row.IsSelected = true;
+        paths.ThrowOnSave = true;
+        await ((IAsyncRelayCommand)vm.ShowSelectedCommand).ExecuteAsync(null);
+
+        Assert.Equal(DesiredVisibility.Hidden, row.DesiredVisibility);
+        Assert.Equal(DesiredVisibility.Hidden, row.Entry.DesiredVisibility);
+        Assert.DoesNotContain("/x", visibility.Shown);
         Assert.Contains("Failed to save", vm.Notification);
     }
 

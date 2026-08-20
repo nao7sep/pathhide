@@ -188,7 +188,7 @@ public partial class MainWindowViewModel : ObservableObject
         var added = 0;
         var skipped = 0;
         var addedPaths = new List<string>();
-        var previousEntries = CloneEntries(_entries);
+        var updated = new List<PathEntry>(_entries);
 
         try
         {
@@ -201,13 +201,13 @@ public partial class MainWindowViewModel : ObservableObject
                     continue;
                 }
 
-                if (_entries.Any(e => PathNormalizer.AreEqual(e.Path, normalized)))
+                if (updated.Any(e => PathNormalizer.AreEqual(e.Path, normalized)))
                 {
                     skipped++;
                     continue;
                 }
 
-                _entries.Add(new PathEntry
+                updated.Add(new PathEntry
                 {
                     Path = normalized,
                     DesiredVisibility = DesiredVisibility.Hidden,
@@ -224,10 +224,10 @@ public partial class MainWindowViewModel : ObservableObject
                 return;
             }
 
-            if (!TryCommitPathChanges(previousEntries))
+            if (!TrySaveEntries(updated))
                 return;
 
-            var newRows = SyncRowsWithEntries()
+            var newRows = Rows
                 .Where(r => addedPaths.Any(path => PathNormalizer.AreEqual(path, r.Path)))
                 .ToList();
             var summary = await ApplyDesiredStateAsync(newRows);
@@ -244,7 +244,6 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var scanWasActive = await PauseScanningAsync();
         var selected = Rows.Where(r => r.IsSelected).ToList();
-        var previousEntries = CloneEntries(_entries);
 
         try
         {
@@ -262,15 +261,14 @@ public partial class MainWindowViewModel : ObservableObject
                     return;
             }
 
-            foreach (var row in selected)
-                _entries.Remove(row.Entry);
+            var removing = new HashSet<PathEntry>(selected.Select(row => row.Entry));
+            var updated = _entries.Where(entry => !removing.Contains(entry)).ToList();
 
             Log.Info("remove paths", new { removed = selected.Count });
 
-            if (!TryCommitPathChanges(previousEntries))
+            if (!TrySaveEntries(updated))
                 return;
 
-            SyncRowsWithEntries();
             ShowNotification($"{selected.Count} removed");
         }
         finally
@@ -282,8 +280,8 @@ public partial class MainWindowViewModel : ObservableObject
     // --- Hide / Show ---
 
     /// <summary>
-    /// The one shape every visibility command has: pause the scan, stamp the
-    /// desired value on the targets, persist, apply, report, resume.
+    /// The one shape every visibility command has: pause the scan, build the
+    /// targets' new desired value, persist, apply, report, resume.
     /// </summary>
     /// <remarks>
     /// The four commands were four copies of this body differing only in which
@@ -299,21 +297,26 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var scanWasActive = await PauseScanningAsync();
         var targets = selectTargets();
-        var previousEntries = CloneEntries(_entries);
 
         try
         {
-            foreach (var row in targets)
-            {
-                row.Entry.DesiredVisibility = desired;
-                row.DesiredVisibility = desired;
-            }
-
             // An empty target set has nothing to persist, but the click still
             // gets an answer: the apply below reports "nothing to do" rather
             // than leaving the user wondering whether the button worked.
-            if (targets.Count > 0 && !TryCommitPathChanges(previousEntries))
-                return;
+            if (targets.Count > 0)
+            {
+                var flipping = new HashSet<PathEntry>(targets.Select(row => row.Entry));
+                var updated = _entries
+                    .Select(entry => flipping.Contains(entry)
+                        ? new PathEntry { Path = entry.Path, DesiredVisibility = desired }
+                        : entry)
+                    .ToList();
+
+                // The rows take the new value from the save, not before it: TrySaveEntries
+                // re-syncs them, so ApplyDesiredStateAsync below reads the committed state.
+                if (!TrySaveEntries(updated))
+                    return;
+            }
 
             ShowNotification(await ApplyDesiredStateAsync(targets));
         }
@@ -487,18 +490,24 @@ public partial class MainWindowViewModel : ObservableObject
 
     // --- Internals ---
 
-    private bool TrySavePaths()
+    /// <summary>
+    /// Persists <paramref name="updated"/> and, only if the save lands, makes it the live entry
+    /// list and re-syncs the rows. Returns false when the save failed, having changed nothing.
+    /// </summary>
+    /// <remarks>
+    /// Commit after save, never mutate-then-roll-back. The previous shape deep-cloned the list,
+    /// applied the change to live state, and restored the clone when the save threw — so the
+    /// correctness of every mutating command rested on each one remembering to snapshot at the
+    /// right moment. Building the new list as a value makes a failed save a no-op by
+    /// construction: nothing in memory moves until disk agrees.
+    /// </remarks>
+    private bool TrySaveEntries(List<PathEntry> updated)
     {
         try
         {
-            // Sort a snapshot so paths.json is diff-stable without mutating the
-            // live in-memory list. UI ordering is a separate concern handled by
-            // the DataGrid's own sort.
-            var snapshot = _entries
-                .OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            _pathListStore.Save(snapshot);
-            return true;
+            // Sort a snapshot so paths.json is diff-stable without imposing that order on the
+            // live list. UI ordering is a separate concern handled by the DataGrid's own sort.
+            _pathListStore.Save(updated.OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase).ToList());
         }
         catch (Exception ex)
         {
@@ -506,27 +515,10 @@ public partial class MainWindowViewModel : ObservableObject
             ShowNotification($"Failed to save: {ex.Message}");
             return false;
         }
-    }
 
-    private bool TryCommitPathChanges(List<PathEntry> previousEntries)
-    {
-        if (TrySavePaths())
-            return true;
-
-        _entries = previousEntries;
+        _entries = updated;
         SyncRowsWithEntries();
-        return false;
-    }
-
-    private static List<PathEntry> CloneEntries(IEnumerable<PathEntry> entries)
-    {
-        return entries
-            .Select(entry => new PathEntry
-            {
-                Path = entry.Path,
-                DesiredVisibility = entry.DesiredVisibility,
-            })
-            .ToList();
+        return true;
     }
 
     private void StartBackgroundScan()
@@ -566,12 +558,16 @@ public partial class MainWindowViewModel : ObservableObject
         StartBackgroundScan();
     }
 
-    private List<PathRowViewModel> SyncRowsWithEntries()
+    /// <summary>
+    /// Brings <see cref="Rows"/> into agreement with <c>_entries</c>: existing rows are rebound to
+    /// their entry (keeping the scanned state and the selection they carry), rows whose entry is
+    /// gone are dropped, and new entries get a new row — all in the entries' own order.
+    /// </summary>
+    private void SyncRowsWithEntries()
     {
         var remainingRows = Rows.ToList();
 
         var desiredRows = new List<PathRowViewModel>(_entries.Count);
-        var addedRows = new List<PathRowViewModel>();
 
         foreach (var entry in _entries)
         {
@@ -580,7 +576,6 @@ public partial class MainWindowViewModel : ObservableObject
             if (existingIndex < 0)
             {
                 row = new PathRowViewModel(entry);
-                addedRows.Add(row);
             }
             else
             {
@@ -618,7 +613,6 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(StatusBarText));
-        return addedRows;
     }
 
     private async Task RunScanAsync()
