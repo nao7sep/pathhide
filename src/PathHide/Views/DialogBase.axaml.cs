@@ -120,11 +120,37 @@ public partial class DialogBase : Window
 
     private void OnOpened(object? sender, EventArgs e)
     {
+        ClampHeightToScreen();
+
         var target = _initialFocusControl;
         if (target is null)
             return;
 
         Dispatcher.UIThread.Post(() => target.Focus());
+    }
+
+    /// <summary>
+    /// Bounds the dialog to the working area of the screen it opened on, so
+    /// SizeToContent can never grow it past what fits.
+    /// </summary>
+    /// <remarks>
+    /// Derived rather than a fixed number: what fits depends on the display,
+    /// and the body's height depends on the user's UI font. Without this the
+    /// docked footer — every dismiss path this shell offers — is pushed off the
+    /// bottom of a small laptop screen, on a window that cannot be resized.
+    /// </remarks>
+    private void ClampHeightToScreen()
+    {
+        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        if (screen is null)
+            return;
+
+        // WorkingArea is in physical pixels; MaxHeight is in logical ones.
+        var available = screen.WorkingArea.Height / screen.Scaling;
+
+        // Leave a margin so the dialog reads as a window on the desktop rather
+        // than something wedged against both edges.
+        MaxHeight = available * 0.9;
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)

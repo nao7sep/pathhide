@@ -16,8 +16,18 @@
                     HorizontalAlignment="Right"
                     Margin="0,20,0,0"/>
 
-        <!-- Content area -->
-        <ContentPresenter x:Name="DialogContent"/>
+        <!-- Content area. The body is the sole scroll region, under a height
+             bounded to the screen (see OnOpened): the footer is docked, so an
+             unbounded body pushes it off-screen instead of scrolling, and this
+             shell is CanResize="False" — there would be no way to get it back.
+             The shortcuts dialog already measures close to a small laptop's
+             working height, and the startup-failure notice embeds an
+             arbitrary-length exception message. -->
+        <ScrollViewer x:Name="DialogScroll"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <ContentPresenter x:Name="DialogContent"/>
+        </ScrollViewer>
     </DockPanel>
 
 </Window>
