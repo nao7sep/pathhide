@@ -17,11 +17,10 @@ public class PathScannerTests
     private static async Task<List<ScanResult>> CollectAsync(
         PathScanner scanner,
         IReadOnlyList<PathEntry> entries,
-        System.IProgress<int>? progress = null,
         CancellationToken token = default)
     {
         var results = new List<ScanResult>();
-        await foreach (var r in scanner.ScanAsync(entries, progress, token))
+        await foreach (var r in scanner.ScanAsync(entries, token))
             results.Add(r);
         return results;
     }
@@ -73,20 +72,6 @@ public class PathScannerTests
     }
 
     [Fact]
-    public async Task ScanAsync_ReportsProgressIncrementally()
-    {
-        var fake = new FakeVisibilityService();
-        var scanner = new PathScanner(fake);
-        var reported = new List<int>();
-        // Synchronous IProgress avoids the SynchronizationContext post used by Progress<T>.
-        var progress = new SynchronousProgress<int>(reported.Add);
-
-        await CollectAsync(scanner, new[] { Entry("/a"), Entry("/b"), Entry("/c") }, progress, TestContext.Current.CancellationToken);
-
-        Assert.Equal(new[] { 1, 2, 3 }, reported);
-    }
-
-    [Fact]
     public async Task ScanAsync_CancelledToken_ThrowsOperationCanceled()
     {
         var fake = new FakeVisibilityService();
@@ -96,13 +81,6 @@ public class PathScannerTests
 
         await Assert.ThrowsAnyAsync<System.OperationCanceledException>(
             () => CollectAsync(scanner, new[] { Entry("/a") }, token: cts.Token));
-    }
-
-    private sealed class SynchronousProgress<T> : System.IProgress<T>
-    {
-        private readonly System.Action<T> _handler;
-        public SynchronousProgress(System.Action<T> handler) => _handler = handler;
-        public void Report(T value) => _handler(value);
     }
 
     // Timed, because the failure mode is a HANG: without the fix the scan waits on the blocked

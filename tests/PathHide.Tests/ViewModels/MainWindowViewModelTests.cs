@@ -160,6 +160,14 @@ public class MainWindowViewModelTests
         // Cancellation took effect before the second entry: /a was inspected, /b never was.
         Assert.Contains("/a", visibility.Inspected);
         Assert.DoesNotContain("/b", visibility.Inspected);
+        // Progress is counted from the results as they arrive, so the number the status bar
+        // shows and the rows it describes can never disagree: /a's inspection was entered but
+        // abandoned when the cancel landed, so it yielded no result, moved no row, and counts
+        // for nothing. Deterministic here only because the count is now made in the consuming
+        // loop rather than posted to the dispatcher from a separate progress channel.
+        Assert.Equal(0, vm.ScanProgress);
+        Assert.Equal(2, vm.ScanTotal);
+        Assert.All(vm.Rows, r => Assert.Equal(ActualState.Unknown, r.ActualState));
     }
 
     [Fact]

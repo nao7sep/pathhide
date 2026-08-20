@@ -62,16 +62,22 @@ public sealed class PathScanner
             TaskContinuationOptions.OnlyOnFaulted,
             TaskScheduler.Default);
 
+    /// <summary>
+    /// Inspects each entry in order, yielding one result per entry.
+    /// </summary>
+    /// <remarks>
+    /// There is no progress callback: the results ARE the progress. A separate
+    /// <c>IProgress&lt;int&gt;</c> reported the same count through a second, asynchronous channel,
+    /// so a report could land after the consumer had already finished with the scan — which is
+    /// what forced the consumer to check whether each report was still current.
+    /// </remarks>
     public async IAsyncEnumerable<ScanResult> ScanAsync(
         IReadOnlyList<PathEntry> entries,
-        IProgress<int>? progress = null,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        for (var i = 0; i < entries.Count; i++)
+        foreach (var entry in entries)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            var entry = entries[i];
 
             PathInspection inspection;
             PathFamily family;
@@ -96,7 +102,6 @@ public sealed class PathScanner
                 family,
             });
 
-            progress?.Report(i + 1);
             yield return new ScanResult(entry, inspection, family);
         }
     }

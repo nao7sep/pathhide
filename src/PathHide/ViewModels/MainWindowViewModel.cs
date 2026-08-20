@@ -638,21 +638,18 @@ public partial class MainWindowViewModel : ObservableObject
         ScanTotal = entries.Count;
         ScanProgress = 0;
 
-        var progress = new Progress<int>(p =>
-        {
-            if (ReferenceEquals(_scanCts, scanCts))
-                ScanProgress = p;
-        });
-
         try
         {
-            await foreach (var result in _scanner.ScanAsync(entries, progress, token))
+            await foreach (var result in _scanner.ScanAsync(entries, token))
             {
                 if (!ReferenceEquals(_scanCts, scanCts))
                     return;
 
                 var row = Rows.FirstOrDefault(r => r.Entry == result.Entry);
                 row?.ApplyScanResult(result.Inspection, result.Family);
+                // The results ARE the progress: counting them here keeps the number the status
+                // bar shows in lockstep with the rows, instead of arriving on its own channel.
+                ScanProgress++;
             }
         }
         catch (OperationCanceledException)
