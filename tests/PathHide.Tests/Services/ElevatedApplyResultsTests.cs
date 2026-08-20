@@ -84,4 +84,40 @@ public sealed class ElevatedApplyResultsTests
     {
         Assert.Empty(ElevatedApplyResults.Parse(string.Empty));
     }
+
+    [Fact]
+    public void SerializeLine_ProducesOneAppendableJsonlRecord()
+    {
+        // The child appends one of these per path, so a run that stalls or is
+        // killed still accounts for what it did. Writing once at the end meant
+        // that in the exact scenario the parent's timeout exists for, the file
+        // did not exist yet and every path the child HAD changed was reported
+        // to the user as an error.
+        var line = ElevatedApplyResults.SerializeLine(new PathApplyResult(@"C:\a b\x.txt", Ok: true));
+
+        Assert.EndsWith("\n", line);
+        Assert.Single(line.TrimEnd('\n').Split('\n'));
+
+        var parsed = Assert.Single(ElevatedApplyResults.Parse(line));
+        Assert.Equal(@"C:\a b\x.txt", parsed.Path);
+        Assert.True(parsed.Ok);
+    }
+
+    [Fact]
+    public void Parse_ReadsAPartialFileAndToleratesATruncatedFinalLine()
+    {
+        // What a killed or still-running child leaves behind: whole records,
+        // then possibly half of one.
+        var whole = ElevatedApplyResults.SerializeLine(new PathApplyResult("/a", Ok: true))
+                  + ElevatedApplyResults.SerializeLine(new PathApplyResult("/b", Ok: false));
+        var truncated = whole + "{\"path\":\"/c\",\"ok\":tr";
+
+        var parsed = ElevatedApplyResults.Parse(truncated);
+
+        Assert.Equal(2, parsed.Count);
+        Assert.Equal("/a", parsed[0].Path);
+        Assert.True(parsed[0].Ok);
+        Assert.Equal("/b", parsed[1].Path);
+        Assert.False(parsed[1].Ok);
+    }
 }

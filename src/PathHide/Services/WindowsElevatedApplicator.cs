@@ -78,6 +78,12 @@ public static class WindowsElevatedApplicator
 
         var totalPaths = hideList.Count + systemList.Count + showList.Count;
 
+        // Declared out here so the finally owns the cleanup for every path through the try,
+        // except the timeout — where ownership passes to DeleteAfterChildExits, which needs the
+        // handle alive to wait on and the file kept until the child stops appending to it.
+        Process? process = null;
+        var ownershipTransferred = false;
+
         try
         {
             Log.Info("elevated apply: launching", new
@@ -87,7 +93,7 @@ public static class WindowsElevatedApplicator
                 system = systemList.Count,
                 show = showList.Count,
             });
-            using var process = Process.Start(psi);
+            process = Process.Start(psi);
             if (process is null)
             {
                 Log.Error("elevated apply: process did not start");
@@ -103,8 +109,9 @@ public static class WindowsElevatedApplicator
             {
                 // The child is elevated, so this process cannot kill it — a higher-integrity
                 // token is not ours to signal. Stop waiting and report what it managed to
-                // write: partial results are still authoritative for the paths they name,
-                // and the caller already treats an unreported path as unknown.
+                // write: the child appends each result as its path completes, so a partial file
+                // is authoritative for the paths it names, and the caller treats an unreported
+                // path as unknown.
                 var partial = ReadResults(resultsPath);
                 Log.Error("elevated apply: child did not exit within the timeout", new
                 {
@@ -112,6 +119,13 @@ public static class WindowsElevatedApplicator
                     reported = partial.Count,
                     totalPaths,
                 });
+
+                // The finally below deletes the file, but the child is still running and will
+                // keep appending to it — and for an app whose purpose is concealing these paths,
+                // a cleartext inventory of them left in %TEMP% is the wrong residue. Outlive the
+                // UI: wait for the child in the background, then delete what it finished writing.
+                DeleteAfterChildExits(process, resultsPath);
+                ownershipTransferred = true;
                 return new ElevatedApplyOutcome(-1, partial);
             }
 
@@ -131,8 +145,42 @@ public static class WindowsElevatedApplicator
         }
         finally
         {
-            TryDeleteResults(resultsPath);
+            if (!ownershipTransferred)
+            {
+                process?.Dispose();
+                TryDeleteResults(resultsPath);
+            }
         }
+    }
+
+    /// <summary>
+    /// Waits for a child we stopped waiting on, then removes its results file.
+    /// </summary>
+    /// <remarks>
+    /// Fire-and-forget on purpose: the UI has already moved on with the partial results, and
+    /// nothing about the outcome depends on this. It exists so a stalled child that later
+    /// recovers — the hung share answers, the volume comes back — does not leave a plaintext
+    /// list of the user's hidden paths sitting in the temp directory until the OS cleans it.
+    /// </remarks>
+    private static void DeleteAfterChildExits(Process process, string resultsPath)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await process.WaitForExitAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("elevated apply: could not wait out the timed-out child", ex);
+            }
+            finally
+            {
+                process.Dispose();
+            }
+
+            TryDeleteResults(resultsPath);
+        });
     }
 
     private static IReadOnlyDictionary<string, bool> ReadResults(string path)

@@ -34,11 +34,16 @@ public static class ElevatedApplyResults
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
+    /// <summary>One JSONL record, newline-terminated. Appending these one at a time is what
+    /// makes a partial file meaningful when the child is killed or stalls mid-run.</summary>
+    public static string SerializeLine(PathApplyResult result) =>
+        JsonSerializer.Serialize(result, Options) + "\n";
+
     public static string Serialize(IEnumerable<PathApplyResult> results)
     {
         var builder = new StringBuilder();
         foreach (var result in results)
-            builder.Append(JsonSerializer.Serialize(result, Options)).Append('\n');
+            builder.Append(SerializeLine(result));
         return builder.ToString();
     }
 

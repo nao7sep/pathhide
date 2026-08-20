@@ -121,12 +121,18 @@ sealed class Program
                 var toSystem = result.GetValue(systemOpt) ?? [];
                 var toShow   = result.GetValue(showOpt)   ?? [];
 
+                // Each result is appended the moment its path is done, so the file is a true
+                // running record. Accumulating in memory and writing once at the end meant that
+                // in the exact scenario the parent's timeout exists for — a stall inside
+                // SetAttributes on a share that stopped answering — the file did not exist yet,
+                // so every path the child HAD already changed was reported to the user as an
+                // error. The parent's reader tolerates a truncated final line, which is what a
+                // killed child leaves behind.
+                var resultsPath = result.GetValue(resultsOpt);
                 var results = new List<PathApplyResult>(toHide.Length + toSystem.Length + toShow.Length);
-                results.AddRange(ApplyFileAttributes(toHide,   hide: true,  system: false));
-                results.AddRange(ApplyFileAttributes(toSystem, hide: true,  system: true));
-                results.AddRange(ApplyFileAttributes(toShow,   hide: false, system: false));
-
-                WriteResults(result.GetValue(resultsOpt), results);
+                results.AddRange(ApplyFileAttributes(toHide,   hide: true,  system: false, resultsPath));
+                results.AddRange(ApplyFileAttributes(toSystem, hide: true,  system: true,  resultsPath));
+                results.AddRange(ApplyFileAttributes(toShow,   hide: false, system: false, resultsPath));
 
                 // The per-path file is the authoritative channel; the exit code stays a coarse
                 // 0 = all ok / 1 = some failed signal for callers and logs.
@@ -161,7 +167,8 @@ sealed class Program
     /// onto the link's target. Keep both calls path-based for that reason; do not switch to a
     /// follow-based API or add reparse-handle machinery to "harden" a hazard that cannot occur.
     /// </remarks>
-    private static List<PathApplyResult> ApplyFileAttributes(string[] paths, bool hide, bool system)
+    private static List<PathApplyResult> ApplyFileAttributes(
+        string[] paths, bool hide, bool system, string? resultsPath)
     {
         var results = new List<PathApplyResult>(paths.Length);
         if (paths.Length == 0)
@@ -179,7 +186,9 @@ sealed class Program
                 var attrs = WindowsFileVisibility.ApplyVisibility(
                     File.GetAttributes(path), hide, system);
                 File.SetAttributes(path, attrs);
-                results.Add(new PathApplyResult(path, Ok: true));
+                var ok = new PathApplyResult(path, Ok: true);
+                results.Add(ok);
+                AppendResult(resultsPath, ok);
             }
             catch (Exception ex)
             {
@@ -187,7 +196,9 @@ sealed class Program
                 // unelevated attempt hit access-denied, so a failure here is
                 // unexpected and gets a full error — not a silent swallow.
                 Log.Error("apply: failed to set attributes", ex, new { path, hide, system });
-                results.Add(new PathApplyResult(path, Ok: false));
+                var bad = new PathApplyResult(path, Ok: false);
+                results.Add(bad);
+                AppendResult(resultsPath, bad);
                 failed++;
             }
         }
@@ -196,24 +207,32 @@ sealed class Program
         return results;
     }
 
-    private static void WriteResults(string? resultsPath, List<PathApplyResult> results)
+    /// <summary>
+    /// Appends one result to the parent's results file, if it asked for one.
+    /// </summary>
+    /// <remarks>
+    /// Per path rather than per run: the file is the only channel back across the runas
+    /// boundary (stdout cannot be redirected through the shell verb), and a run that is killed
+    /// or stalls partway must still account for what it did. A failed append degrades the
+    /// verdict rather than breaking the run — the parent falls back to re-inspecting any path
+    /// it gets no result for.
+    ///
+    /// not recorded: a transient elevated-IPC file in the OS temp directory, not under
+    /// ~/.pathhide/, and never reloaded as state — neither managed data nor written through the
+    /// atomic-write choke point (data-backup conventions).
+    /// </remarks>
+    private static void AppendResult(string? resultsPath, PathApplyResult result)
     {
         if (string.IsNullOrEmpty(resultsPath))
             return;
 
         try
         {
-            // not recorded: a transient elevated-IPC results file in the OS temp directory
-            // (%TEMP%/pathhide-apply-<nanoid>.jsonl), not under ~/.pathhide/ and deleted right after the
-            // parent reads it back. It is ephemeral output the app never reloads as state, so it is neither
-            // managed data nor written through the atomic-write choke point (data-backup conventions).
-            File.WriteAllText(resultsPath, ElevatedApplyResults.Serialize(results));
+            File.AppendAllText(resultsPath, ElevatedApplyResults.SerializeLine(result));
         }
         catch (Exception ex)
         {
-            // The launcher falls back to re-inspection for any path it gets no result for,
-            // so a failed write degrades the verdict rather than breaking it.
-            Log.Error("apply: failed to write results file", ex, new { resultsPath });
+            Log.Error("apply: failed to append to the results file", ex, new { resultsPath });
         }
     }
 }
