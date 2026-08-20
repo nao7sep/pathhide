@@ -6,9 +6,22 @@ namespace PathHide.Storage;
 /// persistence behaviour without binding to <see cref="JsonStore{T}"/>'s file
 /// I/O, which keeps that orchestration unit-testable with in-memory fakes.
 /// </summary>
+/// <summary>
+/// The outcome of a load: the value, and whether the live file was present but
+/// unreadable (and so has been set aside).
+/// </summary>
+/// <remarks>
+/// An absent file and an unreadable one both yield defaults, but they mean
+/// opposite things. Absent is first run. Unreadable means the user HAD content
+/// and it could not be read — and for a store holding work the user built and
+/// cannot re-derive, silently continuing with an empty value is the failure the
+/// storage-path conventions require a halt for.
+/// </remarks>
+public readonly record struct LoadedStore<T>(T Value, bool WasUnreadable);
+
 public interface IJsonStore<T> where T : class, new()
 {
-    T Load();
+    LoadedStore<T> Load();
     void Save(T value);
 
     /// <summary>

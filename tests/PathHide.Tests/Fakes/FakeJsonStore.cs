@@ -12,6 +12,10 @@ public sealed class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
 {
     public T Value { get; set; } = new();
     public bool ThrowOnSave { get; set; }
+
+    /// <summary>Models a live file that was present but could not be read (and
+    /// so has been set aside), as distinct from one that was simply absent.</summary>
+    public bool LoadIsUnreadable { get; set; }
     public int SaveCount { get; private set; }
     public int LoadCount { get; private set; }
     public T? LastSaved { get; private set; }
@@ -20,10 +24,12 @@ public sealed class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
     /// <see cref="CreateIfMissing"/> models the real store's absence-only trigger.</summary>
     public bool FileExists { get; set; }
 
-    public T Load()
+    public LoadedStore<T> Load()
     {
         LoadCount++;
-        return Value;
+        return LoadIsUnreadable
+            ? new LoadedStore<T>(new T(), WasUnreadable: true)
+            : new LoadedStore<T>(Value, WasUnreadable: false);
     }
 
     public void Save(T value)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -36,6 +37,27 @@ public partial class App : Application
                 // the read now so its recovery and any failed quarantine share
                 // the same startup report/catch as config.json.
                 viewModel.LoadPersistedState();
+            }
+            catch (Storage.PathListUnreadableException)
+            {
+                // The list WAS set aside successfully — its bytes are safe. The
+                // halt is not about the move failing; it is that opening with an
+                // empty list would look exactly like losing it, and the first add
+                // would then write a fresh file containing only that entry.
+                var quarantined = Storage.QuarantineJournal.Drain();
+                Log.Warn("startup: the path list could not be read; halting rather than starting empty",
+                    new { quarantined = string.Join(", ", quarantined.Select(q => q.Path)) });
+                desktop.MainWindow = NoticeDialog.CreateStartupFailure(
+                    "PathHide could not read your path list",
+                    "Your list of tracked paths could not be read, so it has been set aside with its "
+                    + "contents intact rather than replaced:\n\n"
+                    + string.Join("\n", quarantined.Select(q => q.Path))
+                    + "\n\nPathHide has not started with an empty list, because that would look like "
+                    + "your entries were lost. Your files are not affected: nothing was hidden or "
+                    + "unhidden by this.\n\nRepair the file and rename it back, or move it out of the "
+                    + "way to start fresh, then start PathHide again.");
+                base.OnFrameworkInitializationCompleted();
+                return;
             }
             catch (Exception ex)
             {
@@ -82,7 +104,10 @@ public partial class App : Application
     {
         var pathListStore = new JsonStore<List<PathEntry>>("paths.json", "paths");
         var settingsStore = new JsonStore<AppSettings>("config.json", "settings");
-        var settings = settingsStore.Load();
+        // Settings are re-derivable, so an unreadable config.json correctly falls back to
+        // defaults; the recovery notice tells the user it happened. The path list does NOT —
+        // see LoadPersistedState.
+        var settings = settingsStore.Load().Value;
 
         // Create config.json on first run so the settings file exists on disk immediately, not only
         // after the first save (storage-path conventions, "Materializing settings on first run"). This

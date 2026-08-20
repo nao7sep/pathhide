@@ -17,7 +17,7 @@ public sealed class ShortcutRouterTests
             new FakeVisibilityService(),
             new FakeJsonStore<List<PathEntry>>(),
             settingsStore,
-            settingsStore.Load());
+            settingsStore.Load().Value);
     }
 
     [Theory]

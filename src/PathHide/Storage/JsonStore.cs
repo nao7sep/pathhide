@@ -40,18 +40,24 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         _label = label;
     }
 
-    public T Load()
+    public LoadedStore<T> Load()
     {
-        if (TryLoadFile(out var value))
-            return value;
+        if (TryLoadFile(out var value, out var wasUnreadable))
+            return new LoadedStore<T>(value, WasUnreadable: false);
 
         // Reached on first run (no file yet — normal) or after the live file was present but
         // unreadable (already quarantined and logged a warn above). There is no .bak fallback: a
         // live file that will not parse is moved aside rather than reset over, and its earlier
         // content is recovered, if ever needed, from the quarantined file itself or the
         // write-through backup store backups.sqlite3 (see the data-backup conventions).
-        Log.Info("store: no existing data, using defaults", new { label = _label });
-        return new T();
+        //
+        // The two are reported apart, because they mean opposite things to the
+        // caller: absent is a first run, unreadable means the user had content
+        // that could not be read.
+        if (!wasUnreadable)
+            Log.Info("store: no existing data, using defaults", new { label = _label });
+
+        return new LoadedStore<T>(new T(), wasUnreadable);
     }
 
     public void Save(T value)
@@ -87,9 +93,10 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         return true;
     }
 
-    private bool TryLoadFile(out T value)
+    private bool TryLoadFile(out T value, out bool wasUnreadable)
     {
         value = new T();
+        wasUnreadable = false;
 
         // An absent file is normal (first run): not a failure, so it is not logged here — the
         // caller decides what the absence means.
@@ -106,8 +113,9 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         catch (Exception ex)
         {
             // Present but unparseable: quarantine aside (bytes preserved) before the caller
-            // falls back to defaults; the next Save or CreateIfMissing recreates the file.
+            // decides what to do; the next Save or CreateIfMissing recreates the file.
             Quarantine(ex);
+            wasUnreadable = true;
             return false;
         }
     }

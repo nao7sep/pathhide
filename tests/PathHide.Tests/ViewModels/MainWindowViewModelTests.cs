@@ -37,7 +37,7 @@ public class MainWindowViewModelTests
         FakeJsonStore<AppSettings>? settings = null)
     {
         var settingsStore = settings ?? new FakeJsonStore<AppSettings>();
-        var vm = new MainWindowViewModel(visibility, paths, settingsStore, settingsStore.Load());
+        var vm = new MainWindowViewModel(visibility, paths, settingsStore, settingsStore.Load().Value);
         vm.Initialize();
         return vm;
     }
@@ -154,6 +154,45 @@ public class MainWindowViewModelTests
         Assert.Equal(ActualState.Visible, row.ActualState);
         Assert.Contains("/x", visibility.Shown);
         Assert.Equal("1 applied", vm.Notification);
+    }
+
+    [Fact]
+    public void LoadPersistedState_WhenThePathListIsUnreadable_HaltsRatherThanStartingEmpty()
+    {
+        // The path list is the user's work product, re-derivable from nothing
+        // else on disk. Opening with an empty list would look exactly like
+        // losing it, and the first add would then write a fresh file holding
+        // only that entry — the user working on top of an apparent loss.
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>> { LoadIsUnreadable = true };
+        var settingsStore = new FakeJsonStore<AppSettings>();
+        var vm = new MainWindowViewModel(visibility, paths, settingsStore, settingsStore.Load().Value);
+
+        Assert.Throws<PathHide.Storage.PathListUnreadableException>(() => vm.LoadPersistedState());
+    }
+
+    [Fact]
+    public async Task Reload_WhenThePathListIsUnreadable_KeepsTheRowsOnScreen()
+    {
+        // Mid-session there is nothing to halt: the rows already shown are the
+        // last good state, so they stay rather than being replaced by an empty
+        // list, and the user is told what happened.
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/keep-me" });
+        Assert.Single(vm.Rows);
+
+        var told = false;
+        vm.ShowNoticeAsync = (_, _) => { told = true; return Task.CompletedTask; };
+        paths.LoadIsUnreadable = true;
+        PathHide.Storage.QuarantineJournal.Record("paths", "/r/paths-x.invalid");
+
+        await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
+
+        Assert.Single(vm.Rows);
+        Assert.Equal("/keep-me", vm.Rows[0].Path);
+        Assert.True(told);
     }
 
     [Fact]
@@ -367,7 +406,7 @@ public class MainWindowViewModelTests
             Value = new List<PathEntry> { Entry("/a"), Entry("/b") },
         };
         var settingsStore = new FakeJsonStore<AppSettings>();
-        var vm = new MainWindowViewModel(new FakeVisibilityService(), paths, settingsStore, settingsStore.Load());
+        var vm = new MainWindowViewModel(new FakeVisibilityService(), paths, settingsStore, settingsStore.Load().Value);
 
         // Construction is side-effect-free: the persisted entries are not read yet.
         Assert.Empty(vm.Rows);
@@ -385,7 +424,7 @@ public class MainWindowViewModelTests
             Value = new List<PathEntry> { Entry("/a") },
         };
         var settingsStore = new FakeJsonStore<AppSettings>();
-        var vm = new MainWindowViewModel(new FakeVisibilityService(), paths, settingsStore, settingsStore.Load());
+        var vm = new MainWindowViewModel(new FakeVisibilityService(), paths, settingsStore, settingsStore.Load().Value);
 
         vm.Initialize();
         vm.Initialize();
@@ -403,7 +442,7 @@ public class MainWindowViewModelTests
     public void SetWindowsHideMode_PersistsAndUpdatesSharedSettingsInstance()
     {
         var settingsStore = new FakeJsonStore<AppSettings>();
-        var settings = settingsStore.Load();
+        var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
             new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
 
@@ -422,7 +461,7 @@ public class MainWindowViewModelTests
     {
         var settingsStore = new FakeJsonStore<AppSettings>();
         var vm = new MainWindowViewModel(
-            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load());
+            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value);
 
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
@@ -437,7 +476,7 @@ public class MainWindowViewModelTests
     public void SetWindowsHideMode_WhenUnchanged_DoesNotSave()
     {
         var settingsStore = new FakeJsonStore<AppSettings>();
-        var settings = settingsStore.Load(); // defaults to HiddenOnly
+        var settings = settingsStore.Load().Value; // defaults to HiddenOnly
         var vm = new MainWindowViewModel(
             new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
 
@@ -450,7 +489,7 @@ public class MainWindowViewModelTests
     public void SetWindowsHideMode_WhenSaveFails_RevertsInMemoryAndNotifies()
     {
         var settingsStore = new FakeJsonStore<AppSettings> { ThrowOnSave = true };
-        var settings = settingsStore.Load();
+        var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
             new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
 

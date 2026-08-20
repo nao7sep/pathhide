@@ -62,7 +62,7 @@ public sealed class JsonStoreTests : IDisposable
         var store = new JsonStore<AppSettings>("config.json", "settings");
         store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
 
-        var loaded = store.Load();
+        var loaded = store.Load().Value;
 
         Assert.Equal(WindowsHideMode.HiddenAndSystem, loaded.WindowsHideMode);
     }
@@ -72,7 +72,7 @@ public sealed class JsonStoreTests : IDisposable
     {
         var store = new JsonStore<AppSettings>("config.json", "settings");
 
-        var loaded = store.Load();
+        var loaded = store.Load().Value;
 
         // Default-constructed AppSettings.
         Assert.Equal(WindowsHideMode.HiddenOnly, loaded.WindowsHideMode);
@@ -95,7 +95,7 @@ public sealed class JsonStoreTests : IDisposable
         const string corrupt = "{ not valid json";
         File.WriteAllText(PathOf("paths.json"), corrupt);
 
-        var loaded = store.Load();
+        var loaded = store.Load().Value;
 
         Assert.Empty(loaded);
         Assert.False(File.Exists(PathOf("paths.json")));
@@ -124,7 +124,7 @@ public sealed class JsonStoreTests : IDisposable
         // The next save recreates the live file (the first-run materialization path's counterpart for an
         // in-flight store) without ever touching the quarantined file sitting beside it.
         Assert.True(File.Exists(PathOf("paths.json")));
-        Assert.Single(store.Load());
+        Assert.Single(store.Load().Value);
         Assert.Equal(corrupt, File.ReadAllText(quarantinedPath));
     }
 
@@ -147,7 +147,7 @@ public sealed class JsonStoreTests : IDisposable
         File.WriteAllText(PathOf("config.json"), "null");
         var store = new JsonStore<AppSettings>("config.json", "settings");
 
-        var loaded = store.Load();
+        var loaded = store.Load().Value;
 
         Assert.Equal(WindowsHideMode.HiddenOnly, loaded.WindowsHideMode);
     }
@@ -227,7 +227,7 @@ public sealed class JsonStoreTests : IDisposable
         Assert.True(File.Exists(PathOf("config.json")));
         // Produced through Save (the real serializer), so it round-trips and carries the on-disk shape.
         Assert.Contains("\"windowsHideMode\"", File.ReadAllText(PathOf("config.json")));
-        Assert.Equal(WindowsHideMode.HiddenOnly, store.Load().WindowsHideMode);
+        Assert.Equal(WindowsHideMode.HiddenOnly, store.Load().Value.WindowsHideMode);
     }
 
     [Fact]
@@ -243,7 +243,7 @@ public sealed class JsonStoreTests : IDisposable
 
         Assert.False(created);
         Assert.Equal(before, File.ReadAllText(PathOf("config.json")));
-        Assert.Equal(WindowsHideMode.HiddenAndSystem, store.Load().WindowsHideMode);
+        Assert.Equal(WindowsHideMode.HiddenAndSystem, store.Load().Value.WindowsHideMode);
     }
 
     [Fact]
@@ -270,8 +270,8 @@ public sealed class JsonStoreTests : IDisposable
         Assert.False(File.Exists(PathOf("settings.json.bak")));
 
         // Each store round-trips only its own document; the roles do not bleed together.
-        Assert.Equal(WindowsHideMode.HiddenAndSystem, settingsStore.Load().WindowsHideMode);
-        Assert.Single(pathListStore.Load());
+        Assert.Equal(WindowsHideMode.HiddenAndSystem, settingsStore.Load().Value.WindowsHideMode);
+        Assert.Single(pathListStore.Load().Value);
     }
 
     // --- Write-through data-backup hook (STEP 3): the record fires from this one choke point, after the
@@ -379,6 +379,6 @@ public sealed class JsonStoreTests : IDisposable
 
         Assert.Null(exception);
         Assert.True(File.Exists(PathOf("config.json")));
-        Assert.Equal(WindowsHideMode.HiddenAndSystem, store.Load().WindowsHideMode);
+        Assert.Equal(WindowsHideMode.HiddenAndSystem, store.Load().Value.WindowsHideMode);
     }
 }

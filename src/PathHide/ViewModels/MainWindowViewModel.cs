@@ -159,7 +159,21 @@ public partial class MainWindowViewModel : ViewModelBase
         if (_persistedStateLoaded)
             return;
         _persistedStateLoaded = true;
-        _entries = _pathListStore.Load();
+
+        var loaded = _pathListStore.Load();
+        if (loaded.WasUnreadable)
+        {
+            // The path list is the user's work product: a curated registry they
+            // built, re-derivable from nothing else on disk. Opening with an
+            // empty list would look exactly like losing it, and the first add
+            // would then write a fresh file containing only that entry — the
+            // user working on top of an apparent loss. The storage-path
+            // conventions require a halt here; only re-derivable stores may
+            // quarantine and continue.
+            throw new PathListUnreadableException();
+        }
+
+        _entries = loaded.Value;
         SyncRowsWithEntries();
     }
 
@@ -353,7 +367,19 @@ public partial class MainWindowViewModel : ViewModelBase
         // a freshly loaded settings object back into the shared instance field-by-field would
         // be both brittle (it silently couples to AppSettings having one field) and pointless.
         Log.Info("reload");
-        _entries = _pathListStore.Load();
+        var reloaded = _pathListStore.Load();
+        if (reloaded.WasUnreadable)
+        {
+            // Mid-session there is nothing to halt: the app is already running
+            // and the rows on screen are the last good state. Keep them rather
+            // than replacing them with an empty list, and say what happened.
+            Log.Warn("reload: path list unreadable; keeping the loaded entries");
+            await ReportQuarantinesAsync();
+            ResumeScanningIfNeeded(true);
+            return;
+        }
+
+        _entries = reloaded.Value;
         SyncRowsWithEntries();
 
         // A load can find the file unreadable and set it aside, and this one
