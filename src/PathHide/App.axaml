@@ -204,15 +204,31 @@
 
         <!-- Utility buttons: a dark-gray neutral (clearly not black) with a white icon/label — a
              deliberate dark control, without the near-black weight the hamburger originally had -->
-        <!-- Buttons state their padding symmetrically and let the content centre. That is
-             the whole of the intent; Avalonia's stock button padding is lopsided (8,5,8,6)
-             and its text layout centres a line box rather than the glyphs inside it, so a
-             label may still sit slightly off. That is the toolkit's to get right, not
-             something to chase here with compensating values that would then be wrong at
-             the next font or size. -->
+        <!-- A button states everything it requires of its label: that the content is
+             centred, and that the padding around it is symmetric. Avalonia's stock button
+             padding is lopsided (8,5,8,6), so leaving either unstated is the app failing
+             to say what it wants rather than the toolkit getting it wrong. Anything still
+             off after both are declared is the toolkit's, and is not to be chased with
+             compensating values that would be wrong at the next font or size. -->
+        <!-- A checkbox states the same as a button: its label is centred against the box.
+             Left unstated it inherits the theme's own idea, which is not reliably centred. -->
+        <Style Selector="CheckBox">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
         <Style Selector="Button">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Padding" Value="12,6"/>
         </Style>
+        <Style Selector="TextBox">
+            <!-- A single-line field states that its text centres and that its padding is
+                 symmetric. That is the whole of the intent; if Avalonia's text layout
+                 still lands the line slightly off, that is the toolkit's, not something
+                 to chase with lopsided values. -->
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="8,6"/>
+        </Style>
+
         <Style Selector="Button.utility">
             <Setter Property="Background" Value="{StaticResource UtilityBrush}"/>
             <Setter Property="Foreground" Value="White"/>
