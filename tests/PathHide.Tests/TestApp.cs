@@ -20,5 +20,11 @@ namespace PathHide.Tests;
 public static class TestAppBuilder
 {
     public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<App>().UseHeadless(new AvaloniaHeadlessPlatformOptions());
+        // Skia headless + WithInterFont match the real builder: default headless drawing
+        // swaps in a stub font manager, so text-measuring tests would measure a font
+        // the app never renders.
+        AppBuilder.Configure<App>()
+            .UseSkia()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+            .WithInterFont();
 }
