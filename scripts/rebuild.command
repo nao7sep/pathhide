@@ -23,6 +23,17 @@ if [[ "$ARCH" != "arm64" ]]; then
 fi
 RID="osx-arm64"
 
+log_step() {
+  printf '\n==> %s\n' "$1"
+}
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing required command: $1" >&2
+    exit 1
+  fi
+}
+
 pause_on_failure() {
   local status="$1"
   if [[ "$status" -ne 0 && "$status" -ne 130 ]]; then
@@ -36,9 +47,15 @@ trap 'pause_on_failure $?' EXIT
 
 cd "$REPO_DIR"
 
+require_command dotnet
+
 # Clear stale output, then publish. `dotnet publish` runs the bundling target,
 # leaving publish/ holding only the signed .app.
+log_step "Clearing the previous build"
 rm -rf "$REPO_DIR/publish"
+
+log_step "Publishing PathHide ($RID, Release, self-contained)"
 dotnet publish "$PROJECT_FILE" -c Release -r "$RID" --self-contained true -o "$REPO_DIR/publish"
 
+log_step "Launching the rebuilt app"
 open "$APP_BUNDLE"

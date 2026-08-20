@@ -2,7 +2,7 @@ using System;
 using PathHide.Services;
 using Xunit;
 
-namespace PathHide.Tests;
+namespace PathHide.Tests.Services;
 
 public sealed class SessionLogTests
 {

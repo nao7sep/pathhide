@@ -23,7 +23,6 @@ public static class StorageRoot
     // The resolved root is cached alongside the raw override value it was computed from, so production
     // resolves once while a test that changes PATHHIDE_HOME (to a throwaway directory) re-resolves.
     private static string? _cachedOverride;
-    private static bool _cachedOverridePresent;
     private static string? _cachedRoot;
 
     public static string Directory
@@ -35,13 +34,14 @@ public static class StorageRoot
                 var rawOverride = Environment.GetEnvironmentVariable(HomeEnvironmentVariable);
                 var hasOverride = !string.IsNullOrEmpty(rawOverride?.Trim());
 
+                // One clause, because the raw value determines everything else: hasOverride is a
+                // pure function of it, so a second clause comparing the two could never be the
+                // deciding condition — a field, an assignment and a comparison that decided nothing.
                 if (_cachedRoot is null ||
-                    _cachedOverridePresent != hasOverride ||
                     !string.Equals(_cachedOverride, rawOverride, StringComparison.Ordinal))
                 {
                     _cachedRoot = Resolve(rawOverride, hasOverride);
                     _cachedOverride = rawOverride;
-                    _cachedOverridePresent = hasOverride;
                 }
 
                 return _cachedRoot;

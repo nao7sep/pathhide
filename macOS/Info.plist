@@ -13,7 +13,8 @@
     <!-- Dual-key icon wiring (see liquid-glass-icon-workflow). Older macOS reads
          CFBundleIconFile -> Resources/icon.icns (classic flat tile); macOS 26 (Tahoe)
          reads CFBundleIconName -> Resources/Assets.car (the Liquid Glass tile). Both
-         are staged into Contents/Resources by scripts/rebuild.command. -->
+         are staged into Contents/Resources by the AssembleMacAppBundle target in
+         Directory.Build.targets. -->
     <key>CFBundleIconFile</key>
     <string>icon</string>
     <key>CFBundleIconName</key>

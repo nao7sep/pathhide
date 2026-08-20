@@ -8,7 +8,8 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Windows: embeds icon.ico into the .exe. macOS uses macOS/icon.icns (classic,
          CFBundleIconFile) and macOS/Assets.car (Liquid Glass, CFBundleIconName) instead;
-         see scripts/rebuild.command. Icon provenance: company/assets/pathhide/icons. -->
+         staged into the .app by the AssembleMacAppBundle target in Directory.Build.targets.
+         Icon provenance: company/assets/pathhide/icons. -->
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyTitle>PathHide</AssemblyTitle>
@@ -42,6 +43,5 @@
          native SQLite. Drop this pin once Microsoft.Data.Sqlite's floor moves to SQLitePCLRaw 3.x. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
     <PackageReference Include="System.CommandLine" Version="2.0.11" />
-    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.2" />
   </ItemGroup>
 </Project>

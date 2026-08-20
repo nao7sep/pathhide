@@ -15,3 +15,5 @@ dist/
 
 # Coverage reports (generated)
 coverage/
+# `dotnet test --collect` without --results-directory drops cobertura output here.
+TestResults/
