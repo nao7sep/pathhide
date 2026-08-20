@@ -125,13 +125,46 @@ public class MainWindowViewModelTests
         Assert.Single(vm.Rows);
     }
 
+    [Fact]
+    public async Task MutatingCommands_DoNotInterleaveWithEachOther()
+    {
+        // Each generated AsyncRelayCommand refuses a second run of ITSELF, but nothing stopped
+        // Remove from landing in the middle of Add's apply - and both pause the background scan,
+        // change the list, and start a scan again afterwards. One gate serializes them, which is
+        // what makes "the scan I started is the scan that is running" true by construction rather
+        // than something RunScanAsync re-checks wherever it touches shared state.
+        using var gate = new ManualResetEventSlim(false);
+        var visibility = new FakeVisibilityService { InspectGate = gate };
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        // Park the add inside its apply - the list is already saved and the row is on screen.
+        var add = vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
+        await visibility.InspectEntered.Task;
+        Assert.Equal(1, paths.SaveCount);
+        vm.Rows[0].IsSelected = true;
+
+        // Remove has nothing to await before it saves, so without the gate its whole body runs
+        // right here, inside the add.
+        var remove = ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
+        Assert.Single(vm.Rows);
+        Assert.Equal(1, paths.SaveCount);
+
+        gate.Set();
+        await add;
+        await remove;
+
+        // It is not refused, only made to wait its turn.
+        Assert.Empty(vm.Rows);
+        Assert.Equal(2, paths.SaveCount);
+    }
+
     [AvaloniaFact]
     public async Task CancellingARunningScan_StopsItMidwayAndClearsTheScanningFlag()
     {
-        // The reachable purpose of RunScanAsync's `ReferenceEquals(_scanCts, scanCts)` guards:
-        // cancelling an in-flight scan interrupts it (later entries are never inspected) and the
-        // finally block resets IsScanning — but only because the cancelled scan is still the
-        // current one. Run on the headless UI thread so scan progress marshals as it does live.
+        // Cancelling an in-flight scan interrupts it (later entries are never inspected) and the
+        // finally block resets IsScanning unconditionally — there is only ever one scan to reset.
+        // Run on the headless UI thread so the scan's continuations marshal as they do live.
         var gate = new ManualResetEventSlim(false);
         var visibility = new FakeVisibilityService { InspectGate = gate };
         visibility.Set("/a", ActualState.Hidden);

@@ -175,113 +175,140 @@ public partial class MainWindowViewModel : ObservableObject
         SyncRowsWithEntries();
     }
 
-    // --- Add / Remove ---
+    // --- The mutation protocol ---
 
-    // A guarded command (parity with the sibling mutating commands): the generated async command
-    // refuses a second run while one is in flight, so two rapid drops — or a drop landing during a
-    // picker add — cannot interleave and corrupt the shared scan state (_scanCts / _scanTask). Both
-    // the pickers and drag-drop dispatch through AddPathsCommand.
-    [RelayCommand]
-    private async Task AddPathsAsync(IEnumerable<string> paths)
+    // Every mutating command runs under this gate. The generated AsyncRelayCommands each refuse a
+    // second run of THEMSELVES, but nothing stopped Remove from landing in the middle of Hide's
+    // apply — and each of them pauses the background scan, changes the list, and starts a scan
+    // again afterwards. Serializing them is what makes "the scan I started is the scan that is
+    // running" true by construction, rather than something the scan re-checks wherever it touches
+    // shared state. Never disposed, deliberately: it lives as long as the window's view model, and
+    // its wait handle is never materialized (nothing here reads AvailableWaitHandle), so there is
+    // no unmanaged resource to release.
+    private readonly SemaphoreSlim _mutationGate = new(1, 1);
+
+    /// <summary>Runs <paramref name="body"/> exclusive of every other mutating command.</summary>
+    private async Task UnderMutationGateAsync(Func<Task> body)
+    {
+        await _mutationGate.WaitAsync();
+        try
+        {
+            await body();
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// The mutation protocol in one place: exclusive of every other mutating command, with the
+    /// background scan paused for the body's duration and resumed after if it was running. Each
+    /// command used to open and close with these two lines itself, which is a protocol that can
+    /// be forgotten one command at a time.
+    /// </summary>
+    private Task MutateAsync(Func<Task> body) => UnderMutationGateAsync(async () =>
     {
         var scanWasActive = await PauseScanningAsync();
+        try
+        {
+            await body();
+        }
+        finally
+        {
+            if (scanWasActive)
+                StartBackgroundScan();
+        }
+    });
+
+    // --- Add / Remove ---
+
+    // Both the pickers and drag-drop dispatch through AddPathsCommand, so two rapid drops — or a
+    // drop landing during a picker add — arrive here; MutateAsync serializes them.
+    [RelayCommand]
+    private Task AddPathsAsync(IEnumerable<string> paths) => MutateAsync(async () =>
+    {
         var added = 0;
         var skipped = 0;
         var addedPaths = new List<string>();
         var updated = new List<PathEntry>(_entries);
 
-        try
+        foreach (var raw in paths)
         {
-            foreach (var raw in paths)
+            if (!PathNormalizer.TryNormalize(raw, out var normalized, out _))
             {
-                if (!PathNormalizer.TryNormalize(raw, out var normalized, out _))
-                {
-                    Log.Warn("add: rejected non-absolute path", new { path = raw });
-                    skipped++;
-                    continue;
-                }
-
-                if (updated.Any(e => PathNormalizer.AreEqual(e.Path, normalized)))
-                {
-                    skipped++;
-                    continue;
-                }
-
-                updated.Add(new PathEntry
-                {
-                    Path = normalized,
-                    DesiredVisibility = DesiredVisibility.Hidden,
-                });
-                addedPaths.Add(normalized);
-                added++;
+                Log.Warn("add: rejected non-absolute path", new { path = raw });
+                skipped++;
+                continue;
             }
 
-            Log.Info("add paths", new { added, skipped });
-
-            if (added == 0)
+            if (updated.Any(e => PathNormalizer.AreEqual(e.Path, normalized)))
             {
-                ShowNotification($"{added} added, {skipped} skipped");
-                return;
+                skipped++;
+                continue;
             }
 
-            if (!TrySaveEntries(updated))
-                return;
+            updated.Add(new PathEntry
+            {
+                Path = normalized,
+                DesiredVisibility = DesiredVisibility.Hidden,
+            });
+            addedPaths.Add(normalized);
+            added++;
+        }
 
-            var newRows = Rows
-                .Where(r => addedPaths.Any(path => PathNormalizer.AreEqual(path, r.Path)))
-                .ToList();
-            var summary = await ApplyDesiredStateAsync(newRows);
-            ShowNotification($"{added} added, {skipped} skipped — {summary}");
-        }
-        finally
+        Log.Info("add paths", new { added, skipped });
+
+        if (added == 0)
         {
-            ResumeScanningIfNeeded(scanWasActive);
+            ShowNotification($"{added} added, {skipped} skipped");
+            return;
         }
-    }
+
+        if (!TrySaveEntries(updated))
+            return;
+
+        var newRows = Rows
+            .Where(r => addedPaths.Any(path => PathNormalizer.AreEqual(path, r.Path)))
+            .ToList();
+        var summary = await ApplyDesiredStateAsync(newRows);
+        ShowNotification($"{added} added, {skipped} skipped — {summary}");
+    });
 
     [RelayCommand]
-    private async Task RemoveSelectedAsync()
+    private Task RemoveSelectedAsync() => MutateAsync(async () =>
     {
-        var scanWasActive = await PauseScanningAsync();
         var selected = Rows.Where(r => r.IsSelected).ToList();
+        if (selected.Count == 0)
+            return;
 
-        try
+        if (ConfirmDestructiveAsync is not null)
         {
-            if (selected.Count == 0)
+            var confirmed = await ConfirmDestructiveAsync(new ConfirmRequest(
+                "Remove entries",
+                $"Remove {selected.Count} selected {(selected.Count == 1 ? "entry" : "entries")} from the list?",
+                "Remove"));
+
+            if (!confirmed)
                 return;
-
-            if (ConfirmDestructiveAsync is not null)
-            {
-                var confirmed = await ConfirmDestructiveAsync(new ConfirmRequest(
-                    "Remove entries",
-                    $"Remove {selected.Count} selected {(selected.Count == 1 ? "entry" : "entries")} from the list?",
-                    "Remove"));
-
-                if (!confirmed)
-                    return;
-            }
-
-            var removing = new HashSet<PathEntry>(selected.Select(row => row.Entry));
-            var updated = _entries.Where(entry => !removing.Contains(entry)).ToList();
-
-            Log.Info("remove paths", new { removed = selected.Count });
-
-            if (!TrySaveEntries(updated))
-                return;
-
-            ShowNotification($"{selected.Count} removed");
         }
-        finally
-        {
-            ResumeScanningIfNeeded(scanWasActive);
-        }
-    }
+
+        var removing = new HashSet<PathEntry>(selected.Select(row => row.Entry));
+        var updated = _entries.Where(entry => !removing.Contains(entry)).ToList();
+
+        Log.Info("remove paths", new { removed = selected.Count });
+
+        if (!TrySaveEntries(updated))
+            return;
+
+        ShowNotification($"{selected.Count} removed");
+    });
 
     // --- Hide / Show ---
 
     /// <summary>
-    /// The one shape every visibility command has: pause the scan, build the
-    /// targets' new desired value, persist, apply, report, resume.
+    /// The one shape every visibility command has: build the targets' new desired
+    /// value, persist, apply, report — under the mutation gate, with the scan paused.
     /// </summary>
     /// <remarks>
     /// The four commands were four copies of this body differing only in which
@@ -291,40 +318,32 @@ public partial class MainWindowViewModel : ObservableObject
     /// because the selection must be read AFTER the scan pause completes — the
     /// pause awaits, and the rows can change across it.</para>
     /// </remarks>
-    private async Task SetVisibilityAsync(
+    private Task SetVisibilityAsync(
         Func<List<PathRowViewModel>> selectTargets,
-        DesiredVisibility desired)
+        DesiredVisibility desired) => MutateAsync(async () =>
     {
-        var scanWasActive = await PauseScanningAsync();
         var targets = selectTargets();
 
-        try
+        // An empty target set has nothing to persist, but the click still
+        // gets an answer: the apply below reports "nothing to do" rather
+        // than leaving the user wondering whether the button worked.
+        if (targets.Count > 0)
         {
-            // An empty target set has nothing to persist, but the click still
-            // gets an answer: the apply below reports "nothing to do" rather
-            // than leaving the user wondering whether the button worked.
-            if (targets.Count > 0)
-            {
-                var flipping = new HashSet<PathEntry>(targets.Select(row => row.Entry));
-                var updated = _entries
-                    .Select(entry => flipping.Contains(entry)
-                        ? new PathEntry { Path = entry.Path, DesiredVisibility = desired }
-                        : entry)
-                    .ToList();
+            var flipping = new HashSet<PathEntry>(targets.Select(row => row.Entry));
+            var updated = _entries
+                .Select(entry => flipping.Contains(entry)
+                    ? new PathEntry { Path = entry.Path, DesiredVisibility = desired }
+                    : entry)
+                .ToList();
 
-                // The rows take the new value from the save, not before it: TrySaveEntries
-                // re-syncs them, so ApplyDesiredStateAsync below reads the committed state.
-                if (!TrySaveEntries(updated))
-                    return;
-            }
+            // The rows take the new value from the save, not before it: TrySaveEntries
+            // re-syncs them, so ApplyDesiredStateAsync below reads the committed state.
+            if (!TrySaveEntries(updated))
+                return;
+        }
 
-            ShowNotification(await ApplyDesiredStateAsync(targets));
-        }
-        finally
-        {
-            ResumeScanningIfNeeded(scanWasActive);
-        }
-    }
+        ShowNotification(await ApplyDesiredStateAsync(targets));
+    });
 
     private List<PathRowViewModel> SelectedRows() => Rows.Where(r => r.IsSelected).ToList();
 
@@ -343,22 +362,14 @@ public partial class MainWindowViewModel : ObservableObject
     private Task ShowAllAsync() => SetVisibilityAsync(AllRows, DesiredVisibility.Shown);
 
     [RelayCommand]
-    private async Task ReapplyAllAsync()
-    {
-        var scanWasActive = await PauseScanningAsync();
-        try
-        {
-            var summary = await ApplyDesiredStateAsync(Rows.ToList());
-            ShowNotification(summary);
-        }
-        finally
-        {
-            ResumeScanningIfNeeded(scanWasActive);
-        }
-    }
+    private Task ReapplyAllAsync() => MutateAsync(async () =>
+        ShowNotification(await ApplyDesiredStateAsync(Rows.ToList())));
 
     [RelayCommand]
-    private async Task ReloadAsync()
+    // Reload takes the gate like every other mutating command, but not MutateAsync's
+    // pause-then-resume: it always ends by starting a fresh scan of the reloaded list,
+    // rather than putting back the one it interrupted.
+    private Task ReloadAsync() => UnderMutationGateAsync(async () =>
     {
         await PauseScanningAsync();
 
@@ -376,7 +387,7 @@ public partial class MainWindowViewModel : ObservableObject
             // than replacing them with an empty list, and say what happened.
             Log.Warn("reload: path list unreadable; keeping the loaded entries");
             await ReportQuarantinesAsync();
-            ResumeScanningIfNeeded(true);
+            StartBackgroundScan();
             return;
         }
 
@@ -392,7 +403,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         _scanTask = RunScanAsync();
         await _scanTask;
-    }
+    });
 
     /// <summary>
     /// Tells the user about any store a load just set aside, if there is a
@@ -529,33 +540,29 @@ public partial class MainWindowViewModel : ObservableObject
         _scanTask = RunScanAsync();
     }
 
+    /// <summary>
+    /// Stops the background scan and waits for it to unwind, so the caller has the list to itself.
+    /// Returns whether there was a scan to stop.
+    /// </summary>
+    /// <remarks>
+    /// <c>_scanCts</c> is never a disposed source: the scan nulls the field and disposes the source
+    /// in the same <c>finally</c>, with no await between them, so no other UI-thread work can run
+    /// in the gap. This used to catch <see cref="ObjectDisposedException"/> around the cancel and
+    /// return false — which, had it ever fired, would have told the caller there was no scan and
+    /// left the paused one unresumed.
+    /// </remarks>
     private async Task<bool> PauseScanningAsync()
     {
         var scanCts = _scanCts;
         if (scanCts is null)
             return false;
 
-        try
-        {
-            scanCts.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            return false;
-        }
+        scanCts.Cancel();
 
         if (!_scanTask.IsCompleted)
             await _scanTask;
 
         return true;
-    }
-
-    private void ResumeScanningIfNeeded(bool scanWasActive)
-    {
-        if (!scanWasActive || _scanCts is not null)
-            return;
-
-        StartBackgroundScan();
     }
 
     /// <summary>
@@ -615,24 +622,24 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(StatusBarText));
     }
 
+    /// <summary>
+    /// Scans the current entries in the background, updating each row as its result arrives.
+    /// </summary>
+    /// <remarks>
+    /// At most one scan is ever live, and that is structural rather than checked: every start is
+    /// either <see cref="Initialize"/> — once, before any command can run — or a mutating command
+    /// holding <c>_mutationGate</c>, and every one of those cancels the running scan and AWAITS it
+    /// before starting another. This method used to open by cancelling and disposing a "previous"
+    /// source that cannot exist, and to gate each of its shared-state writes on
+    /// <c>ReferenceEquals(_scanCts, scanCts)</c> — four re-checks of one invariant, in the type
+    /// least able to enforce it.
+    /// </remarks>
     private async Task RunScanAsync()
     {
-        var previousScanCts = _scanCts;
-        previousScanCts?.Cancel();
-        previousScanCts?.Dispose();
-
         var scanCts = new CancellationTokenSource();
         _scanCts = scanCts;
         var token = scanCts.Token;
         var entries = _entries.ToList();
-
-        // Every shared-state write below (ScanProgress, the row updates, and the finally's
-        // _scanCts/IsScanning reset) is gated on ReferenceEquals(_scanCts, scanCts) — "am I still
-        // the current scan?". The mutating commands all PauseScanningAsync (cancel + await the prior
-        // scan) before starting a new one, so two scans never run concurrently; the guard's live
-        // purpose is the cancel path, where a Progress<int> report queued just before CancelScan can
-        // still fire after this scan's finally has reset state — and must not clobber it. Cheap
-        // defense-in-depth on the pause-and-await invariant: do not drop it to "simplify".
 
         IsScanning = true;
         ScanTotal = entries.Count;
@@ -642,9 +649,6 @@ public partial class MainWindowViewModel : ObservableObject
         {
             await foreach (var result in _scanner.ScanAsync(entries, token))
             {
-                if (!ReferenceEquals(_scanCts, scanCts))
-                    return;
-
                 var row = Rows.FirstOrDefault(r => r.Entry == result.Entry);
                 row?.ApplyScanResult(result.Inspection, result.Family);
                 // The results ARE the progress: counting them here keeps the number the status
@@ -663,13 +667,9 @@ public partial class MainWindowViewModel : ObservableObject
         }
         finally
         {
-            if (ReferenceEquals(_scanCts, scanCts))
-            {
-                _scanCts = null;
-                IsScanning = false;
-                OnPropertyChanged(nameof(StatusBarText));
-            }
-
+            _scanCts = null;
+            IsScanning = false;
+            OnPropertyChanged(nameof(StatusBarText));
             scanCts.Dispose();
         }
     }
