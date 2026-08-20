@@ -111,10 +111,22 @@ public static class PathNormalizer
             if (familyA != familyB)
                 return false;
 
-            return string.Equals(
-                normalizedA,
-                normalizedB,
-                familyA == PathFamily.Posix ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
+            // Case-insensitive for every family, including POSIX.
+            //
+            // This comparison answers "are these the same file?", and its three
+            // callers all use it for identity: the add-time duplicate check and
+            // the two row/entry reconciliations. macOS is PathHide's only POSIX
+            // target and its default APFS volume is case-insensitive, so
+            // comparing Ordinal there let two spellings of ONE file become two
+            // entries with independent desired states — the rows then contradict
+            // each other and whichever applies last silently flips the file,
+            // reverting what the user just asked for.
+            //
+            // A case-SENSITIVE APFS volume is opt-in and rare, and the failure
+            // there is the harmless direction: a second genuinely-distinct entry
+            // is refused as a duplicate, visibly and without touching anything.
+            // The default direction was the destructive one.
+            return string.Equals(normalizedA, normalizedB, StringComparison.OrdinalIgnoreCase);
         }
 
         return string.Equals(a, b, StringComparison.Ordinal);

@@ -87,13 +87,19 @@ public class PathNormalizerTests
         Assert.Null(normalized);
     }
 
-    // --- AreEqual: POSIX is case-sensitive ---
+    // --- AreEqual: POSIX is case-insensitive too, because macOS is ---
 
     [Fact]
-    public void AreEqual_Posix_IsCaseSensitive()
+    public void AreEqual_Posix_IsCaseInsensitive()
     {
         Assert.True(PathNormalizer.AreEqual("/foo/bar", "/foo/bar/"));   // trailing-slash insensitive
-        Assert.False(PathNormalizer.AreEqual("/Foo", "/foo"));          // case matters on POSIX
+        // macOS is the only POSIX target and its default volume is
+        // case-insensitive, so these are one file. Treating them as two let a
+        // single file carry two entries with contradictory desired states.
+        Assert.True(PathNormalizer.AreEqual("/Foo", "/foo"));
+        Assert.True(PathNormalizer.AreEqual("/Users/x/Docs/Report.pdf", "/users/x/docs/report.pdf"));
+        // Genuinely different paths still differ.
+        Assert.False(PathNormalizer.AreEqual("/foo", "/bar"));
     }
 
     // --- AreEqual: Windows / UNC are case-insensitive ---
