@@ -78,6 +78,15 @@ sealed class Program
 
     private static int RunApplyMode(string[] args)
     {
+        // Adopt the parent's storage root BEFORE opening the log, so this session's log lands
+        // in the same tree as the GUI's. It arrives as an argument rather than an environment
+        // variable because the runas verb forces UseShellExecute, which forbids setting the
+        // child's environment block — without it a root relocated by PATHHIDE_HOME would be
+        // re-resolved to the default here, splitting the log trail for exactly the
+        // access-denied failures this pass exists to diagnose. Parsed by hand because the
+        // System.CommandLine parser below runs after the logger is already open.
+        AdoptParentStorageRoot(args);
+
         // The elevated apply pass is a genuinely separate OS process, so it gets its
         // own per-session log file (co-located with the GUI process's logs).
         Log.Start(StorageRoot.LogsDirectory);
@@ -108,12 +117,16 @@ sealed class Program
             // runas boundary, so the launcher passes a temp file path here and reads it back.
             // Absent (e.g. a standalone CLI invocation) means write nothing.
             var resultsOpt = new Option<string?>(ElevatedApplyCommand.ResultsOption);
+            // Consumed before the parser runs (see AdoptParentStorageRoot); declared so the
+            // parser accepts it rather than rejecting the command line as unknown.
+            var homeOpt = new Option<string?>(ElevatedApplyCommand.HomeOption);
 
             var applyCmd = new Command(ElevatedApplyCommand.Subcommand, "Apply file attributes in batch");
             applyCmd.Add(hideOpt);
             applyCmd.Add(systemOpt);
             applyCmd.Add(showOpt);
             applyCmd.Add(resultsOpt);
+            applyCmd.Add(homeOpt);
 
             applyCmd.SetAction((ParseResult result) =>
             {
@@ -221,6 +234,18 @@ sealed class Program
     /// ~/.pathhide/, and never reloaded as state — neither managed data nor written through the
     /// atomic-write choke point (data-backup conventions).
     /// </remarks>
+    /// <summary>Points this process's storage root at whatever the parent resolved.</summary>
+    private static void AdoptParentStorageRoot(string[] args)
+    {
+        var index = Array.IndexOf(args, ElevatedApplyCommand.HomeOption);
+        if (index < 0 || index + 1 >= args.Length)
+            return;
+
+        var root = args[index + 1];
+        if (!string.IsNullOrWhiteSpace(root))
+            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, root);
+    }
+
     private static void AppendResult(string? resultsPath, PathApplyResult result)
     {
         if (string.IsNullOrEmpty(resultsPath))

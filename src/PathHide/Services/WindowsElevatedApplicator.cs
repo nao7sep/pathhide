@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
+using PathHide.Storage;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -73,7 +74,8 @@ public static class WindowsElevatedApplicator
             Verb = "runas",
             UseShellExecute = true,
         };
-        foreach (var arg in ElevatedApplyCommand.BuildArguments(hideList, systemList, showList, resultsPath))
+        foreach (var arg in ElevatedApplyCommand.BuildArguments(
+            hideList, systemList, showList, resultsPath, StorageRoot.Directory))
             psi.ArgumentList.Add(arg);
 
         var totalPaths = hideList.Count + systemList.Count + showList.Count;
@@ -93,7 +95,13 @@ public static class WindowsElevatedApplicator
                 system = systemList.Count,
                 show = showList.Count,
             });
-            process = Process.Start(psi);
+            // Off the UI thread. Process.Start with the runas verb is synchronous and returns
+            // only after the user answers the consent prompt, and every caller of this method
+            // resumes on the Avalonia dispatcher — so on a machine with the secure desktop
+            // disabled (common in enterprise images and remote sessions) the window stopped
+            // repainting and Windows marked it "(Not Responding)", letting the user click
+            // through "Close the program" and kill the app mid-apply.
+            process = await Task.Run(() => Process.Start(psi));
             if (process is null)
             {
                 Log.Error("elevated apply: process did not start");
