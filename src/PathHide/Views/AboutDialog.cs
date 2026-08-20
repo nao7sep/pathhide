@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Controls.Documents;
 using Shapes = Avalonia.Controls.Shapes;
 using Avalonia.Data;
 using System.Reflection;
@@ -87,21 +89,25 @@ public sealed class AboutDialog : DialogBase
     /// A button label with a trailing external-link mark drawn as a vector rather than
     /// the ↗ glyph, whose weight and size vary by font. The mark binds to the button's
     /// own foreground, so it follows theme and hover exactly as the text does.
-    /// Coordinates are written at the target pixel size — Avalonia's house pattern here
-    /// — so the stroke keeps a constant weight instead of being scaled by a Stretch.
+    ///
+    /// The mark rides INSIDE the text as an inline, not beside it in a StackPanel:
+    /// stacking centres it on the line box, which includes descender space, so it sits
+    /// visibly below the capitals. An inline is placed against the text baseline, which
+    /// is the only datum that holds whatever font the app is set to.
+    ///
+    /// Coordinates are written at the target pixel size rather than stretched, so the
+    /// stroke keeps one weight — the pattern the app's XAML hamburger already uses.
     /// </summary>
-    private static Control ExternalLinkLabel(string text) =>
-        new StackPanel
+    private static Control ExternalLinkLabel(string text)
+    {
+        var label = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
+        label.Inlines!.Add(new Run(text));
+        label.Inlines!.Add(new InlineUIContainer(ExternalLinkMark())
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            VerticalAlignment = VerticalAlignment.Center,
-            Children =
-            {
-                new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center },
-                ExternalLinkMark(),
-            },
-        };
+            BaselineAlignment = BaselineAlignment.Baseline,
+        });
+        return label;
+    }
 
     private static Shapes.Path ExternalLinkMark()
     {
@@ -109,7 +115,7 @@ public sealed class AboutDialog : DialogBase
         {
             Width = 11,
             Height = 11,
-            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(5, 0, 0, 0),
             StrokeThickness = 1.3,
             StrokeLineCap = PenLineCap.Round,
             StrokeJoin = PenLineJoin.Round,
