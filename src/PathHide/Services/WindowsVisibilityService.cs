@@ -49,13 +49,10 @@ public sealed class WindowsVisibilityService : IVisibilityService
     public void Hide(string path)
     {
         var mode = _getHideMode();
-        var attrs = File.GetAttributes(path);
-        attrs |= FileAttributes.Hidden;
-
-        if (mode == WindowsHideMode.HiddenAndSystem)
-            attrs |= FileAttributes.System;
-        else
-            attrs &= ~FileAttributes.System;
+        var attrs = WindowsFileVisibility.ApplyVisibility(
+            File.GetAttributes(path),
+            hide: true,
+            system: mode == WindowsHideMode.HiddenAndSystem);
 
         // Per-item boundary crossing: debug, not info. The command aggregate is
         // logged once by the caller (ApplyDesiredStateAsync).
@@ -65,9 +62,10 @@ public sealed class WindowsVisibilityService : IVisibilityService
 
     public void Show(string path)
     {
-        var attrs = File.GetAttributes(path);
-        attrs &= ~FileAttributes.Hidden;
-        attrs &= ~FileAttributes.System;
+        var attrs = WindowsFileVisibility.ApplyVisibility(
+            File.GetAttributes(path),
+            hide: false,
+            system: false);
 
         Log.Debug("showing path", new { path });
         File.SetAttributes(path, attrs);

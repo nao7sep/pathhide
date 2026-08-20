@@ -16,13 +16,25 @@ on:
       - "v*"
   workflow_dispatch:
 
+# Read-only by default. Only the job that attaches the release needs to write,
+# and `test` restores and executes NuGet package code - which should not run
+# with a token that can push tags or create releases.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # Gate: a failing test suite means no release is built.
+  #
+  # On BOTH platforms, because the suite is platform-gated. The seven Windows
+  # HIDDEN/SYSTEM attribute tests - the core of the Windows product - and the
+  # non-macOS branch of the IME test report *skipped* anywhere else, so a
+  # macOS-only gate exited 0 while never executing them, and read as coverage.
   test:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false # see both platforms' results, not just the first failure
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-dotnet@v5
@@ -32,6 +44,8 @@ jobs:
 
   build:
     needs: test
+    permissions:
+      contents: write
     strategy:
       fail-fast: false # a Windows failure never cancels the macOS build
       matrix:
