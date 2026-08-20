@@ -779,24 +779,12 @@ public partial class MainWindowViewModel : ObservableObject
         // [SupportedOSPlatform("windows")] call to ApplyAsync below. Do not remove it.
         if (retryBucket.Count > 0 && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            var toHide = retryBucket
-                .Where(r => r.Entry.DesiredVisibility == DesiredVisibility.Hidden
-                         && _settings.WindowsHideMode == WindowsHideMode.HiddenOnly)
-                .Select(r => r.Path)
-                .ToList();
+            var buckets = Services.ElevatedApplyCommand.Partition(
+                retryBucket.Select(r => (r.Path, r.Entry.DesiredVisibility)),
+                _settings.WindowsHideMode);
 
-            var toHideWithSystem = retryBucket
-                .Where(r => r.Entry.DesiredVisibility == DesiredVisibility.Hidden
-                         && _settings.WindowsHideMode == WindowsHideMode.HiddenAndSystem)
-                .Select(r => r.Path)
-                .ToList();
-
-            var toShow = retryBucket
-                .Where(r => r.Entry.DesiredVisibility == DesiredVisibility.Shown)
-                .Select(r => r.Path)
-                .ToList();
-
-            var outcome = await Services.WindowsElevatedApplicator.ApplyAsync(toHide, toHideWithSystem, toShow);
+            var outcome = await Services.WindowsElevatedApplicator.ApplyAsync(
+                buckets.ToHide, buckets.ToHideWithSystem, buckets.ToShow);
             elevationExitCode = outcome.ExitCode;
 
             foreach (var row in retryBucket)

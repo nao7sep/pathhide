@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using PathHide.Models;
 
 namespace PathHide.Services;
 
@@ -27,6 +28,44 @@ public static class ElevatedApplyCommand
     /// the access-denied failures this pass exists to diagnose.
     /// </remarks>
     public const string HomeOption = "--home";
+
+    /// <summary>The three path lists the elevated child takes, in the order it takes them.</summary>
+    public sealed record Buckets(
+        IReadOnlyList<string> ToHide,
+        IReadOnlyList<string> ToHideWithSystem,
+        IReadOnlyList<string> ToShow);
+
+    /// <summary>
+    /// Sorts the paths that need an elevated retry into the child's three lists.
+    /// </summary>
+    /// <remarks>
+    /// This is the third and last spelling of one rule — what a desired visibility plus the
+    /// Windows hide mode means for the Hidden and System bits. <see cref="WindowsFileVisibility"/>
+    /// writes it as bit math for the two processes that touch a file; here it decides which list
+    /// a path travels in, which is the same decision made once for a whole batch. It lived inline
+    /// in the apply pass as three <c>Where</c> clauses, where nothing could test it and nothing
+    /// tied it to the rule it was restating.
+    /// </remarks>
+    public static Buckets Partition(
+        IEnumerable<(string Path, DesiredVisibility Desired)> targets,
+        WindowsHideMode mode)
+    {
+        var toHide = new List<string>();
+        var toHideWithSystem = new List<string>();
+        var toShow = new List<string>();
+
+        foreach (var (path, desired) in targets)
+        {
+            if (desired == DesiredVisibility.Shown)
+                toShow.Add(path);
+            else if (mode == WindowsHideMode.HiddenAndSystem)
+                toHideWithSystem.Add(path);
+            else
+                toHide.Add(path);
+        }
+
+        return new Buckets(toHide, toHideWithSystem, toShow);
+    }
 
     /// <summary>
     /// Builds the argument list that launches the elevated apply pass: the subcommand first, then each

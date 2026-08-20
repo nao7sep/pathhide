@@ -1,4 +1,5 @@
 using System;
+using PathHide.Models;
 using PathHide.Services;
 using Xunit;
 
@@ -12,6 +13,45 @@ namespace PathHide.Tests.Services;
 public sealed class ElevatedApplyCommandTests
 {
     private const string StorageRootArg = @"C:\Users\u\.pathhide";
+
+    /// <summary>
+    /// The routing half of the Windows attribute rule: what a desired visibility plus the hide
+    /// mode means for the Hidden and System bits, decided once for a whole batch. It used to be
+    /// three inline Where clauses in the apply pass, where nothing tested it.
+    /// </summary>
+    [Fact]
+    public void Partition_SortsEachPathByItsDesiredVisibilityAndTheHideMode()
+    {
+        var targets = new[]
+        {
+            ("/hide-me", DesiredVisibility.Hidden),
+            ("/show-me", DesiredVisibility.Shown),
+            ("/hide-me-too", DesiredVisibility.Hidden),
+        };
+
+        var plain = ElevatedApplyCommand.Partition(targets, WindowsHideMode.HiddenOnly);
+        Assert.Equal(new[] { "/hide-me", "/hide-me-too" }, plain.ToHide);
+        Assert.Empty(plain.ToHideWithSystem);
+        Assert.Equal(new[] { "/show-me" }, plain.ToShow);
+
+        // The mode moves the hides to the System list and must leave the show exactly where it is:
+        // showing always clears both bits, whatever the hide mode says.
+        var withSystem = ElevatedApplyCommand.Partition(targets, WindowsHideMode.HiddenAndSystem);
+        Assert.Empty(withSystem.ToHide);
+        Assert.Equal(new[] { "/hide-me", "/hide-me-too" }, withSystem.ToHideWithSystem);
+        Assert.Equal(new[] { "/show-me" }, withSystem.ToShow);
+    }
+
+    [Fact]
+    public void Partition_WithNothingToDo_ReturnsThreeEmptyLists()
+    {
+        var buckets = ElevatedApplyCommand.Partition(
+            Array.Empty<(string, DesiredVisibility)>(), WindowsHideMode.HiddenAndSystem);
+
+        Assert.Empty(buckets.ToHide);
+        Assert.Empty(buckets.ToHideWithSystem);
+        Assert.Empty(buckets.ToShow);
+    }
 
     [Fact]
     public void BuildArguments_PutsTheSubcommandFirstAndTheFixedOptionsLast()
