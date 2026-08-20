@@ -24,6 +24,27 @@ dotnet publish "$PROJECT" -c Release -r osx-arm64 --self-contained true -o publi
 APP="publish/$APP_NAME.app"
 [ -d "$APP" ] || { echo "expected $APP was not produced by publish" >&2; exit 1; }
 
+# Architecture gate. Every shipped Mach-O must be able to run on Apple Silicon:
+# thin arm64 or a universal binary containing it. This catches package-manager
+# delivered native code, not just our own build - the failure it exists for is a
+# SkiaSharp or Avalonia bump that resolves an x86_64-only prebuild, which would
+# ship an app that cannot load its own native library. Nothing else in the
+# pipeline would notice.
+bad=""
+while IFS= read -r macho; do
+  archs="$(lipo -archs "$macho" 2>/dev/null || true)"
+  [ -n "$archs" ] || continue
+  case " $archs " in
+    *" arm64 "*) ;;
+    *) bad="$bad\n  $macho ($archs)" ;;
+  esac
+done < <(find "$APP" -type f \( -perm -u+x -o -name "*.dylib" \) )
+
+if [ -n "$bad" ]; then
+  printf 'These shipped binaries cannot run on Apple Silicon:%b\n' "$bad" >&2
+  exit 1
+fi
+
 # Portable: a zip of the .app (ditto preserves symlinks + the ad-hoc signature).
 ditto -c -k --keepParent "$APP" "dist/$APP_NAME-$VERSION-mac.zip"
 

@@ -13,11 +13,15 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyTitle>PathHide</AssemblyTitle>
     <Description>A desktop utility that hides or shows specific files and directories and remembers the desired visibility state.</Description>
-    <RuntimeIdentifiers>osx-arm64;osx-x64;win-x64</RuntimeIdentifiers>
+    <!-- No osx-x64. The fleet ships Apple Silicon only (app-release-conventions),
+         and nothing published it: package.sh publishes osx-arm64 and package.ps1
+         win-x64. Listing it made restore fetch three osx-x64 runtime packs nobody
+         ships, and kept alive a local rebuild path that would build and launch an
+         Intel binary the project does not produce. -->
+    <RuntimeIdentifiers>osx-arm64;win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
