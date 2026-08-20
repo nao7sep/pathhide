@@ -59,11 +59,21 @@ public sealed class MacVisibilityService : IVisibilityService
 
     private static void SetHidden(string path, bool hidden)
     {
-        var operateOnLink = IsSymlink(path);
-
+        // Never follow a symlink. The user selected THIS path, so this path is
+        // what gets hidden — and Inspect reads the same way, so the row always
+        // reports the entry the user is looking at rather than something the
+        // link points to.
+        //
+        // For a non-link the no-follow calls are identical to the following
+        // ones, so there is nothing to branch on. Choosing between them from an
+        // IsSymlink probe was worse than useless: the probe swallowed its own
+        // failures and answered "not a link", so an unreadable or malformed
+        // path silently became a chflags that set UF_HIDDEN on the link's
+        // TARGET, while Inspect kept reporting the link as visible.
+        //
         // Read existing flags so we don't trample unrelated bits like UF_NODUMP
         // or UF_IMMUTABLE that the user (or another tool) may have set.
-        if (!MacFs.TryGetFlags(path, followSymlinks: !operateOnLink, out var flags))
+        if (!MacFs.TryGetFlags(path, followSymlinks: false, out var flags))
             ThrowErrno($"getattrlist({path})");
 
         var updated = hidden
@@ -73,8 +83,8 @@ public sealed class MacVisibilityService : IVisibilityService
         if (updated == flags)
             return;
 
-        if (MacFs.SetFlags(path, updated, followSymlinks: !operateOnLink) != 0)
-            ThrowErrno($"chflags({path})");
+        if (MacFs.SetFlags(path, updated, followSymlinks: false) != 0)
+            ThrowErrno($"lchflags({path})");
     }
 
     private static void ThrowErrno(string operation)

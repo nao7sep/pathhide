@@ -210,4 +210,35 @@ public sealed class MacVisibilityServiceTests : IDisposable
         // ...while the target it points to is left untouched.
         Assert.Equal(ActualState.Visible, _service.Inspect(target).ActualState);
     }
+
+    [MacOnlyFact]
+    public void Hide_SymlinkToDirectory_AffectsLinkNotTarget()
+    {
+        // The directory half of the same rule. Hide and Show act on the entry
+        // the user selected, never on what it points to.
+        var target = Path.Combine(_dir, "target-dir");
+        Directory.CreateDirectory(target);
+        var link = Path.Combine(_dir, "link-dir");
+        Directory.CreateSymbolicLink(link, target);
+
+        _service.Hide(link);
+
+        Assert.Equal(ActualState.Hidden, _service.Inspect(link).ActualState);
+        Assert.Equal(ActualState.Visible, _service.Inspect(target).ActualState);
+    }
+
+    [MacOnlyFact]
+    public void Hide_DanglingSymlink_HidesTheLinkItself()
+    {
+        // A link whose target does not exist. Following it would fail outright
+        // with ENOENT, so this only works because the write acts on the link.
+        var link = Path.Combine(_dir, "dangling.txt");
+        File.CreateSymbolicLink(link, Path.Combine(_dir, "no-such-target.txt"));
+
+        _service.Hide(link);
+        Assert.Equal(ActualState.Hidden, _service.Inspect(link).ActualState);
+
+        _service.Show(link);
+        Assert.Equal(ActualState.Visible, _service.Inspect(link).ActualState);
+    }
 }
