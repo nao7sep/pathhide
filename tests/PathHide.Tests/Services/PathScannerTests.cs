@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -102,5 +103,34 @@ public class PathScannerTests
         private readonly System.Action<T> _handler;
         public SynchronousProgress(System.Action<T> handler) => _handler = handler;
         public void Report(T value) => _handler(value);
+    }
+
+    // Timed, because the failure mode is a HANG: without the fix the scan waits on the blocked
+    // inspection forever, so an untimed test would stall the suite instead of reporting.
+    [Fact(Timeout = 10_000)]
+    public async Task Cancelling_AbandonsAnInspectionThatIsAlreadyBlocked()
+    {
+        // The token can only stop a work item from STARTING. Inspect is a blocking stat, and on
+        // an unreachable UNC server or a stale mount it blocks for tens of seconds - so Cancel
+        // did nothing observable until the current item returned, and every mutating command sat
+        // dead behind it, since each pauses the scan and then awaits it with no timeout.
+        using var gate = new ManualResetEventSlim(initialState: false);
+        var visibility = new FakeVisibilityService { InspectGate = gate };
+        var scanner = new PathScanner(visibility);
+        using var cts = new CancellationTokenSource();
+
+        var scan = CollectAsync(scanner, [Entry("/blocked"), Entry("/never-reached")], token: cts.Token);
+
+        // Wait until the inspection is genuinely in-flight, then cancel while it is stuck.
+        await visibility.InspectEntered.Task;
+        await cts.CancelAsync();
+
+        // The scan gives up on the wait rather than sitting on it.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scan);
+
+        // And the second path was never started.
+        Assert.DoesNotContain("/never-reached", visibility.Inspected);
+
+        gate.Set(); // let the abandoned probe finish on its own thread
     }
 }
