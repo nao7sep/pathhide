@@ -56,7 +56,8 @@
                      reserves the toolbar's full width so a second line never happens. -->
                 <StackPanel Orientation="Horizontal"
                             x:Name="ActionButtons"
-                            AutomationProperties.Name="Actions">
+                            AutomationProperties.Name="Actions"
+                            KeyboardNavigation.TabNavigation="Once">
                     <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
                         <Button Content="Add Files" Classes="add" x:Name="AddFilesButton"/>
                         <Button Content="Add Directories" Classes="add" x:Name="AddFoldersButton"/>

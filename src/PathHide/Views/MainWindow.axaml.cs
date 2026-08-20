@@ -286,13 +286,23 @@ public partial class MainWindow : Window
         });
     }
 
-    // The action buttons are independent, individually Tab-reachable controls. As a keyboard
-    // convenience, Left/Right also move focus to the adjacent action button — skipping any
-    // that are currently hidden (e.g. Cancel, shown only while scanning) and stopping at the
-    // ends rather than letting the arrow escape the group.
+    // The action bar is ONE tab stop (KeyboardNavigation.TabNavigation="Once" in the XAML),
+    // and these keys move within it: Left/Right to the adjacent button, Home/End to the ends,
+    // skipping any currently hidden (Cancel, shown only while scanning) and stopping at the
+    // ends rather than letting the key escape the group. Ten separately-tabbable buttons made
+    // reaching the grid below cost up to ten Tab presses — and the bar's width is a user
+    // preference, so it grew with every configured action.
     private void OnActionButtonsKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key is not (Key.Left or Key.Right))
+        var key = e.Key switch
+        {
+            Key.Left => ToolbarKey.Previous,
+            Key.Right => ToolbarKey.Next,
+            Key.Home => ToolbarKey.Home,
+            Key.End => ToolbarKey.End,
+            _ => (ToolbarKey?)null,
+        };
+        if (key is null)
             return;
 
         var buttons = ActionButtons.GetLogicalDescendants()
@@ -305,7 +315,7 @@ public partial class MainWindow : Window
             return;
 
         e.Handled = true;
-        if (ActionButtonNavigation.NextIndex(current, e.Key == Key.Right, buttons.Count) is { } next)
+        if (ActionButtonNavigation.Target(key.Value, current, buttons.Count) is { } next)
             buttons[next].Focus(NavigationMethod.Directional);
     }
 }
