@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using PathHide.Views;
 using Xunit;
 
@@ -45,5 +46,29 @@ public sealed class DialogCloseGuardTests
         // direction automatically; the dialog must not hold them open for a confirmation.
         Assert.False(DialogCloseGuard.ShouldConfirmDiscard(
             reason, committing: false, hasUnsavedChanges: true));
+    }
+
+    // --- Which keys dismiss ---
+
+    [Fact]
+    public void Escape_Dismisses()
+    {
+        Assert.True(DialogCloseGuard.ShouldDismissOnKey(Key.Escape));
+    }
+
+    [Fact]
+    public void AKeyTheInputMethodConsumed_DoesNotDismiss()
+    {
+        // Escape mid-conversion is the IME's own cancel gesture. Acting on it
+        // would close the dialog out from under a half-typed Japanese value -
+        // and raise the discard prompt on top, since the draft reads dirty.
+        Assert.False(DialogCloseGuard.ShouldDismissOnKey(Key.ImeProcessed));
+    }
+
+    [Fact]
+    public void OrdinaryTypingDoesNotDismiss()
+    {
+        Assert.False(DialogCloseGuard.ShouldDismissOnKey(Key.A));
+        Assert.False(DialogCloseGuard.ShouldDismissOnKey(Key.Enter));
     }
 }

@@ -155,9 +155,11 @@ public partial class DialogBase : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        // Escape is just another dismiss path — route it through the close guard rather than
-        // closing directly, so a dirty dialog still gets its discard confirmation.
-        if (e.Key == Key.Escape)
+        // The policy lives in DialogCloseGuard so it is testable; the window only acts on it.
+        // Escape is just another dismiss path — routed through the close guard rather than
+        // closing directly, so a dirty dialog still gets its discard confirmation — while a key
+        // the input method already consumed belongs to the composition and is left alone.
+        if (DialogCloseGuard.ShouldDismissOnKey(e.Key))
             Close();
     }
 

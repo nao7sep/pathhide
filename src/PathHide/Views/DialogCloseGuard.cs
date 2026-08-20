@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 
 namespace PathHide.Views;
 
@@ -24,4 +25,16 @@ public static class DialogCloseGuard
         => !committing
            && reason == WindowCloseReason.WindowClosing
            && hasUnsavedChanges;
+
+    /// <summary>
+    /// Whether a key press should dismiss the dialog.
+    /// </summary>
+    /// <remarks>
+    /// Escape dismisses — routed through the close guard, so a dirty dialog still gets its
+    /// discard confirmation. A key the input method already consumed does not: Escape
+    /// mid-conversion is the IME's own cancel gesture, and acting on it would close the dialog
+    /// out from under a half-typed Japanese value, raising the discard prompt on top since the
+    /// draft reads dirty.
+    /// </remarks>
+    public static bool ShouldDismissOnKey(Key key) => key == Key.Escape;
 }
