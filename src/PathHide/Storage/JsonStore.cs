@@ -137,7 +137,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
         Log.Warn("store: file unreadable, quarantined", ex,
             new { label = _label, path = _filePath, quarantinePath });
-        QuarantineJournal.Record(quarantinePath);
+        QuarantineJournal.Record(_label, quarantinePath);
     }
 
     private void WriteAtomically(byte[] bytes)

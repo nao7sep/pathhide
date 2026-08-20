@@ -73,6 +73,7 @@ public partial class MainWindow : Window
 
         ViewModel.ConfirmDestructiveAsync = request =>
             ConfirmDialog.ConfirmDestructiveAsync(this, request.Title, request.Message, request.ConfirmLabel);
+        ViewModel.ShowNoticeAsync = (title, body) => NoticeDialog.ShowAsync(this, title, body);
         ViewModel.Initialize();
         PathGrid.Columns.First(c => c.SortMemberPath == nameof(PathRowViewModel.Path))
             .Sort(ListSortDirection.Ascending);

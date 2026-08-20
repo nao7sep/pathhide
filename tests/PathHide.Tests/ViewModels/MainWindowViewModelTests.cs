@@ -157,6 +157,52 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task Reload_WhenTheStoreWasQuarantined_TellsTheUser()
+    {
+        // The startup drain runs once, in the window's Opened handler. A load
+        // that quarantines afterwards - pressing Reload on a paths.json edited
+        // into invalid JSON - emptied every row with no notice, no explanation
+        // and no pointer to the file that was set aside.
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        (string Title, string Body)? shown = null;
+        vm.ShowNoticeAsync = (title, body) =>
+        {
+            shown = (title, body);
+            return Task.CompletedTask;
+        };
+
+        // The store finds the file unreadable on this load and sets it aside.
+        PathHide.Storage.QuarantineJournal.Record("paths", "/home/u/.pathhide/paths-20260821-000000-000-utc.invalid");
+
+        await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
+
+        Assert.NotNull(shown);
+        Assert.Contains("paths", shown!.Value.Title);
+        Assert.Contains("paths-20260821-000000-000-utc.invalid", shown!.Value.Body);
+        // Drained, so a second reload does not repeat it.
+        Assert.Empty(PathHide.Storage.QuarantineJournal.Drain());
+    }
+
+    [Fact]
+    public void QuarantineNotice_NamesTheStoreThatWasReset()
+    {
+        // One hardcoded wording told a user whose settings file was reset that
+        // their hidden-path list was in a file that does not contain it.
+        var settings = PathHide.Storage.QuarantineJournal.Describe(
+            [new PathHide.Storage.QuarantinedStore("settings", "/r/config-x.invalid")]);
+        Assert.Contains("settings", settings.Title);
+        Assert.DoesNotContain("hidden-path list", settings.Body);
+
+        var pathList = PathHide.Storage.QuarantineJournal.Describe(
+            [new PathHide.Storage.QuarantinedStore("paths", "/r/paths-x.invalid")]);
+        Assert.Contains("paths", pathList.Title);
+        Assert.Contains("/r/paths-x.invalid", pathList.Body);
+    }
+
+    [Fact]
     public async Task HideAll_And_ShowAll_ActOnEveryRowNotJustTheSelection()
     {
         // The four visibility commands share one body now; these pin that the

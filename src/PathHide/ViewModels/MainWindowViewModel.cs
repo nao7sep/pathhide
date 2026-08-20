@@ -44,6 +44,12 @@ public partial class MainWindowViewModel : ViewModelBase
     /// </summary>
     public Func<ConfirmRequest, Task<bool>>? ConfirmDestructiveAsync { get; set; }
 
+    /// <summary>
+    /// Shows an informational notice (title, body). Supplied by the window, the
+    /// same way <see cref="ConfirmDestructiveAsync"/> is.
+    /// </summary>
+    public Func<string, string, Task>? ShowNoticeAsync { get; set; }
+
     public ObservableCollection<PathRowViewModel> Rows { get; } = [];
 
     [ObservableProperty]
@@ -349,8 +355,34 @@ public partial class MainWindowViewModel : ViewModelBase
         Log.Info("reload");
         _entries = _pathListStore.Load();
         SyncRowsWithEntries();
+
+        // A load can find the file unreadable and set it aside, and this one
+        // happens long after startup — where the startup drain has already run
+        // and will never run again. Without reporting here, pressing Reload on
+        // a hand-edited-into-invalid paths.json emptied every row with no
+        // notice, no explanation, and no pointer to the quarantined file.
+        await ReportQuarantinesAsync();
+
         _scanTask = RunScanAsync();
         await _scanTask;
+    }
+
+    /// <summary>
+    /// Tells the user about any store a load just set aside, if there is a
+    /// window to tell them through. Startup has its own drain, because at that
+    /// point no window exists yet to own the dialog.
+    /// </summary>
+    private async Task ReportQuarantinesAsync()
+    {
+        if (ShowNoticeAsync is null)
+            return;
+
+        var quarantined = QuarantineJournal.Drain();
+        if (quarantined.Count == 0)
+            return;
+
+        var (title, body) = QuarantineJournal.Describe(quarantined);
+        await ShowNoticeAsync(title, body);
     }
 
     /// <summary>

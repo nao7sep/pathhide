@@ -63,12 +63,8 @@ public partial class App : Application
                 var quarantined = Storage.QuarantineJournal.Drain();
                 if (quarantined.Count > 0)
                 {
-                    await Views.NoticeDialog.ShowAsync(
-                        mainWindow,
-                        "A settings file was reset",
-                        "A file was unreadable and has been set aside so nothing is lost:\n\n" +
-                        string.Join("\n", quarantined) +
-                        "\n\nPathHide started with defaults for it. Your hidden-path list is preserved in the file above if you need it.");
+                    var (title, body) = Storage.QuarantineJournal.Describe(quarantined);
+                    await Views.NoticeDialog.ShowAsync(mainWindow, title, body);
                 }
             };
         }
