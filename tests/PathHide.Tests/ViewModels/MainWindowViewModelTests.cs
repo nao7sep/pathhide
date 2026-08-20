@@ -157,6 +157,45 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task HideAll_And_ShowAll_ActOnEveryRowNotJustTheSelection()
+    {
+        // The four visibility commands share one body now; these pin that the
+        // All variants still take every row while the Selected ones do not.
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/a", "/b" });
+
+        await ((IAsyncRelayCommand)vm.ShowAllCommand).ExecuteAsync(null);
+        Assert.All(vm.Rows, r => Assert.Equal(DesiredVisibility.Shown, r.DesiredVisibility));
+        Assert.Contains("/a", visibility.Shown);
+        Assert.Contains("/b", visibility.Shown);
+        Assert.Equal("2 applied", vm.Notification);
+
+        await ((IAsyncRelayCommand)vm.HideAllCommand).ExecuteAsync(null);
+        Assert.All(vm.Rows, r => Assert.Equal(DesiredVisibility.Hidden, r.DesiredVisibility));
+        Assert.Equal("2 applied", vm.Notification);
+    }
+
+    [Fact]
+    public async Task HideSelected_WithNothingSelected_ReportsRatherThanSilentlyDoingNothing()
+    {
+        // The button is always clickable, so a click with no selection used to
+        // produce no feedback at all — the user cannot tell it from a hang.
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
+        var writesBefore = paths.SaveCount;
+
+        await ((IAsyncRelayCommand)vm.HideSelectedCommand).ExecuteAsync(null);
+
+        Assert.Equal("nothing to do", vm.Notification);
+        // And nothing was persisted for a change that did not happen.
+        Assert.Equal(writesBefore, paths.SaveCount);
+    }
+
+    [Fact]
     public async Task RemoveSelected_WhenConfirmed_RemovesRowAndPersists()
     {
         var visibility = new FakeVisibilityService();

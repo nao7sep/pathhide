@@ -263,29 +263,41 @@ public partial class MainWindowViewModel : ViewModelBase
 
     // --- Hide / Show ---
 
-    [RelayCommand]
-    private async Task HideSelectedAsync()
+    /// <summary>
+    /// The one shape every visibility command has: pause the scan, stamp the
+    /// desired value on the targets, persist, apply, report, resume.
+    /// </summary>
+    /// <remarks>
+    /// The four commands were four copies of this body differing only in which
+    /// rows they took and which value they wrote, so any change to the mutation
+    /// protocol had to land in all four and would be forgotten in one.
+    /// <para><paramref name="selectTargets"/> is a callback rather than a list
+    /// because the selection must be read AFTER the scan pause completes — the
+    /// pause awaits, and the rows can change across it.</para>
+    /// </remarks>
+    private async Task SetVisibilityAsync(
+        Func<List<PathRowViewModel>> selectTargets,
+        DesiredVisibility desired)
     {
         var scanWasActive = await PauseScanningAsync();
-        var selected = Rows.Where(r => r.IsSelected).ToList();
+        var targets = selectTargets();
         var previousEntries = CloneEntries(_entries);
 
         try
         {
-            if (selected.Count == 0)
-                return;
-
-            foreach (var row in selected)
+            foreach (var row in targets)
             {
-                row.Entry.DesiredVisibility = DesiredVisibility.Hidden;
-                row.DesiredVisibility = DesiredVisibility.Hidden;
+                row.Entry.DesiredVisibility = desired;
+                row.DesiredVisibility = desired;
             }
 
-            if (!TryCommitPathChanges(previousEntries))
+            // An empty target set has nothing to persist, but the click still
+            // gets an answer: the apply below reports "nothing to do" rather
+            // than leaving the user wondering whether the button worked.
+            if (targets.Count > 0 && !TryCommitPathChanges(previousEntries))
                 return;
 
-            var summary = await ApplyDesiredStateAsync(selected);
-            ShowNotification(summary);
+            ShowNotification(await ApplyDesiredStateAsync(targets));
         }
         finally
         {
@@ -293,87 +305,21 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
-    private async Task ShowSelectedAsync()
-    {
-        var scanWasActive = await PauseScanningAsync();
-        var selected = Rows.Where(r => r.IsSelected).ToList();
-        var previousEntries = CloneEntries(_entries);
+    private List<PathRowViewModel> SelectedRows() => Rows.Where(r => r.IsSelected).ToList();
 
-        try
-        {
-            if (selected.Count == 0)
-                return;
-
-            foreach (var row in selected)
-            {
-                row.Entry.DesiredVisibility = DesiredVisibility.Shown;
-                row.DesiredVisibility = DesiredVisibility.Shown;
-            }
-
-            if (!TryCommitPathChanges(previousEntries))
-                return;
-
-            var summary = await ApplyDesiredStateAsync(selected);
-            ShowNotification(summary);
-        }
-        finally
-        {
-            ResumeScanningIfNeeded(scanWasActive);
-        }
-    }
+    private List<PathRowViewModel> AllRows() => Rows.ToList();
 
     [RelayCommand]
-    private async Task HideAllAsync()
-    {
-        var scanWasActive = await PauseScanningAsync();
-        var previousEntries = CloneEntries(_entries);
-
-        try
-        {
-            foreach (var row in Rows)
-            {
-                row.Entry.DesiredVisibility = DesiredVisibility.Hidden;
-                row.DesiredVisibility = DesiredVisibility.Hidden;
-            }
-
-            if (!TryCommitPathChanges(previousEntries))
-                return;
-
-            var summary = await ApplyDesiredStateAsync(Rows.ToList());
-            ShowNotification(summary);
-        }
-        finally
-        {
-            ResumeScanningIfNeeded(scanWasActive);
-        }
-    }
+    private Task HideSelectedAsync() => SetVisibilityAsync(SelectedRows, DesiredVisibility.Hidden);
 
     [RelayCommand]
-    private async Task ShowAllAsync()
-    {
-        var scanWasActive = await PauseScanningAsync();
-        var previousEntries = CloneEntries(_entries);
+    private Task ShowSelectedAsync() => SetVisibilityAsync(SelectedRows, DesiredVisibility.Shown);
 
-        try
-        {
-            foreach (var row in Rows)
-            {
-                row.Entry.DesiredVisibility = DesiredVisibility.Shown;
-                row.DesiredVisibility = DesiredVisibility.Shown;
-            }
+    [RelayCommand]
+    private Task HideAllAsync() => SetVisibilityAsync(AllRows, DesiredVisibility.Hidden);
 
-            if (!TryCommitPathChanges(previousEntries))
-                return;
-
-            var summary = await ApplyDesiredStateAsync(Rows.ToList());
-            ShowNotification(summary);
-        }
-        finally
-        {
-            ResumeScanningIfNeeded(scanWasActive);
-        }
-    }
+    [RelayCommand]
+    private Task ShowAllAsync() => SetVisibilityAsync(AllRows, DesiredVisibility.Shown);
 
     [RelayCommand]
     private async Task ReapplyAllAsync()
