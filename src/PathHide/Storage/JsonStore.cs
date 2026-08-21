@@ -106,7 +106,8 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         try
         {
             var json = File.ReadAllText(_filePath);
-            value = JsonSerializer.Deserialize<T>(json, JsonOptions.Default) ?? new T();
+            value = JsonSerializer.Deserialize<T>(json, JsonOptions.Default)
+                ?? throw new JsonException($"The {_label} file contains null instead of an object or array.");
             Log.Info("store: loaded", new { label = _label, path = _filePath });
             return true;
         }

@@ -142,14 +142,19 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_LiteralNullDocument_ReturnsDefault()
+    public void Load_LiteralNullPathList_QuarantinesAndReportsUnreadable()
     {
-        File.WriteAllText(PathOf("config.json"), "null");
-        var store = new JsonStore<AppSettings>("config.json", "settings");
+        File.WriteAllText(PathOf("paths.json"), "null");
+        var store = new JsonStore<List<PathEntry>>("paths.json", "paths");
 
-        var loaded = store.Load().Value;
+        var loaded = store.Load();
 
-        Assert.Equal(WindowsHideMode.HiddenOnly, loaded.WindowsHideMode);
+        Assert.True(loaded.WasUnreadable);
+        Assert.Empty(loaded.Value);
+        Assert.False(File.Exists(PathOf("paths.json")));
+        var quarantined = Directory.EnumerateFiles(_root, "paths-*.invalid").ToList();
+        Assert.Single(quarantined);
+        Assert.Equal("null", File.ReadAllText(quarantined[0]));
     }
 
     [Fact]
