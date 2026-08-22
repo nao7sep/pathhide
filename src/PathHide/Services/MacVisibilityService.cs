@@ -83,6 +83,8 @@ public sealed class MacVisibilityService : IVisibilityService
         if (updated == flags)
             return;
 
+        // not recorded: this changes only external filesystem metadata; paths.json
+        // records the user's desired visibility and tracked-path identity.
         if (MacFs.SetFlags(path, updated, followSymlinks: false) != 0)
             ThrowErrno($"lchflags({path})");
     }

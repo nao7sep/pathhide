@@ -57,6 +57,8 @@ public sealed class WindowsVisibilityService : IVisibilityService
         // Per-item boundary crossing: debug, not info. The command aggregate is
         // logged once by the caller (ApplyDesiredStateAsync).
         Log.Debug("hiding path", new { path, mode });
+        // not recorded: this changes only external filesystem metadata; paths.json
+        // records the user's desired visibility and tracked-path identity.
         File.SetAttributes(path, attrs);
     }
 
@@ -68,6 +70,8 @@ public sealed class WindowsVisibilityService : IVisibilityService
             system: false);
 
         Log.Debug("showing path", new { path });
+        // not recorded: this changes only external filesystem metadata; paths.json
+        // records the user's desired visibility and tracked-path identity.
         File.SetAttributes(path, attrs);
     }
 

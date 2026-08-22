@@ -198,6 +198,8 @@ sealed class Program
             {
                 var attrs = WindowsFileVisibility.ApplyVisibility(
                     File.GetAttributes(path), hide, system);
+                // not recorded: this changes only external filesystem metadata; paths.json
+                // records the user's desired visibility and tracked-path identity.
                 File.SetAttributes(path, attrs);
                 var ok = new PathApplyResult(path, Ok: true);
                 results.Add(ok);
@@ -220,20 +222,6 @@ sealed class Program
         return results;
     }
 
-    /// <summary>
-    /// Appends one result to the parent's results file, if it asked for one.
-    /// </summary>
-    /// <remarks>
-    /// Per path rather than per run: the file is the only channel back across the runas
-    /// boundary (stdout cannot be redirected through the shell verb), and a run that is killed
-    /// or stalls partway must still account for what it did. A failed append degrades the
-    /// verdict rather than breaking the run — the parent falls back to re-inspecting any path
-    /// it gets no result for.
-    ///
-    /// not recorded: a transient elevated-IPC file in the OS temp directory, not under
-    /// ~/.pathhide/, and never reloaded as state — neither managed data nor written through the
-    /// atomic-write choke point (data-backup conventions).
-    /// </remarks>
     /// <summary>Points this process's storage root at whatever the parent resolved.</summary>
     private static void AdoptParentStorageRoot(string[] args)
     {
@@ -253,6 +241,8 @@ sealed class Program
 
         try
         {
+            // not recorded: this is a transient elevated-IPC result in the OS temp
+            // directory, never reloaded as managed state.
             File.AppendAllText(resultsPath, ElevatedApplyResults.SerializeLine(result));
         }
         catch (Exception ex)
