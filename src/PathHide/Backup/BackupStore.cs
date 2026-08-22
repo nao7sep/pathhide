@@ -69,8 +69,8 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
     /// <summary>
     /// Open and initialize the store once (create the table if absent, switch on WAL and a busy timeout).
     /// Best-effort: on any failure it logs ONE warn, leaves recording disabled for the session, and never
-    /// throws. WAL is what lets the tolerated two-instance case (two PathHide processes saving at once)
-    /// serialize safely without a cross-process lock.
+    /// throws. WAL and the busy timeout let the tolerated two-instance case wait safely on SQLite's
+    /// write lock; <see cref="Record"/> takes that lock before its latest-row decision.
     /// </summary>
     private static SqliteConnection? EnsureOpen()
     {
@@ -166,20 +166,29 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
 
                 var hash = Sha256(bytes);
 
+                // Acquire SQLite's cross-process write reservation BEFORE reading the predecessor.
+                // WAL serializes eventual writes, but without one immediate transaction two PathHide
+                // processes can both read the same latest hash and then append the same successor.
+                // `deferred: false` is Microsoft.Data.Sqlite's BEGIN IMMEDIATE equivalent.
+                using var transaction = connection.BeginTransaction(deferred: false);
+
                 using (var latest = connection.CreateCommand())
                 {
+                    latest.Transaction = transaction;
                     latest.CommandText =
                         "SELECT content_sha256 FROM backups WHERE path = $path ORDER BY id DESC LIMIT 1";
                     latest.Parameters.AddWithValue("$path", absolutePath);
                     if (latest.ExecuteScalar() is string previousHash &&
                         string.Equals(previousHash, hash, StringComparison.Ordinal))
                     {
+                        transaction.Commit();
                         return; // unchanged since the last recorded version — dedup skip
                     }
                 }
 
                 using (var insert = connection.CreateCommand())
                 {
+                    insert.Transaction = transaction;
                     insert.CommandText =
                         "INSERT INTO backups (path, content, content_sha256, byte_size, written_at_utc) " +
                         "VALUES ($path, $content, $hash, $size, $writtenAt)";
@@ -192,6 +201,8 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
                         Storage.FileTimestamp.SerializedStamp(DateTimeOffset.UtcNow));
                     insert.ExecuteNonQuery();
                 }
+
+                transaction.Commit();
             }
             catch (Exception ex)
             {

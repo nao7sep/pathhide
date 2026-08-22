@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using PathHide.Backup;
 using PathHide.Storage;
@@ -145,6 +147,67 @@ public sealed class BackupStoreTests : IDisposable
         BackupStore.Record(path, (byte[])bytes.Clone()); // identical content, distinct buffer
 
         Assert.Single(RowsFor(path)); // dedup skipped the second insert
+    }
+
+    [Fact]
+    public async Task Record_ConcurrentWriterCommitsSameSuccessor_DedupsAcrossConnections()
+    {
+        var path = PathOf("config.json");
+        var before = Encoding.UTF8.GetBytes("before");
+        var successor = Encoding.UTF8.GetBytes("successor");
+        BackupStore.Record(path, before);
+
+        // Model a second PathHide process with its own connection. It has appended the same
+        // successor but has not committed yet, while this process begins its Record call.
+        // A SELECT outside an immediate transaction can still see `before`, then wait at INSERT
+        // and append a duplicate after this writer commits. Taking the write reservation before
+        // SELECT makes Record wait here, then observe and dedup the committed successor.
+        using var other = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = StoreFile,
+            Mode = SqliteOpenMode.ReadWrite,
+        }.ToString());
+        other.Open();
+        using var otherTransaction = other.BeginTransaction(deferred: false);
+        using (var insert = other.CreateCommand())
+        {
+            insert.Transaction = otherTransaction;
+            insert.CommandText =
+                "INSERT INTO backups (path, content, content_sha256, byte_size, written_at_utc) " +
+                "VALUES ($path, $content, $hash, $size, $writtenAt)";
+            insert.Parameters.AddWithValue("$path", path);
+            insert.Parameters.AddWithValue("$content", successor);
+            insert.Parameters.AddWithValue(
+                "$hash",
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(successor)));
+            insert.Parameters.AddWithValue("$size", successor.LongLength);
+            insert.Parameters.AddWithValue(
+                "$writtenAt",
+                FileTimestamp.SerializedStamp(DateTimeOffset.UtcNow));
+            insert.ExecuteNonQuery();
+        }
+
+        using var started = new ManualResetEventSlim();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var competingRecord = Task.Run(() =>
+        {
+            started.Set();
+            BackupStore.Record(path, (byte[])successor.Clone());
+        }, cancellationToken);
+        Assert.True(started.Wait(TimeSpan.FromSeconds(2), cancellationToken));
+
+        // Give Record a bounded opportunity to reach SQLite while the other writer owns the
+        // reservation. It must be waiting, whether at BEGIN IMMEDIATE (fixed) or INSERT (old).
+        await Task.Delay(100, cancellationToken);
+        Assert.False(competingRecord.IsCompleted);
+
+        otherTransaction.Commit();
+        await competingRecord.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+
+        var rows = RowsFor(path);
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(before, rows[0].Content);
+        Assert.Equal(successor, rows[1].Content);
     }
 
     [Fact]
