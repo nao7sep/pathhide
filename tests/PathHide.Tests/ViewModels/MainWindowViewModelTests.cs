@@ -340,7 +340,7 @@ public class MainWindowViewModelTests
 
         await ((IAsyncRelayCommand)vm.HideSelectedCommand).ExecuteAsync(null);
 
-        Assert.Equal("nothing to do", vm.Notification);
+        Assert.Equal("Nothing to do", vm.Notification);
         // And nothing was persisted for a change that did not happen.
         Assert.Equal(writesBefore, paths.SaveCount);
     }

@@ -325,7 +325,7 @@ public partial class MainWindowViewModel : ObservableObject
         var targets = selectTargets();
 
         // An empty target set has nothing to persist, but the click still
-        // gets an answer: the apply below reports "nothing to do" rather
+        // gets an answer: the apply below reports "Nothing to do" rather
         // than leaving the user wondering whether the button worked.
         if (targets.Count > 0)
         {
@@ -812,7 +812,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (missing > 0) parts.Add($"{missing} missing");
         if (errors > 0) parts.Add($"{errors} errors");
 
-        return parts.Count > 0 ? string.Join(", ", parts) : "nothing to do";
+        return parts.Count > 0 ? string.Join(", ", parts) : "Nothing to do";
     }
 
     /// <summary>
