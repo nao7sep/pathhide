@@ -102,7 +102,7 @@ public sealed class MacVisibilityService : IVisibilityService
     /// </remarks>
     internal static bool IsDotPrefixed(string path)
     {
-        var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar));
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
         return name.Length > 1 && name[0] == '.';
     }
 
