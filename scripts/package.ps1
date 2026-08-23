@@ -18,10 +18,21 @@ dotnet publish $Project -c Release -r win-x64 --self-contained true -o publish-w
 # Portable: zip the self-contained folder as-is.
 Compress-Archive -Path publish-win/* -DestinationPath "dist/$AppName-$Version-win.zip" -Force
 
-# Installer: Inno Setup. iscc is pre-installed on the windows-latest runner; fall
-# back to its standard install path if it isn't on PATH.
-$iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
-if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+# Installer: Inno Setup. iscc is pre-installed on the windows-latest runner;
+# local development may use either the per-user or machine-wide installation.
+$isccCommand = Get-Command iscc -ErrorAction SilentlyContinue
+$iscc = if ($isccCommand) { $isccCommand.Source } else { $null }
+if (-not $iscc) {
+    $isccCandidates = @(
+        if ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe" }
+        if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe" }
+        if ($env:ProgramFiles) { Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe" }
+    )
+    $iscc = $isccCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+}
+if (-not $iscc) {
+    throw "Inno Setup compiler not found. Install Inno Setup 6 for the current user or machine, or add ISCC.exe to PATH."
+}
 & $iscc "/DMyAppVersion=$Version" scripts/pathhide.iss
 
 Get-ChildItem dist
