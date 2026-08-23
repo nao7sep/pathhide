@@ -45,8 +45,9 @@ if [ -n "$bad" ]; then
   exit 1
 fi
 
-# Portable: a zip of the .app without AppleDouble resource-fork sidecars.
-ditto -c -k --norsrc --keepParent "$APP" "dist/$APP_NAME-$VERSION-mac.zip"
+# Portable: retain AppleDouble metadata because deep signing stores managed-DLL
+# signatures in extended attributes that must survive archive extraction.
+ditto -c -k --keepParent "$APP" "dist/$APP_NAME-$VERSION-mac.zip"
 
 # Installer: a compressed .dmg holding the .app plus an /Applications alias so the
 # user can drag-install. hdiutil is built into macOS — no extra tool to install.
