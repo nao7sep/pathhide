@@ -35,6 +35,13 @@ sealed class Program
             return 1;
         }
 
+        if (!SingleInstanceLease.TryAcquire(StorageRoot.Directory, out var instanceLease))
+        {
+            Console.Error.WriteLine("PathHide is already running; activated the existing window.");
+            return 0;
+        }
+        using var ownedInstance = instanceLease;
+
         // One JSON-Lines file per launch under the app's logs directory; the logger
         // installs its own crash hooks and console fallback.
         Log.Start(StorageRoot.LogsDirectory);

@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using PathHide.Models;
 using PathHide.Services;
 using PathHide.Storage;
@@ -56,6 +58,7 @@ public partial class App : Application
                     + "your entries were lost. Your files are not affected: nothing was hidden or "
                     + "unhidden by this.\n\nRepair the file and rename it back, or move it out of the "
                     + "way to start fresh, then start PathHide again.");
+                RegisterOwnerActivation(desktop.MainWindow);
                 base.OnFrameworkInitializationCompleted();
                 return;
             }
@@ -69,6 +72,7 @@ public partial class App : Application
                     + ex.Message
                     + "\n\nYour files are not affected: nothing was hidden or unhidden by this. "
                     + "Repair or move the file under the PathHide data folder, then start PathHide again.");
+                RegisterOwnerActivation(desktop.MainWindow);
                 base.OnFrameworkInitializationCompleted();
                 return;
             }
@@ -78,6 +82,7 @@ public partial class App : Application
                 DataContext = viewModel,
             };
             desktop.MainWindow = mainWindow;
+            RegisterOwnerActivation(mainWindow);
 
             // Report material recovery once the main window can own the dialog.
             mainWindow.Opened += async (_, _) =>
@@ -92,6 +97,18 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static void RegisterOwnerActivation(Window window)
+    {
+        SingleInstanceLease.RegisterOwnerActivationHandler(() => Dispatcher.UIThread.Post(() =>
+        {
+            if (window.WindowState == WindowState.Minimized)
+                window.WindowState = WindowState.Normal;
+            if (!window.IsVisible)
+                window.Show();
+            window.Activate();
+        }));
     }
 
     /// <summary>
