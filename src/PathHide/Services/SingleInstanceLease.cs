@@ -189,6 +189,15 @@ internal sealed class SingleInstanceLease : IDisposable
             {
                 return;
             }
+            catch (IOException)
+            {
+                // A client can disconnect mid-request; keep the owner available
+                // for the next legitimate activation rather than losing the listener.
+            }
+            catch (SocketException)
+            {
+                // A transient loopback failure is not a reason to surrender ownership.
+            }
         }
     }
 
