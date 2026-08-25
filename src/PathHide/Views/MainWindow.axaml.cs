@@ -10,6 +10,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using PathHide.Services;
@@ -31,6 +32,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        if (OperatingSystem.IsWindows())
+        {
+            using var iconStream = AssetLoader.Open(new Uri("avares://PathHide/Assets/icon-win.png"));
+            Icon = new WindowIcon(iconStream);
+        }
 
         AddFilesButton.Click += OnAddFilesClick;
         AddFoldersButton.Click += OnAddFoldersClick;
