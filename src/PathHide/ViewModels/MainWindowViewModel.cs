@@ -52,6 +52,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     public ObservableCollection<PathRowViewModel> Rows { get; } = [];
 
+    /// <summary>The path grid is mandatory, so it remains present and explains its empty body.</summary>
+    public bool IsPathListEmpty => Rows.Count == 0;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ProgressText))]
     private int _scanTotal;
@@ -133,6 +136,7 @@ public partial class MainWindowViewModel : ObservableObject
         _settingsStore = settingsStore;
         _settings = settings;
         _scanner = new PathScanner(visibilityService);
+        Rows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsPathListEmpty));
         ApplyUiFont();
     }
 

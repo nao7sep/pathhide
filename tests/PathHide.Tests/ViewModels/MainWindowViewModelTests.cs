@@ -48,10 +48,12 @@ public class MainWindowViewModelTests
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
+        Assert.True(vm.IsPathListEmpty);
 
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/foo", "/foo", "relative" });
 
         var row = Assert.Single(vm.Rows);
+        Assert.False(vm.IsPathListEmpty);
         Assert.Equal("/foo", row.Path);
         Assert.Contains("1 added, 2 skipped", vm.Notification);
         Assert.Contains("/foo", visibility.Hidden); // newly added entries default to Hidden and are applied
@@ -358,6 +360,7 @@ public class MainWindowViewModelTests
         await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
 
         Assert.Empty(vm.Rows);
+        Assert.True(vm.IsPathListEmpty);
         Assert.Contains("1 removed", vm.Notification);
     }
 

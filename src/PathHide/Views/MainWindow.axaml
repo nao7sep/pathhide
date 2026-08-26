@@ -115,30 +115,37 @@
                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
                 Background="{StaticResource SurfaceBrush}"
                 ClipToBounds="True">
-            <DataGrid x:Name="PathGrid"
-                      AutomationProperties.Name="Path entries"
-                      ItemsSource="{Binding Rows}"
-                      AutoGenerateColumns="False"
-                      CanUserReorderColumns="True"
-                      CanUserResizeColumns="True"
-                      CanUserSortColumns="True"
-                      SelectionMode="Extended"
-                      IsReadOnly="True"
-                      GridLinesVisibility="Horizontal"
-                      BorderThickness="0"
-                      Background="Transparent"
-                      RowBackground="{StaticResource SurfaceBrush}">
-                <DataGrid.Columns>
-                    <!-- Each column carries a real minimum width; WindowMetrics sums these
-                         (read from the live columns) to derive the window's MinWidth, so the
-                         window and its columns can never drift apart. -->
-                    <DataGridTextColumn Header="Path" Binding="{Binding Path}" SortMemberPath="Path" Width="*" MinWidth="240"/>
-                    <DataGridTextColumn Header="Family" Binding="{Binding PathFamily}" SortMemberPath="PathFamily" Width="100" MinWidth="100"/>
-                    <DataGridTextColumn Header="Desired" Binding="{Binding DesiredVisibility}" SortMemberPath="DesiredVisibility" Width="90" MinWidth="90"/>
-                    <DataGridTextColumn Header="Actual" Binding="{Binding ActualState}" SortMemberPath="ActualState" Width="120" MinWidth="120"/>
-                    <DataGridTextColumn Header="Kind" Binding="{Binding ItemKind}" SortMemberPath="ItemKind" Width="110" MinWidth="110"/>
-                </DataGrid.Columns>
-            </DataGrid>
+            <Grid>
+                <DataGrid x:Name="PathGrid"
+                          AutomationProperties.Name="Path entries"
+                          ItemsSource="{Binding Rows}"
+                          AutoGenerateColumns="False"
+                          CanUserReorderColumns="True"
+                          CanUserResizeColumns="True"
+                          CanUserSortColumns="True"
+                          SelectionMode="Extended"
+                          IsReadOnly="True"
+                          GridLinesVisibility="Horizontal"
+                          BorderThickness="0"
+                          Background="Transparent"
+                          RowBackground="{StaticResource SurfaceBrush}">
+                    <DataGrid.Columns>
+                        <!-- Each column carries a real minimum width; WindowMetrics sums these
+                             (read from the live columns) to derive the window's MinWidth, so the
+                             window and its columns can never drift apart. -->
+                        <DataGridTextColumn Header="Path" Binding="{Binding Path}" SortMemberPath="Path" Width="*" MinWidth="240"/>
+                        <DataGridTextColumn Header="Family" Binding="{Binding PathFamily}" SortMemberPath="PathFamily" Width="100" MinWidth="100"/>
+                        <DataGridTextColumn Header="Desired" Binding="{Binding DesiredVisibility}" SortMemberPath="DesiredVisibility" Width="90" MinWidth="90"/>
+                        <DataGridTextColumn Header="Actual" Binding="{Binding ActualState}" SortMemberPath="ActualState" Width="120" MinWidth="120"/>
+                        <DataGridTextColumn Header="Kind" Binding="{Binding ItemKind}" SortMemberPath="ItemKind" Width="110" MinWidth="110"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="No entries yet. Add files or folders, or drop them here."
+                           IsVisible="{Binding IsPathListEmpty}" IsHitTestVisible="False"
+                           Margin="24,48,24,24" TextAlignment="Center" TextWrapping="Wrap"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}"/>
+            </Grid>
         </Border>
 
     </DockPanel>
