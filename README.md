@@ -4,14 +4,14 @@ PathHide is a desktop utility for macOS and Windows that hides or shows specific
 
 ## What adding a path does
 
-**Adding a path hides it immediately.** Drag a folder onto the window, or pick one, and it disappears from Finder or Explorer on the spot — adding is the act of hiding, not a bookkeeping step before it. Select an entry and choose Show to bring it back.
+**Adding a path hides it immediately.** Drag a folder into the path list, or pick one, and it disappears from Finder or Explorer on the spot — adding is the act of hiding, not a bookkeeping step before it. Select an entry and choose Show to bring it back.
 
 Removing an entry is the opposite of adding it to the list, not the opposite of hiding it: the entry goes, and the file **stays hidden**. Show it first if that is what you meant.
 
 ## Features
 
 - Remember the desired visibility per entry and reapply in bulk (hide all, show all, reapply all)
-- Add paths via pickers or drag and drop
+- Add paths via pickers or by dropping them into the path list
 - Windows: optional stronger hiding (HIDDEN + SYSTEM), with automatic UAC elevation for access-protected paths
 - macOS: hiding anything in Desktop, Documents, Downloads, or on a removable or network volume asks for the system's Files and Folders permission the first time
 

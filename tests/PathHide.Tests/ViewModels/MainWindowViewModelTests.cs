@@ -55,9 +55,55 @@ public class MainWindowViewModelTests
         var row = Assert.Single(vm.Rows);
         Assert.False(vm.IsPathListEmpty);
         Assert.Equal("/foo", row.Path);
-        Assert.Contains("1 added, 2 skipped", vm.Notification);
+        Assert.Equal("Added 1 path to the list; 1 hidden; 1 path is already in the list; 1 path was unavailable or invalid.", vm.PathAddResult);
+        Assert.True(vm.IsPathAddResultWarning);
         Assert.Contains("/foo", visibility.Hidden); // newly added entries default to Hidden and are applied
         Assert.Equal(1, paths.SaveCount);
+    }
+
+    [Fact]
+    public async Task AddPaths_DuplicateIsPersistentInformationUntilDismissed()
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/same" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/same" });
+
+        Assert.Equal("1 path is already in the list.", vm.PathAddResult);
+        Assert.False(vm.IsPathAddResultWarning);
+        Assert.False(vm.IsPathAddResultError);
+
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/other" });
+        Assert.Equal("1 path is already in the list.", vm.PathAddResult);
+
+        vm.DismissPathAddResultCommand.Execute(null);
+        Assert.False(vm.HasPathAddResult);
+    }
+
+    [Fact]
+    public async Task AddPaths_MixedBatchKeepsVisibilityFailureAndAdmissionResultsTogether()
+    {
+        var visibility = new FakeVisibilityService
+        {
+            OnHide = path => path == "/cannot-hide" ? new IOException("denied") : null,
+        };
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/existing" });
+        Assert.False(vm.HasPathAddResult);
+
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/cannot-hide", "/existing", "relative" });
+
+        Assert.Equal(
+            "Added 1 path to the list; 1 path is already in the list; 1 path was unavailable or invalid; 1 path could not be hidden.",
+            vm.PathAddResult);
+        Assert.False(vm.IsPathAddResultWarning);
+        Assert.True(vm.IsPathAddResultError);
+        Assert.Equal(2, vm.Rows.Count);
+        Assert.Equal(ActualState.Visible, vm.Rows.Single(row => row.Path == "/cannot-hide").ActualState);
     }
 
     [Fact]
@@ -77,7 +123,8 @@ public class MainWindowViewModelTests
         // the list is what it was and the failure is surfaced.
         var row = Assert.Single(vm.Rows);
         Assert.Equal("/existing", row.Path);
-        Assert.Contains("Failed to save", vm.Notification);
+        Assert.Contains("path list could not be saved", vm.PathAddResult);
+        Assert.True(vm.IsPathAddResultError);
     }
 
     [Fact]
@@ -587,8 +634,28 @@ public class MainWindowViewModelTests
         // A newly added entry defaults to Hidden and is applied immediately, so Hide runs.
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
-        Assert.Contains("1 errors", vm.Notification);
+        Assert.Contains("1 path could not be hidden", vm.PathAddResult);
+        Assert.True(vm.IsPathAddResultError);
         Assert.Contains("/x", visibility.Inspected); // re-inspected after the failure
+    }
+
+    [Fact]
+    public async Task ReapplyAll_ClearsTheExactAddFailureAfterItIsCorrected()
+    {
+        var visibility = new FakeVisibilityService
+        {
+            OnHide = _ => new IOException("temporarily unavailable"),
+        };
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
+        Assert.True(vm.HasPathAddResult);
+
+        visibility.OnHide = null;
+        await vm.ReapplyAllCommand.ExecuteAsync(null);
+
+        Assert.False(vm.HasPathAddResult);
     }
 
     [Fact]
@@ -606,8 +673,9 @@ public class MainWindowViewModelTests
 
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
-        Assert.Contains("1 errors", vm.Notification);
-        Assert.DoesNotContain("elevated", vm.Notification);
+        Assert.Contains("1 path could not be hidden", vm.PathAddResult);
+        Assert.DoesNotContain("elevated", vm.PathAddResult);
+        Assert.True(vm.IsPathAddResultError);
     }
 
     [Fact]
@@ -629,8 +697,9 @@ public class MainWindowViewModelTests
 
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
-        Assert.Contains("1 errors", vm.Notification);
-        Assert.DoesNotContain("elevated", vm.Notification);
+        Assert.Contains("1 path could not be hidden", vm.PathAddResult);
+        Assert.DoesNotContain("elevated", vm.PathAddResult);
+        Assert.True(vm.IsPathAddResultError);
         // The write boundary is never crossed for an access-denied inspect.
         Assert.DoesNotContain("/x", visibility.Hidden);
     }

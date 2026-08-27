@@ -9,8 +9,28 @@
         Title="PathHide"
         Icon="/Assets/icon.png"
         Width="1280" Height="720"
-        Background="{StaticResource AppBackgroundBrush}"
-        DragDrop.AllowDrop="True">
+        Background="{StaticResource AppBackgroundBrush}">
+
+    <Window.Styles>
+        <Style Selector="Border.pathReceiver.dropActive">
+            <Setter Property="BorderBrush" Value="{StaticResource ReloadBrush}"/>
+            <Setter Property="BorderThickness" Value="3"/>
+        </Style>
+        <Style Selector="Border.pathResult">
+            <Setter Property="Background" Value="{StaticResource StatusBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource StatusAccentBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="Margin" Value="8"/>
+        </Style>
+        <Style Selector="Border.pathResult.warning">
+            <Setter Property="BorderBrush" Value="{StaticResource CancelBrush}"/>
+        </Style>
+        <Style Selector="Border.pathResult.error">
+            <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
+        </Style>
+    </Window.Styles>
 
     <DockPanel>
 
@@ -111,11 +131,23 @@
         </Border>
 
         <!-- Path list -->
-        <Border Margin="12" CornerRadius="8"
+        <Border x:Name="PathListReceiver" Classes="pathReceiver" Margin="12" CornerRadius="8"
                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
                 Background="{StaticResource SurfaceBrush}"
-                ClipToBounds="True">
-            <Grid>
+                ClipToBounds="True" DragDrop.AllowDrop="True">
+            <DockPanel>
+                <Border DockPanel.Dock="Bottom" Classes="pathResult"
+                        Classes.warning="{Binding IsPathAddResultWarning}"
+                        Classes.error="{Binding IsPathAddResultError}"
+                        IsVisible="{Binding HasPathAddResult}">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Text="{Binding PathAddResult}" TextWrapping="Wrap"
+                                   VerticalAlignment="Center"/>
+                        <Button Grid.Column="1" Content="Dismiss" Classes="utility"
+                                Margin="10,0,0,0" Command="{Binding DismissPathAddResultCommand}"/>
+                    </Grid>
+                </Border>
+                <Grid>
                 <DataGrid x:Name="PathGrid"
                           AutomationProperties.Name="Path entries"
                           ItemsSource="{Binding Rows}"
@@ -145,7 +177,8 @@
                            Margin="24,48,24,24" TextAlignment="Center" TextWrapping="Wrap"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
                            Foreground="{StaticResource TextSecondaryBrush}"/>
-            </Grid>
+                </Grid>
+            </DockPanel>
         </Border>
 
     </DockPanel>

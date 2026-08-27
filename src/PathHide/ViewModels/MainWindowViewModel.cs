@@ -70,6 +70,21 @@ public partial class MainWindowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusBarText))]
     private string _notification = string.Empty;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPathAddResult))]
+    private string _pathAddResult = string.Empty;
+
+    [ObservableProperty]
+    private bool _isPathAddResultWarning;
+
+    [ObservableProperty]
+    private bool _isPathAddResultError;
+
+    private readonly List<string> _pathAddIssuePaths = [];
+    private bool _pathAddHasOpaqueIssues;
+
+    public bool HasPathAddResult => !string.IsNullOrEmpty(PathAddResult);
+
     // Settings are always available now: the UI font is a cross-platform setting, so the dialog
 
     /// <summary>Whether the Windows-only hide-mode setting applies; the dialog shows it only then.</summary>
@@ -227,13 +242,20 @@ public partial class MainWindowViewModel : ObservableObject
 
     // --- Add / Remove ---
 
-    // Both the pickers and drag-drop dispatch through AddPathsCommand, so two rapid drops — or a
-    // drop landing during a picker add — arrive here; MutateAsync serializes them.
+    // Pickers and drag-drop share AddPathsCoreAsync; MutateAsync serializes two rapid drops or a
+    // drop landing during a picker add.
     [RelayCommand]
-    private Task AddPathsAsync(IEnumerable<string> paths) => MutateAsync(async () =>
+    private Task AddPathsAsync(IEnumerable<string> paths) => AddPathsCoreAsync(paths, unavailable: 0);
+
+    public Task AddDroppedPathsAsync(IEnumerable<string> paths, int unavailable) =>
+        AddPathsCoreAsync(paths, Math.Max(0, unavailable));
+
+    private Task AddPathsCoreAsync(IEnumerable<string> paths, int unavailable) => MutateAsync(async () =>
     {
         var added = 0;
-        var skipped = 0;
+        var duplicates = 0;
+        var duplicatePaths = new List<string>();
+        var invalid = unavailable;
         var addedPaths = new List<string>();
         var updated = new List<PathEntry>(_entries);
 
@@ -242,13 +264,14 @@ public partial class MainWindowViewModel : ObservableObject
             if (!PathNormalizer.TryNormalize(raw, out var normalized, out _))
             {
                 Log.Warn("add: rejected non-absolute path", new { path = raw });
-                skipped++;
+                invalid++;
                 continue;
             }
 
             if (updated.Any(e => PathNormalizer.AreEqual(e.Path, normalized)))
             {
-                skipped++;
+                duplicates++;
+                duplicatePaths.Add(normalized);
                 continue;
             }
 
@@ -261,23 +284,107 @@ public partial class MainWindowViewModel : ObservableObject
             added++;
         }
 
-        Log.Info("add paths", new { added, skipped });
+        Log.Info("add paths", new { added, duplicates, invalid });
 
         if (added == 0)
         {
-            ShowNotification($"{added} added, {skipped} skipped");
+            ShowPathAddResult(added, duplicatePaths, invalid, ApplyOutcome.Empty);
             return;
         }
 
-        if (!TrySaveEntries(updated))
+        if (!TrySaveEntries(updated, out var saveFailure))
+        {
+            SetPathAddResult(
+                $"Could not add the selected paths because the path list could not be saved: {saveFailure}",
+                error: true,
+                issuePaths: addedPaths);
             return;
+        }
 
         var newRows = Rows
             .Where(r => addedPaths.Any(path => PathNormalizer.AreEqual(path, r.Path)))
             .ToList();
-        var summary = await ApplyDesiredStateAsync(newRows);
-        ShowNotification($"{added} added, {skipped} skipped — {summary}");
+        var outcome = await ApplyDesiredStateAsync(newRows);
+        if (duplicates > 0 || invalid > 0 || outcome.HasProblems)
+        {
+            ShowPathAddResult(added, duplicatePaths, invalid, outcome);
+        }
+        else
+        {
+            ClearPathAddResultIfResolvedBy(addedPaths);
+        }
     });
+
+    private void ShowPathAddResult(
+        int added,
+        IReadOnlyCollection<string> duplicatePaths,
+        int invalid,
+        ApplyOutcome outcome)
+    {
+        var duplicates = duplicatePaths.Count;
+        var parts = new List<string>();
+        if (added > 0)
+            parts.Add($"Added {added} path{(added == 1 ? string.Empty : "s")} to the list");
+        if (outcome.Applied > 0)
+            parts.Add($"{outcome.Applied} hidden");
+        if (duplicates > 0)
+            parts.Add(duplicates == 1 ? "1 path is already in the list" : $"{duplicates} paths are already in the list");
+        if (invalid > 0)
+            parts.Add(invalid == 1 ? "1 path was unavailable or invalid" : $"{invalid} paths were unavailable or invalid");
+        if (outcome.Unchanged > 0)
+            parts.Add(outcome.Unchanged == 1 ? "1 path did not become hidden" : $"{outcome.Unchanged} paths did not become hidden");
+        if (outcome.Missing > 0)
+            parts.Add(outcome.Missing == 1 ? "1 added path is missing" : $"{outcome.Missing} added paths are missing");
+        if (outcome.Errors > 0)
+            parts.Add(outcome.Errors == 1 ? "1 path could not be hidden" : $"{outcome.Errors} paths could not be hidden");
+
+        if (parts.Count == 0)
+            return;
+
+        SetPathAddResult(
+            string.Join("; ", parts) + ".",
+            warning: outcome.Errors == 0 && (invalid > 0 || outcome.Unchanged > 0 || outcome.Missing > 0),
+            error: outcome.Errors > 0,
+            issuePaths: duplicatePaths.Concat(outcome.ProblemPaths),
+            hasOpaqueIssues: invalid > 0);
+    }
+
+    private void SetPathAddResult(
+        string message,
+        bool warning = false,
+        bool error = false,
+        IEnumerable<string>? issuePaths = null,
+        bool hasOpaqueIssues = false)
+    {
+        _pathAddIssuePaths.Clear();
+        if (issuePaths is not null)
+            _pathAddIssuePaths.AddRange(issuePaths.Distinct(StringComparer.Ordinal));
+        _pathAddHasOpaqueIssues = hasOpaqueIssues;
+        IsPathAddResultWarning = warning;
+        IsPathAddResultError = error;
+        PathAddResult = message;
+        Log.Info("path add result", new { message, warning, error });
+    }
+
+    private void ClearPathAddResultIfResolvedBy(IEnumerable<string> resolvedPaths)
+    {
+        if (_pathAddHasOpaqueIssues || _pathAddIssuePaths.Count == 0)
+            return;
+
+        var resolved = resolvedPaths.ToList();
+        if (_pathAddIssuePaths.All(issue => resolved.Any(path => PathNormalizer.AreEqual(issue, path))))
+            DismissPathAddResult();
+    }
+
+    [RelayCommand]
+    private void DismissPathAddResult()
+    {
+        _pathAddIssuePaths.Clear();
+        _pathAddHasOpaqueIssues = false;
+        IsPathAddResultWarning = false;
+        IsPathAddResultError = false;
+        PathAddResult = string.Empty;
+    }
 
     [RelayCommand]
     private Task RemoveSelectedAsync() => MutateAsync(async () =>
@@ -302,8 +409,11 @@ public partial class MainWindowViewModel : ObservableObject
 
         Log.Info("remove paths", new { removed = selected.Count });
 
-        if (!TrySaveEntries(updated))
+        if (!TrySaveEntries(updated, out var saveFailure))
+        {
+            ShowNotification($"Failed to save: {saveFailure}");
             return;
+        }
 
         ShowNotification($"{selected.Count} removed");
     });
@@ -342,11 +452,17 @@ public partial class MainWindowViewModel : ObservableObject
 
             // The rows take the new value from the save, not before it: TrySaveEntries
             // re-syncs them, so ApplyDesiredStateAsync below reads the committed state.
-            if (!TrySaveEntries(updated))
+            if (!TrySaveEntries(updated, out var saveFailure))
+            {
+                ShowNotification($"Failed to save: {saveFailure}");
                 return;
+            }
         }
 
-        ShowNotification(await ApplyDesiredStateAsync(targets));
+        var outcome = await ApplyDesiredStateAsync(targets);
+        ShowNotification(outcome.Summary);
+        if (!outcome.HasProblems)
+            ClearPathAddResultIfResolvedBy(targets.Select(row => row.Path));
     });
 
     private List<PathRowViewModel> SelectedRows() => Rows.Where(r => r.IsSelected).ToList();
@@ -367,7 +483,13 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private Task ReapplyAllAsync() => MutateAsync(async () =>
-        ShowNotification(await ApplyDesiredStateAsync(Rows.ToList())));
+    {
+        var targets = Rows.ToList();
+        var outcome = await ApplyDesiredStateAsync(targets);
+        ShowNotification(outcome.Summary);
+        if (!outcome.HasProblems)
+            ClearPathAddResultIfResolvedBy(targets.Select(row => row.Path));
+    });
 
     [RelayCommand]
     // Reload takes the gate like every other mutating command, but not MutateAsync's
@@ -516,8 +638,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// right moment. Building the new list as a value makes a failed save a no-op by
     /// construction: nothing in memory moves until disk agrees.
     /// </remarks>
-    private bool TrySaveEntries(List<PathEntry> updated)
+    private bool TrySaveEntries(List<PathEntry> updated, out string? failure)
     {
+        failure = null;
         try
         {
             // Sort a snapshot so paths.json is diff-stable without imposing that order on the
@@ -527,7 +650,7 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error("paths: save failed", ex);
-            ShowNotification($"Failed to save: {ex.Message}");
+            failure = ex.Message;
             return false;
         }
 
@@ -678,7 +801,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async Task<string> ApplyDesiredStateAsync(List<PathRowViewModel> targets)
+    private async Task<ApplyOutcome> ApplyDesiredStateAsync(List<PathRowViewModel> targets)
     {
         Log.Info("apply: start", new { count = targets.Count });
 
@@ -686,6 +809,7 @@ public partial class MainWindowViewModel : ObservableObject
         var unchanged = 0;
         var missing = 0;
         var errors = 0;
+        var problemPaths = new List<string>();
         var retryBucket = new List<PathRowViewModel>();
 
         foreach (var row in targets)
@@ -697,6 +821,7 @@ public partial class MainWindowViewModel : ObservableObject
                 if (inspection.ActualState == ActualState.Missing)
                 {
                     missing++;
+                    problemPaths.Add(row.Path);
                     row.ActualState = ActualState.Missing;
                     continue;
                 }
@@ -719,6 +844,7 @@ public partial class MainWindowViewModel : ObservableObject
                 if (inspection.ActualState is ActualState.AccessDenied or ActualState.Error)
                 {
                     errors++;
+                    problemPaths.Add(row.Path);
                     row.ActualState = inspection.ActualState;
                     continue;
                 }
@@ -751,6 +877,7 @@ public partial class MainWindowViewModel : ObservableObject
                 else
                 {
                     unchanged++;
+                    problemPaths.Add(row.Path);
                     Log.Info("apply: state unchanged", new
                     {
                         path = row.Path,
@@ -770,6 +897,7 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 Log.Error("apply: failed", ex, new { path = row.Path });
                 errors++;
+                problemPaths.Add(row.Path);
                 var recheck = await Task.Run(() => _visibilityService.Inspect(row.Path));
                 row.ApplyScanResult(recheck, row.PathFamily);
             }
@@ -802,7 +930,11 @@ public partial class MainWindowViewModel : ObservableObject
                 row.ApplyScanResult(recheck with { ActualState = display }, row.PathFamily);
 
                 if (wasApplied) applied++;
-                else errors++;
+                else
+                {
+                    errors++;
+                    problemPaths.Add(row.Path);
+                }
             }
         }
 
@@ -810,13 +942,32 @@ public partial class MainWindowViewModel : ObservableObject
         // tally below is built per-path, so the raw child exit code is not surfaced to the UI.
         Log.Info("apply: done", new { applied, unchanged, missing, errors, elevationExitCode });
 
-        var parts = new List<string>();
-        if (applied > 0) parts.Add($"{applied} applied");
-        if (unchanged > 0) parts.Add($"{unchanged} unchanged");
-        if (missing > 0) parts.Add($"{missing} missing");
-        if (errors > 0) parts.Add($"{errors} errors");
+        return new ApplyOutcome(applied, unchanged, missing, errors, problemPaths);
+    }
 
-        return parts.Count > 0 ? string.Join(", ", parts) : "Nothing to do";
+    private readonly record struct ApplyOutcome(
+        int Applied,
+        int Unchanged,
+        int Missing,
+        int Errors,
+        IReadOnlyList<string> ProblemPaths)
+    {
+        public static ApplyOutcome Empty { get; } = new(0, 0, 0, 0, []);
+
+        public bool HasProblems => Unchanged > 0 || Missing > 0 || Errors > 0;
+
+        public string Summary
+        {
+            get
+            {
+                var parts = new List<string>();
+                if (Applied > 0) parts.Add($"{Applied} applied");
+                if (Unchanged > 0) parts.Add($"{Unchanged} unchanged");
+                if (Missing > 0) parts.Add($"{Missing} missing");
+                if (Errors > 0) parts.Add($"{Errors} errors");
+                return parts.Count > 0 ? string.Join(", ", parts) : "Nothing to do";
+            }
+        }
     }
 
     /// <summary>

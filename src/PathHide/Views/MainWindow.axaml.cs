@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     // item's own HotKey only registers while the flyout is open, so accelerators are matched at the
     // window level in OnKeyDown, with InputGesture providing the visible menu association.
     private IReadOnlyList<ShortcutItem> _shortcuts = [];
+    private readonly DispatcherTimer _pathDropLeaseTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
     private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
 
@@ -51,8 +52,12 @@ public partial class MainWindow : Window
         AboutMenuItem.Click += OnAboutClick;
         ShortcutsMenuItem.Click += OnShortcutsClick;
 
-        AddHandler(DragDrop.DropEvent, OnDrop);
-        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        PathListReceiver.AddHandler(DragDrop.DropEvent, OnDrop);
+        PathListReceiver.AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        PathListReceiver.AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
+        _pathDropLeaseTimer.Tick += (_, _) => SetPathDropActive(false);
+        Deactivated += (_, _) => SetPathDropActive(false);
+        Closed += (_, _) => SetPathDropActive(false);
         KeyDown += OnKeyDown;
         PathGrid.SelectionChanged += OnGridSelectionChanged;
         PathGrid.KeyDown += OnGridKeyDown;
@@ -176,19 +181,38 @@ public partial class MainWindow : Window
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        e.DragEffects = e.DataTransfer.Contains(DataFormat.File)
-            ? DragDropEffects.Copy
-            : DragDropEffects.None;
+        var acceptsFiles = e.DataTransfer.Contains(DataFormat.File);
+        e.DragEffects = acceptsFiles ? DragDropEffects.Copy : DragDropEffects.None;
+        SetPathDropActive(acceptsFiles);
+        e.Handled = true;
     }
+
+    private void OnDragLeave(object? sender, DragEventArgs e) => SetPathDropActive(false);
 
     private async void OnDrop(object? sender, DragEventArgs e)
     {
+        e.Handled = true;
+        SetPathDropActive(false);
         var items = e.DataTransfer.TryGetFiles();
         if (items is null)
             return;
 
-        var paths = items.Select(i => i.Path.LocalPath);
-        await ViewModel.AddPathsCommand.ExecuteAsync(paths);
+        var deliveredItems = items.ToArray();
+        var paths = deliveredItems
+            .Select(i => i.Path.LocalPath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToArray();
+        await ViewModel.AddDroppedPathsAsync(paths, deliveredItems.Length - paths.Length);
+    }
+
+    private void SetPathDropActive(bool active)
+    {
+        _pathDropLeaseTimer.Stop();
+        PathListReceiver.Classes.Set("dropActive", active);
+        if (active)
+        {
+            _pathDropLeaseTimer.Start();
+        }
     }
 
     private void OnGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
