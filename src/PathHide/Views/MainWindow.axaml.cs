@@ -26,7 +26,6 @@ public partial class MainWindow : Window
     // item's own HotKey only registers while the flyout is open, so accelerators are matched at the
     // window level in OnKeyDown, with InputGesture providing the visible menu association.
     private IReadOnlyList<ShortcutItem> _shortcuts = [];
-    private readonly DispatcherTimer _pathDropLeaseTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
     private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
 
@@ -55,7 +54,6 @@ public partial class MainWindow : Window
         PathListReceiver.AddHandler(DragDrop.DropEvent, OnDrop);
         PathListReceiver.AddHandler(DragDrop.DragOverEvent, OnDragOver);
         PathListReceiver.AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
-        _pathDropLeaseTimer.Tick += (_, _) => SetPathDropActive(false);
         Deactivated += (_, _) => SetPathDropActive(false);
         Closed += (_, _) => SetPathDropActive(false);
         KeyDown += OnKeyDown;
@@ -205,15 +203,7 @@ public partial class MainWindow : Window
         await ViewModel.AddDroppedPathsAsync(paths, deliveredItems.Length - paths.Length);
     }
 
-    private void SetPathDropActive(bool active)
-    {
-        _pathDropLeaseTimer.Stop();
-        PathListReceiver.Classes.Set("dropActive", active);
-        if (active)
-        {
-            _pathDropLeaseTimer.Start();
-        }
-    }
+    private void SetPathDropActive(bool active) => PathListReceiver.Classes.Set("dropActive", active);
 
     private void OnGridSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
