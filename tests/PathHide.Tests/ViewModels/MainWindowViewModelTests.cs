@@ -5,12 +5,20 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
 using PathHide.Models;
 using PathHide.Services;
 using PathHide.Tests.Fakes;
 using PathHide.ViewModels;
+using PathHide.Views;
 using Xunit;
 
 namespace PathHide.Tests.ViewModels;
@@ -250,6 +258,75 @@ public class MainWindowViewModelTests
         Assert.Equal(0, vm.ScanProgress);
         Assert.Equal(2, vm.ScanTotal);
         Assert.All(vm.Rows, r => Assert.Equal(ActualState.Unknown, r.ActualState));
+    }
+
+    [AvaloniaFact]
+    public async Task PathListReceiver_RoutesNativeFilesAndNeighboringToolbarDenies()
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var settingsStore = new FakeJsonStore<AppSettings>();
+        var vm = new MainWindowViewModel(
+            visibility,
+            paths,
+            settingsStore,
+            settingsStore.Load().Value);
+        var window = new MainWindow { DataContext = vm };
+        var source = Path.GetTempFileName();
+
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var receiver = Assert.IsType<Border>(window.FindControl<Border>("PathListReceiver"));
+            var toolbar = Assert.IsType<Border>(window.FindControl<Border>("Toolbar"));
+            var storageFile = await window.StorageProvider.TryGetFileFromPathAsync(new Uri(source));
+            Assert.NotNull(storageFile);
+            using var transfer = new DataTransfer();
+            transfer.Add(DataTransferItem.CreateFile(storageFile));
+            Assert.True(DragDrop.GetAllowDrop(receiver));
+            Assert.True(((IDataTransfer)transfer).Contains(DataFormat.File));
+
+            var receiverPoint = receiver.TranslatePoint(new Point(10, 10), window);
+            var toolbarPoint = toolbar.TranslatePoint(new Point(10, 10), window);
+            Assert.NotNull(receiverPoint);
+            Assert.NotNull(toolbarPoint);
+
+            window.DragDrop(receiverPoint.Value, RawDragEventType.DragEnter, transfer,
+                DragDropEffects.Copy, RawInputModifiers.None);
+            window.DragDrop(receiverPoint.Value, RawDragEventType.DragOver, transfer,
+                DragDropEffects.Copy, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("dropActive", receiver.Classes);
+
+            window.DragDrop(receiverPoint.Value, RawDragEventType.DragLeave, transfer,
+                DragDropEffects.Copy, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.DoesNotContain("dropActive", receiver.Classes);
+
+            window.DragDrop(receiverPoint.Value, RawDragEventType.DragOver, transfer,
+                DragDropEffects.Copy, RawInputModifiers.None);
+            window.DragDrop(receiverPoint.Value, RawDragEventType.Drop, transfer,
+                DragDropEffects.Copy, RawInputModifiers.None);
+            await visibility.InspectEntered.Task;
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.DoesNotContain("dropActive", receiver.Classes);
+            Assert.Equal(Path.GetFullPath(source), Assert.Single(vm.Rows).Path);
+            Assert.Equal(1, paths.SaveCount);
+
+            window.DragDrop(toolbarPoint.Value, RawDragEventType.Drop, transfer,
+                DragDropEffects.Copy, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(vm.Rows);
+            Assert.Equal(1, paths.SaveCount);
+        }
+        finally
+        {
+            window.Close();
+            File.Delete(source);
+        }
     }
 
     [Fact]
