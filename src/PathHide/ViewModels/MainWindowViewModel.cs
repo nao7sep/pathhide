@@ -70,6 +70,10 @@ public partial class MainWindowViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusBarText))]
     private string _notification = string.Empty;
 
+    public ObservableCollection<OperationalResultViewModel> OperationalResults { get; } = [];
+
+    public bool HasOperationalResults => OperationalResults.Count > 0;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPathAddResult))]
     private string _pathAddResult = string.Empty;
@@ -411,10 +415,11 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (!TrySaveEntries(updated, out var saveFailure))
         {
-            ShowNotification($"Failed to save: {saveFailure}");
+            ShowOperationalResult(OperationalResultOwner.PathStore, $"Failed to save: {saveFailure}", error: true);
             return;
         }
 
+        ResolveOperationalResult(OperationalResultOwner.PathStore);
         ShowNotification($"{selected.Count} removed");
     });
 
@@ -454,13 +459,14 @@ public partial class MainWindowViewModel : ObservableObject
             // re-syncs them, so ApplyDesiredStateAsync below reads the committed state.
             if (!TrySaveEntries(updated, out var saveFailure))
             {
-                ShowNotification($"Failed to save: {saveFailure}");
+                ShowOperationalResult(OperationalResultOwner.PathStore, $"Failed to save: {saveFailure}", error: true);
                 return;
             }
+            ResolveOperationalResult(OperationalResultOwner.PathStore);
         }
 
         var outcome = await ApplyDesiredStateAsync(targets);
-        ShowNotification(outcome.Summary);
+        ShowApplyOutcome(outcome);
         if (!outcome.HasProblems)
             ClearPathAddResultIfResolvedBy(targets.Select(row => row.Path));
     });
@@ -486,7 +492,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var targets = Rows.ToList();
         var outcome = await ApplyDesiredStateAsync(targets);
-        ShowNotification(outcome.Summary);
+        ShowApplyOutcome(outcome);
         if (!outcome.HasProblems)
             ClearPathAddResultIfResolvedBy(targets.Select(row => row.Path));
     });
@@ -569,12 +575,13 @@ public partial class MainWindowViewModel : ObservableObject
             _settingsStore.Save(_settings);
             Log.Info("settings: hide mode changed", new { mode = newMode });
             OnPropertyChanged(nameof(IsHiddenAndSystem));
+            ResolveOperationalResult(OperationalResultOwner.Settings);
         }
         catch (Exception ex)
         {
             _settings.WindowsHideMode = previousMode;
             Log.Error("settings: save failed", ex);
-            ShowNotification($"Failed to save settings: {ex.Message}");
+            ShowOperationalResult(OperationalResultOwner.Settings, $"Failed to save settings: {ex.Message}", error: true);
         }
     }
 
@@ -598,12 +605,13 @@ public partial class MainWindowViewModel : ObservableObject
             Log.Info("settings: ui font changed", new { family });
             ApplyUiFont();
             OnPropertyChanged(nameof(UiFontFamily));
+            ResolveOperationalResult(OperationalResultOwner.Settings);
         }
         catch (Exception ex)
         {
             _settings.UiFontFamily = previous;
             Log.Error("settings: save failed", ex);
-            ShowNotification($"Failed to save settings: {ex.Message}");
+            ShowOperationalResult(OperationalResultOwner.Settings, $"Failed to save settings: {ex.Message}", error: true);
         }
     }
 
@@ -767,6 +775,7 @@ public partial class MainWindowViewModel : ObservableObject
         _scanCts = scanCts;
         var token = scanCts.Token;
         var entries = _entries.ToList();
+        var completed = false;
 
         IsScanning = true;
         ScanTotal = entries.Count;
@@ -782,6 +791,7 @@ public partial class MainWindowViewModel : ObservableObject
                 // bar shows in lockstep with the rows, instead of arriving on its own channel.
                 ScanProgress++;
             }
+            completed = true;
         }
         catch (OperationCanceledException)
         {
@@ -790,10 +800,12 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error("scan: failed", ex);
-            ShowNotification($"Scan failed: {ex.Message}");
+            ShowOperationalResult(OperationalResultOwner.Scan, $"Scan failed: {ex.Message}", error: true);
         }
         finally
         {
+            if (completed)
+                ResolveOperationalResult(OperationalResultOwner.Scan);
             _scanCts = null;
             IsScanning = false;
             OnPropertyChanged(nameof(StatusBarText));
@@ -1005,6 +1017,46 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     private CancellationTokenSource? _notificationCts;
+
+    private void ShowApplyOutcome(ApplyOutcome outcome)
+    {
+        if (outcome.Errors > 0)
+        {
+            ShowOperationalResult(OperationalResultOwner.Visibility, outcome.Summary, error: true);
+            return;
+        }
+
+        if (outcome.HasProblems)
+        {
+            ShowOperationalResult(OperationalResultOwner.Visibility, outcome.Summary, error: false);
+            return;
+        }
+
+        ResolveOperationalResult(OperationalResultOwner.Visibility);
+        ShowNotification(outcome.Summary);
+    }
+
+    private void ShowOperationalResult(OperationalResultOwner owner, string message, bool error)
+    {
+        Log.Info("operational result", new { owner, message, error });
+        ResolveOperationalResult(owner);
+        OperationalResults.Add(new OperationalResultViewModel(owner, message, error));
+        OnPropertyChanged(nameof(HasOperationalResults));
+    }
+
+    [RelayCommand]
+    private void DismissOperationalResult(OperationalResultViewModel result)
+    {
+        if (OperationalResults.Remove(result))
+            OnPropertyChanged(nameof(HasOperationalResults));
+    }
+
+    private void ResolveOperationalResult(OperationalResultOwner owner)
+    {
+        var result = OperationalResults.FirstOrDefault(item => item.Owner == owner);
+        if (result is not null && OperationalResults.Remove(result))
+            OnPropertyChanged(nameof(HasOperationalResults));
+    }
 
     private void ShowNotification(string message)
     {

@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -155,7 +156,10 @@ public class MainWindowViewModelTests
         Assert.Equal(DesiredVisibility.Hidden, row.DesiredVisibility);
         Assert.Equal(DesiredVisibility.Hidden, row.Entry.DesiredVisibility);
         Assert.DoesNotContain("/x", visibility.Shown);
-        Assert.Contains("Failed to save", vm.Notification);
+        var failure = Assert.Single(vm.OperationalResults);
+        Assert.Contains("Failed to save", failure.Message);
+        Assert.True(failure.IsError);
+        Assert.Equal(AutomationLiveSetting.Assertive, failure.LiveSetting);
     }
 
     [Fact]
@@ -693,9 +697,39 @@ public class MainWindowViewModelTests
         // The failed save leaves memory (and what the service reads) on the old value...
         Assert.False(vm.IsHiddenAndSystem);
         Assert.Equal(WindowsHideMode.HiddenOnly, settings.WindowsHideMode);
-        Assert.Contains("Failed to save settings", vm.Notification);
+        var failure = Assert.Single(vm.OperationalResults);
+        Assert.Contains("Failed to save settings", failure.Message);
+        Assert.Equal("Error", failure.SeverityLabel);
+        Assert.Equal(AutomationLiveSetting.Assertive, failure.LiveSetting);
         // ...and must not announce a hide-mode change that was rolled back.
         Assert.DoesNotContain(nameof(MainWindowViewModel.IsHiddenAndSystem), changed);
+    }
+
+    [Fact]
+    public async Task IndependentOperationalFailuresStackUntilTheirOwnerRecoversOrTheyAreDismissed()
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var settings = new FakeJsonStore<AppSettings>();
+        var vm = CreateViewModel(visibility, paths, settings);
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
+
+        settings.ThrowOnSave = true;
+        vm.SetWindowsHideMode(true);
+
+        paths.ThrowOnSave = true;
+        vm.Rows[0].IsSelected = true;
+        await ((IAsyncRelayCommand)vm.ShowSelectedCommand).ExecuteAsync(null);
+
+        Assert.Equal(2, vm.OperationalResults.Count);
+        Assert.Contains(vm.OperationalResults, result => result.Owner == OperationalResultOwner.Settings);
+        Assert.Contains(vm.OperationalResults, result => result.Owner == OperationalResultOwner.PathStore);
+
+        var pathFailure = vm.OperationalResults.Single(result => result.Owner == OperationalResultOwner.PathStore);
+        vm.DismissOperationalResultCommand.Execute(pathFailure);
+
+        var remaining = Assert.Single(vm.OperationalResults);
+        Assert.Equal(OperationalResultOwner.Settings, remaining.Owner);
     }
 
     // --- Apply error handling ---

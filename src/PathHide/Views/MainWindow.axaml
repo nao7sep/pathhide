@@ -130,6 +130,30 @@
             </Panel>
         </Border>
 
+        <!-- Operational problems are independent from the transient status bar. A routine success
+             can update the bar without erasing this dismissible result. -->
+        <ItemsControl DockPanel.Dock="Bottom" ItemsSource="{Binding OperationalResults}"
+                      IsVisible="{Binding HasOperationalResults}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="vm:OperationalResultViewModel">
+                    <Border Classes="pathResult" Classes.error="{Binding IsError}"
+                            AutomationProperties.Name="{Binding Message}"
+                            AutomationProperties.LiveSetting="{Binding LiveSetting}">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <TextBlock Text="{Binding SeverityLabel}" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Message}" TextWrapping="Wrap"
+                                       VerticalAlignment="Center"/>
+                            <Button Grid.Column="2" Content="Dismiss" Classes="utility"
+                                    Margin="10,0,0,0"
+                                    Command="{Binding $parent[ItemsControl].DataContext.DismissOperationalResultCommand}"
+                                    CommandParameter="{Binding}"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <!-- Path list -->
         <Border x:Name="PathListReceiver" Classes="pathReceiver" Margin="12" CornerRadius="8"
                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
