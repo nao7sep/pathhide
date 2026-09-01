@@ -118,6 +118,9 @@ public partial class DialogBase : Window
 
     protected void SetInitialFocus(Control control) => _initialFocusControl = control;
 
+    /// <summary>Allows a feature dialog to persist its draft before the shell closes.</summary>
+    protected virtual bool TryCommit(string tag) => true;
+
     private void OnOpened(object? sender, EventArgs e)
     {
         ClampHeightToScreen();
@@ -168,7 +171,11 @@ public partial class DialogBase : Window
         if (sender is not Button button)
             return;
 
-        ResultTag = button.Tag as string;
+        var tag = button.Tag as string;
+        if (tag is null || (_commitButtons.Contains(button) && !TryCommit(tag)))
+            return;
+
+        ResultTag = tag;
         if (_commitButtons.Contains(button))
             _bypassCloseGuard = true;
 

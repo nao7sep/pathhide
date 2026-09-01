@@ -706,6 +706,41 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public void TryApplySettings_SavesBothFieldsAsOneCandidateBeforePublishingThem()
+    {
+        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settings = settingsStore.Load().Value;
+        var vm = new MainWindowViewModel(
+            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+
+        var failure = vm.TryApplySettings("  Menlo  ", hiddenAndSystem: true);
+
+        Assert.Null(failure);
+        Assert.Equal(1, settingsStore.SaveCount);
+        Assert.Equal("Menlo", settingsStore.LastSaved!.UiFontFamily);
+        Assert.Equal(WindowsHideMode.HiddenAndSystem, settingsStore.LastSaved.WindowsHideMode);
+        Assert.Equal("Menlo", settings.UiFontFamily);
+        Assert.True(vm.IsHiddenAndSystem);
+        Assert.Empty(vm.OperationalResults);
+    }
+
+    [Fact]
+    public void TryApplySettings_FailureLeavesBothLiveFieldsUntouchedForDialogRetry()
+    {
+        var settingsStore = new FakeJsonStore<AppSettings> { ThrowOnSave = true };
+        var settings = settingsStore.Load().Value;
+        var vm = new MainWindowViewModel(
+            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+
+        var failure = vm.TryApplySettings("Menlo", hiddenAndSystem: true);
+
+        Assert.Contains("save failed", failure);
+        Assert.Equal(AppSettings.DefaultUiFontFamily, settings.UiFontFamily);
+        Assert.Equal(WindowsHideMode.HiddenOnly, settings.WindowsHideMode);
+        Assert.Empty(vm.OperationalResults);
+    }
+
+    [Fact]
     public async Task IndependentOperationalFailuresStackUntilTheirOwnerRecoversOrTheyAreDismissed()
     {
         var visibility = new FakeVisibilityService();

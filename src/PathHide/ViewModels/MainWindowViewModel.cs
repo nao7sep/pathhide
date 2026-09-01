@@ -563,25 +563,10 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public void SetWindowsHideMode(bool hiddenAndSystem)
     {
-        var newMode = hiddenAndSystem ? WindowsHideMode.HiddenAndSystem : WindowsHideMode.HiddenOnly;
-        if (_settings.WindowsHideMode == newMode)
-            return;
-
-        var previousMode = _settings.WindowsHideMode;
-        _settings.WindowsHideMode = newMode;
-
-        try
+        var failure = TryApplySettings(_settings.UiFontFamily, hiddenAndSystem);
+        if (failure is not null)
         {
-            _settingsStore.Save(_settings);
-            Log.Info("settings: hide mode changed", new { mode = newMode });
-            OnPropertyChanged(nameof(IsHiddenAndSystem));
-            ResolveOperationalResult(OperationalResultOwner.Settings);
-        }
-        catch (Exception ex)
-        {
-            _settings.WindowsHideMode = previousMode;
-            Log.Error("settings: save failed", ex);
-            ShowOperationalResult(OperationalResultOwner.Settings, $"Failed to save settings: {ex.Message}", error: true);
+            ShowOperationalResult(OperationalResultOwner.Settings, $"Failed to save settings: {failure}", error: true);
         }
     }
 
@@ -592,27 +577,50 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public void SetUiFontFamily(string family)
     {
+        var failure = TryApplySettings(family, IsHiddenAndSystem);
+        if (failure is not null)
+        {
+            ShowOperationalResult(OperationalResultOwner.Settings, $"Failed to save settings: {failure}", error: true);
+        }
+    }
+
+    /// <summary>Saves the complete Settings draft atomically and publishes it only after disk agrees.</summary>
+    public string? TryApplySettings(string family, bool hiddenAndSystem)
+    {
         family = UiFontFamilyValue.Normalize(family);
-        if (_settings.UiFontFamily == family)
-            return;
+        var newMode = hiddenAndSystem ? WindowsHideMode.HiddenAndSystem : WindowsHideMode.HiddenOnly;
+        if (_settings.UiFontFamily == family && _settings.WindowsHideMode == newMode)
+            return null;
 
-        var previous = _settings.UiFontFamily;
-        _settings.UiFontFamily = family;
-
+        var candidate = new AppSettings
+        {
+            UiFontFamily = family,
+            WindowsHideMode = newMode,
+        };
         try
         {
-            _settingsStore.Save(_settings);
-            Log.Info("settings: ui font changed", new { family });
-            ApplyUiFont();
-            OnPropertyChanged(nameof(UiFontFamily));
-            ResolveOperationalResult(OperationalResultOwner.Settings);
+            _settingsStore.Save(candidate);
         }
         catch (Exception ex)
         {
-            _settings.UiFontFamily = previous;
             Log.Error("settings: save failed", ex);
-            ShowOperationalResult(OperationalResultOwner.Settings, $"Failed to save settings: {ex.Message}", error: true);
+            return ex.Message;
         }
+
+        var fontChanged = _settings.UiFontFamily != family;
+        var modeChanged = _settings.WindowsHideMode != newMode;
+        _settings.UiFontFamily = family;
+        _settings.WindowsHideMode = newMode;
+        if (fontChanged)
+        {
+            ApplyUiFont();
+            OnPropertyChanged(nameof(UiFontFamily));
+        }
+        if (modeChanged)
+            OnPropertyChanged(nameof(IsHiddenAndSystem));
+        ResolveOperationalResult(OperationalResultOwner.Settings);
+        Log.Info("settings: changed", new { family, mode = newMode });
+        return null;
     }
 
     /// <summary>

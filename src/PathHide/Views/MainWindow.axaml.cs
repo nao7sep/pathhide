@@ -135,14 +135,15 @@ public partial class MainWindow : Window
 
     private async Task OpenSettingsAsync()
     {
-        var dialog = new SettingsDialog(ViewModel.UiFontFamily, ViewModel.IsHiddenAndSystem, ViewModel.HasWindowsHideMode);
+        var dialog = new SettingsDialog(
+            ViewModel.UiFontFamily,
+            ViewModel.IsHiddenAndSystem,
+            ViewModel.HasWindowsHideMode,
+            ViewModel.TryApplySettings);
         await dialog.ShowDialog(this);
 
         if (dialog.Accepted)
         {
-            ViewModel.SetUiFontFamily(dialog.UiFontFamily);
-            ViewModel.SetWindowsHideMode(dialog.IsHiddenAndSystem);
-
             // The font applies live through a DynamicResource, so the chrome's natural size
             // changes with it. Re-derive after the layout pass has taken the new family.
             Dispatcher.UIThread.Post(ApplyWindowMinimums, DispatcherPriority.Loaded);

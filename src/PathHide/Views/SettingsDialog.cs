@@ -1,4 +1,6 @@
+using System;
 using Avalonia.Controls;
+using Avalonia.Automation;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using PathHide.Controls;
@@ -13,13 +15,20 @@ public sealed class SettingsDialog : DialogBase
     private readonly string _originalUiFont;
     private readonly bool _originalIsHiddenAndSystem;
     private readonly Button _saveButton;
+    private readonly TextBlock _saveError;
+    private readonly Func<string, bool, string?> _trySave;
 
     public bool Accepted => ResultTag == "save";
     public bool IsHiddenAndSystem => _hiddenAndSystemCheckBox.IsChecked == true;
     public string UiFontFamily => UiFontFamilyValue.Normalize(_uiFontBox.Text);
 
-    public SettingsDialog(string uiFontFamily, bool isHiddenAndSystem, bool showWindowsHideMode)
+    public SettingsDialog(
+        string uiFontFamily,
+        bool isHiddenAndSystem,
+        bool showWindowsHideMode,
+        Func<string, bool, string?> trySave)
     {
+        _trySave = trySave;
         _originalUiFont = UiFontFamilyValue.Normalize(uiFontFamily);
         _originalIsHiddenAndSystem = isHiddenAndSystem;
         Width = 500;
@@ -77,6 +86,16 @@ public sealed class SettingsDialog : DialogBase
             panel.Children.Add(hideModeHint);
         }
 
+        _saveError = new TextBlock
+        {
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+        };
+        _saveError[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("DangerBrush");
+        AutomationProperties.SetLiveSetting(_saveError, AutomationLiveSetting.Assertive);
+        panel.Children.Add(_saveError);
+
         SetContent(panel);
         var buttons = SetButtons(
         [
@@ -99,6 +118,22 @@ public sealed class SettingsDialog : DialogBase
     // commit buttons). Both fields are always valid, so dirtiness alone gates the commit.
     protected override bool HasUnsavedChanges =>
         UiFontFamily != _originalUiFont || IsHiddenAndSystem != _originalIsHiddenAndSystem;
+
+    protected override bool TryCommit(string tag)
+    {
+        if (tag != "save")
+            return true;
+
+        _saveError.IsVisible = false;
+        _saveError.Text = string.Empty;
+        var failure = _trySave(UiFontFamily, IsHiddenAndSystem);
+        if (failure is null)
+            return true;
+
+        _saveError.Text = $"Settings could not be saved: {failure}";
+        _saveError.IsVisible = true;
+        return false;
+    }
 
     private void UpdateSaveState() => _saveButton.IsEnabled = HasUnsavedChanges;
 }
