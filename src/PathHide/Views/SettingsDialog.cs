@@ -130,7 +130,7 @@ public sealed class SettingsDialog : DialogBase
         if (failure is null)
             return true;
 
-        _saveError.Text = $"Settings could not be saved: {failure}";
+        _saveError.Text = "Settings could not be saved. Your changes are still here; try again.";
         _saveError.IsVisible = true;
         return false;
     }
