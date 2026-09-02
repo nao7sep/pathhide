@@ -158,8 +158,8 @@
                             <TextBlock Text="{Binding Message}" TextWrapping="Wrap"/>
                             <Button Grid.Column="1" Classes="resultClose" VerticalAlignment="Top"
                                     Command="{Binding $parent[ItemsControl].DataContext.DismissOperationalResultCommand}"
-                                    CommandParameter="{Binding}" AutomationProperties.Name="Dismiss result"
-                                    ToolTip.Tip="Dismiss">
+                                    CommandParameter="{Binding}" AutomationProperties.Name="Close result"
+                                    ToolTip.Tip="Close">
                                 <Path Width="10" Height="10" Stroke="{Binding $parent[Button].Foreground}"
                                       StrokeThickness="1.6" StrokeLineCap="Round"
                                       Data="M1,1 L9,9 M9,1 L1,9"/>
@@ -187,7 +187,7 @@
                         <TextBlock Text="{Binding PathAddResult.Message}" TextWrapping="Wrap"/>
                         <Button Grid.Column="1" Classes="resultClose" VerticalAlignment="Top"
                                 Command="{Binding DismissPathAddResultCommand}"
-                                AutomationProperties.Name="Dismiss result" ToolTip.Tip="Dismiss">
+                                AutomationProperties.Name="Close result" ToolTip.Tip="Close">
                             <Path Width="10" Height="10" Stroke="{Binding $parent[Button].Foreground}"
                                   StrokeThickness="1.6" StrokeLineCap="Round"
                                   Data="M1,1 L9,9 M9,1 L1,9"/>

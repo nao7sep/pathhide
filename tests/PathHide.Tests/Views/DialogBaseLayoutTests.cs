@@ -1,4 +1,6 @@
+using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
@@ -19,7 +21,7 @@ namespace PathHide.Tests.Views;
 /// a scroll region, a body taller than the screen pushes that footer off the
 /// bottom of a window the user cannot resize or scroll. The shortcuts dialog
 /// already measures close to a small laptop's working height, and the
-/// startup-failure notice embeds an arbitrary-length exception message.
+/// startup and recovery copy can legitimately wrap.
 /// </remarks>
 public sealed class DialogBaseLayoutTests
 {
@@ -55,4 +57,17 @@ public sealed class DialogBaseLayoutTests
         Assert.NotNull(footer);
         Assert.Empty(footer!.GetLogicalAncestors().OfType<ScrollViewer>());
     }
+
+    [Fact]
+    public void Dialog_button_intents_have_explicit_keyboard_focus_states()
+    {
+        var app = File.ReadAllText(Path.Combine(RepoRoot(), "src", "PathHide", "App.axaml"));
+
+        Assert.Contains("Button.accent:focus /template/ ContentPresenter", app);
+        Assert.Contains("Button.destructive:focus /template/ ContentPresenter", app);
+        Assert.Contains("Button.utility:focus /template/ ContentPresenter", app);
+    }
+
+    private static string RepoRoot([CallerFilePath] string path = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", "..", ".."));
 }

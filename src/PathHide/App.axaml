@@ -172,6 +172,10 @@
             <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
+        <Style Selector="Button.destructive:focus /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
 
         <!-- Cancellation button -->
         <Style Selector="Button.cancel">
@@ -237,6 +241,10 @@
             <Setter Property="Background" Value="{StaticResource UtilityHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
+        <Style Selector="Button.utility:focus /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource UtilityHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
 
         <!-- Dialog accent button -->
         <Style Selector="Button.accent">
@@ -246,6 +254,10 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.accent:focus /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>

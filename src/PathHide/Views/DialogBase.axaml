@@ -21,8 +21,7 @@
              unbounded body pushes it off-screen instead of scrolling, and this
              shell is CanResize="False" — there would be no way to get it back.
              The shortcuts dialog already measures close to a small laptop's
-             working height, and the startup-failure notice embeds an
-             arbitrary-length exception message. -->
+             working height, and startup/recovery copy can legitimately wrap. -->
         <ScrollViewer x:Name="DialogScroll"
                       HorizontalScrollBarVisibility="Disabled"
                       VerticalScrollBarVisibility="Auto">
