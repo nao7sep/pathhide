@@ -21,6 +21,7 @@ public sealed class FailurePresentationTests
             FailurePresentation.Scan(error),
             FailurePresentation.PathPicker(error),
             FailurePresentation.WindowAction(error),
+            FailurePresentation.StartupStorage(),
             FailurePresentation.Startup(),
             FailurePresentation.PathListStartup(),
         };

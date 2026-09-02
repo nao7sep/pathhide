@@ -5,6 +5,9 @@ namespace PathHide.ViewModels;
 /// <summary>Owns the user-safe presentation of failures whose diagnostics remain in the log.</summary>
 public static class FailurePresentation
 {
+    public static string StartupStorage() =>
+        "PathHide could not open its storage location. Check that the location exists and is writable, then restart PathHide.";
+
     public static string SettingsSave(Exception error) => error is UnauthorizedAccessException
         ? "Settings could not be saved. Check that the PathHide data folder is writable, then try again."
         : "Settings could not be saved. Nothing was changed; try again.";

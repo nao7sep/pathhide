@@ -17,6 +17,8 @@ namespace PathHide;
 
 public partial class App : Application
 {
+    internal static string? StartupFailureMessage { get; set; }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -26,6 +28,15 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            if (StartupFailureMessage is { } startupFailure)
+            {
+                desktop.MainWindow = NoticeDialog.CreateStartupFailure(
+                    "PathHide could not start",
+                    startupFailure);
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
+
             // Builds the view model, which materializes config.json (CreateIfMissing) before the window.
             // The data backup is now write-through — recorded the instant each managed save's atomic rename
             // lands (see JsonStore/BackupStore) — so there is no startup backup pass to kick off here.

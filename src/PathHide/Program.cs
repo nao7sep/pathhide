@@ -32,6 +32,8 @@ sealed class Program
         {
             Console.Error.WriteLine(
                 "PathHide cannot start: its storage location could not be created. " + ex.Message);
+            App.StartupFailureMessage = ViewModels.FailurePresentation.StartupStorage();
+            _ = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
             return 1;
         }
 
