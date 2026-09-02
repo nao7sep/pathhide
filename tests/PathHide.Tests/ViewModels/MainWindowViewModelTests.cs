@@ -389,6 +389,16 @@ public class MainWindowViewModelTests
             Assert.Equal(AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(surface));
             Assert.Equal("1 path was unavailable or invalid.", AutomationProperties.GetName(surface));
             Assert.DoesNotContain(surface.GetLogicalDescendants().OfType<TextBlock>(), block => block.Text == "Warning");
+
+            var layout = Assert.IsType<Grid>(surface.Child);
+            var message = Assert.Single(layout.GetLogicalChildren().OfType<TextBlock>());
+            var dismiss = Assert.Single(layout.GetLogicalChildren().OfType<Button>());
+
+            // The close affordance keeps a generous transparent target, but that target must live
+            // in the result's existing padding rather than make a one-line message look taller
+            // below the text than above it.
+            Assert.True(dismiss.Bounds.Height > message.DesiredSize.Height);
+            Assert.Equal(message.DesiredSize.Height, layout.Bounds.Height, 1);
         }
         finally
         {

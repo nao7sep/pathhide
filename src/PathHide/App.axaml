@@ -107,6 +107,10 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
             <Setter Property="Padding" Value="6"/>
+            <!-- The result's own vertical padding contains the larger pointer target. Removing
+                 half of that target's excess from layout keeps a one-line message as the row's
+                 height while the clickable area remains comfortably larger than the mark. -->
+            <Setter Property="Margin" Value="0,-3"/>
             <Setter Property="CornerRadius" Value="4"/>
         </Style>
         <Style Selector="Button.resultClose:pointerover /template/ ContentPresenter">
