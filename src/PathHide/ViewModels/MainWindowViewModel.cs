@@ -66,28 +66,18 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool _isScanning;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StatusBarText))]
-    private string _notification = string.Empty;
-
     public ObservableCollection<OperationalResultViewModel> OperationalResults { get; } = [];
 
     public bool HasOperationalResults => OperationalResults.Count > 0;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPathAddResult))]
-    private string _pathAddResult = string.Empty;
-
-    [ObservableProperty]
-    private bool _isPathAddResultWarning;
-
-    [ObservableProperty]
-    private bool _isPathAddResultError;
+    private PathAddResultViewModel? _pathAddResult;
 
     private readonly List<string> _pathAddIssuePaths = [];
     private bool _pathAddHasOpaqueIssues;
 
-    public bool HasPathAddResult => !string.IsNullOrEmpty(PathAddResult);
+    public bool HasPathAddResult => PathAddResult is not null;
 
     // Settings are always available now: the UI font is a cross-platform setting, so the dialog
 
@@ -96,22 +86,19 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// Current Windows hide mode as a bool, used to seed the settings dialog. Read-only:
-    /// the mode is changed and persisted through <see cref="SetWindowsHideMode"/>, never
-    /// through a bound setter, so there is no save side effect on assignment.
+    /// the complete dialog draft is changed and persisted through <see cref="TryApplySettings"/>,
+    /// never through a bound setter, so there is no save side effect on assignment.
     /// </summary>
     public bool IsHiddenAndSystem => _settings.WindowsHideMode == WindowsHideMode.HiddenAndSystem;
 
-    /// <summary>The configured UI (chrome) font family, used to seed the settings dialog. Changed and
-    /// persisted through <see cref="SetUiFontFamily"/>.</summary>
+    /// <summary>The configured UI (chrome) font family, used to seed the settings dialog.</summary>
     public string UiFontFamily => _settings.UiFontFamily;
 
     public string ProgressText => ScanTotal > 0
         ? $"Scanning {ScanProgress} / {ScanTotal}"
         : string.Empty;
 
-    public string StatusBarText => !string.IsNullOrEmpty(Notification)
-        ? Notification
-        : BuildSummary();
+    public string StatusBarText => BuildSummary();
 
     private string BuildSummary()
     {
@@ -300,7 +287,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             SetPathAddResult(
                 $"Could not add the selected paths because the path list could not be saved: {saveFailure}",
-                error: true,
+                PathAddResultSeverity.Error,
                 issuePaths: addedPaths);
             return;
         }
@@ -345,18 +332,22 @@ public partial class MainWindowViewModel : ObservableObject
         if (parts.Count == 0)
             return;
 
+        var severity = outcome.Errors > 0
+            ? PathAddResultSeverity.Error
+            : invalid > 0 || outcome.Unchanged > 0 || outcome.Missing > 0
+                ? PathAddResultSeverity.Warning
+                : PathAddResultSeverity.Information;
+
         SetPathAddResult(
             string.Join("; ", parts) + ".",
-            warning: outcome.Errors == 0 && (invalid > 0 || outcome.Unchanged > 0 || outcome.Missing > 0),
-            error: outcome.Errors > 0,
+            severity,
             issuePaths: duplicatePaths.Concat(outcome.ProblemPaths),
             hasOpaqueIssues: invalid > 0);
     }
 
     private void SetPathAddResult(
         string message,
-        bool warning = false,
-        bool error = false,
+        PathAddResultSeverity severity,
         IEnumerable<string>? issuePaths = null,
         bool hasOpaqueIssues = false)
     {
@@ -364,10 +355,8 @@ public partial class MainWindowViewModel : ObservableObject
         if (issuePaths is not null)
             _pathAddIssuePaths.AddRange(issuePaths.Distinct(StringComparer.Ordinal));
         _pathAddHasOpaqueIssues = hasOpaqueIssues;
-        IsPathAddResultWarning = warning;
-        IsPathAddResultError = error;
-        PathAddResult = message;
-        Log.Info("path add result", new { message, warning, error });
+        PathAddResult = new PathAddResultViewModel(message, severity);
+        Log.Info("path add result", new { message, severity });
     }
 
     private void ClearPathAddResultIfResolvedBy(IEnumerable<string> resolvedPaths)
@@ -385,9 +374,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         _pathAddIssuePaths.Clear();
         _pathAddHasOpaqueIssues = false;
-        IsPathAddResultWarning = false;
-        IsPathAddResultError = false;
-        PathAddResult = string.Empty;
+        PathAddResult = null;
     }
 
     [RelayCommand]
@@ -420,7 +407,6 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         ResolveOperationalResult(OperationalResultOwner.PathStore);
-        ShowNotification($"{selected.Count} removed");
     });
 
     // --- Hide / Show ---
@@ -443,9 +429,8 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var targets = selectTargets();
 
-        // An empty target set has nothing to persist, but the click still
-        // gets an answer: the apply below reports "Nothing to do" rather
-        // than leaving the user wondering whether the button worked.
+        // An empty target set has nothing to persist. Like a full successful
+        // visibility change, it is quiet and leaves the standing summary intact.
         if (targets.Count > 0)
         {
             var flipping = new HashSet<PathEntry>(targets.Select(row => row.Entry));
@@ -506,8 +491,8 @@ public partial class MainWindowViewModel : ObservableObject
         await PauseScanningAsync();
 
         // Reload reconciles the path list and re-scans. It deliberately does NOT reload
-        // settings: the hide mode is owned in-app and persisted immediately on every change
-        // (see SetWindowsHideMode), so the in-memory value never diverges from disk. Copying
+        // settings: the settings dialog saves before publishing its complete draft, so the
+        // in-memory value never diverges from disk. Copying
         // a freshly loaded settings object back into the shared instance field-by-field would
         // be both brittle (it silently couples to AppSettings having one field) and pointless.
         Log.Info("reload");
@@ -555,35 +540,6 @@ public partial class MainWindowViewModel : ObservableObject
         await ShowNoticeAsync(title, body);
     }
 
-    /// <summary>
-    /// Updates and persists the Windows hide mode. On a save failure the in-memory
-    /// mode is restored to its previous value — so it never diverges from disk or from
-    /// what the visibility service reads — and the failure is surfaced to the user.
-    /// No-op when the mode is unchanged.
-    /// </summary>
-    public void SetWindowsHideMode(bool hiddenAndSystem)
-    {
-        var failure = TryApplySettings(_settings.UiFontFamily, hiddenAndSystem);
-        if (failure is not null)
-        {
-            ShowOperationalResult(OperationalResultOwner.Settings, $"Failed to save settings: {failure}", error: true);
-        }
-    }
-
-    /// <summary>
-    /// Updates and persists the UI (chrome) font, then applies it app-wide. On a save failure the
-    /// in-memory value is restored and the failure is surfaced, mirroring <see cref="SetWindowsHideMode"/>.
-    /// No-op when the family is unchanged. The string is stored trimmed; blank means the bundled default.
-    /// </summary>
-    public void SetUiFontFamily(string family)
-    {
-        var failure = TryApplySettings(family, IsHiddenAndSystem);
-        if (failure is not null)
-        {
-            ShowOperationalResult(OperationalResultOwner.Settings, $"Failed to save settings: {failure}", error: true);
-        }
-    }
-
     /// <summary>Saves the complete Settings draft atomically and publishes it only after disk agrees.</summary>
     public string? TryApplySettings(string family, bool hiddenAndSystem)
     {
@@ -618,7 +574,6 @@ public partial class MainWindowViewModel : ObservableObject
         }
         if (modeChanged)
             OnPropertyChanged(nameof(IsHiddenAndSystem));
-        ResolveOperationalResult(OperationalResultOwner.Settings);
         Log.Info("settings: changed", new { family, mode = newMode });
         return null;
     }
@@ -961,6 +916,7 @@ public partial class MainWindowViewModel : ObservableObject
         // elevationExitCode is a coarse diagnostic kept in the structured log; the user-facing
         // tally below is built per-path, so the raw child exit code is not surfaced to the UI.
         Log.Info("apply: done", new { applied, unchanged, missing, errors, elevationExitCode });
+        OnPropertyChanged(nameof(StatusBarText));
 
         return new ApplyOutcome(applied, unchanged, missing, errors, problemPaths);
     }
@@ -1024,8 +980,6 @@ public partial class MainWindowViewModel : ObservableObject
         return (display, applied);
     }
 
-    private CancellationTokenSource? _notificationCts;
-
     private void ShowApplyOutcome(ApplyOutcome outcome)
     {
         if (outcome.Errors > 0)
@@ -1041,7 +995,6 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         ResolveOperationalResult(OperationalResultOwner.Visibility);
-        ShowNotification(outcome.Summary);
     }
 
     private void ShowOperationalResult(OperationalResultOwner owner, string message, bool error)
@@ -1066,29 +1019,4 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(HasOperationalResults));
     }
 
-    private void ShowNotification(string message)
-    {
-        // One line per user-visible outcome — the record of what the status bar showed.
-        Log.Info("notification", new { message });
-        Notification = message;
-
-        _notificationCts?.Cancel();
-        _notificationCts = new CancellationTokenSource();
-        var token = _notificationCts.Token;
-
-        _ = ClearNotificationAsync(token);
-    }
-
-    private async Task ClearNotificationAsync(CancellationToken token)
-    {
-        try
-        {
-            await Task.Delay(5000, token);
-            Notification = string.Empty;
-        }
-        catch (OperationCanceledException)
-        {
-            // Next notification replaced this one
-        }
-    }
 }

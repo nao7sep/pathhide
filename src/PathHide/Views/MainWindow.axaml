@@ -160,14 +160,20 @@
                 Background="{StaticResource SurfaceBrush}"
                 ClipToBounds="True" DragDrop.AllowDrop="True">
             <DockPanel>
-                <Border DockPanel.Dock="Bottom" Classes="pathResult"
-                        Classes.warning="{Binding IsPathAddResultWarning}"
-                        Classes.error="{Binding IsPathAddResultError}"
-                        IsVisible="{Binding HasPathAddResult}">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="{Binding PathAddResult}" TextWrapping="Wrap"
+                <Border x:Name="PathAddResultSurface"
+                        DockPanel.Dock="Bottom" Classes="pathResult"
+                        Classes.warning="{Binding PathAddResult.IsWarning}"
+                        Classes.error="{Binding PathAddResult.IsError}"
+                        IsVisible="{Binding HasPathAddResult}"
+                        AutomationProperties.Name="{Binding PathAddResult.AccessibleName}"
+                        AutomationProperties.LiveSetting="{Binding PathAddResult.LiveSetting}">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock Text="{Binding PathAddResult.SeverityLabel}"
+                                   FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Margin="0,0,8,0"/>
+                        <TextBlock Grid.Column="1" Text="{Binding PathAddResult.Message}" TextWrapping="Wrap"
                                    VerticalAlignment="Center"/>
-                        <Button Grid.Column="1" Content="Dismiss" Classes="utility"
+                        <Button Grid.Column="2" Content="Dismiss" Classes="utility"
                                 Margin="10,0,0,0" Command="{Binding DismissPathAddResultCommand}"/>
                     </Grid>
                 </Border>

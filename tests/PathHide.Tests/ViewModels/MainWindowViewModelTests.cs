@@ -12,6 +12,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
@@ -64,8 +65,11 @@ public class MainWindowViewModelTests
         var row = Assert.Single(vm.Rows);
         Assert.False(vm.IsPathListEmpty);
         Assert.Equal("/foo", row.Path);
-        Assert.Equal("Added 1 path to the list; 1 hidden; 1 path is already in the list; 1 path was unavailable or invalid.", vm.PathAddResult);
-        Assert.True(vm.IsPathAddResultWarning);
+        var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
+        Assert.Equal("Added 1 path to the list; 1 hidden; 1 path is already in the list; 1 path was unavailable or invalid.", result.Message);
+        Assert.Equal(PathAddResultSeverity.Warning, result.Severity);
+        Assert.Equal("Warning", result.SeverityLabel);
+        Assert.Equal(AutomationLiveSetting.Polite, result.LiveSetting);
         Assert.Contains("/foo", visibility.Hidden); // newly added entries default to Hidden and are applied
         Assert.Equal(1, paths.SaveCount);
     }
@@ -80,12 +84,14 @@ public class MainWindowViewModelTests
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/same" });
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/same" });
 
-        Assert.Equal("1 path is already in the list.", vm.PathAddResult);
-        Assert.False(vm.IsPathAddResultWarning);
-        Assert.False(vm.IsPathAddResultError);
+        var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
+        Assert.Equal("1 path is already in the list.", result.Message);
+        Assert.Equal(PathAddResultSeverity.Information, result.Severity);
+        Assert.Equal("Information", result.SeverityLabel);
+        Assert.Equal(AutomationLiveSetting.Polite, result.LiveSetting);
 
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/other" });
-        Assert.Equal("1 path is already in the list.", vm.PathAddResult);
+        Assert.Equal("1 path is already in the list.", vm.PathAddResult?.Message);
 
         vm.DismissPathAddResultCommand.Execute(null);
         Assert.False(vm.HasPathAddResult);
@@ -106,11 +112,14 @@ public class MainWindowViewModelTests
 
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/cannot-hide", "/existing", "relative" });
 
+        var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
         Assert.Equal(
             "Added 1 path to the list; 1 path is already in the list; 1 path was unavailable or invalid; 1 path could not be hidden.",
-            vm.PathAddResult);
-        Assert.False(vm.IsPathAddResultWarning);
-        Assert.True(vm.IsPathAddResultError);
+            result.Message);
+        Assert.Equal(PathAddResultSeverity.Error, result.Severity);
+        Assert.Equal("Error", result.SeverityLabel);
+        Assert.Equal(AutomationLiveSetting.Assertive, result.LiveSetting);
+        Assert.StartsWith("Error: ", result.AccessibleName);
         Assert.Equal(2, vm.Rows.Count);
         Assert.Equal(ActualState.Visible, vm.Rows.Single(row => row.Path == "/cannot-hide").ActualState);
     }
@@ -132,8 +141,9 @@ public class MainWindowViewModelTests
         // the list is what it was and the failure is surfaced.
         var row = Assert.Single(vm.Rows);
         Assert.Equal("/existing", row.Path);
-        Assert.Contains("path list could not be saved", vm.PathAddResult);
-        Assert.True(vm.IsPathAddResultError);
+        var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
+        Assert.Contains("path list could not be saved", result.Message);
+        Assert.Equal(PathAddResultSeverity.Error, result.Severity);
     }
 
     [Fact]
@@ -333,6 +343,39 @@ public class MainWindowViewModelTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task PathAddResult_ExposesSeverityTextAndLiveSemanticsAtTheReceiver()
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var settingsStore = new FakeJsonStore<AppSettings>();
+        var vm = new MainWindowViewModel(
+            visibility,
+            paths,
+            settingsStore,
+            settingsStore.Load().Value);
+        var window = new MainWindow { DataContext = vm };
+
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            await vm.AddPathsCommand.ExecuteAsync(new[] { "relative" });
+            Dispatcher.UIThread.RunJobs();
+
+            var surface = Assert.IsType<Border>(window.FindControl<Border>("PathAddResultSurface"));
+            Assert.True(surface.IsVisible);
+            Assert.Equal(AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(surface));
+            Assert.StartsWith("Warning: ", AutomationProperties.GetName(surface));
+            Assert.Contains(surface.GetLogicalDescendants().OfType<TextBlock>(), block => block.Text == "Warning");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     [Fact]
     public async Task ShowSelected_FlipsDesiredVisibilityAndApplies()
     {
@@ -348,7 +391,8 @@ public class MainWindowViewModelTests
         Assert.Equal(DesiredVisibility.Shown, row.DesiredVisibility);
         Assert.Equal(ActualState.Visible, row.ActualState);
         Assert.Contains("/x", visibility.Shown);
-        Assert.Equal("1 applied", vm.Notification);
+        Assert.Contains("1 visible", vm.StatusBarText);
+        Assert.Empty(vm.OperationalResults);
     }
 
     [Fact]
@@ -450,28 +494,28 @@ public class MainWindowViewModelTests
         Assert.All(vm.Rows, r => Assert.Equal(DesiredVisibility.Shown, r.DesiredVisibility));
         Assert.Contains("/a", visibility.Shown);
         Assert.Contains("/b", visibility.Shown);
-        Assert.Equal("2 applied", vm.Notification);
+        Assert.Contains("2 visible", vm.StatusBarText);
 
         await ((IAsyncRelayCommand)vm.HideAllCommand).ExecuteAsync(null);
         Assert.All(vm.Rows, r => Assert.Equal(DesiredVisibility.Hidden, r.DesiredVisibility));
-        Assert.Equal("2 applied", vm.Notification);
+        Assert.Contains("2 hidden", vm.StatusBarText);
+        Assert.Empty(vm.OperationalResults);
     }
 
     [Fact]
-    public async Task HideSelected_WithNothingSelected_ReportsRatherThanSilentlyDoingNothing()
+    public async Task HideSelected_WithNothingSelected_LeavesStandingStatusUnchanged()
     {
-        // The button is always clickable, so a click with no selection used to
-        // produce no feedback at all — the user cannot tell it from a hang.
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
         var writesBefore = paths.SaveCount;
+        var statusBefore = vm.StatusBarText;
 
         await ((IAsyncRelayCommand)vm.HideSelectedCommand).ExecuteAsync(null);
 
-        Assert.Equal("Nothing to do", vm.Notification);
-        // And nothing was persisted for a change that did not happen.
+        Assert.Equal(statusBefore, vm.StatusBarText);
+        Assert.Empty(vm.OperationalResults);
         Assert.Equal(writesBefore, paths.SaveCount);
     }
 
@@ -489,7 +533,8 @@ public class MainWindowViewModelTests
 
         Assert.Empty(vm.Rows);
         Assert.True(vm.IsPathListEmpty);
-        Assert.Contains("1 removed", vm.Notification);
+        Assert.Equal("No entries — drop files or folders here to get started", vm.StatusBarText);
+        Assert.Empty(vm.OperationalResults);
     }
 
     [Fact]
@@ -632,78 +677,7 @@ public class MainWindowViewModelTests
         Assert.Equal(1, paths.LoadCount);
     }
 
-    // --- Windows hide mode (settings) ---
-
-    [Fact]
-    public void SetWindowsHideMode_PersistsAndUpdatesSharedSettingsInstance()
-    {
-        var settingsStore = new FakeJsonStore<AppSettings>();
-        var settings = settingsStore.Load().Value;
-        var vm = new MainWindowViewModel(
-            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
-
-        Assert.False(vm.IsHiddenAndSystem);
-
-        vm.SetWindowsHideMode(true);
-
-        Assert.True(vm.IsHiddenAndSystem);
-        // The very instance the visibility service reads is updated — no separate sync step.
-        Assert.Equal(WindowsHideMode.HiddenAndSystem, settings.WindowsHideMode);
-        Assert.Equal(1, settingsStore.SaveCount);
-    }
-
-    [Fact]
-    public void SetWindowsHideMode_RaisesPropertyChangedForIsHiddenAndSystem()
-    {
-        var settingsStore = new FakeJsonStore<AppSettings>();
-        var vm = new MainWindowViewModel(
-            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value);
-
-        var changed = new List<string?>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
-
-        vm.SetWindowsHideMode(true);
-
-        // IsHiddenAndSystem is a plain getter now; a bound view must still be told it changed.
-        Assert.Contains(nameof(MainWindowViewModel.IsHiddenAndSystem), changed);
-    }
-
-    [Fact]
-    public void SetWindowsHideMode_WhenUnchanged_DoesNotSave()
-    {
-        var settingsStore = new FakeJsonStore<AppSettings>();
-        var settings = settingsStore.Load().Value; // defaults to HiddenOnly
-        var vm = new MainWindowViewModel(
-            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
-
-        vm.SetWindowsHideMode(false);
-
-        Assert.Equal(0, settingsStore.SaveCount);
-    }
-
-    [Fact]
-    public void SetWindowsHideMode_WhenSaveFails_RevertsInMemoryAndNotifies()
-    {
-        var settingsStore = new FakeJsonStore<AppSettings> { ThrowOnSave = true };
-        var settings = settingsStore.Load().Value;
-        var vm = new MainWindowViewModel(
-            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
-
-        var changed = new List<string?>();
-        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
-
-        vm.SetWindowsHideMode(true);
-
-        // The failed save leaves memory (and what the service reads) on the old value...
-        Assert.False(vm.IsHiddenAndSystem);
-        Assert.Equal(WindowsHideMode.HiddenOnly, settings.WindowsHideMode);
-        var failure = Assert.Single(vm.OperationalResults);
-        Assert.Contains("Failed to save settings", failure.Message);
-        Assert.Equal("Error", failure.SeverityLabel);
-        Assert.Equal(AutomationLiveSetting.Assertive, failure.LiveSetting);
-        // ...and must not announce a hide-mode change that was rolled back.
-        Assert.DoesNotContain(nameof(MainWindowViewModel.IsHiddenAndSystem), changed);
-    }
+    // --- Settings ---
 
     [Fact]
     public void TryApplySettings_SavesBothFieldsAsOneCandidateBeforePublishingThem()
@@ -712,6 +686,8 @@ public class MainWindowViewModelTests
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
             new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
         var failure = vm.TryApplySettings("  Menlo  ", hiddenAndSystem: true);
 
@@ -721,7 +697,23 @@ public class MainWindowViewModelTests
         Assert.Equal(WindowsHideMode.HiddenAndSystem, settingsStore.LastSaved.WindowsHideMode);
         Assert.Equal("Menlo", settings.UiFontFamily);
         Assert.True(vm.IsHiddenAndSystem);
+        Assert.Contains(nameof(MainWindowViewModel.UiFontFamily), changed);
+        Assert.Contains(nameof(MainWindowViewModel.IsHiddenAndSystem), changed);
         Assert.Empty(vm.OperationalResults);
+    }
+
+    [Fact]
+    public void TryApplySettings_WhenUnchanged_DoesNotSave()
+    {
+        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settings = settingsStore.Load().Value;
+        var vm = new MainWindowViewModel(
+            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+
+        var failure = vm.TryApplySettings(AppSettings.DefaultUiFontFamily, hiddenAndSystem: false);
+
+        Assert.Null(failure);
+        Assert.Equal(0, settingsStore.SaveCount);
     }
 
     [Fact]
@@ -744,27 +736,29 @@ public class MainWindowViewModelTests
     public async Task IndependentOperationalFailuresStackUntilTheirOwnerRecoversOrTheyAreDismissed()
     {
         var visibility = new FakeVisibilityService();
-        var paths = new FakeJsonStore<List<PathEntry>>();
         var settings = new FakeJsonStore<AppSettings>();
-        var vm = CreateViewModel(visibility, paths, settings);
-        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
+        visibility.OnInspect = _ => new IOException("scan failed");
+        var scanPaths = new FakeJsonStore<List<PathEntry>>
+        {
+            Value = new List<PathEntry> { Entry("/x") },
+        };
+        var vm = CreateViewModel(visibility, scanPaths, settings);
+        await vm.ScanTask;
+        visibility.OnInspect = null;
 
-        settings.ThrowOnSave = true;
-        vm.SetWindowsHideMode(true);
-
-        paths.ThrowOnSave = true;
+        scanPaths.ThrowOnSave = true;
         vm.Rows[0].IsSelected = true;
         await ((IAsyncRelayCommand)vm.ShowSelectedCommand).ExecuteAsync(null);
 
         Assert.Equal(2, vm.OperationalResults.Count);
-        Assert.Contains(vm.OperationalResults, result => result.Owner == OperationalResultOwner.Settings);
+        Assert.Contains(vm.OperationalResults, result => result.Owner == OperationalResultOwner.Scan);
         Assert.Contains(vm.OperationalResults, result => result.Owner == OperationalResultOwner.PathStore);
 
         var pathFailure = vm.OperationalResults.Single(result => result.Owner == OperationalResultOwner.PathStore);
         vm.DismissOperationalResultCommand.Execute(pathFailure);
 
         var remaining = Assert.Single(vm.OperationalResults);
-        Assert.Equal(OperationalResultOwner.Settings, remaining.Owner);
+        Assert.Equal(OperationalResultOwner.Scan, remaining.Owner);
     }
 
     // --- Apply error handling ---
@@ -780,8 +774,9 @@ public class MainWindowViewModelTests
         // A newly added entry defaults to Hidden and is applied immediately, so Hide runs.
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
-        Assert.Contains("1 path could not be hidden", vm.PathAddResult);
-        Assert.True(vm.IsPathAddResultError);
+        var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
+        Assert.Contains("1 path could not be hidden", result.Message);
+        Assert.Equal(PathAddResultSeverity.Error, result.Severity);
         Assert.Contains("/x", visibility.Inspected); // re-inspected after the failure
     }
 
@@ -819,9 +814,10 @@ public class MainWindowViewModelTests
 
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
-        Assert.Contains("1 path could not be hidden", vm.PathAddResult);
-        Assert.DoesNotContain("elevated", vm.PathAddResult);
-        Assert.True(vm.IsPathAddResultError);
+        var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
+        Assert.Contains("1 path could not be hidden", result.Message);
+        Assert.DoesNotContain("elevated", result.Message);
+        Assert.Equal(PathAddResultSeverity.Error, result.Severity);
     }
 
     [Fact]
@@ -843,9 +839,10 @@ public class MainWindowViewModelTests
 
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
-        Assert.Contains("1 path could not be hidden", vm.PathAddResult);
-        Assert.DoesNotContain("elevated", vm.PathAddResult);
-        Assert.True(vm.IsPathAddResultError);
+        var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
+        Assert.Contains("1 path could not be hidden", result.Message);
+        Assert.DoesNotContain("elevated", result.Message);
+        Assert.Equal(PathAddResultSeverity.Error, result.Severity);
         // The write boundary is never crossed for an access-denied inspect.
         Assert.DoesNotContain("/x", visibility.Hidden);
     }

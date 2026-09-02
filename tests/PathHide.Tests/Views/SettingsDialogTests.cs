@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using PathHide.Views;
 using Xunit;
 
@@ -31,5 +32,15 @@ public sealed class SettingsDialogTests
             block.IsVisible && block.Text?.Contains("could not be saved") == true);
         Assert.Contains("try again", error.Text);
         Assert.DoesNotContain("/private/test", error.Text);
+
+        // A growing result remains in the shell's scrollable body. The fixed
+        // footer stays outside that region, so longer copy or a larger UI font
+        // cannot compress the fields or push both actions out of reach.
+        Assert.Equal(TextWrapping.Wrap, error.TextWrapping);
+        Assert.NotEmpty(error.GetLogicalAncestors().OfType<ScrollViewer>());
+        var footer = dialog.GetLogicalDescendants().OfType<StackPanel>()
+            .Single(panel => panel.Name == "ButtonPanel");
+        Assert.Empty(footer.GetLogicalAncestors().OfType<ScrollViewer>());
+        Assert.All(footer.Children.OfType<Button>(), button => Assert.True(button.MinWidth >= 80));
     }
 }
