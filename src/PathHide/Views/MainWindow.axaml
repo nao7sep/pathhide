@@ -30,21 +30,6 @@
         <Style Selector="Border.pathResult.error">
             <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
         </Style>
-        <Style Selector="Button.resultClose">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-            <Setter Property="Padding" Value="6"/>
-            <Setter Property="CornerRadius" Value="4"/>
-        </Style>
-        <Style Selector="Button.resultClose:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-        </Style>
-        <Style Selector="Button.resultClose:focus /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-        </Style>
     </Window.Styles>
 
     <DockPanel>

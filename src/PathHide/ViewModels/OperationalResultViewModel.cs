@@ -8,6 +8,7 @@ public enum OperationalResultOwner
     Visibility,
     Scan,
     Window,
+    LogReveal,
 }
 
 public sealed record OperationalResultViewModel(

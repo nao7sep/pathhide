@@ -127,7 +127,10 @@ public partial class MainWindow : Window
 
     private void OnOpenLogClick(object? sender, RoutedEventArgs e)
     {
-        LogReveal.Reveal();
+        if (LogReveal.Reveal())
+            ViewModel.ResolveLogRevealFailure();
+        else
+            ViewModel.ReportLogRevealFailure();
     }
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e) =>

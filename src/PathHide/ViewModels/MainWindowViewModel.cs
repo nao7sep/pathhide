@@ -263,6 +263,15 @@ public partial class MainWindowViewModel : ObservableObject
             FailurePresentation.WindowAction(error),
             error: true);
 
+    public void ReportLogRevealFailure() =>
+        ShowOperationalResult(
+            OperationalResultOwner.LogReveal,
+            "The log could not be shown. Try again or open the app’s log folder manually.",
+            error: true);
+
+    public void ResolveLogRevealFailure() =>
+        ResolveOperationalResult(OperationalResultOwner.LogReveal);
+
     private Task AddPathsCoreAsync(IEnumerable<string> paths, int unavailable) => MutateAsync(async () =>
     {
         var added = 0;

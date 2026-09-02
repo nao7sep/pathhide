@@ -23,7 +23,7 @@ internal readonly record struct LogRevealTarget(string Path, LogRevealTargetKind
 /// </summary>
 public static class LogReveal
 {
-    public static void Reveal()
+    public static bool Reveal()
     {
         try
         {
@@ -32,10 +32,12 @@ public static class LogReveal
                 RevealInFileManager(target.Path);
             else
                 OpenDirectoryInFileManager(target.Path);
+            return true;
         }
         catch (Exception ex)
         {
             Log.Error("reveal log: failed", ex);
+            return false;
         }
     }
 

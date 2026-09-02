@@ -19,11 +19,12 @@ public sealed class ExternalLauncherTests
 
         // A bare throw from here would fail the test, proving the boundary catch holds;
         // the failure must instead reach the error sink (in production, Log.Error).
-        ExternalLauncher.Open(
+        var opened = ExternalLauncher.Open(
             url,
             start: _ => throw failure,
             onError: (u, ex) => { reportedUrl = u; reportedError = ex; });
 
+        Assert.False(opened);
         Assert.Equal(url, reportedUrl);
         Assert.Same(failure, reportedError);
     }
@@ -35,11 +36,12 @@ public sealed class ExternalLauncherTests
         string? launched = null;
         var reported = false;
 
-        ExternalLauncher.Open(
+        var opened = ExternalLauncher.Open(
             url,
             start: u => launched = u,
             onError: (_, _) => reported = true);
 
+        Assert.True(opened);
         Assert.Equal(url, launched);
         Assert.False(reported);
     }

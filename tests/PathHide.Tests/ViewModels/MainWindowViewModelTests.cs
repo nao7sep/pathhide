@@ -783,6 +783,23 @@ public class MainWindowViewModelTests
         Assert.Equal(OperationalResultOwner.Scan, remaining.Owner);
     }
 
+    [Fact]
+    public async Task Log_reveal_failure_has_an_independent_authored_owner_until_retry_succeeds()
+    {
+        var vm = CreateViewModel(new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>());
+        await vm.ScanTask;
+
+        vm.ReportLogRevealFailure();
+
+        var result = Assert.Single(vm.OperationalResults);
+        Assert.Equal(OperationalResultOwner.LogReveal, result.Owner);
+        Assert.Contains("log could not be shown", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("EACCES", result.Message, StringComparison.Ordinal);
+
+        vm.ResolveLogRevealFailure();
+        Assert.Empty(vm.OperationalResults);
+    }
+
     // --- Apply error handling ---
 
     [Fact]

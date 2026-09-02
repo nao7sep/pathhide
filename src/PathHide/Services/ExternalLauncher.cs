@@ -18,20 +18,22 @@ namespace PathHide.Services;
 /// </remarks>
 public static class ExternalLauncher
 {
-    public static void Open(string url) => Open(url, StartShellExecute, ReportFailure);
+    public static bool Open(string url) => Open(url, StartShellExecute, ReportFailure);
 
     // Test seam: the launch and the failure sink are injected so the boundary contract
     // — a failed launch is reported, never thrown — is observable without a real
     // process or the static Log facade.
-    internal static void Open(string url, Action<string> start, Action<string, Exception> onError)
+    internal static bool Open(string url, Action<string> start, Action<string, Exception> onError)
     {
         try
         {
             start(url);
+            return true;
         }
         catch (Exception ex)
         {
             onError(url, ex);
+            return false;
         }
     }
 
