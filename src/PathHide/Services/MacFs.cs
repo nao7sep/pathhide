@@ -55,6 +55,31 @@ internal static partial class MacFs
     public static int SetFlags(string path, uint flags, bool followSymlinks)
         => followSymlinks ? chflags(path, flags) : lchflags(path, flags);
 
+    /// <summary>
+    /// Resolves aliases in an existing directory path. Callers use this only as
+    /// an identity descriptor; the user-authored path remains authoritative for
+    /// storage and visibility operations.
+    /// </summary>
+    public static bool TryRealPath(string path, out string resolved)
+    {
+        var pointer = realpath(path, IntPtr.Zero);
+        if (pointer == IntPtr.Zero)
+        {
+            resolved = string.Empty;
+            return false;
+        }
+
+        try
+        {
+            resolved = Marshal.PtrToStringUTF8(pointer) ?? string.Empty;
+            return resolved.Length > 0;
+        }
+        finally
+        {
+            free(pointer);
+        }
+    }
+
     [LibraryImport("libc", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static partial int chflags(string path, uint flags);
 
@@ -68,6 +93,12 @@ internal static partial class MacFs
         ref FlagsResult attrBuf,
         nuint attrBufSize,
         uint options);
+
+    [LibraryImport("libc", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    private static partial IntPtr realpath(string path, IntPtr resolvedPath);
+
+    [LibraryImport("libc")]
+    private static partial void free(IntPtr pointer);
 
     private const ushort AttrBitMapCount = 5;
     // ATTR_CMN_FLAGS from <sys/attr.h>. Beware: 0x00000040 is ATTR_CMN_OBJPERMANENTID

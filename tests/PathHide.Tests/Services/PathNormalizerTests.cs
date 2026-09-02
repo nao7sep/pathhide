@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using PathHide.Models;
 using PathHide.Services;
 using Xunit;
@@ -100,6 +102,29 @@ public class PathNormalizerTests
         Assert.True(PathNormalizer.AreEqual("/Users/x/Docs/Report.pdf", "/users/x/docs/report.pdf"));
         // Genuinely different paths still differ.
         Assert.False(PathNormalizer.AreEqual("/foo", "/bar"));
+    }
+
+    [Fact]
+    public void AreEqual_MacOS_ResolvesParentDirectoryAliasesWithoutFollowingTheItem()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return;
+
+        var directoryName = $"pathhide-normalizer-{Guid.NewGuid():N}";
+        var publicParent = Path.Combine("/tmp", directoryName);
+        var resolvedParent = Path.Combine("/private/tmp", directoryName);
+        Directory.CreateDirectory(publicParent);
+
+        try
+        {
+            Assert.True(PathNormalizer.AreEqual(
+                Path.Combine(publicParent, "capture.txt"),
+                Path.Combine(resolvedParent, "capture.txt")));
+        }
+        finally
+        {
+            Directory.Delete(publicParent);
+        }
     }
 
     // --- AreEqual: Windows / UNC are case-insensitive ---

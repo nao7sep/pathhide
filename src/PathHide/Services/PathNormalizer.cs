@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using PathHide.Models;
 
 namespace PathHide.Services;
@@ -123,9 +124,29 @@ public static class PathNormalizer
             // there is the harmless direction: a second genuinely-distinct entry
             // is refused as a duplicate, visibly and without touching anything.
             // The default direction was the destructive one.
+            if (familyA == PathFamily.Posix && OperatingSystem.IsMacOS())
+            {
+                normalizedA = ResolveParentAliases(normalizedA!);
+                normalizedB = ResolveParentAliases(normalizedB!);
+            }
+
             return string.Equals(normalizedA, normalizedB, StringComparison.OrdinalIgnoreCase);
         }
 
         return string.Equals(a, b, StringComparison.Ordinal);
+    }
+
+    private static string ResolveParentAliases(string path)
+    {
+        var parent = Path.GetDirectoryName(path);
+        var name = Path.GetFileName(path);
+        if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(name))
+            return path;
+
+        // Resolve only the parent. The final component may itself be a symlink,
+        // and PathHide deliberately operates on that link rather than its target.
+        return MacFs.TryRealPath(parent, out var resolvedParent)
+            ? Path.Combine(resolvedParent, name)
+            : path;
     }
 }
