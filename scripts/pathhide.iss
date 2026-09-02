@@ -14,17 +14,21 @@
 ; folder are at the repo root — so resolve all source/output paths one level up.
 SourceDir=..
 AppName={#MyAppName}
+AppId={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExe}
+Uninstallable=yes
 OutputDir=dist
 OutputBaseFilename={#MyAppName}-{#MyAppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
+SetupIconFile=src\PathHide\icon.ico
+PrivilegesRequiredOverridesAllowed=dialog
 
 [Files]
 Source: "publish-win\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
@@ -37,4 +41,6 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; Tasks: deskto
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
 
 [Run]
-Filename: "{app}\{#MyAppExe}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
+; Inno cannot recover a non-elevated user token for every elevated setup path.
+; All-users installs launch later through their scoped shell shortcuts.
+Filename: "{app}\{#MyAppExe}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent runasoriginaluser; Check: not IsAdminInstallMode
