@@ -76,6 +76,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private readonly List<string> _pathAddIssuePaths = [];
     private bool _pathAddHasOpaqueIssues;
+    private bool _pathAddResultIsPickerFailure;
 
     public bool HasPathAddResult => PathAddResult is not null;
 
@@ -241,6 +242,27 @@ public partial class MainWindowViewModel : ObservableObject
     public Task AddDroppedPathsAsync(IEnumerable<string> paths, int unavailable) =>
         AddPathsCoreAsync(paths, Math.Max(0, unavailable));
 
+    public void ReportPathPickerFailure(Exception error)
+    {
+        SetPathAddResult(
+            FailurePresentation.PathPicker(error),
+            PathAddResultSeverity.Error,
+            hasOpaqueIssues: true);
+        _pathAddResultIsPickerFailure = true;
+    }
+
+    public void ResolvePathPickerFailure()
+    {
+        if (_pathAddResultIsPickerFailure)
+            DismissPathAddResult();
+    }
+
+    public void ReportWindowActionFailure(Exception error) =>
+        ShowOperationalResult(
+            OperationalResultOwner.Window,
+            FailurePresentation.WindowAction(error),
+            error: true);
+
     private Task AddPathsCoreAsync(IEnumerable<string> paths, int unavailable) => MutateAsync(async () =>
     {
         var added = 0;
@@ -351,6 +373,7 @@ public partial class MainWindowViewModel : ObservableObject
         IEnumerable<string>? issuePaths = null,
         bool hasOpaqueIssues = false)
     {
+        _pathAddResultIsPickerFailure = false;
         _pathAddIssuePaths.Clear();
         if (issuePaths is not null)
             _pathAddIssuePaths.AddRange(issuePaths.Distinct(StringComparer.Ordinal));
@@ -372,6 +395,7 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void DismissPathAddResult()
     {
+        _pathAddResultIsPickerFailure = false;
         _pathAddIssuePaths.Clear();
         _pathAddHasOpaqueIssues = false;
         PathAddResult = null;

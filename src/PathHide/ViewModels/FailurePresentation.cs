@@ -17,6 +17,12 @@ public static class FailurePresentation
         ? "Some paths could not be scanned because PathHide did not have permission to inspect them."
         : "The path scan could not be completed. Your existing results are still shown; try Reload again.";
 
+    public static string PathPicker(Exception error) =>
+        "The path picker could not be opened. Your path list is unchanged; try adding paths again.";
+
+    public static string WindowAction(Exception error) =>
+        "The requested window action could not be completed. Try again.";
+
     public static string Startup() =>
         "A settings file could not be read, and PathHide could not set it aside either, so it was left " +
         "unchanged rather than risk overwriting it. Your files were not hidden or unhidden. Repair or " +

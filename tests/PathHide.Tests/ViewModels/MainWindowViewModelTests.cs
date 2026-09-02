@@ -75,6 +75,26 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public void Path_picker_failure_uses_the_add_receiver_without_diagnostics()
+    {
+        var vm = CreateViewModel(
+            new FakeVisibilityService(),
+            new FakeJsonStore<List<PathEntry>>());
+        var hostile = new IOException("EACCES IPC /private/tmp/PATHHIDE-PICKER-SENTINEL");
+
+        vm.ReportPathPickerFailure(hostile);
+
+        var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
+        Assert.Equal(PathAddResultSeverity.Error, result.Severity);
+        Assert.Contains("path picker", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("EACCES", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("PATHHIDE-PICKER-SENTINEL", result.Message, StringComparison.Ordinal);
+
+        vm.ResolvePathPickerFailure();
+        Assert.Null(vm.PathAddResult);
+    }
+
+    [Fact]
     public async Task AddPaths_DuplicateIsPersistentInformationUntilDismissed()
     {
         var visibility = new FakeVisibilityService();

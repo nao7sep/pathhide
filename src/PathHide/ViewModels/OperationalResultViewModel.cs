@@ -7,6 +7,7 @@ public enum OperationalResultOwner
     PathStore,
     Visibility,
     Scan,
+    Window,
 }
 
 public sealed record OperationalResultViewModel(

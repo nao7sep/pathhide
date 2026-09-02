@@ -90,12 +90,11 @@ public partial class MainWindow : Window
         });
     }
 
-    private async void OnAboutClick(object? sender, RoutedEventArgs e)
-    {
-        await new AboutDialog().ShowDialog(this);
-    }
+    private async void OnAboutClick(object? sender, RoutedEventArgs e) =>
+        await OwnViewActionAsync(() => new AboutDialog().ShowDialog(this));
 
-    private async void OnShortcutsClick(object? sender, RoutedEventArgs e) => await ShowShortcutsAsync();
+    private async void OnShortcutsClick(object? sender, RoutedEventArgs e) =>
+        await OwnViewActionAsync(ShowShortcutsAsync);
 
     /// <summary>
     /// Derives the window minimum from the live layout: the grid's column minimums plus the
@@ -131,7 +130,8 @@ public partial class MainWindow : Window
         LogReveal.Reveal();
     }
 
-    private async void OnSettingsClick(object? sender, RoutedEventArgs e) => await OpenSettingsAsync();
+    private async void OnSettingsClick(object? sender, RoutedEventArgs e) =>
+        await OwnViewActionAsync(OpenSettingsAsync);
 
     private async Task OpenSettingsAsync()
     {
@@ -154,28 +154,66 @@ public partial class MainWindow : Window
 
     private async Task AddFilesAsync()
     {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        IReadOnlyList<IStorageFile> files;
+        try
         {
-            Title = "Add Files",
-            AllowMultiple = true,
-        });
+            files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Add Files",
+                AllowMultiple = true,
+            });
+            ViewModel.ResolvePathPickerFailure();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ui: add files picker failed", ex);
+            ViewModel.ReportPathPickerFailure(ex);
+            return;
+        }
 
-        if (files.Count > 0)
-            await ViewModel.AddPathsCommand.ExecuteAsync(files.Select(f => f.Path.LocalPath));
+        try
+        {
+            if (files.Count > 0)
+                await ViewModel.AddPathsCommand.ExecuteAsync(files.Select(f => f.Path.LocalPath));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ui: add files action failed", ex);
+            ViewModel.ReportWindowActionFailure(ex);
+        }
     }
 
     private async void OnAddFoldersClick(object? sender, RoutedEventArgs e) => await AddFoldersAsync();
 
     private async Task AddFoldersAsync()
     {
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        IReadOnlyList<IStorageFolder> folders;
+        try
         {
-            Title = "Add Directories",
-            AllowMultiple = true,
-        });
+            folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = "Add Directories",
+                AllowMultiple = true,
+            });
+            ViewModel.ResolvePathPickerFailure();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ui: add directories picker failed", ex);
+            ViewModel.ReportPathPickerFailure(ex);
+            return;
+        }
 
-        if (folders.Count > 0)
-            await ViewModel.AddPathsCommand.ExecuteAsync(folders.Select(f => f.Path.LocalPath));
+        try
+        {
+            if (folders.Count > 0)
+                await ViewModel.AddPathsCommand.ExecuteAsync(folders.Select(f => f.Path.LocalPath));
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ui: add directories action failed", ex);
+            ViewModel.ReportWindowActionFailure(ex);
+        }
     }
 
     private void OnDragOver(object? sender, DragEventArgs e)
@@ -262,10 +300,23 @@ public partial class MainWindow : Window
     // Fires an async window action (a picker or dialog) and reports the gesture as handled. The task
     // is intentionally not awaited — the key handler is synchronous and the action runs to completion
     // on the UI thread on its own.
-    private static bool Run(Func<Task> action)
+    private bool Run(Func<Task> action)
     {
-        _ = action();
+        _ = OwnViewActionAsync(action);
         return true;
+    }
+
+    internal async Task OwnViewActionAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ui: shortcut window action failed", ex);
+            ViewModel.ReportWindowActionFailure(ex);
+        }
     }
 
     private static bool TryExecute(ICommand command)
