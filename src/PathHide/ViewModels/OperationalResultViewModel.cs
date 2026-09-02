@@ -14,8 +14,6 @@ public sealed record OperationalResultViewModel(
     string Message,
     bool IsError)
 {
-    public string SeverityLabel => IsError ? "Error" : "Warning";
-
     public AutomationLiveSetting LiveSetting => IsError
         ? AutomationLiveSetting.Assertive
         : AutomationLiveSetting.Polite;
@@ -36,9 +34,7 @@ public sealed record PathAddResultViewModel(
 
     public bool IsError => Severity == PathAddResultSeverity.Error;
 
-    public string SeverityLabel => Severity.ToString();
-
-    public string AccessibleName => $"{SeverityLabel}: {Message}";
+    public string AccessibleName => Message;
 
     public AutomationLiveSetting LiveSetting => IsError
         ? AutomationLiveSetting.Assertive

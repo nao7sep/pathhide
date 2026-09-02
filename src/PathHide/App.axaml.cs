@@ -51,13 +51,7 @@ public partial class App : Application
                     new { quarantined = string.Join(", ", quarantined.Select(q => q.Path)) });
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
                     "PathHide could not read your path list",
-                    "Your list of tracked paths could not be read, so it has been set aside with its "
-                    + "contents intact rather than replaced:\n\n"
-                    + string.Join("\n", quarantined.Select(q => q.Path))
-                    + "\n\nPathHide has not started with an empty list, because that would look like "
-                    + "your entries were lost. Your files are not affected: nothing was hidden or "
-                    + "unhidden by this.\n\nRepair the file and rename it back, or move it out of the "
-                    + "way to start fresh, then start PathHide again.");
+                    FailurePresentation.PathListStartup());
                 RegisterOwnerActivation(desktop.MainWindow);
                 base.OnFrameworkInitializationCompleted();
                 return;
@@ -67,11 +61,7 @@ public partial class App : Application
                 Log.Error("startup: a settings file could not be read or set aside", ex);
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
                     "PathHide could not start",
-                    "A settings file could not be read, and PathHide could not set it aside either — so it has been "
-                    + "left exactly where it is rather than risk overwriting it.\n\n"
-                    + ex.Message
-                    + "\n\nYour files are not affected: nothing was hidden or unhidden by this. "
-                    + "Repair or move the file under the PathHide data folder, then start PathHide again.");
+                    FailurePresentation.Startup());
                 RegisterOwnerActivation(desktop.MainWindow);
                 base.OnFrameworkInitializationCompleted();
                 return;

@@ -286,7 +286,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (!TrySaveEntries(updated, out var saveFailure))
         {
             SetPathAddResult(
-                $"Could not add the selected paths because the path list could not be saved: {saveFailure}",
+                saveFailure!,
                 PathAddResultSeverity.Error,
                 issuePaths: addedPaths);
             return;
@@ -402,7 +402,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (!TrySaveEntries(updated, out var saveFailure))
         {
-            ShowOperationalResult(OperationalResultOwner.PathStore, $"Failed to save: {saveFailure}", error: true);
+            ShowOperationalResult(OperationalResultOwner.PathStore, saveFailure!, error: true);
             return;
         }
 
@@ -444,7 +444,7 @@ public partial class MainWindowViewModel : ObservableObject
             // re-syncs them, so ApplyDesiredStateAsync below reads the committed state.
             if (!TrySaveEntries(updated, out var saveFailure))
             {
-                ShowOperationalResult(OperationalResultOwner.PathStore, $"Failed to save: {saveFailure}", error: true);
+                ShowOperationalResult(OperationalResultOwner.PathStore, saveFailure!, error: true);
                 return;
             }
             ResolveOperationalResult(OperationalResultOwner.PathStore);
@@ -560,7 +560,7 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error("settings: save failed", ex);
-            return ex.Message;
+            return FailurePresentation.SettingsSave(ex);
         }
 
         var fontChanged = _settings.UiFontFamily != family;
@@ -621,7 +621,7 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error("paths: save failed", ex);
-            failure = ex.Message;
+            failure = FailurePresentation.PathListSave(ex);
             return false;
         }
 
@@ -763,7 +763,7 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error("scan: failed", ex);
-            ShowOperationalResult(OperationalResultOwner.Scan, $"Scan failed: {ex.Message}", error: true);
+            ShowOperationalResult(OperationalResultOwner.Scan, FailurePresentation.Scan(ex), error: true);
         }
         finally
         {

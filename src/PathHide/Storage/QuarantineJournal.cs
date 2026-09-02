@@ -46,9 +46,9 @@ public static class QuarantineJournal
             : "Some files were reset";
 
         var body =
-            $"{what} could not be read, so it has been set aside rather than overwritten:\n\n"
-            + string.Join("\n", quarantined.Select(q => q.Path))
-            + "\n\nPathHide started with defaults in its place. The original contents are in the file above.";
+            $"{what} could not be read, so PathHide preserved it rather than overwriting it. "
+            + "PathHide started with defaults in its place. Check the session log for the preserved "
+            + "copy's location.";
 
         return (title, body);
     }

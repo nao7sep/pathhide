@@ -68,7 +68,7 @@ public class MainWindowViewModelTests
         var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
         Assert.Equal("Added 1 path to the list; 1 hidden; 1 path is already in the list; 1 path was unavailable or invalid.", result.Message);
         Assert.Equal(PathAddResultSeverity.Warning, result.Severity);
-        Assert.Equal("Warning", result.SeverityLabel);
+        Assert.Equal(result.Message, result.AccessibleName);
         Assert.Equal(AutomationLiveSetting.Polite, result.LiveSetting);
         Assert.Contains("/foo", visibility.Hidden); // newly added entries default to Hidden and are applied
         Assert.Equal(1, paths.SaveCount);
@@ -87,7 +87,7 @@ public class MainWindowViewModelTests
         var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
         Assert.Equal("1 path is already in the list.", result.Message);
         Assert.Equal(PathAddResultSeverity.Information, result.Severity);
-        Assert.Equal("Information", result.SeverityLabel);
+        Assert.Equal(result.Message, result.AccessibleName);
         Assert.Equal(AutomationLiveSetting.Polite, result.LiveSetting);
 
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/other" });
@@ -117,9 +117,9 @@ public class MainWindowViewModelTests
             "Added 1 path to the list; 1 path is already in the list; 1 path was unavailable or invalid; 1 path could not be hidden.",
             result.Message);
         Assert.Equal(PathAddResultSeverity.Error, result.Severity);
-        Assert.Equal("Error", result.SeverityLabel);
+        Assert.Equal(result.Message, result.AccessibleName);
         Assert.Equal(AutomationLiveSetting.Assertive, result.LiveSetting);
-        Assert.StartsWith("Error: ", result.AccessibleName);
+        Assert.DoesNotContain("Error: ", result.AccessibleName, StringComparison.Ordinal);
         Assert.Equal(2, vm.Rows.Count);
         Assert.Equal(ActualState.Visible, vm.Rows.Single(row => row.Path == "/cannot-hide").ActualState);
     }
@@ -167,7 +167,7 @@ public class MainWindowViewModelTests
         Assert.Equal(DesiredVisibility.Hidden, row.Entry.DesiredVisibility);
         Assert.DoesNotContain("/x", visibility.Shown);
         var failure = Assert.Single(vm.OperationalResults);
-        Assert.Contains("Failed to save", failure.Message);
+        Assert.Contains("path list could not be saved", failure.Message);
         Assert.True(failure.IsError);
         Assert.Equal(AutomationLiveSetting.Assertive, failure.LiveSetting);
     }
@@ -367,8 +367,8 @@ public class MainWindowViewModelTests
             var surface = Assert.IsType<Border>(window.FindControl<Border>("PathAddResultSurface"));
             Assert.True(surface.IsVisible);
             Assert.Equal(AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(surface));
-            Assert.StartsWith("Warning: ", AutomationProperties.GetName(surface));
-            Assert.Contains(surface.GetLogicalDescendants().OfType<TextBlock>(), block => block.Text == "Warning");
+            Assert.Equal("1 path was unavailable or invalid.", AutomationProperties.GetName(surface));
+            Assert.DoesNotContain(surface.GetLogicalDescendants().OfType<TextBlock>(), block => block.Text == "Warning");
         }
         finally
         {
@@ -440,7 +440,7 @@ public class MainWindowViewModelTests
         // The startup drain runs once, in the window's Opened handler. A load
         // that quarantines afterwards - pressing Reload on a paths.json edited
         // into invalid JSON - emptied every row with no notice, no explanation
-        // and no pointer to the file that was set aside.
+        // and no safe recovery guidance for the copy that was set aside.
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
@@ -459,7 +459,8 @@ public class MainWindowViewModelTests
 
         Assert.NotNull(shown);
         Assert.Contains("paths", shown!.Value.Title);
-        Assert.Contains("paths-20260821-000000-000-utc.invalid", shown!.Value.Body);
+        Assert.Contains("session log", shown!.Value.Body);
+        Assert.DoesNotContain("/home/u/.pathhide", shown.Value.Body, StringComparison.Ordinal);
         // Drained, so a second reload does not repeat it.
         Assert.Empty(PathHide.Storage.QuarantineJournal.Drain());
     }
@@ -477,7 +478,8 @@ public class MainWindowViewModelTests
         var pathList = PathHide.Storage.QuarantineJournal.Describe(
             [new PathHide.Storage.QuarantinedStore("paths", "/r/paths-x.invalid")]);
         Assert.Contains("paths", pathList.Title);
-        Assert.Contains("/r/paths-x.invalid", pathList.Body);
+        Assert.Contains("session log", pathList.Body);
+        Assert.DoesNotContain("/r/paths-x.invalid", pathList.Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -726,7 +728,7 @@ public class MainWindowViewModelTests
 
         var failure = vm.TryApplySettings("Menlo", hiddenAndSystem: true);
 
-        Assert.Contains("save failed", failure);
+        Assert.Contains("Settings could not be saved", failure);
         Assert.Equal(AppSettings.DefaultUiFontFamily, settings.UiFontFamily);
         Assert.Equal(WindowsHideMode.HiddenOnly, settings.WindowsHideMode);
         Assert.Empty(vm.OperationalResults);
