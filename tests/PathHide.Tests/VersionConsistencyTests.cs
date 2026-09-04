@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -91,6 +92,18 @@ public sealed class VersionConsistencyTests
             actual == expected,
             $"src/PathHide/app.manifest's assemblyIdentity version is '{actual}' but expected '{expected}' " +
             $"(Directory.Build.props' <Version> '{canonical}' plus a trailing .0).");
+    }
+
+    [Fact]
+    public void GitHub_Release_Tag_Matches_The_Product_Version()
+    {
+        if (Environment.GetEnvironmentVariable("GITHUB_REF_TYPE") != "tag")
+        {
+            return;
+        }
+
+        var canonical = CanonicalVersion(RepoRoot());
+        Assert.Equal("v" + canonical, Environment.GetEnvironmentVariable("GITHUB_REF_NAME"));
     }
 
     private static string PlistStringValue(string plistPath, string key)
