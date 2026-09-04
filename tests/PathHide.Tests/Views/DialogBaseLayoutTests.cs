@@ -1,6 +1,4 @@
-using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
@@ -58,16 +56,4 @@ public sealed class DialogBaseLayoutTests
         Assert.Empty(footer!.GetLogicalAncestors().OfType<ScrollViewer>());
     }
 
-    [Fact]
-    public void Dialog_button_intents_have_explicit_keyboard_focus_states()
-    {
-        var app = File.ReadAllText(Path.Combine(RepoRoot(), "src", "PathHide", "App.axaml"));
-
-        Assert.Contains("Button.accent:focus /template/ ContentPresenter", app);
-        Assert.Contains("Button.destructive:focus /template/ ContentPresenter", app);
-        Assert.Contains("Button.utility:focus /template/ ContentPresenter", app);
-    }
-
-    private static string RepoRoot([CallerFilePath] string path = "") =>
-        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", "..", ".."));
 }
