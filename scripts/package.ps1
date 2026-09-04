@@ -15,6 +15,13 @@ New-Item -ItemType Directory -Force -Path dist | Out-Null
 # Self-contained win-x64 publish -> a folder of PathHide.exe + its runtime.
 dotnet publish $Project -c Release -r win-x64 --self-contained true -o publish-win
 
+# Debug symbols are useful to developers but add about 105 MB of uncompressed
+# payload. Keep them in build outputs, not in the user-facing package.
+Get-ChildItem -LiteralPath publish-win -Recurse -File -Filter *.pdb | Remove-Item -Force
+if (Get-ChildItem -LiteralPath publish-win -Recurse -File -Filter *.pdb) {
+    throw "Debug symbols remain in publish-win after release cleanup."
+}
+
 # Portable: zip the self-contained folder as-is.
 Compress-Archive -Path publish-win/* -DestinationPath "dist/$AppName-$Version-win.zip" -Force
 
