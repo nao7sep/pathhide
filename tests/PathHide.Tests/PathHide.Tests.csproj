@@ -16,7 +16,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
-    <!-- Avalonia.Headless.XUnit 12.1.1 calls xUnit 3.2.2 discovery internals and fails
+    <!-- Avalonia.Headless.XUnit 12.1.2 calls xUnit 3.2.2 discovery internals and fails
          discovery under xUnit 4. Keep this pair until Avalonia publishes compatible integration. -->
     <PackageReference Include="xunit.v3" Version="3.2.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
@@ -26,7 +26,7 @@
     <!-- Official xUnit headless integration ([AvaloniaFact]); depends on xunit.v3. Lets the
          scan-lifecycle tests run on a real dispatcher/UI thread, matching how the view model
          marshals scan progress in the app. -->
-    <PackageReference Include="Avalonia.Headless.XUnit" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Headless.XUnit" Version="12.1.2" />
   </ItemGroup>
 
   <ItemGroup>

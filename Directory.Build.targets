@@ -29,9 +29,11 @@
       <_PublishRoot>$([System.IO.Path]::GetFullPath('$(PublishDir)'))</_PublishRoot>
     </PropertyGroup>
 
-    <!-- Capture the loose publish output before the bundle directory is created. -->
+    <!-- Capture the loose publish output before the bundle directory is created.
+         PDBs remain builder artifacts: exclude them before signing so neither macOS
+         release shape carries debug symbols. The cleanup below removes the loose copy. -->
     <ItemGroup>
-      <_PublishedFile Include="$(PublishDir)**/*" Exclude="$(_MacBundle)/**" />
+      <_PublishedFile Include="$(PublishDir)**/*" Exclude="$(_MacBundle)/**;$(PublishDir)**/*.pdb" />
     </ItemGroup>
 
     <MakeDir Directories="$(_MacExecDir);$(_MacResDir)" />
@@ -46,7 +48,6 @@
     <Copy SourceFiles="$(MSBuildThisFileDirectory)macOS/Assets.car"
           DestinationFolder="$(_MacResDir)"
           Condition="Exists('$(MSBuildThisFileDirectory)macOS/Assets.car')" />
-
     <!-- Moving files leaves empty directory shells in the publish root for any
          localization satellite folders; remove every top-level entry except the
          bundle so the publish directory holds only the .app. -->
