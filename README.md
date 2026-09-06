@@ -46,7 +46,7 @@ Some tests are platform-gated and report as skipped off their platform — the W
 
 ## License
 
-MIT © 2026 Yoshinao Inoguchi
+[GNU GPL v3 or later](LICENSE) © 2026 Yoshinao Inoguchi
 
 ## Contact
 
