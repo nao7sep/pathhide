@@ -41,10 +41,29 @@ public sealed class InstallerConfigurationTests
         Assert.Contains("$(PublishDir)**/*.pdb", exclusions);
     }
 
+    [Fact]
+    public void Application_License_Is_Packaged_On_Both_Platforms()
+    {
+        var targets = BuildTargets();
+        var copy = targets.Descendants("Copy").Single(element =>
+            (string?)element.Attribute("SourceFiles") == "$(MSBuildThisFileDirectory)LICENSE");
+        Assert.Equal("$(_MacResDir)/LICENSE.txt", (string?)copy.Attribute("DestinationFiles"));
+        Assert.Contains(
+            "Copy-Item -LiteralPath LICENSE -Destination publish-win/LICENSE.txt",
+            RepoFile("scripts", "package.ps1"));
+    }
+
     private static XDocument BuildTargets([CallerFilePath] string callerPath = "")
     {
         var testsProjectDir = Path.GetDirectoryName(callerPath)!;
         var repoRoot = Path.GetFullPath(Path.Combine(testsProjectDir, "..", ".."));
         return XDocument.Load(Path.Combine(repoRoot, "Directory.Build.targets"));
+    }
+
+    private static string RepoFile(string directory, string file, [CallerFilePath] string callerPath = "")
+    {
+        var testsProjectDir = Path.GetDirectoryName(callerPath)!;
+        var repoRoot = Path.GetFullPath(Path.Combine(testsProjectDir, "..", ".."));
+        return File.ReadAllText(Path.Combine(repoRoot, directory, file));
     }
 }

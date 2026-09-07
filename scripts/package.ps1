@@ -21,6 +21,7 @@ Get-ChildItem -LiteralPath publish-win -Recurse -File -Filter *.pdb | Remove-Ite
 if (Get-ChildItem -LiteralPath publish-win -Recurse -File -Filter *.pdb) {
     throw "Debug symbols remain in publish-win after release cleanup."
 }
+Copy-Item -LiteralPath LICENSE -Destination publish-win/LICENSE.txt
 
 # Portable: zip the self-contained folder as-is.
 Compress-Archive -Path publish-win/* -DestinationPath "dist/$AppName-$Version-win.zip" -Force
