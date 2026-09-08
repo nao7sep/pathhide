@@ -92,16 +92,16 @@
             <Setter Property="FontSize" Value="13"/>
         </Style>
 
-        <!-- Keep DataGrid cell navigation active without drawing a harsh current-cell box. -->
-        <Style Selector="DataGridCell">
-            <Setter Property="FocusAdorner" Value="{x:Null}"/>
+        <!-- Keep Fluent's native scrollbar geometry and hit targets. Expand immediately on hover,
+             remain expanded during interaction, then use the framework's two-second leave delay. -->
+        <Style Selector="ScrollViewer">
+            <Setter Property="AllowAutoHide" Value="True"/>
         </Style>
-        <Style Selector="DataGridCell:current /template/ Rectangle#CurrencyVisual">
-            <Setter Property="IsVisible" Value="False"/>
+        <Style Selector="ScrollBar">
+            <Setter Property="ShowDelay" Value="00:00:00"/>
+            <Setter Property="HideDelay" Value="00:00:02"/>
         </Style>
-        <Style Selector="DataGridCell:focus /template/ Grid#FocusVisual">
-            <Setter Property="IsVisible" Value="False"/>
-        </Style>
+
         <Style Selector="Button.resultClose">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>

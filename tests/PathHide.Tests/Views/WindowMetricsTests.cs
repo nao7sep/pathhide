@@ -3,6 +3,9 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using Avalonia;
+using Avalonia.Headless.XUnit;
+using Avalonia.Styling;
 using PathHide.Views;
 using Xunit;
 
@@ -23,15 +26,16 @@ public sealed class WindowMetricsTests
     // is what catches drift between this list and the actual XAML.
     private static readonly double[] ColumnMinWidths = [240, 100, 90, 120, 110];
 
-    // Chrome budget added on top of the columns: the list Border's 12px left+right margin plus
-    // the ~12px vertical-scrollbar gutter. Mirrors the private constants in WindowMetrics.
-    private const double ChromeWidth = 12 + 12 + 12;
+    // The list Border's 12px left+right margin is the only fixed chrome in WindowMetrics.
+    // The scrollbar gutter comes from the live Fluent theme and is passed in by the view.
+    private const double GridHorizontalMargin = 12 + 12;
+    private const double ScrollBarGutter = 16;
 
     [Fact]
     public void MinWidth_EqualsColumnMinimumsPlusChrome()
     {
-        var expected = ColumnMinWidths.Sum() + ChromeWidth;
-        Assert.Equal(expected, WindowMetrics.MinWidthFor(ColumnMinWidths));
+        var expected = ColumnMinWidths.Sum() + GridHorizontalMargin + ScrollBarGutter;
+        Assert.Equal(expected, WindowMetrics.MinWidthFor(ColumnMinWidths, ScrollBarGutter));
     }
 
     [Fact]
@@ -39,9 +43,28 @@ public sealed class WindowMetricsTests
     {
         // Adding a column to the input must move the derived minimum by exactly that column's
         // minimum width — the property that keeps the window and its columns from drifting apart.
-        var baseWidth = WindowMetrics.MinWidthFor(ColumnMinWidths);
-        var widened = WindowMetrics.MinWidthFor([.. ColumnMinWidths, 75]);
+        var baseWidth = WindowMetrics.MinWidthFor(ColumnMinWidths, ScrollBarGutter);
+        var widened = WindowMetrics.MinWidthFor([.. ColumnMinWidths, 75], ScrollBarGutter);
         Assert.Equal(baseWidth + 75, widened);
+    }
+
+    [Fact]
+    public void MinWidth_TracksTheLiveScrollBarGutter()
+    {
+        var narrowTheme = WindowMetrics.MinWidthFor(ColumnMinWidths, verticalScrollBarGutter: 12);
+        var wideTheme = WindowMetrics.MinWidthFor(ColumnMinWidths, verticalScrollBarGutter: 20);
+
+        Assert.Equal(narrowTheme + 8, wideTheme);
+    }
+
+    [AvaloniaFact]
+    public void FluentTheme_ProvidesTheLiveScrollBarGutter()
+    {
+        Assert.True(Application.Current!.TryGetResource(
+            "ScrollBarSize",
+            ThemeVariant.Light,
+            out var value));
+        Assert.True(Assert.IsType<double>(value) > 0);
     }
 
     [Fact]

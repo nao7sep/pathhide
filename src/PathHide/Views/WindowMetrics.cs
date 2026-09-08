@@ -21,10 +21,6 @@ public static class WindowMetrics
     // room on each edge.
     private const double GridHorizontalMargin = 12 + 12;
 
-    // Room for the DataGrid's vertical scrollbar so the rightmost column is never partly hidden
-    // behind it at the minimum width — Fluent's bar is a slim ~12px gutter.
-    private const double VerticalScrollBarGutter = 12;
-
     // A real content minimum, tall enough to show a few data rows plus the column header — a
     // declared pane minimum, not an arbitrary number. The chrome heights are NOT declared here:
     // they are measured from the live controls and passed in, because both depend on the
@@ -35,8 +31,10 @@ public static class WindowMetrics
     /// The minimum window width: the sum of the column minimums plus the list margins and the
     /// vertical scrollbar gutter.
     /// </summary>
-    public static double MinWidthFor(IEnumerable<double> columnMinWidths)
-        => columnMinWidths.Sum() + GridHorizontalMargin + VerticalScrollBarGutter;
+    public static double MinWidthFor(
+        IEnumerable<double> columnMinWidths,
+        double verticalScrollBarGutter)
+        => columnMinWidths.Sum() + GridHorizontalMargin + verticalScrollBarGutter;
 
     /// <summary>
     /// The minimum window height: the measured chrome (toolbar + status bar) plus a content

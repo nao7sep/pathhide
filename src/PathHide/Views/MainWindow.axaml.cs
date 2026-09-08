@@ -116,11 +116,22 @@ public partial class MainWindow : Window
         StatusBar.Measure(Size.Infinity);
 
         MinWidth = Math.Max(
-            WindowMetrics.MinWidthFor(PathGrid.Columns.Select(c => c.MinWidth)),
+            WindowMetrics.MinWidthFor(
+                PathGrid.Columns.Select(c => c.MinWidth),
+                VerticalScrollBarGutter()),
             Toolbar.DesiredSize.Width);
         MinHeight = WindowMetrics.MinHeightFor(
             Toolbar.DesiredSize.Height,
             StatusBar.DesiredSize.Height);
+    }
+
+    private double VerticalScrollBarGutter()
+    {
+        // The width is a Fluent-theme token. Resolve it from the live resource tree
+        // instead of duplicating today's theme value in window-sizing logic.
+        return this.TryFindResource("ScrollBarSize", out var value) && value is double size
+            ? size
+            : 0;
     }
 
     private Task ShowShortcutsAsync() => new ShortcutsDialog(_shortcuts).ShowDialog(this);
