@@ -9,6 +9,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_BUNDLE="$REPO_DIR/publish/PathHide.app"
+APP_EXECUTABLE="$APP_BUNDLE/Contents/MacOS/PathHide"
+RUNTIME_TOKEN="run-built-$$-$(date +%s)-$RANDOM"
+source "$SCRIPT_DIR/launcher-runtime.sh"
 
 log_step() {
   printf '\n==> %s\n' "$1"
@@ -16,7 +19,7 @@ log_step() {
 
 pause_on_failure() {
   local status="$1"
-  if [[ "$status" -ne 0 && "$status" -ne 130 ]]; then
+  if [[ "$status" -ne 0 && ( "$status" -lt 128 || "$status" -gt 143 ) ]]; then
     echo
     echo "pathhide run-built failed with exit code $status."
     read -r -p "Press Enter to close..."
@@ -38,9 +41,12 @@ fi
 # Age tracks the actual build: rebuild resets Contents/MacOS, but never touches
 # the .app dir's own mtime — stat'ing the bundle root would report a stale date.
 built_at="$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S %Z' "$APP_BUNDLE/Contents/MacOS" 2>/dev/null || echo 'unknown')"
+claim_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
+stop_owned_runtime dotnet "PathHide" "$REPO_DIR" "$REPO_DIR/src/PathHide/PathHide.csproj" "PathHide" "$APP_EXECUTABLE"
 log_step "Launching the existing build (built: $built_at)"
 echo "If you changed source since then, run rebuild instead."
 
 # `open` routes through Launch Services, which registers the bundle identity with
 # TCC and triggers permission prompts on first access.
-open "$APP_BUNDLE"
+open -n "$APP_BUNDLE"
+wait_for_owned_runtime dotnet "PathHide" "$REPO_DIR" "$REPO_DIR/src/PathHide/PathHide.csproj" "PathHide" "$APP_EXECUTABLE" 30

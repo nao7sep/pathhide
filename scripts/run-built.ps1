@@ -26,9 +26,12 @@ function Write-Step {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
 $exePath = Join-Path $repoDir "bin/Release/net10.0/win-x64/publish/PathHide.exe"
+$projectFile = Join-Path $repoDir "src/PathHide/PathHide.csproj"
+$runtimeToken = [guid]::NewGuid().ToString("N")
 
 try {
     Set-Utf8Console
+    Import-Module (Join-Path $scriptDir "launcher-runtime.psm1") -Force
 
     Set-Location $repoDir
 
@@ -40,11 +43,14 @@ try {
     }
 
     $builtAt = (Get-Item $exePath).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+    Claim-LauncherRuntime -Token $runtimeToken -RepoDir $repoDir
+    Stop-OwnedRuntime -Kind dotnet -Label "PathHide" -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName "PathHide" -BuiltExecutable $exePath
     Write-Step "Launching the existing build (built: $builtAt)"
     Write-Host "If you changed source since then, run rebuild instead."
 
     # GUI app: launch non-blocking via Start-Process.
-    Start-Process -FilePath $exePath
+    Start-Process -FilePath $exePath | Out-Null
+    Wait-OwnedRuntime -Kind dotnet -Label "PathHide" -RepoDir $repoDir -ProjectFile "" -ExecutableName "PathHide" -BuiltExecutable $exePath -TimeoutSeconds 30
 }
 catch {
     Write-Host ""

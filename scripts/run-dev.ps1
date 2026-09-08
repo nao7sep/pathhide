@@ -48,18 +48,31 @@ function Invoke-Native {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
 $projectFile = Join-Path $repoDir "src/PathHide/PathHide.csproj"
+$builtExecutable = Join-Path $repoDir "bin/Release/net10.0/win-x64/publish/PathHide.exe"
+$runtimeToken = [guid]::NewGuid().ToString("N")
 
 try {
     Set-Utf8Console
+    Import-Module (Join-Path $scriptDir "launcher-runtime.psm1") -Force
     Require-Command dotnet
 
     Set-Location $repoDir
+
+    Write-Step "Replacing any existing PathHide runtime"
+    Claim-LauncherRuntime -Token $runtimeToken -RepoDir $repoDir
+    Stop-OwnedRuntime -Kind dotnet -Label "PathHide" -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName "PathHide" -BuiltExecutable $builtExecutable
 
     Write-Step "Restoring packages required for launch"
     Invoke-Native -FilePath "dotnet" -ArgumentList @("restore", $projectFile)
 
     Write-Step "Starting PathHide (Debug, from source)"
-    Invoke-Native -FilePath "dotnet" -ArgumentList @("run", "--project", $projectFile) -AllowedExitCodes @(0, 130, -1073741510)
+    $devProcess = Start-Process -FilePath "dotnet" -ArgumentList @("run", "--project", $projectFile) -NoNewWindow -PassThru
+    Wait-OwnedRuntime -Kind dotnet -Label "PathHide" -RepoDir $repoDir -ProjectFile "" -ExecutableName "PathHide" -BuiltExecutable $builtExecutable -TimeoutSeconds 120
+    Write-Step "PathHide is ready"
+    $devProcess.WaitForExit()
+    if ($devProcess.ExitCode -notin @(0, 130, -1073741510)) {
+        throw "PathHide development runtime failed with exit code $($devProcess.ExitCode)."
+    }
 }
 catch {
     Write-Host ""
@@ -67,7 +80,11 @@ catch {
     $scriptExitCode = 1
 }
 finally {
-    Read-Host "Press Enter to close" | Out-Null
+    if (Test-LauncherRuntimeOwner -Token $runtimeToken -RepoDir $repoDir) {
+        Stop-OwnedRuntime -Kind dotnet -Label "PathHide" -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName "PathHide" -BuiltExecutable $builtExecutable
+        Release-LauncherRuntime -Token $runtimeToken -RepoDir $repoDir
+        Read-Host "Press Enter to close" | Out-Null
+    }
 }
 
 exit $scriptExitCode

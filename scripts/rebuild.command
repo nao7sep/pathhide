@@ -11,6 +11,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_FILE="$REPO_DIR/src/PathHide/PathHide.csproj"
 APP_BUNDLE="$REPO_DIR/publish/PathHide.app"
+APP_EXECUTABLE="$APP_BUNDLE/Contents/MacOS/PathHide"
+RUNTIME_TOKEN="rebuild-$$-$(date +%s)-$RANDOM"
+source "$SCRIPT_DIR/launcher-runtime.sh"
 
 # Apple Silicon only, matching what the fleet ships and what package.sh
 # publishes. Building an Intel binary locally would produce an artifact the
@@ -36,7 +39,7 @@ require_command() {
 
 pause_on_failure() {
   local status="$1"
-  if [[ "$status" -ne 0 && "$status" -ne 130 ]]; then
+  if [[ "$status" -ne 0 && ( "$status" -lt 128 || "$status" -gt 143 ) ]]; then
     echo
     echo "pathhide rebuild failed with exit code $status."
     read -r -p "Press Enter to close..."
@@ -58,4 +61,7 @@ log_step "Publishing PathHide ($RID, Release, self-contained)"
 dotnet publish "$PROJECT_FILE" -c Release -r "$RID" --self-contained true -o "$REPO_DIR/publish"
 
 log_step "Launching the rebuilt app"
-open "$APP_BUNDLE"
+claim_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
+stop_owned_runtime dotnet "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE"
+open -n "$APP_BUNDLE"
+wait_for_owned_runtime dotnet "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE" 30

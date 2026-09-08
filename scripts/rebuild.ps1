@@ -49,12 +49,20 @@ $repoDir = Split-Path -Parent $scriptDir
 $projectFile = Join-Path $repoDir "src/PathHide/PathHide.csproj"
 $publishDir = Join-Path $repoDir "bin/Release/net10.0/win-x64/publish"
 $exePath = Join-Path $publishDir "PathHide.exe"
+$runtimeToken = [guid]::NewGuid().ToString("N")
 
 try {
     Set-Utf8Console
+    Import-Module (Join-Path $scriptDir "launcher-runtime.psm1") -Force
     Require-Command dotnet
 
     Set-Location $repoDir
+
+    # Windows locks the published executable while it runs, so replacement must
+    # happen before removing the publish directory.
+    Write-Step "Replacing any existing PathHide runtime"
+    Claim-LauncherRuntime -Token $runtimeToken -RepoDir $repoDir
+    Stop-OwnedRuntime -Kind dotnet -Label "PathHide" -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName "PathHide" -BuiltExecutable $exePath
 
     Write-Step "Removing stale publish output"
     # Clear the publish dir first so a build that fails to emit a file cannot be
@@ -75,7 +83,8 @@ try {
     Write-Step "Launching PathHide"
     # GUI app: launch non-blocking via Start-Process (the Windows counterpart to
     # macOS `open`), so the console does not wait on the app's lifetime.
-    Start-Process -FilePath $exePath
+    Start-Process -FilePath $exePath | Out-Null
+    Wait-OwnedRuntime -Kind dotnet -Label "PathHide" -RepoDir $repoDir -ProjectFile "" -ExecutableName "PathHide" -BuiltExecutable $exePath -TimeoutSeconds 30
 }
 catch {
     Write-Host ""
