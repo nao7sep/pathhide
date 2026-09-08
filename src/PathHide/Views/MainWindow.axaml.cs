@@ -14,6 +14,8 @@ using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using PathHide.Services;
+using PathHide.Models;
+using PathHide.Storage;
 using PathHide.ViewModels;
 
 namespace PathHide.Views;
@@ -26,12 +28,27 @@ public partial class MainWindow : Window
     // item's own HotKey only registers while the flyout is open, so accelerators are matched at the
     // window level in OnKeyDown, with InputGesture providing the visible menu association.
     private IReadOnlyList<ShortcutItem> _shortcuts = [];
+    private readonly JsonStore<WindowPlacementState> _placementStore = new("state.json", "window placement");
+    private readonly DispatcherTimer _placementSaveTimer;
+    private WindowBounds? _normalWindowBounds;
+    private string _stableWindowMode = "normal";
+    private bool _placementCaptureEnabled;
+    private bool _placementTransient;
 
     private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _placementSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        _placementSaveTimer.Tick += (_, _) =>
+        {
+            _placementSaveTimer.Stop();
+            if (WindowState == WindowState.Normal && !_placementTransient)
+                CacheCurrentNormalBounds();
+            PersistWindowPlacement();
+        };
 
         if (OperatingSystem.IsWindows())
         {
@@ -62,6 +79,153 @@ public partial class MainWindow : Window
         ActionButtons.KeyDown += OnActionButtonsKeyDown;
 
         Loaded += OnLoaded;
+        PositionChanged += (_, _) => ScheduleNormalWindowPlacement();
+        PropertyChanged += OnPlacementPropertyChanged;
+    }
+
+    protected override void OnOpened(EventArgs e)
+    {
+        ApplyWindowMinimums();
+        PrepareWindowPlacement();
+        base.OnOpened(e);
+    }
+
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        FlushWindowPlacement();
+        base.OnClosing(e);
+    }
+
+    private void PrepareWindowPlacement()
+    {
+        var displays = Screens.All.Select(screen => new DisplayWorkArea(
+            screen.WorkingArea.X, screen.WorkingArea.Y,
+            screen.WorkingArea.Width, screen.WorkingArea.Height, screen.Scaling)).ToArray();
+        var restoration = WindowPlacementPolicy.Resolve(
+            _placementStore.Load().Value.WindowPlacements.Main,
+            MinWidth,
+            MinHeight,
+            displays);
+        if (restoration.NormalBounds is { } bounds)
+        {
+            var display = displays.First(item =>
+                bounds.X >= item.X && bounds.Y >= item.Y
+                && (long)bounds.X + bounds.Width <= (long)item.X + item.Width
+                && (long)bounds.Y + bounds.Height <= (long)item.Y + item.Height);
+            var frameSize = FrameSize ?? ClientSize;
+            var chromeWidth = Math.Max(0, frameSize.Width - ClientSize.Width);
+            var chromeHeight = Math.Max(0, frameSize.Height - ClientSize.Height);
+            Position = new PixelPoint(bounds.X, bounds.Y);
+            Width = Math.Max(MinWidth, bounds.Width / display.Scaling - chromeWidth);
+            Height = Math.Max(MinHeight, bounds.Height / display.Scaling - chromeHeight);
+        }
+        _stableWindowMode = restoration.Mode;
+        CacheCurrentNormalBounds();
+        if (_stableWindowMode == "maximized")
+            WindowState = WindowState.Maximized;
+        Opacity = 1;
+        ShowInTaskbar = true;
+        DispatcherTimer.RunOnce(() =>
+        {
+            _placementCaptureEnabled = true;
+            _placementTransient = WindowState is WindowState.Minimized or WindowState.FullScreen;
+        }, TimeSpan.FromMilliseconds(500));
+    }
+
+    private void OnPlacementPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == ClientSizeProperty || e.Property == BoundsProperty)
+            ScheduleNormalWindowPlacement();
+        else if (e.Property == WindowStateProperty)
+            OnWindowStateChanged();
+    }
+
+    private void ScheduleNormalWindowPlacement()
+    {
+        if (!_placementCaptureEnabled || _placementTransient || WindowState != WindowState.Normal)
+            return;
+        _stableWindowMode = "normal";
+        _placementSaveTimer.Stop();
+        _placementSaveTimer.Start();
+    }
+
+    private void CacheCurrentNormalBounds()
+    {
+        var scale = (Screens.ScreenFromWindow(this)?.Scaling).GetValueOrDefault(RenderScaling);
+        var frameSize = FrameSize ?? ClientSize;
+        _normalWindowBounds = new WindowBounds
+        {
+            X = Position.X,
+            Y = Position.Y,
+            Width = (int)Math.Round(frameSize.Width * scale),
+            Height = (int)Math.Round(frameSize.Height * scale),
+        };
+    }
+
+    private void OnWindowStateChanged()
+    {
+        if (!_placementCaptureEnabled)
+            return;
+        if (WindowState is WindowState.Minimized or WindowState.FullScreen)
+        {
+            _placementTransient = true;
+            _placementSaveTimer.Stop();
+            return;
+        }
+        if (WindowState == WindowState.Maximized)
+        {
+            _placementTransient = false;
+            _placementSaveTimer.Stop();
+            _stableWindowMode = "maximized";
+            PersistWindowPlacement();
+            return;
+        }
+        _placementTransient = true;
+        _placementSaveTimer.Stop();
+        DispatcherTimer.RunOnce(() =>
+        {
+            _placementTransient = false;
+            if (WindowState != WindowState.Normal)
+                return;
+            CacheCurrentNormalBounds();
+            _stableWindowMode = "normal";
+            PersistWindowPlacement();
+        }, TimeSpan.FromMilliseconds(400));
+    }
+
+    private void PersistWindowPlacement()
+    {
+        if (!_placementCaptureEnabled || _normalWindowBounds is null)
+            return;
+        try
+        {
+            _placementStore.Save(new WindowPlacementState
+            {
+                WindowPlacements = new WindowPlacements
+                {
+                    Main = new WindowPlacement
+                    {
+                        NormalBounds = _normalWindowBounds,
+                        Mode = _stableWindowMode,
+                    },
+                },
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("window placement save failed", ex);
+        }
+    }
+
+    private void FlushWindowPlacement()
+    {
+        _placementSaveTimer.Stop();
+        if (_placementCaptureEnabled && !_placementTransient && WindowState == WindowState.Normal)
+        {
+            CacheCurrentNormalBounds();
+            _stableWindowMode = "normal";
+        }
+        PersistWindowPlacement();
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)

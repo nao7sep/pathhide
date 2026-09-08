@@ -81,6 +81,8 @@ public partial class App : Application
             var mainWindow = new MainWindow
             {
                 DataContext = viewModel,
+                Opacity = 0,
+                ShowInTaskbar = false,
             };
             desktop.MainWindow = mainWindow;
             RegisterOwnerActivation(mainWindow);
