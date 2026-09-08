@@ -41,4 +41,26 @@ public sealed class WindowPlacementPolicyTests
         Assert.Equal("maximized", result.Mode);
         Assert.Null(result.NormalBounds);
     }
+
+    [Fact]
+    public void Accepted_restored_bounds_seed_the_normal_landing_rectangle()
+    {
+        var accepted = new WindowBounds { X = 120, Y = 140, Width = 1340, Height = 880 };
+        var opening = new WindowBounds { X = 300, Y = 220, Width = 1200, Height = 800 };
+
+        Assert.Same(accepted, WindowPlacementPolicy.SeedNormalBounds(
+            new WindowPlacement { NormalBounds = accepted, Mode = "normal" }, opening));
+        Assert.Same(opening, WindowPlacementPolicy.SeedNormalBounds(
+            new WindowPlacement { NormalBounds = null, Mode = "maximized" }, opening));
+    }
+
+    [Fact]
+    public void Native_fullscreen_frame_matches_only_the_complete_display()
+    {
+        var displays = new[] { new DisplayWorkArea(0, 0, 2560, 1440, 1) };
+        Assert.True(WindowPlacementPolicy.IsFullDisplayFrame(
+            new WindowBounds { X = 0, Y = 0, Width = 2560, Height = 1440 }, displays));
+        Assert.False(WindowPlacementPolicy.IsFullDisplayFrame(
+            new WindowBounds { X = 0, Y = 30, Width = 2560, Height = 1311 }, displays));
+    }
 }

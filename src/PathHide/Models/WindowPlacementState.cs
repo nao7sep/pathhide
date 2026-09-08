@@ -32,6 +32,17 @@ public sealed record DisplayWorkArea(int X, int Y, int Width, int Height, double
 
 public static class WindowPlacementPolicy
 {
+    public static WindowBounds SeedNormalBounds(WindowPlacement restoration, WindowBounds observedOpening) =>
+        restoration.NormalBounds ?? observedOpening;
+
+    public static bool IsFullDisplayFrame(
+        WindowBounds bounds,
+        IEnumerable<DisplayWorkArea> displays) => displays.Any(display =>
+            bounds.X == display.X
+            && bounds.Y == display.Y
+            && bounds.Width == display.Width
+            && bounds.Height == display.Height);
+
     public static WindowPlacement Resolve(
         WindowPlacement? saved,
         double minimumWidth,
