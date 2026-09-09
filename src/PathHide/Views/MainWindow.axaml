@@ -32,7 +32,10 @@
         </Style>
     </Window.Styles>
 
-    <DockPanel>
+    <ScrollViewer x:Name="WindowViewport"
+                  HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+    <DockPanel x:Name="LayoutRoot"
+               Width="{Binding #WindowViewport.Viewport.Width}" Height="{Binding #WindowViewport.Viewport.Height}">
 
         <!-- Toolbar -->
         <Border DockPanel.Dock="Top"
@@ -215,4 +218,5 @@
 
     </DockPanel>
 
+    </ScrollViewer>
 </Window>

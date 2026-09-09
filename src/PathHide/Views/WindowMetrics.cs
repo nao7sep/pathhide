@@ -17,6 +17,11 @@ namespace PathHide.Views;
 /// </remarks>
 public static class WindowMetrics
 {
+    public static Avalonia.Size CapMinimumToWorkArea(
+        Avalonia.Size contentFloor, Avalonia.PixelRect workArea, double scale, Avalonia.Size chrome) =>
+        new(System.Math.Min(contentFloor.Width, System.Math.Max(1, workArea.Width / scale - chrome.Width)),
+            System.Math.Min(contentFloor.Height, System.Math.Max(1, workArea.Height / scale - chrome.Height)));
+
     // The path-list Border has Margin="12" on all sides, so the grid loses 12px of horizontal
     // room on each edge.
     private const double GridHorizontalMargin = 12 + 12;
