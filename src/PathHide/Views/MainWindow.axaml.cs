@@ -14,8 +14,6 @@ using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using PathHide.Services;
-using PathHide.Models;
-using PathHide.Storage;
 using PathHide.ViewModels;
 
 namespace PathHide.Views;
@@ -28,8 +26,6 @@ public partial class MainWindow : Window
     // item's own HotKey only registers while the flyout is open, so accelerators are matched at the
     // window level in OnKeyDown, with InputGesture providing the visible menu association.
     private IReadOnlyList<ShortcutItem> _shortcuts = [];
-    private readonly JsonStore<WindowPlacementState> _placementStore = new("state.json", "window placement");
-    private WindowPlacementController? _placement;
 
     private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
 
@@ -70,33 +66,10 @@ public partial class MainWindow : Window
         ScalingChanged += (_, _) => ApplyNativeMinimum();
         Screens.Changed += OnScreensChanged;
         Closed += (_, _) => Screens.Changed -= OnScreensChanged;
-    }
 
-    protected override void OnClosing(WindowClosingEventArgs e)
-    {
-        _placement?.Flush();
-        base.OnClosing(e);
-    }
-
-    public void PrepareWindowPlacement()
-    {
+        // Establish the content-derived minimum before the first native window is shown.
+        // OnLoaded repeats the measurement after the visual tree has completed layout.
         ApplyWindowMinimums();
-        WindowPlacement? saved = null;
-        try
-        {
-            saved = _placementStore.Load().Value.WindowPlacements?.Main;
-        }
-        catch (Exception ex)
-        {
-            Log.Warn("window placement load failed", ex);
-        }
-        _placement = new WindowPlacementController(this,
-            saved,
-            placement => _placementStore.Save(new WindowPlacementState
-            {
-                WindowPlacements = new WindowPlacements { Main = placement },
-            }),
-            ex => Log.Warn("window placement failed", ex), ApplyNativeMinimum);
     }
 
     private void OnScreensChanged(object? sender, EventArgs e) => ApplyNativeMinimum();
