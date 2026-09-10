@@ -94,6 +94,10 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The configured UI (chrome) font family, used to seed the settings dialog.</summary>
     public string UiFontFamily => _settings.UiFontFamily;
+    public int? WindowPositionX => _settings.WindowPositionX;
+    public int? WindowPositionY => _settings.WindowPositionY;
+    public double? WindowWidth => _settings.WindowWidth;
+    public double? WindowHeight => _settings.WindowHeight;
 
     public string ProgressText => ScanTotal > 0
         ? $"Scanning {ScanProgress} / {ScanTotal}"
@@ -581,11 +585,9 @@ public partial class MainWindowViewModel : ObservableObject
         if (_settings.UiFontFamily == family && _settings.WindowsHideMode == newMode)
             return null;
 
-        var candidate = new AppSettings
-        {
-            UiFontFamily = family,
-            WindowsHideMode = newMode,
-        };
+        var candidate = CopySettings();
+        candidate.UiFontFamily = family;
+        candidate.WindowsHideMode = newMode;
         try
         {
             _settingsStore.Save(candidate);
@@ -610,6 +612,30 @@ public partial class MainWindowViewModel : ObservableObject
         Log.Info("settings: changed", new { family, mode = newMode });
         return null;
     }
+
+    public void SaveWindowGeometry(int x, int y, double width, double height)
+    {
+        var candidate = CopySettings();
+        candidate.WindowPositionX = x;
+        candidate.WindowPositionY = y;
+        candidate.WindowWidth = width;
+        candidate.WindowHeight = height;
+        _settingsStore.Save(candidate);
+        _settings.WindowPositionX = x;
+        _settings.WindowPositionY = y;
+        _settings.WindowWidth = width;
+        _settings.WindowHeight = height;
+    }
+
+    private AppSettings CopySettings() => new()
+    {
+        UiFontFamily = _settings.UiFontFamily,
+        WindowsHideMode = _settings.WindowsHideMode,
+        WindowPositionX = _settings.WindowPositionX,
+        WindowPositionY = _settings.WindowPositionY,
+        WindowWidth = _settings.WindowWidth,
+        WindowHeight = _settings.WindowHeight,
+    };
 
     /// <summary>
     /// Applies the configured UI font app-wide by overriding the <c>AppFontFamily</c> resource the

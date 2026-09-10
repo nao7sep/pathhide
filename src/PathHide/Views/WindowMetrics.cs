@@ -17,6 +17,23 @@ namespace PathHide.Views;
 /// </remarks>
 public static class WindowMetrics
 {
+    public static bool CanRestoreWindowGeometry(
+        int? x, int? y, double? width, double? height,
+        IEnumerable<Avalonia.PixelRect> workingAreas)
+    {
+        if (x is not { } savedX || y is not { } savedY
+            || width is not > 0 || height is not > 0
+            || !double.IsFinite(width.Value) || !double.IsFinite(height.Value))
+        {
+            return false;
+        }
+
+        return workingAreas.Any(area =>
+            area.Width > 0 && area.Height > 0
+            && savedX >= area.X && savedX < (long)area.X + area.Width
+            && savedY >= area.Y && savedY < (long)area.Y + area.Height);
+    }
+
     public static Avalonia.Size CapMinimumToWorkArea(
         Avalonia.Size contentFloor, Avalonia.PixelRect workArea, double scale, Avalonia.Size chrome) =>
         new(System.Math.Min(contentFloor.Width, System.Math.Max(1, workArea.Width / scale - chrome.Width)),

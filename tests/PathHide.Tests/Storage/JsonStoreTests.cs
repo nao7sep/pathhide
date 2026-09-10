@@ -60,11 +60,22 @@ public sealed class JsonStoreTests : IDisposable
     public void SaveThenLoad_RoundTripsValue()
     {
         var store = new JsonStore<AppSettings>("config.json", "settings");
-        store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
+        store.Save(new AppSettings
+        {
+            WindowsHideMode = WindowsHideMode.HiddenAndSystem,
+            WindowPositionX = -1200,
+            WindowPositionY = 80,
+            WindowWidth = 1100.5,
+            WindowHeight = 720.25,
+        });
 
         var loaded = store.Load().Value;
 
         Assert.Equal(WindowsHideMode.HiddenAndSystem, loaded.WindowsHideMode);
+        Assert.Equal(-1200, loaded.WindowPositionX);
+        Assert.Equal(80, loaded.WindowPositionY);
+        Assert.Equal(1100.5, loaded.WindowWidth);
+        Assert.Equal(720.25, loaded.WindowHeight);
     }
 
     [Fact]

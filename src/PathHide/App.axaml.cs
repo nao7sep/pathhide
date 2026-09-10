@@ -82,6 +82,7 @@ public partial class App : Application
             {
                 DataContext = viewModel,
             };
+            mainWindow.RestoreWindowGeometry();
             desktop.MainWindow = mainWindow;
             RegisterOwnerActivation(mainWindow);
 

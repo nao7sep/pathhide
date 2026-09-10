@@ -22,6 +22,36 @@ namespace PathHide.Tests.Views;
 public sealed class WindowMetricsTests
 {
     [Fact]
+    public void Saved_window_geometry_accepts_negative_coordinates_on_a_current_screen()
+    {
+        Avalonia.PixelRect[] workingAreas =
+        [
+            new(-1920, -1080, 1920, 1080),
+            new(0, 0, 2560, 1440),
+        ];
+
+        Assert.True(WindowMetrics.CanRestoreWindowGeometry(-1800, -1000, 1280, 720, workingAreas));
+        Assert.True(WindowMetrics.CanRestoreWindowGeometry(0, 0, 1280, 720, workingAreas));
+        Assert.False(WindowMetrics.CanRestoreWindowGeometry(-2500, 0, 1280, 720, workingAreas));
+        Assert.False(WindowMetrics.CanRestoreWindowGeometry(2560, 0, 1280, 720, workingAreas));
+    }
+
+    [Theory]
+    [InlineData(null, 0, 1280d, 720d)]
+    [InlineData(0, null, 1280d, 720d)]
+    [InlineData(0, 0, null, 720d)]
+    [InlineData(0, 0, 1280d, null)]
+    [InlineData(0, 0, 0d, 720d)]
+    [InlineData(0, 0, 1280d, -1d)]
+    [InlineData(0, 0, double.PositiveInfinity, 720d)]
+    public void Saved_window_geometry_rejects_missing_or_invalid_primitives(
+        int? x, int? y, double? width, double? height)
+    {
+        Assert.False(WindowMetrics.CanRestoreWindowGeometry(
+            x, y, width, height, [new Avalonia.PixelRect(0, 0, 1920, 1080)]));
+    }
+
+    [Fact]
     public void Native_minimum_uses_scaled_work_area_without_changing_the_content_floor()
     {
         var floor = new Avalonia.Size(1200, 800);

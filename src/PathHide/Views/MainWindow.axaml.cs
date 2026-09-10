@@ -74,6 +74,51 @@ public partial class MainWindow : Window
 
     private void OnScreensChanged(object? sender, EventArgs e) => ApplyNativeMinimum();
 
+    public void RestoreWindowGeometry()
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        try
+        {
+            var target = Screens.All.FirstOrDefault(screen => WindowMetrics.CanRestoreWindowGeometry(
+                vm.WindowPositionX, vm.WindowPositionY, vm.WindowWidth, vm.WindowHeight,
+                [screen.WorkingArea]));
+            if (target is null)
+                return;
+
+            ApplyNativeMinimum(target);
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = new PixelPoint(vm.WindowPositionX!.Value, vm.WindowPositionY!.Value);
+            Width = vm.WindowWidth!.Value;
+            Height = vm.WindowHeight!.Value;
+        }
+        catch (Exception ex)
+        {
+            // Placement is disposable. Keep the designed defaults if the display
+            // backend or a saved value cannot be used.
+            Log.Warn("window geometry restore failed", ex);
+        }
+    }
+
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        if (WindowState == WindowState.Normal && DataContext is MainWindowViewModel vm)
+        {
+            try
+            {
+                vm.SaveWindowGeometry(Position.X, Position.Y, Width, Height);
+            }
+            catch (Exception ex)
+            {
+                // Disposable placement must never block closing or affect user data.
+                Log.Warn("window geometry save failed", ex);
+            }
+        }
+
+        base.OnClosing(e);
+    }
+
     private void ApplyNativeMinimum(Screen? target = null)
     {
         try
