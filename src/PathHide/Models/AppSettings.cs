@@ -45,4 +45,5 @@ public sealed class AppSettings
     public int? WindowPositionY { get; set; }
     public double? WindowWidth { get; set; }
     public double? WindowHeight { get; set; }
+    public bool WindowMaximized { get; set; }
 }

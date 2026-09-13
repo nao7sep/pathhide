@@ -21,6 +21,17 @@ namespace PathHide.Tests.Views;
 /// </summary>
 public sealed class WindowMetricsTests
 {
+    [Theory]
+    [InlineData(false, false, Avalonia.Controls.WindowState.Normal)]
+    [InlineData(true, false, Avalonia.Controls.WindowState.Normal)]
+    [InlineData(false, true, Avalonia.Controls.WindowState.Normal)]
+    [InlineData(true, true, Avalonia.Controls.WindowState.Maximized)]
+    public void Restored_window_state_is_maximized_only_on_Windows(
+        bool maximized, bool isWindows, Avalonia.Controls.WindowState expected)
+    {
+        Assert.Equal(expected, WindowMetrics.RestoredWindowState(maximized, isWindows));
+    }
+
     [Fact]
     public void Saved_window_geometry_accepts_negative_coordinates_on_a_current_screen()
     {

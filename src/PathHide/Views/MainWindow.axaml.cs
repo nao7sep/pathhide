@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     // item's own HotKey only registers while the flyout is open, so accelerators are matched at the
     // window level in OnKeyDown, with InputGesture providing the visible menu association.
     private IReadOnlyList<ShortcutItem> _shortcuts = [];
+    private (int X, int Y, double Width, double Height)? _normalGeometry;
 
     private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
 
@@ -62,7 +63,13 @@ public partial class MainWindow : Window
         ActionButtons.KeyDown += OnActionButtonsKeyDown;
 
         Loaded += OnLoaded;
-        PositionChanged += (_, _) => ApplyNativeMinimum();
+        PositionChanged += (_, _) =>
+        {
+            RememberNormalGeometry();
+            ApplyNativeMinimum();
+        };
+        Resized += (_, _) => RememberNormalGeometry();
+        Opened += (_, _) => RememberNormalGeometry();
         ScalingChanged += (_, _) => ApplyNativeMinimum();
         Screens.Changed += OnScreensChanged;
         Closed += (_, _) => Screens.Changed -= OnScreensChanged;
@@ -92,6 +99,11 @@ public partial class MainWindow : Window
             Position = new PixelPoint(vm.WindowPositionX!.Value, vm.WindowPositionY!.Value);
             Width = vm.WindowWidth!.Value;
             Height = vm.WindowHeight!.Value;
+            _normalGeometry = (
+                vm.WindowPositionX!.Value, vm.WindowPositionY!.Value,
+                vm.WindowWidth!.Value, vm.WindowHeight!.Value);
+            WindowState = WindowMetrics.RestoredWindowState(
+                vm.WindowMaximized, OperatingSystem.IsWindows());
         }
         catch (Exception ex)
         {
@@ -103,11 +115,15 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
-        if (WindowState == WindowState.Normal && DataContext is MainWindowViewModel vm)
+        if (WindowState is WindowState.Normal or WindowState.Maximized
+            && DataContext is MainWindowViewModel vm
+            && _normalGeometry is { } normal)
         {
             try
             {
-                vm.SaveWindowGeometry(Position.X, Position.Y, Width, Height);
+                vm.SaveWindowPlacement(
+                    normal.X, normal.Y, normal.Width, normal.Height,
+                    OperatingSystem.IsWindows() && WindowState == WindowState.Maximized);
             }
             catch (Exception ex)
             {
@@ -117,6 +133,14 @@ public partial class MainWindow : Window
         }
 
         base.OnClosing(e);
+    }
+
+    private void RememberNormalGeometry()
+    {
+        if (WindowState != WindowState.Normal)
+            return;
+
+        _normalGeometry = (Position.X, Position.Y, Width, Height);
     }
 
     private void ApplyNativeMinimum(Screen? target = null)

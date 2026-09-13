@@ -98,6 +98,7 @@ public partial class MainWindowViewModel : ObservableObject
     public int? WindowPositionY => _settings.WindowPositionY;
     public double? WindowWidth => _settings.WindowWidth;
     public double? WindowHeight => _settings.WindowHeight;
+    public bool WindowMaximized => _settings.WindowMaximized;
 
     public string ProgressText => ScanTotal > 0
         ? $"Scanning {ScanProgress} / {ScanTotal}"
@@ -613,18 +614,20 @@ public partial class MainWindowViewModel : ObservableObject
         return null;
     }
 
-    public void SaveWindowGeometry(int x, int y, double width, double height)
+    public void SaveWindowPlacement(int x, int y, double width, double height, bool maximized)
     {
         var candidate = CopySettings();
         candidate.WindowPositionX = x;
         candidate.WindowPositionY = y;
         candidate.WindowWidth = width;
         candidate.WindowHeight = height;
+        candidate.WindowMaximized = maximized;
         _settingsStore.Save(candidate);
         _settings.WindowPositionX = x;
         _settings.WindowPositionY = y;
         _settings.WindowWidth = width;
         _settings.WindowHeight = height;
+        _settings.WindowMaximized = maximized;
     }
 
     private AppSettings CopySettings() => new()
@@ -635,6 +638,7 @@ public partial class MainWindowViewModel : ObservableObject
         WindowPositionY = _settings.WindowPositionY,
         WindowWidth = _settings.WindowWidth,
         WindowHeight = _settings.WindowHeight,
+        WindowMaximized = _settings.WindowMaximized,
     };
 
     /// <summary>

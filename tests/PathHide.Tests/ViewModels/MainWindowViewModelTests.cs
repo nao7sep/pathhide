@@ -720,6 +720,7 @@ public class MainWindowViewModelTests
         settings.WindowPositionY = 80;
         settings.WindowWidth = 1100;
         settings.WindowHeight = 720;
+        settings.WindowMaximized = true;
         var vm = new MainWindowViewModel(
             new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
         var changed = new List<string?>();
@@ -735,6 +736,7 @@ public class MainWindowViewModelTests
         Assert.Equal(80, settingsStore.LastSaved.WindowPositionY);
         Assert.Equal(1100, settingsStore.LastSaved.WindowWidth);
         Assert.Equal(720, settingsStore.LastSaved.WindowHeight);
+        Assert.True(settingsStore.LastSaved.WindowMaximized);
         Assert.Equal("Menlo", settings.UiFontFamily);
         Assert.True(vm.IsHiddenAndSystem);
         Assert.Contains(nameof(MainWindowViewModel.UiFontFamily), changed);
@@ -743,40 +745,43 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void SaveWindowGeometry_PersistsAndPublishesAllFourPrimitives()
+    public void SaveWindowPlacement_PersistsAndPublishesAllFivePrimitives()
     {
         var settingsStore = new FakeJsonStore<AppSettings>();
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
             new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
 
-        vm.SaveWindowGeometry(-900, 40, 1180.5, 700.25);
+        vm.SaveWindowPlacement(-900, 40, 1180.5, 700.25, maximized: true);
 
         Assert.Equal(1, settingsStore.SaveCount);
         Assert.Equal(-900, settingsStore.LastSaved!.WindowPositionX);
         Assert.Equal(40, settingsStore.LastSaved.WindowPositionY);
         Assert.Equal(1180.5, settingsStore.LastSaved.WindowWidth);
         Assert.Equal(700.25, settingsStore.LastSaved.WindowHeight);
+        Assert.True(settingsStore.LastSaved.WindowMaximized);
         Assert.Equal(-900, vm.WindowPositionX);
         Assert.Equal(40, vm.WindowPositionY);
         Assert.Equal(1180.5, vm.WindowWidth);
         Assert.Equal(700.25, vm.WindowHeight);
+        Assert.True(vm.WindowMaximized);
     }
 
     [Fact]
-    public void SaveWindowGeometry_FailureLeavesLiveGeometryUntouched()
+    public void SaveWindowPlacement_FailureLeavesLivePlacementUntouched()
     {
         var settingsStore = new FakeJsonStore<AppSettings> { ThrowOnSave = true };
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
             new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
 
-        Assert.Throws<IOException>(() => vm.SaveWindowGeometry(10, 20, 1000, 700));
+        Assert.Throws<IOException>(() => vm.SaveWindowPlacement(10, 20, 1000, 700, maximized: true));
 
         Assert.Null(vm.WindowPositionX);
         Assert.Null(vm.WindowPositionY);
         Assert.Null(vm.WindowWidth);
         Assert.Null(vm.WindowHeight);
+        Assert.False(vm.WindowMaximized);
     }
 
     [Fact]

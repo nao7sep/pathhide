@@ -67,6 +67,7 @@ public sealed class JsonStoreTests : IDisposable
             WindowPositionY = 80,
             WindowWidth = 1100.5,
             WindowHeight = 720.25,
+            WindowMaximized = true,
         });
 
         var loaded = store.Load().Value;
@@ -76,6 +77,7 @@ public sealed class JsonStoreTests : IDisposable
         Assert.Equal(80, loaded.WindowPositionY);
         Assert.Equal(1100.5, loaded.WindowWidth);
         Assert.Equal(720.25, loaded.WindowHeight);
+        Assert.True(loaded.WindowMaximized);
     }
 
     [Fact]

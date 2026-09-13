@@ -17,6 +17,11 @@ namespace PathHide.Views;
 /// </remarks>
 public static class WindowMetrics
 {
+    public static Avalonia.Controls.WindowState RestoredWindowState(bool maximized, bool isWindows) =>
+        maximized && isWindows
+            ? Avalonia.Controls.WindowState.Maximized
+            : Avalonia.Controls.WindowState.Normal;
+
     public static bool CanRestoreWindowGeometry(
         int? x, int? y, double? width, double? height,
         IEnumerable<Avalonia.PixelRect> workingAreas)
