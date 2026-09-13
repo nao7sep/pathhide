@@ -17,6 +17,9 @@ namespace PathHide.Views;
 /// </remarks>
 public static class WindowMetrics
 {
+    // Native frame rounding and decoration measurements can differ from the working area slightly.
+    private const double MaximizedSizeTolerance = 8;
+
     public static Avalonia.Controls.WindowState RestoredWindowState(bool maximized, bool isWindows) =>
         maximized && isWindows
             ? Avalonia.Controls.WindowState.Maximized
@@ -37,6 +40,18 @@ public static class WindowMetrics
             area.Width > 0 && area.Height > 0
             && savedX >= area.X && savedX < (long)area.X + area.Width
             && savedY >= area.Y && savedY < (long)area.Y + area.Height);
+    }
+
+    public static bool IsMaximizedGeometry(
+        Avalonia.Size frameSize, Avalonia.PixelRect workingArea, double scale)
+    {
+        if (scale <= 0 || !double.IsFinite(scale))
+            return false;
+
+        var workWidth = workingArea.Width / scale;
+        var workHeight = workingArea.Height / scale;
+        return frameSize.Width >= workWidth - MaximizedSizeTolerance
+            && frameSize.Height >= workHeight - MaximizedSizeTolerance;
     }
 
     public static Avalonia.Size CapMinimumToWorkArea(

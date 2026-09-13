@@ -62,6 +62,20 @@ public sealed class WindowMetricsTests
             x, y, width, height, [new Avalonia.PixelRect(0, 0, 1920, 1080)]));
     }
 
+    [Theory]
+    [InlineData(1280, 720, 2560, 1280, 1, false)]
+    [InlineData(2557, 1276, 2560, 1280, 1, true)]
+    [InlineData(1278, 636, 2560, 1280, 2, true)]
+    [InlineData(2560, 1280, 2560, 1280, 0, false)]
+    public void Maximized_geometry_matches_the_scaled_working_area(
+        double width, double height, int workWidth, int workHeight, double scale, bool expected)
+    {
+        Assert.Equal(expected, WindowMetrics.IsMaximizedGeometry(
+            new Avalonia.Size(width, height),
+            new Avalonia.PixelRect(0, 30, workWidth, workHeight),
+            scale));
+    }
+
     [Fact]
     public void Native_minimum_uses_scaled_work_area_without_changing_the_content_floor()
     {

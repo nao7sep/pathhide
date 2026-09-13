@@ -65,10 +65,10 @@ public partial class MainWindow : Window
         Loaded += OnLoaded;
         PositionChanged += (_, _) =>
         {
-            RememberNormalGeometry();
+            RememberNormalGeometryAfterNativeEvents();
             ApplyNativeMinimum();
         };
-        Resized += (_, _) => RememberNormalGeometry();
+        Resized += (_, _) => RememberNormalGeometryAfterNativeEvents();
         Opened += (_, _) => RememberNormalGeometry();
         ScalingChanged += (_, _) => ApplyNativeMinimum();
         Screens.Changed += OnScreensChanged;
@@ -115,6 +115,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        RememberNormalGeometry();
         if (WindowState is WindowState.Normal or WindowState.Maximized
             && DataContext is MainWindowViewModel vm
             && _normalGeometry is { } normal)
@@ -140,8 +141,21 @@ public partial class MainWindow : Window
         if (WindowState != WindowState.Normal)
             return;
 
+        // Avalonia reports macOS title-bar zoom as Normal. Judge the settled native frame too,
+        // otherwise the zoomed rectangle replaces the actual normal rectangle.
+        var screen = Screens.ScreenFromWindow(this);
+        if (screen is not null
+            && WindowMetrics.IsMaximizedGeometry(
+                FrameSize ?? new Size(Width, Height), screen.WorkingArea, screen.Scaling))
+        {
+            return;
+        }
+
         _normalGeometry = (Position.X, Position.Y, Width, Height);
     }
+
+    private void RememberNormalGeometryAfterNativeEvents() =>
+        Dispatcher.UIThread.Post(RememberNormalGeometry);
 
     private void ApplyNativeMinimum(Screen? target = null)
     {
