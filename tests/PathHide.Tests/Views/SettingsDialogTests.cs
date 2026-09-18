@@ -4,6 +4,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using PathHide.Models;
 using PathHide.Views;
 using Xunit;
 
@@ -16,9 +17,10 @@ public sealed class SettingsDialogTests
     {
         var dialog = new SettingsDialog(
             "Inter",
+            ThemePreference.System,
             isHiddenAndSystem: false,
             showWindowsHideMode: false,
-            (_, _) => "Access to /private/test/config.tmp is denied.");
+            (_, _, _) => "Access to /private/test/config.tmp is denied.");
         var font = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
         font.Text = "Menlo";
         var save = dialog.GetLogicalDescendants().OfType<Button>()
@@ -42,5 +44,37 @@ public sealed class SettingsDialogTests
             .Single(panel => panel.Name == "ButtonPanel");
         Assert.Empty(footer.GetLogicalAncestors().OfType<ScrollViewer>());
         Assert.All(footer.Children.OfType<Button>(), button => Assert.True(button.MinWidth >= 80));
+    }
+
+    [AvaloniaFact]
+    public void ThemeIsOneRadioGroupStagedUntilSave()
+    {
+        ThemePreference? saved = null;
+        var dialog = new SettingsDialog(
+            "Inter",
+            ThemePreference.Light,
+            isHiddenAndSystem: false,
+            showWindowsHideMode: false,
+            (_, _, theme) =>
+            {
+                saved = theme;
+                return null;
+            });
+        var radios = dialog.GetLogicalDescendants().OfType<RadioButton>().ToList();
+        var save = dialog.GetLogicalDescendants().OfType<Button>()
+            .Single(button => Equals(button.Tag, "save"));
+
+        Assert.Equal(new[] { "System", "Light", "Dark" }, radios.Select(radio => radio.Content as string));
+        Assert.Single(radios.Select(radio => radio.Parent).Distinct());
+        Assert.Equal("Light", radios.Single(radio => radio.IsChecked == true).Content);
+        Assert.False(save.IsEnabled);
+
+        radios[2].IsChecked = true;
+        Assert.True(save.IsEnabled);
+        Assert.Null(saved);
+
+        save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(dialog.Accepted);
+        Assert.Equal(ThemePreference.Dark, saved);
     }
 }

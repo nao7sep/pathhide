@@ -33,9 +33,8 @@ public sealed class ShortcutsDialog : DialogBase
                 Text = ShortcutCatalog.GroupHeader(group),
                 FontWeight = FontWeight.SemiBold,
                 FontSize = 13,
-                Foreground = Brush("TextSecondaryBrush"),
                 Margin = new Thickness(2, 0, 0, 6),
-            });
+            }.Themed(TextBlock.ForegroundProperty, "TextSecondaryBrush"));
             sections.Children.Add(BuildCard(rows));
         }
 
@@ -57,18 +56,18 @@ public sealed class ShortcutsDialog : DialogBase
         {
             stack.Children.Add(BuildRow(rows[i]));
             if (i < rows.Count - 1)
-                stack.Children.Add(new Border { Height = 1, Background = Brush("BorderBrush") });
+                stack.Children.Add(new Border { Height = 1 }.Themed(Border.BackgroundProperty, "BorderBrush"));
         }
 
         return new Border
         {
-            BorderBrush = Brush("BorderBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
-            Background = Brush("SurfaceBrush"),
             Padding = new Thickness(14, 4),
             Child = stack,
-        };
+        }
+            .Themed(Border.BorderBrushProperty, "BorderBrush")
+            .Themed(Border.BackgroundProperty, "SurfaceBrush");
     }
 
     // Description on the left (wrapping), key on the right.
@@ -85,9 +84,8 @@ public sealed class ShortcutsDialog : DialogBase
         {
             Text = item.Description,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = Brush("TextPrimaryBrush"),
             VerticalAlignment = VerticalAlignment.Center,
-        };
+        }.Themed(TextBlock.ForegroundProperty, "TextPrimaryBrush");
         Grid.SetColumn(description, 0);
         grid.Children.Add(description);
 
@@ -99,10 +97,8 @@ public sealed class ShortcutsDialog : DialogBase
     }
 
     // A keycap: a small rounded border with a subtle fill and SemiBold text.
-    private Border Keycap(string label) => new()
+    private Border Keycap(string label) => new Border
     {
-        Background = Brush("AppBackgroundBrush"),
-        BorderBrush = Brush("BorderBrush"),
         BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(5),
         Padding = new Thickness(8, 3),
@@ -113,26 +109,18 @@ public sealed class ShortcutsDialog : DialogBase
             Text = label,
             FontWeight = FontWeight.SemiBold,
             FontSize = 12,
-            Foreground = Brush("TextPrimaryBrush"),
-        },
-    };
+        }.Themed(TextBlock.ForegroundProperty, "TextPrimaryBrush"),
+    }
+        .Themed(Border.BackgroundProperty, "AppBackgroundBrush")
+        .Themed(Border.BorderBrushProperty, "BorderBrush");
 
     // A non-key affordance (drag and drop): plain right-aligned text, no keycap box.
-    private TextBlock PlainAffordance(string label) => new()
+    private TextBlock PlainAffordance(string label) => new TextBlock
     {
         Text = label,
         FontWeight = FontWeight.SemiBold,
         FontSize = 12,
-        Foreground = Brush("TextSecondaryBrush"),
         HorizontalAlignment = HorizontalAlignment.Right,
         VerticalAlignment = VerticalAlignment.Center,
-    };
-
-    // Pull a palette brush from the app resources so the dialog tracks the shared tokens rather than
-    // duplicating their hex values. The brushes live directly in Application.Resources (no theme
-    // dictionary), so a null theme resolves them.
-    private static IBrush Brush(string key) =>
-        Application.Current!.Resources.TryGetResource(key, null, out var value) && value is IBrush brush
-            ? brush
-            : Brushes.Transparent;
+    }.Themed(TextBlock.ForegroundProperty, "TextSecondaryBrush");
 }

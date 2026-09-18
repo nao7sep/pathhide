@@ -267,6 +267,7 @@ public partial class MainWindow : Window
     {
         var dialog = new SettingsDialog(
             ViewModel.UiFontFamily,
+            ViewModel.Theme,
             ViewModel.IsHiddenAndSystem,
             ViewModel.HasWindowsHideMode,
             ViewModel.TryApplySettings);
@@ -274,6 +275,8 @@ public partial class MainWindow : Window
 
         if (dialog.Accepted)
         {
+            // The theme is app-wide: every window, dialog, and title bar follows the variant.
+            AppTheme.Apply(ViewModel.Theme);
             // The font applies live through a DynamicResource, so the chrome's natural size
             // changes with it. Re-derive after the layout pass has taken the new family.
             Dispatcher.UIThread.Post(ApplyWindowMinimums, DispatcherPriority.Loaded);

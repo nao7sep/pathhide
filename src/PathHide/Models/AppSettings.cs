@@ -36,6 +36,10 @@ public sealed class AppSettings
     // bundled default (Inter). Applied app-wide.
     public string UiFontFamily { get; set; } = DefaultUiFontFamily;
 
+    // App appearance — the theme. System follows the OS; applied app-wide before the main window
+    // exists and again on each Save.
+    public ThemePreference Theme { get; set; } = ThemePreference.System;
+
     public WindowsHideMode WindowsHideMode { get; set; } = WindowsHideMode.HiddenOnly;
 
     // Last normal main-window geometry. Nullable primitives distinguish an absent

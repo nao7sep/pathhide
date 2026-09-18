@@ -94,6 +94,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The configured UI (chrome) font family, used to seed the settings dialog.</summary>
     public string UiFontFamily => _settings.UiFontFamily;
+
+    /// <summary>The saved theme, used to seed the settings dialog.</summary>
+    public ThemePreference Theme => _settings.Theme;
     public int? WindowPositionX => _settings.WindowPositionX;
     public int? WindowPositionY => _settings.WindowPositionY;
     public double? WindowWidth => _settings.WindowWidth;
@@ -579,16 +582,17 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>Saves the complete Settings draft atomically and publishes it only after disk agrees.</summary>
-    public string? TryApplySettings(string family, bool hiddenAndSystem)
+    public string? TryApplySettings(string family, bool hiddenAndSystem, ThemePreference theme)
     {
         family = UiFontFamilyValue.Normalize(family);
         var newMode = hiddenAndSystem ? WindowsHideMode.HiddenAndSystem : WindowsHideMode.HiddenOnly;
-        if (_settings.UiFontFamily == family && _settings.WindowsHideMode == newMode)
+        if (_settings.UiFontFamily == family && _settings.WindowsHideMode == newMode && _settings.Theme == theme)
             return null;
 
         var candidate = CopySettings();
         candidate.UiFontFamily = family;
         candidate.WindowsHideMode = newMode;
+        candidate.Theme = theme;
         try
         {
             _settingsStore.Save(candidate);
@@ -601,8 +605,10 @@ public partial class MainWindowViewModel : ObservableObject
 
         var fontChanged = _settings.UiFontFamily != family;
         var modeChanged = _settings.WindowsHideMode != newMode;
+        var themeChanged = _settings.Theme != theme;
         _settings.UiFontFamily = family;
         _settings.WindowsHideMode = newMode;
+        _settings.Theme = theme;
         if (fontChanged)
         {
             ApplyUiFont();
@@ -610,7 +616,9 @@ public partial class MainWindowViewModel : ObservableObject
         }
         if (modeChanged)
             OnPropertyChanged(nameof(IsHiddenAndSystem));
-        Log.Info("settings: changed", new { family, mode = newMode });
+        if (themeChanged)
+            OnPropertyChanged(nameof(Theme));
+        Log.Info("settings: changed", new { family, mode = newMode, theme });
         return null;
     }
 
@@ -633,6 +641,7 @@ public partial class MainWindowViewModel : ObservableObject
     private AppSettings CopySettings() => new()
     {
         UiFontFamily = _settings.UiFontFamily,
+        Theme = _settings.Theme,
         WindowsHideMode = _settings.WindowsHideMode,
         WindowPositionX = _settings.WindowPositionX,
         WindowPositionY = _settings.WindowPositionY,

@@ -9,7 +9,7 @@
         Title="PathHide"
         Icon="/Assets/icon.png"
         Width="1280" Height="720"
-        Background="{StaticResource AppBackgroundBrush}">
+        Background="{DynamicResource AppBackgroundBrush}">
 
     <Window.Styles>
         <Style Selector="Border.pathReceiver.dropActive">
@@ -17,8 +17,8 @@
             <Setter Property="BorderThickness" Value="3"/>
         </Style>
         <Style Selector="Border.pathResult">
-            <Setter Property="Background" Value="{StaticResource StatusBackgroundBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource StatusAccentBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource StatusBackgroundBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="5"/>
             <Setter Property="Padding" Value="10,7"/>
@@ -40,8 +40,8 @@
         <!-- Toolbar -->
         <Border DockPanel.Dock="Top"
                 x:Name="Toolbar"
-                Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="12,8">
             <DockPanel>
@@ -116,19 +116,19 @@
         <!-- Status bar -->
         <Border DockPanel.Dock="Bottom"
                 x:Name="StatusBar"
-                Background="{StaticResource StatusBackgroundBrush}"
-                BorderBrush="{StaticResource StatusBorderBrush}"
+                Background="{DynamicResource StatusBackgroundBrush}"
+                BorderBrush="{DynamicResource StatusBorderBrush}"
                 BorderThickness="0,1,0,0"
                 Padding="12,6">
             <Panel>
                 <TextBlock Text="{Binding ProgressText}"
                            IsVisible="{Binding IsScanning}"
-                           Foreground="{StaticResource StatusAccentBrush}"
+                           Foreground="{DynamicResource StatusAccentBrush}"
                            FontWeight="SemiBold"
                            VerticalAlignment="Center"/>
                 <TextBlock Text="{Binding StatusBarText}"
                            IsVisible="{Binding !IsScanning}"
-                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
                            VerticalAlignment="Center"/>
             </Panel>
         </Border>
@@ -160,8 +160,8 @@
 
         <!-- Path list -->
         <Border x:Name="PathListReceiver" Classes="pathReceiver" Margin="12" CornerRadius="8"
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
-                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
+                Background="{DynamicResource SurfaceBrush}"
                 ClipToBounds="True" DragDrop.AllowDrop="True">
             <DockPanel>
                 <Border x:Name="PathAddResultSurface"
@@ -195,7 +195,7 @@
                           GridLinesVisibility="Horizontal"
                           BorderThickness="0"
                           Background="Transparent"
-                          RowBackground="{StaticResource SurfaceBrush}">
+                          RowBackground="{DynamicResource SurfaceBrush}">
                     <DataGrid.Columns>
                         <!-- Each column carries a real minimum width; WindowMetrics sums these
                              (read from the live columns) to derive the window's MinWidth, so the
@@ -211,7 +211,7 @@
                            IsVisible="{Binding IsPathListEmpty}" IsHitTestVisible="False"
                            Margin="24,48,24,24" TextAlignment="Center" TextWrapping="Wrap"
                            HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                           Foreground="{DynamicResource TextSecondaryBrush}"/>
                 </Grid>
             </DockPanel>
         </Border>

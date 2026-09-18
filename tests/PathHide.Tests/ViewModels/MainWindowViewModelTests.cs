@@ -726,7 +726,7 @@ public class MainWindowViewModelTests
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
-        var failure = vm.TryApplySettings("  Menlo  ", hiddenAndSystem: true);
+        var failure = vm.TryApplySettings("  Menlo  ", hiddenAndSystem: true, ThemePreference.System);
 
         Assert.Null(failure);
         Assert.Equal(1, settingsStore.SaveCount);
@@ -785,6 +785,27 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public void TryApplySettings_SavesATheme_ChangeAndPublishesIt()
+    {
+        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settings = settingsStore.Load().Value;
+        Assert.Equal(ThemePreference.System, settings.Theme);
+        var vm = new MainWindowViewModel(
+            new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        var failure = vm.TryApplySettings(AppSettings.DefaultUiFontFamily, hiddenAndSystem: false, ThemePreference.Dark);
+
+        Assert.Null(failure);
+        Assert.Equal(1, settingsStore.SaveCount);
+        Assert.Equal(ThemePreference.Dark, settingsStore.LastSaved!.Theme);
+        Assert.Equal(ThemePreference.Dark, vm.Theme);
+        Assert.Contains(nameof(MainWindowViewModel.Theme), changed);
+        Assert.DoesNotContain(nameof(MainWindowViewModel.UiFontFamily), changed);
+    }
+
+    [Fact]
     public void TryApplySettings_WhenUnchanged_DoesNotSave()
     {
         var settingsStore = new FakeJsonStore<AppSettings>();
@@ -792,7 +813,7 @@ public class MainWindowViewModelTests
         var vm = new MainWindowViewModel(
             new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
 
-        var failure = vm.TryApplySettings(AppSettings.DefaultUiFontFamily, hiddenAndSystem: false);
+        var failure = vm.TryApplySettings(AppSettings.DefaultUiFontFamily, hiddenAndSystem: false, ThemePreference.System);
 
         Assert.Null(failure);
         Assert.Equal(0, settingsStore.SaveCount);
@@ -806,11 +827,12 @@ public class MainWindowViewModelTests
         var vm = new MainWindowViewModel(
             new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
 
-        var failure = vm.TryApplySettings("Menlo", hiddenAndSystem: true);
+        var failure = vm.TryApplySettings("Menlo", hiddenAndSystem: true, ThemePreference.Dark);
 
         Assert.Contains("Settings could not be saved", failure);
         Assert.Equal(AppSettings.DefaultUiFontFamily, settings.UiFontFamily);
         Assert.Equal(WindowsHideMode.HiddenOnly, settings.WindowsHideMode);
+        Assert.Equal(ThemePreference.System, settings.Theme);
         Assert.Empty(vm.OperationalResults);
     }
 

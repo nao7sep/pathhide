@@ -69,8 +69,6 @@ public sealed class AboutDialog : DialogBase
         dismissResult.Content = dismissMark;
         _launchResult = new Border
         {
-            Background = Brush("StatusBackgroundBrush"),
-            BorderBrush = Brush("DangerBrush"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(5),
             Padding = new Thickness(9, 7),
@@ -86,7 +84,9 @@ public sealed class AboutDialog : DialogBase
                     dismissResult,
                 },
             },
-        };
+        }
+            .Themed(Border.BackgroundProperty, "StatusBackgroundBrush")
+            .Themed(Border.BorderBrushProperty, "DangerBrush");
         dismissResult.Click += (_, _) => _launchResult.IsVisible = false;
         Grid.SetColumn(dismissResult, 1);
         AutomationProperties.SetLiveSetting(_launchResult, AutomationLiveSetting.Assertive);
@@ -107,9 +107,8 @@ public sealed class AboutDialog : DialogBase
                 {
                     Text = $"Version {version}",
                     FontSize = 13,
-                    Foreground = Brushes.Gray,
                     Margin = new Avalonia.Thickness(0, 0, 0, 12),
-                },
+                }.Themed(TextBlock.ForegroundProperty, "TextSecondaryBrush"),
                 new TextBlock
                 {
                     Text = "A desktop utility for macOS and Windows that hides or shows specific files and directories and remembers the desired visibility state of each entry.",
@@ -129,8 +128,7 @@ public sealed class AboutDialog : DialogBase
                 {
                     Text = "© 2026 Yoshinao Inoguchi — GNU GPL v3 or later",
                     FontSize = 12,
-                    Foreground = Brushes.Gray,
-                },
+                }.Themed(TextBlock.ForegroundProperty, "TextSecondaryBrush"),
             },
         };
 
@@ -193,10 +191,5 @@ public sealed class AboutDialog : DialogBase
             new Binding("Foreground") { RelativeSource = new RelativeSource { AncestorType = typeof(Button) } });
         return mark;
     }
-
-    private static IBrush Brush(string key) =>
-        Application.Current!.Resources.TryGetResource(key, null, out var value) && value is IBrush brush
-            ? brush
-            : Brushes.Transparent;
 
 }

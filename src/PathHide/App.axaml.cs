@@ -78,6 +78,8 @@ public partial class App : Application
                 return;
             }
 
+            // Before the main window exists, so its first frame and title bar take the saved theme.
+            AppTheme.Apply(viewModel.Theme);
             var mainWindow = new MainWindow
             {
                 DataContext = viewModel,
