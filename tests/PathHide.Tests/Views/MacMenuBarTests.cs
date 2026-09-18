@@ -239,7 +239,7 @@ public sealed class MacMenuBarTests
         var command = ShortcutCatalog.CommandModifier(window);
         foreach (var shortcut in ShortcutCatalog.Build(window).Where(item => item.Gesture is not null))
         {
-            // A key without Command, such as Escape, cannot match any item in the bar.
+            // A key without Command cannot match any item in the bar.
             var gesture = shortcut.Gesture!;
             if (!gesture.KeyModifiers.HasFlag(command))
                 continue;
