@@ -167,13 +167,16 @@ internal static class MacMenuBar
 
         try
         {
-            var bar = BuildBar(appName, CreateAppActionTarget(appName + "MenuActions"));
-
-            // Avalonia's view is the first responder in every Avalonia window.
+            // Avalonia's view is the first responder in every Avalonia window. The Edit items take their
+            // shortcuts only when that view can be taught the Edit actions; otherwise AppKit would swallow
+            // the keys, so the items go without and the keys reach Avalonia as they would with no menu.
             var view = Class("AvnView");
-            if (view == IntPtr.Zero)
-                Log.Warn("ui: Avalonia's macOS view class was not found; the Edit menu cannot reach its text fields");
-            else
+            var editShortcuts = CanTeachEditActions(view);
+            if (!editShortcuts)
+                Log.Warn("ui: Avalonia's macOS view cannot take the Edit actions; the Edit menu leaves its shortcuts to Avalonia");
+
+            var bar = BuildBar(appName, CreateAppActionTarget(appName + "MenuActions"), editShortcuts);
+            if (editShortcuts)
                 AddEditActions(view);
 
             var app = Send(Class("NSApplication"), "sharedApplication");
@@ -198,8 +201,11 @@ internal static class MacMenuBar
     /// <summary>The native bar, and the Services and Window menus AppKit is told about.</summary>
     internal readonly record struct NativeBar(IntPtr Bar, IntPtr Services, IntPtr Window);
 
-    /// <summary>Builds the native bar from <see cref="Layout"/>, without setting it.</summary>
-    internal static NativeBar BuildBar(string appName, IntPtr appActionTarget)
+    /// <summary>
+    /// Builds the native bar from <see cref="Layout"/>, without setting it. Without
+    /// <paramref name="editShortcuts"/> the Edit items carry no shortcuts.
+    /// </summary>
+    internal static NativeBar BuildBar(string appName, IntPtr appActionTarget, bool editShortcuts = true)
     {
         // Every message to a class that is not loaded returns nothing, so without AppKit this would
         // build an empty bar and report no error.
@@ -226,7 +232,8 @@ internal static class MacMenuBar
                 }
                 else
                 {
-                    native = NewItem(item, appActionTarget);
+                    var shortcut = editShortcuts || !EditActions.Contains(item.Action);
+                    native = NewItem(shortcut ? item : item with { Key = "" }, appActionTarget);
                 }
 
                 Send(menu, "addItem:", native);
@@ -274,6 +281,19 @@ internal static class MacMenuBar
         });
         return Send(Send(type, "alloc"), "init");
     }
+
+    /// <summary>
+    /// Whether <paramref name="viewClass"/> can be taught the Edit actions: it exists, takes key-downs,
+    /// where a shortcut is handed back, and answers none of the Edit actions or their validation itself.
+    /// An Avalonia upgrade that renames or reworks its view fails this, and the view is left untouched.
+    /// </summary>
+    internal static bool CanTeachEditActions(IntPtr viewClass) =>
+        viewClass != IntPtr.Zero
+        && InstancesRespondTo(viewClass, "keyDown:")
+        && !EditActions.Append("validateMenuItem:").Any(action => InstancesRespondTo(viewClass, action));
+
+    private static bool InstancesRespondTo(IntPtr type, string selector) =>
+        SendForBool(type, "instancesRespondToSelector:", Sel(selector));
 
     /// <summary>
     /// Teaches a view class the Edit actions. On Avalonia's view they sit ahead of NSWindow, which

@@ -259,15 +259,47 @@ public sealed class MacMenuBarTests
     public void Avalonias_macOS_view_is_still_the_class_the_Edit_actions_are_taught()
     {
         // The bar teaches the Edit actions to Avalonia's view class, found by name. An Avalonia upgrade
-        // that renames it would leave every Edit item disabled in its windows, and AppKit swallows a
-        // disabled item's shortcut, so Command-C, V, X, A, and Z would stop working in text fields. One
-        // that answers these actions itself keeps its own, which needs a look before upgrading.
+        // that renames or reworks it falls back to Edit items without shortcuts, so the app keeps
+        // working, but the Edit menu loses its shortcuts; this names what changed before upgrading.
         NativeLibrary.Load(Path.Combine(AppContext.BaseDirectory, "runtimes", "osx", "native", "libAvaloniaNative.dylib"));
         var view = ObjC.Class("AvnView");
         Assert.NotEqual(IntPtr.Zero, view);
         Assert.True(InstancesRespondTo(view, "keyDown:"));
         foreach (var action in EditActions.Append("validateMenuItem:"))
             Assert.False(InstancesRespondTo(view, action), $"Avalonia's view now answers {action} itself");
+        Assert.True(CanTeachEditActions(view));
+    }
+
+    [MacOnlyFact]
+    public void The_Edit_actions_are_taught_only_to_a_view_that_can_take_them()
+    {
+        LoadAppKit();
+        Assert.False(CanTeachEditActions(IntPtr.Zero));
+        Assert.False(CanTeachEditActions(StandIn("NoKeyDown")));
+        Assert.True(CanTeachEditActions(StandIn("KeyDown", "keyDown:")));
+        Assert.False(CanTeachEditActions(StandIn("KeyDownAndCopy", "keyDown:", "copy:")));
+        Assert.False(CanTeachEditActions(StandIn("KeyDownAndValidation", "keyDown:", "validateMenuItem:")));
+    }
+
+    [MacOnlyFact]
+    public void Without_the_Edit_actions_the_Edit_items_leave_their_shortcuts_to_Avalonia()
+    {
+        LoadAppKit();
+        var bar = BuildBar("PathHide", CreateAppActionTarget(UniqueClassName("Target")), editShortcuts: false);
+
+        var edit = ObjC.Send(ItemAt(bar.Bar, 1), "submenu");
+        for (var i = 0; i < Count(edit); i++)
+            Assert.Equal("", ObjC.String(ObjC.Send(ItemAt(edit, i), "keyEquivalent")));
+        foreach (var item in Menu("Edit").OfType<Item>())
+        {
+            var (characters, modifiers) = Typed(item);
+            Assert.False(PerformsKeyEquivalent(bar.Bar, characters, modifiers), $"{item.Title} still takes its shortcut");
+        }
+
+        // The rest of the bar keeps its shortcuts.
+        Assert.True(PerformsKeyEquivalent(bar.Bar, "q", Cmd));
+        Assert.True(PerformsKeyEquivalent(bar.Bar, ",", Cmd));
+        Assert.True(PerformsKeyEquivalent(bar.Bar, "m", Cmd));
     }
 
     [MacOnlyFact]
@@ -389,6 +421,23 @@ public sealed class MacMenuBarTests
         NativeLibrary.Load("/System/Library/Frameworks/AppKit.framework/AppKit");
         Assert.NotEqual(IntPtr.Zero, ObjC.Class("NSMenu"));
     }
+
+    // A class standing in for a view, answering the given selectors.
+    private static IntPtr StandIn(string role, params string[] selectors) =>
+        ObjC.DefineClass(UniqueClassName(role), "NSObject", type =>
+        {
+            foreach (var selector in selectors)
+            {
+                if (selector == "validateMenuItem:")
+                    ObjC.AddMethod(type, selector, Validate, ObjC.BoolMethodTypes);
+                else
+                    ObjC.AddMethod(type, selector, RecordKeyDown, ObjC.ActionMethodTypes);
+            }
+        });
+
+    private delegate byte ValidateImp(IntPtr self, IntPtr selector, IntPtr menuItem);
+
+    private static readonly ValidateImp Validate = (_, _, _) => 1;
 
     private static string UniqueClassName(string role) => $"PathHideMenuBarTest{role}{Guid.NewGuid():N}";
 
