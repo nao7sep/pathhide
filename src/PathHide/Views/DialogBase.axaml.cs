@@ -56,6 +56,7 @@ public partial class DialogBase : Window
     public DialogBase()
     {
         InitializeComponent();
+        MacMenus.Attach(this, includeWindowMenu: false);
         Activated += (_, _) => Classes.Set("windowInactive", false);
         Deactivated += (_, _) => Classes.Set("windowInactive", true);
         Opened += OnOpened;

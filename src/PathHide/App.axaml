@@ -4,6 +4,18 @@
              Name="PathHide"
              RequestedThemeVariant="Default">
 
+    <!-- The macOS app menu (app-chrome conventions, macOS menu bar): About and Settings under the
+         app's own name, replacing Avalonia's default "About Avalonia" menu; macOS and Avalonia add
+         Services, Hide, and Quit below. Declared here because Avalonia reads the application menu
+         from markup; the Edit and Window menus are per window (MacMenus). -->
+    <NativeMenu.Menu>
+        <NativeMenu>
+            <NativeMenuItem Header="About PathHide" Click="AboutMenu_Click"/>
+            <NativeMenuItemSeparator/>
+            <NativeMenuItem Header="Settings…" Gesture="Meta+OemComma" Click="SettingsMenu_Click"/>
+        </NativeMenu>
+    </NativeMenu.Menu>
+
     <Application.Resources>
         <ResourceDictionary>
             <!-- The surfaces, borders, and text change with the theme; each brush is defined in both

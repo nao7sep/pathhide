@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        MacMenus.Attach(this, includeWindowMenu: true);
 
         if (OperatingSystem.IsWindows())
         {
@@ -207,6 +208,12 @@ public partial class MainWindow : Window
 
     private async void OnAboutClick(object? sender, RoutedEventArgs e) =>
         await OwnViewActionAsync(() => new AboutDialog().ShowDialog(this));
+
+    /// <summary>The macOS app menu's About item; the same action as the in-window menu's.</summary>
+    internal void ShowAboutFromMenu() => OnAboutClick(null, new RoutedEventArgs());
+
+    /// <summary>The macOS app menu's Settings item; the same action as the in-window menu's.</summary>
+    internal void ShowSettingsFromMenu() => OnSettingsClick(null, new RoutedEventArgs());
 
     private async void OnShortcutsClick(object? sender, RoutedEventArgs e) =>
         await OwnViewActionAsync(ShowShortcutsAsync);

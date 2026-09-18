@@ -19,6 +19,10 @@ public partial class App : Application
 {
     internal static string? StartupFailureMessage { get; set; }
 
+    // The main window, which the app menu's About and Settings items open through. Null while a
+    // startup failure is shown instead, when those items do nothing.
+    private MainWindow? _mainWindow;
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -86,6 +90,7 @@ public partial class App : Application
             };
             mainWindow.RestoreWindowGeometry();
             desktop.MainWindow = mainWindow;
+            _mainWindow = mainWindow;
             RegisterOwnerActivation(mainWindow);
 
             // Report material recovery once the main window can own the dialog.
@@ -102,6 +107,10 @@ public partial class App : Application
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    private void AboutMenu_Click(object? sender, EventArgs e) => _mainWindow?.ShowAboutFromMenu();
+
+    private void SettingsMenu_Click(object? sender, EventArgs e) => _mainWindow?.ShowSettingsFromMenu();
 
     private static void RegisterOwnerActivation(Window window)
     {
