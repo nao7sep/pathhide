@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using PathHide.Services;
 using PathHide.Storage;
+using PathHide.Views;
 using System.CommandLine;
 
 namespace PathHide;
@@ -79,6 +80,7 @@ sealed class Program
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            .With(MacMenuBar.PlatformOptions())
             .WithInterFont()
             .LogToTrace();
 

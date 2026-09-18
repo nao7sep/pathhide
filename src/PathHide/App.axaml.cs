@@ -20,7 +20,7 @@ public partial class App : Application
     internal static string? StartupFailureMessage { get; set; }
 
     // The main window, which the app menu's About and Settings items open through. Null while a
-    // startup failure is shown instead, when those items do nothing.
+    // startup failure is shown instead, when those items are disabled.
     private MainWindow? _mainWindow;
 
     public override void Initialize()
@@ -32,6 +32,15 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // The one macOS menu bar, set before any window so every window, a startup failure notice
+            // included, shows the same bar. About and Settings are enabled while the main window is in
+            // front, so never over one of its dialogs.
+            MacMenuBar.Install(
+                "PathHide",
+                showAbout: () => _mainWindow?.ShowAboutFromMenu(),
+                showSettings: () => _mainWindow?.ShowSettingsFromMenu(),
+                canShowAppDialogs: () => _mainWindow is { IsActive: true });
+
             if (StartupFailureMessage is { } startupFailure)
             {
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
@@ -107,10 +116,6 @@ public partial class App : Application
 
         base.OnFrameworkInitializationCompleted();
     }
-
-    private void AboutMenu_Click(object? sender, EventArgs e) => _mainWindow?.ShowAboutFromMenu();
-
-    private void SettingsMenu_Click(object? sender, EventArgs e) => _mainWindow?.ShowSettingsFromMenu();
 
     private static void RegisterOwnerActivation(Window window)
     {
