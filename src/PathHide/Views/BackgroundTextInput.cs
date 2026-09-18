@@ -49,22 +49,30 @@ internal static class BackgroundTextInput
     // nothing focused, to the window's last text field while the window is in the background.
     private static void Deliver(WindowBase window, TextInputEventArgs e)
     {
-        if (e.Handled || IsInFront(window) || !ReferenceEquals(e.Source, window) || string.IsNullOrEmpty(e.Text))
-            return;
-
-        // A read-only field takes the text and ignores it, as it would typed text.
-        if (!s_lastField.TryGetValue(window, out var last)
-            || !last.TryGetTarget(out var field)
-            || TopLevel.GetTopLevel(field) != window
-            || !field.Focus())
+        try
         {
-            // The length only: what was typed is never logged.
-            Log.Info("ui: text reached a background window with no text field to take it", new { length = e.Text.Length });
-            return;
-        }
+            if (e.Handled || IsInFront(window) || !ReferenceEquals(e.Source, window) || string.IsNullOrEmpty(e.Text))
+                return;
 
-        field.RaiseEvent(new TextInputEventArgs { RoutedEvent = InputElement.TextInputEvent, Text = e.Text });
-        e.Handled = true;
-        Log.Info("ui: text that reached a background window went to its text field", new { length = e.Text.Length });
+            // A read-only field takes the text and ignores it, as it would typed text.
+            if (!s_lastField.TryGetValue(window, out var last)
+                || !last.TryGetTarget(out var field)
+                || TopLevel.GetTopLevel(field) != window
+                || !field.Focus())
+            {
+                // The length only: what was typed is never logged.
+                Log.Info("ui: text reached a background window with no text field to take it", new { length = e.Text.Length });
+                return;
+            }
+
+            field.RaiseEvent(new TextInputEventArgs { RoutedEvent = InputElement.TextInputEvent, Text = e.Text });
+            e.Handled = true;
+            Log.Info("ui: text that reached a background window went to its text field", new { length = e.Text.Length });
+        }
+        catch (Exception ex)
+        {
+            // A fault in this workaround must never break typing; the text stays where Avalonia put it.
+            Log.Error("ui: background text could not be handed to its text field", ex);
+        }
     }
 }

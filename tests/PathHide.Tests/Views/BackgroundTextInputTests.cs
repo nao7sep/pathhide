@@ -110,6 +110,19 @@ public sealed class BackgroundTextInputTests
         Assert.Equal("ab!", scene.Field.Text);
     }
 
+    [AvaloniaFact]
+    public void A_fault_in_the_workaround_never_breaks_typing()
+    {
+        using var scene = new Scene("ab");
+        scene.DropFocus();
+        BackgroundTextInput.IsInFront = _ => throw new InvalidOperationException("A fault in the workaround.");
+
+        var e = scene.RaiseText(scene.Window, "x");
+
+        Assert.False(e.Handled);
+        Assert.Equal("ab", scene.Field.Text);
+    }
+
     // A window with a text field and a button, the field focused, the workaround installed; disposing
     // it closes the window and puts back whether windows count as in front.
     private sealed class Scene : IDisposable
