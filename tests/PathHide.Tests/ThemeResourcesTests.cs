@@ -44,7 +44,7 @@ public sealed class ThemeResourcesTests
     [Theory]
     [InlineData("Light")]
     [InlineData("Dark")]
-    public void TextMeetsWcagAaInEachTheme(string theme)
+    public void TextKeepsHighContrastInEachTheme(string theme)
     {
         var brushes = ThemeBrushes(theme);
         foreach (var text in new[] { "TextPrimaryBrush", "TextSecondaryBrush", "StatusAccentBrush", "DangerTextBrush" })
@@ -58,7 +58,7 @@ public sealed class ThemeResourcesTests
     }
 
     [Fact]
-    public void WhiteLabelsMeetWcagAaOnEveryActionFill()
+    public void WhiteLabelsKeepHighContrastOnEveryActionFill()
     {
         var fills = new[] { "Add", "Hide", "Show", "Reload", "Reapply", "Danger", "Cancel", "Utility", "InactiveAction" };
         var colors = RootColors();

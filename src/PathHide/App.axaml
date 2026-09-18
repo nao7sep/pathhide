@@ -9,7 +9,7 @@
             <!-- The surfaces, borders, and text change with the theme; each brush is defined in both
                  dictionaries and every consumer reaches it through DynamicResource (or the code-built
                  equivalent, ThemeResources.Themed), so a Save or an OS change repaints live. Each
-                 pair meets WCAG AA in both themes (ThemeResourcesTests). -->
+                 pair keeps high contrast in both themes (ThemeResourcesTests). -->
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F6F8FA"/>
