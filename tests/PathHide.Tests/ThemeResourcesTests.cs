@@ -60,12 +60,34 @@ public sealed class ThemeResourcesTests
     [Fact]
     public void WhiteLabelsKeepHighContrastOnEveryActionFill()
     {
-        var fills = new[] { "Add", "Hide", "Show", "Reload", "Reapply", "Danger", "Cancel", "Utility", "InactiveAction" };
+        // Every rung of every ladder, not just the resting one: a button's label is read on
+        // the fill it hovers to and the fill it presses to as surely as on the one it sits at.
+        var actions = new[] { "Add", "Hide", "Show", "Reload", "Reapply", "Danger", "Cancel", "Utility" };
+        var fills = actions
+            .SelectMany(action => new[] { action, $"{action}Hover", $"{action}Pressed" })
+            .Append("InactiveAction");
         var colors = RootColors();
         foreach (var fill in fills)
         {
             var ratio = Contrast(Colors.White, colors[fill]);
             Assert.True(ratio >= 4.5, $"white on {fill} is {ratio:F2}:1");
+        }
+    }
+
+    // A press steps the fill one rung further down the ladder its hover already steps, so the
+    // colour code survives the click. Left unsaid, Fluent answered instead, and its answer is not
+    // a step but a replacement: a 40% black wash with the label forced to black, identical for
+    // green, pink, violet, blue, teal, red and amber alike.
+    [Fact]
+    public void EveryActionFillStatesAPressedStepBeyondItsHover()
+    {
+        var colors = RootColors();
+        foreach (var action in new[] { "Add", "Hide", "Show", "Reload", "Reapply", "Danger", "Cancel", "Utility" })
+        {
+            Assert.True(colors.ContainsKey($"{action}Pressed"), $"{action} states no pressed fill");
+            Assert.True(
+                Luminance(colors[$"{action}Pressed"]) < Luminance(colors[$"{action}Hover"]),
+                $"{action}: pressed must be a step beyond hover, in the hover's own direction");
         }
     }
 

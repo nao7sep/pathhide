@@ -39,44 +39,60 @@
                  foreground) text at 4.5:1 or more. -->
             <Color x:Key="Add">#047857</Color>
             <Color x:Key="AddHover">#065F46</Color>
+            <Color x:Key="AddPressed">#064E3B</Color>
             <Color x:Key="Hide">#BE185D</Color>
             <Color x:Key="HideHover">#9D174D</Color>
+            <Color x:Key="HidePressed">#831843</Color>
             <Color x:Key="Show">#6D28D9</Color>
             <Color x:Key="ShowHover">#5B21B6</Color>
+            <Color x:Key="ShowPressed">#4C1D95</Color>
             <Color x:Key="Reload">#1D4ED8</Color>
             <Color x:Key="ReloadHover">#1E40AF</Color>
+            <Color x:Key="ReloadPressed">#1E3A8A</Color>
             <Color x:Key="Reapply">#0E7490</Color>
             <Color x:Key="ReapplyHover">#155E75</Color>
+            <Color x:Key="ReapplyPressed">#164E63</Color>
             <Color x:Key="Danger">#DC2626</Color>
             <Color x:Key="DangerHover">#B91C1C</Color>
+            <Color x:Key="DangerPressed">#991B1B</Color>
             <Color x:Key="Cancel">#B45309</Color>
             <Color x:Key="CancelHover">#92400E</Color>
+            <Color x:Key="CancelPressed">#78350F</Color>
             <Color x:Key="About">#4A044E</Color>
             <Color x:Key="AboutHover">#3B0764</Color>
             <Color x:Key="AboutForeground">#FFF7FE</Color>
             <Color x:Key="Utility">#374151</Color>
             <Color x:Key="UtilityHover">#1F2937</Color>
+            <Color x:Key="UtilityPressed">#111827</Color>
             <Color x:Key="InactiveAction">#64748B</Color>
 
             <SolidColorBrush x:Key="AddBrush" Color="{StaticResource Add}"/>
             <SolidColorBrush x:Key="AddHoverBrush" Color="{StaticResource AddHover}"/>
+            <SolidColorBrush x:Key="AddPressedBrush" Color="{StaticResource AddPressed}"/>
             <SolidColorBrush x:Key="HideBrush" Color="{StaticResource Hide}"/>
             <SolidColorBrush x:Key="HideHoverBrush" Color="{StaticResource HideHover}"/>
+            <SolidColorBrush x:Key="HidePressedBrush" Color="{StaticResource HidePressed}"/>
             <SolidColorBrush x:Key="ShowBrush" Color="{StaticResource Show}"/>
             <SolidColorBrush x:Key="ShowHoverBrush" Color="{StaticResource ShowHover}"/>
+            <SolidColorBrush x:Key="ShowPressedBrush" Color="{StaticResource ShowPressed}"/>
             <SolidColorBrush x:Key="ReloadBrush" Color="{StaticResource Reload}"/>
             <SolidColorBrush x:Key="ReloadHoverBrush" Color="{StaticResource ReloadHover}"/>
+            <SolidColorBrush x:Key="ReloadPressedBrush" Color="{StaticResource ReloadPressed}"/>
             <SolidColorBrush x:Key="ReapplyBrush" Color="{StaticResource Reapply}"/>
             <SolidColorBrush x:Key="ReapplyHoverBrush" Color="{StaticResource ReapplyHover}"/>
+            <SolidColorBrush x:Key="ReapplyPressedBrush" Color="{StaticResource ReapplyPressed}"/>
             <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource Danger}"/>
             <SolidColorBrush x:Key="DangerHoverBrush" Color="{StaticResource DangerHover}"/>
+            <SolidColorBrush x:Key="DangerPressedBrush" Color="{StaticResource DangerPressed}"/>
             <SolidColorBrush x:Key="CancelBrush" Color="{StaticResource Cancel}"/>
             <SolidColorBrush x:Key="CancelHoverBrush" Color="{StaticResource CancelHover}"/>
+            <SolidColorBrush x:Key="CancelPressedBrush" Color="{StaticResource CancelPressed}"/>
             <SolidColorBrush x:Key="AboutBrush" Color="{StaticResource About}"/>
             <SolidColorBrush x:Key="AboutHoverBrush" Color="{StaticResource AboutHover}"/>
             <SolidColorBrush x:Key="AboutForegroundBrush" Color="{StaticResource AboutForeground}"/>
             <SolidColorBrush x:Key="UtilityBrush" Color="{StaticResource Utility}"/>
             <SolidColorBrush x:Key="UtilityHoverBrush" Color="{StaticResource UtilityHover}"/>
+            <SolidColorBrush x:Key="UtilityPressedBrush" Color="{StaticResource UtilityPressed}"/>
             <SolidColorBrush x:Key="InactiveActionBrush" Color="{StaticResource InactiveAction}"/>
 
             <!-- The app-wide UI (chrome) font. The default is the bundled Inter; the view model overrides
@@ -133,6 +149,10 @@
             <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
+        <Style Selector="Button.resultClose:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
 
         <!-- Add buttons -->
         <Style Selector="Button.add">
@@ -143,6 +163,10 @@
         </Style>
         <Style Selector="Button.add:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource AddHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.add:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource AddPressedBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
@@ -157,6 +181,14 @@
             <Setter Property="Background" Value="{StaticResource HideHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
+        <Style Selector="Button.hide:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource HidePressedBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.hide:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource HideBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
 
         <!-- Show buttons -->
         <Style Selector="Button.show">
@@ -167,6 +199,14 @@
         </Style>
         <Style Selector="Button.show:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource ShowHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.show:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ShowPressedBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.show:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ShowBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
@@ -181,6 +221,14 @@
             <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
+        <Style Selector="Button.reload:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReloadPressedBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.reload:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReloadBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
 
         <!-- Reapply button -->
         <Style Selector="Button.reapply">
@@ -193,6 +241,14 @@
             <Setter Property="Background" Value="{StaticResource ReapplyHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
+        <Style Selector="Button.reapply:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReapplyPressedBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.reapply:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReapplyBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
 
         <!-- Destructive buttons -->
         <Style Selector="Button.destructive">
@@ -203,6 +259,10 @@
         </Style>
         <Style Selector="Button.destructive:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.destructive:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource DangerPressedBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
         <Style Selector="Button.destructive:focus /template/ ContentPresenter">
@@ -219,6 +279,10 @@
         </Style>
         <Style Selector="Button.cancel:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource CancelHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.cancel:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource CancelPressedBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
@@ -274,6 +338,10 @@
             <Setter Property="Background" Value="{StaticResource UtilityHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
+        <Style Selector="Button.utility:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource UtilityPressedBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
         <Style Selector="Button.utility:focus /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource UtilityHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
@@ -286,12 +354,28 @@
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
+        <!-- Fluent ships its own Button.accent, and its presenter setters outrank a
+             button-level Background, so this class rested at the toolkit's system azure
+             and only reached the app's blue once the pointer arrived. Said at presenter
+             level, the resting fill is the app's again. -->
+        <Style Selector="Button.accent /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReloadBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
         <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
         <Style Selector="Button.accent:focus /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.accent:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReloadPressedBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.accent:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource ReloadBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
@@ -308,9 +392,14 @@
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
-        <!-- The accent commit button carries an explicit background, so dim it when disabled
-             to read as unavailable — e.g. Save before a setting is changed. -->
-        <Style Selector="Button.accent:disabled">
+        <!-- A disabled button is the resting button, faded: it keeps its own fill, ink and
+             footprint, so it stays recognisably the control that will come back and the colour
+             codes stay told apart while they are off. Left to Fluent, every class here — green,
+             pink, violet, blue, teal, red, amber — resolved to the same grey slab, so a disabled
+             Hide and a disabled Reload were one control. The fade is on the button, and the
+             classes that can be switched off restate their own fill above; a class that is never
+             disabled says nothing. -->
+        <Style Selector="Button:disabled">
             <Setter Property="Opacity" Value="0.45"/>
         </Style>
     </Application.Styles>
