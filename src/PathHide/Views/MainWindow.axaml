@@ -48,20 +48,22 @@
                 <!-- Hamburger menu (right-aligned) -->
                 <Button DockPanel.Dock="Right"
                         Classes="utility"
-                        Padding="14,2"
+                        Padding="8,2"
                         VerticalAlignment="Stretch"
                         x:Name="MenuButton"
                         AutomationProperties.Name="Menu"
                         ToolTip.Tip="Menu">
                     <!-- Hamburger drawn as a vector (three equal strokes) rather than the
-                         ☰ glyph, whose strokes render with uneven weight across fonts. -->
-                    <Path Width="18" Height="14"
+                         ☰ glyph, whose strokes render with uneven weight across fonts. Bars 16
+                         long and 2 thick with 5 between them: closer together they read as one
+                         block rather than a menu, and the round caps stay inside the 18x16 box. -->
+                    <Path Width="18" Height="16"
                           VerticalAlignment="Center" HorizontalAlignment="Center"
                           Stroke="{Binding $parent[Button].Foreground}"
                           StrokeThickness="2"
                           StrokeLineCap="Round"
                           UseLayoutRounding="True"
-                          Data="M0,1 H18 M0,7 H18 M0,13 H18"/>
+                          Data="M1,1 H17 M1,8 H17 M1,15 H17"/>
                     <Button.Flyout>
                         <MenuFlyout Placement="BottomEdgeAlignedRight">
                             <!-- Header set in code: it reveals rather than opens (LogReveal runs
