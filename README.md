@@ -44,8 +44,6 @@ dotnet test -c Release
 dotnet test --collect "XPlat Code Coverage" --results-directory coverage
 ```
 
-`dotnet test` runs the whole test project, and there is no second command for a longer run — nothing here is paid, external, or slow. [`tests/README.md`](tests/README.md) names the areas a green run stands for.
-
 Some tests are platform-gated and report as skipped off their platform — the Windows attribute tests on macOS and vice versa — so a green run on one machine does not mean the whole suite ran. CI runs it on both.
 
 ## License
