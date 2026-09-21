@@ -17,6 +17,10 @@
                     <SolidColorBrush x:Key="BorderBrush" Color="#D8DEE8"/>
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1F2430"/>
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#586070"/>
+                    <!-- The scroll-bar thumb in the app's palette. Fluent reads a different key for a bar
+                         that takes layout space and one that floats, so both are set (app-chrome conventions). -->
+                    <SolidColorBrush x:Key="ScrollBarThumbBackgroundColor" Color="#586070"/>
+                    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#586070"/>
                     <SolidColorBrush x:Key="StatusBackgroundBrush" Color="#F8FAFC"/>
                     <SolidColorBrush x:Key="StatusBorderBrush" Color="#D8DEE8"/>
                     <SolidColorBrush x:Key="StatusAccentBrush" Color="#1D4ED8"/>
@@ -28,6 +32,10 @@
                     <SolidColorBrush x:Key="BorderBrush" Color="#323A46"/>
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E6EAF0"/>
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#A3ACBA"/>
+                    <!-- The scroll-bar thumb in the app's palette. Fluent reads a different key for a bar
+                         that takes layout space and one that floats, so both are set (app-chrome conventions). -->
+                    <SolidColorBrush x:Key="ScrollBarThumbBackgroundColor" Color="#A3ACBA"/>
+                    <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#A3ACBA"/>
                     <SolidColorBrush x:Key="StatusBackgroundBrush" Color="#161A1F"/>
                     <SolidColorBrush x:Key="StatusBorderBrush" Color="#323A46"/>
                     <SolidColorBrush x:Key="StatusAccentBrush" Color="#8AB4FF"/>
@@ -120,11 +128,27 @@
             <Setter Property="FontSize" Value="13"/>
         </Style>
 
-        <!-- Keep Fluent's native scrollbar geometry and hit targets. Expand immediately on hover,
-             remain expanded during interaction, then use the framework's two-second leave delay. -->
+        <!-- The path grid and the window viewport hold content out to their own edges, so their bars
+             take layout space rather than floating over it (app-chrome conventions). The dialog body
+             insets its content and opts back in; see DialogBase.axaml. -->
         <Style Selector="ScrollViewer">
-            <Setter Property="AllowAutoHide" Value="True"/>
+            <Setter Property="AllowAutoHide" Value="False"/>
         </Style>
+
+        <!-- Keep DataGrid cell navigation active without drawing a harsh current-cell box. Fluent
+             outlines the focused cell in white, which reads as a second selection inside the row
+             the user actually selected. -->
+        <Style Selector="DataGridCell">
+            <Setter Property="FocusAdorner" Value="{x:Null}"/>
+        </Style>
+        <Style Selector="DataGridCell:current /template/ Rectangle#CurrencyVisual">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="DataGridCell:focus /template/ Grid#FocusVisual">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+
+        <!-- For the one region that floats: no delay arriving, the framework's two seconds leaving. -->
         <Style Selector="ScrollBar">
             <Setter Property="ShowDelay" Value="00:00:00"/>
             <Setter Property="HideDelay" Value="00:00:02"/>

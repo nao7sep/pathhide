@@ -59,6 +59,30 @@ public static class WindowMetrics
         new(System.Math.Min(contentFloor.Width, System.Math.Max(1, workArea.Width / scale - chrome.Width)),
             System.Math.Min(contentFloor.Height, System.Math.Max(1, workArea.Height / scale - chrome.Height)));
 
+    // A dialog takes this much of what bounds it, never all of it: the web half of the modal-dialog
+    // conventions caps at a fraction of the viewport, and a dialog filling its owner's content height
+    // exactly reads as bursting out of the window rather than sitting inside it.
+    public const double DialogHeightFraction = 0.85;
+
+    /// <summary>
+    /// The tallest a dialog's content may be: <see cref="DialogHeightFraction"/> of the content height
+    /// of the window that owns it, and no more than the same fraction of the screen's working height.
+    /// Pass 0 for <paramref name="ownerContentHeight"/> when the dialog has no owner — the
+    /// startup-failure shell — and the screen alone bounds it. A working area that cannot be read
+    /// leaves the dialog unbounded rather than guessing a height for it.
+    /// </summary>
+    public static double DialogMaxHeight(double ownerContentHeight, double workingAreaHeight, double scale)
+    {
+        var screenBound = workingAreaHeight > 0 && scale > 0 && double.IsFinite(scale)
+            ? workingAreaHeight / scale * DialogHeightFraction
+            : double.PositiveInfinity;
+        var ownerBound = ownerContentHeight > 0
+            ? ownerContentHeight * DialogHeightFraction
+            : double.PositiveInfinity;
+
+        return System.Math.Min(ownerBound, screenBound);
+    }
+
     // The path-list Border has Margin="12" on all sides, so the grid loses 12px of horizontal
     // room on each edge.
     private const double GridHorizontalMargin = 12 + 12;

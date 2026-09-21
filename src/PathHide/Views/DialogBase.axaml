@@ -7,25 +7,31 @@
         ShowInTaskbar="False"
         Background="{DynamicResource AppBackgroundBrush}">
 
-    <DockPanel Margin="24">
-        <!-- Button row at the bottom -->
+    <!-- Two bands, because the OS title bar is the header (modal-dialog conventions). Each band carries
+         its own padding: the body's is inside the scroll region, so the region fills the band and its
+         bar sits at the dialog's edge rather than against a control. A margin here instead would leave
+         a gap where the bar should start. -->
+    <DockPanel>
         <StackPanel DockPanel.Dock="Bottom"
                     x:Name="ButtonPanel"
                     Orientation="Horizontal"
                     Spacing="8"
                     HorizontalAlignment="Right"
-                    Margin="0,20,0,0"/>
+                    Margin="24,20,24,20"/>
 
-        <!-- Content area. The body is the sole scroll region, under a height
-             bounded to the screen (see OnOpened): the footer is docked, so an
-             unbounded body pushes it off-screen instead of scrolling, and this
-             shell is CanResize="False" — there would be no way to get it back.
-             The shortcuts dialog already measures close to a small laptop's
-             working height, and startup/recovery copy can legitimately wrap. -->
+        <!-- The line that opens the footer band, and the bottom edge of the scrolling body. -->
+        <Border DockPanel.Dock="Bottom"
+                x:Name="FooterSeparator"
+                Height="1"
+                Background="{DynamicResource BorderBrush}"/>
+
+        <!-- The sole scroll region. The footer is docked outside it, so it stays reachable at any
+             height the dialog is bounded to. -->
         <ScrollViewer x:Name="DialogScroll"
+                      AllowAutoHide="True"
                       HorizontalScrollBarVisibility="Disabled"
                       VerticalScrollBarVisibility="Auto">
-            <ContentPresenter x:Name="DialogContent"/>
+            <ContentPresenter x:Name="DialogContent" Margin="24"/>
         </ScrollViewer>
     </DockPanel>
 

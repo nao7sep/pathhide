@@ -28,11 +28,15 @@ public sealed class NoticeDialog : DialogBase
     }
 
     public static Task ShowAsync(Window owner, string title, string message) =>
-        new NoticeDialog(title, message).ShowDialog(owner);
+        new NoticeDialog(title, message).ShowBoundedAsync(owner);
 
     /// <summary>
     /// A startup failure notice used as the main window. Closing it ends the app.
     /// </summary>
-    public static Window CreateStartupFailure(string title, string message) =>
-        new NoticeDialog(title, message);
+    public static Window CreateStartupFailure(string title, string message)
+    {
+        var dialog = new NoticeDialog(title, message);
+        dialog.BoundHeightToScreen();
+        return dialog;
+    }
 }

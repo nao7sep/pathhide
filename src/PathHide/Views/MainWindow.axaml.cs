@@ -206,7 +206,7 @@ public partial class MainWindow : Window
     }
 
     private async void OnAboutClick(object? sender, RoutedEventArgs e) =>
-        await OwnViewActionAsync(() => new AboutDialog().ShowDialog(this));
+        await OwnViewActionAsync(() => new AboutDialog().ShowBoundedAsync(this));
 
     /// <summary>The macOS app menu's About item; the same action as the in-window menu's.</summary>
     internal void ShowAboutFromMenu() => OnAboutClick(null, new RoutedEventArgs());
@@ -256,7 +256,7 @@ public partial class MainWindow : Window
             : 0;
     }
 
-    private Task ShowShortcutsAsync() => new ShortcutsDialog(_shortcuts).ShowDialog(this);
+    private Task ShowShortcutsAsync() => new ShortcutsDialog(_shortcuts).ShowBoundedAsync(this);
 
     private void OnOpenLogClick(object? sender, RoutedEventArgs e)
     {
@@ -277,7 +277,7 @@ public partial class MainWindow : Window
             ViewModel.IsHiddenAndSystem,
             ViewModel.HasWindowsHideMode,
             ViewModel.TryApplySettings);
-        await dialog.ShowDialog(this);
+        await dialog.ShowBoundedAsync(this);
 
         if (dialog.Accepted)
         {

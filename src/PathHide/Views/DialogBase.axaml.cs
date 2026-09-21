@@ -120,12 +120,41 @@ public partial class DialogBase : Window
 
     protected void SetInitialFocus(Control control) => _initialFocusControl = control;
 
+    /// <summary>
+    /// Shows the dialog modally over <paramref name="owner"/>, bounded to a share of the owner's
+    /// content height before the window is placed (modal-dialog conventions). Every owned dialog
+    /// opens through here.
+    /// </summary>
+    public Task ShowBoundedAsync(Window owner)
+    {
+        BoundHeight(owner);
+        return ShowDialog(owner);
+    }
+
+    /// <summary>
+    /// Bounds a dialog that will be shown without an owner — the startup-failure shell, which is the
+    /// application's only window — to the screen alone. Call it before the window is shown.
+    /// </summary>
+    protected void BoundHeightToScreen() => BoundHeight(null);
+
+    private void BoundHeight(Window? owner)
+    {
+        // Before Show this window has no screen of its own, so the owner's is the one it will open on.
+        var screen = owner is null
+            ? Screens.Primary
+            : owner.Screens.ScreenFromWindow(owner) ?? owner.Screens.Primary;
+
+        MaxHeight = WindowMetrics.DialogMaxHeight(
+            owner?.ClientSize.Height ?? 0,
+            screen?.WorkingArea.Height ?? 0,
+            screen?.Scaling ?? 0);
+    }
+
     /// <summary>Allows a feature dialog to persist its draft before the shell closes.</summary>
     protected virtual bool TryCommit(string tag) => true;
 
     private void OnOpened(object? sender, EventArgs e)
     {
-        ClampHeightToScreen();
 
         var target = _initialFocusControl;
         if (target is null)
@@ -134,29 +163,6 @@ public partial class DialogBase : Window
         Dispatcher.UIThread.Post(() => target.Focus());
     }
 
-    /// <summary>
-    /// Bounds the dialog to the working area of the screen it opened on, so
-    /// SizeToContent can never grow it past what fits.
-    /// </summary>
-    /// <remarks>
-    /// Derived rather than a fixed number: what fits depends on the display,
-    /// and the body's height depends on the user's UI font. Without this the
-    /// docked footer — every dismiss path this shell offers — is pushed off the
-    /// bottom of a small laptop screen, on a window that cannot be resized.
-    /// </remarks>
-    private void ClampHeightToScreen()
-    {
-        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
-        if (screen is null)
-            return;
-
-        // WorkingArea is in physical pixels; MaxHeight is in logical ones.
-        var available = screen.WorkingArea.Height / screen.Scaling;
-
-        // Leave a margin so the dialog reads as a window on the desktop rather
-        // than something wedged against both edges.
-        MaxHeight = available * 0.9;
-    }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {

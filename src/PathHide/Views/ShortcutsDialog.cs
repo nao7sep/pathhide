@@ -59,7 +59,7 @@ public sealed class ShortcutsDialog : DialogBase
 
     /// <summary>
     /// Where the section list divides into two columns, keeping the sections in order: the split that
-    /// leaves the taller column with the fewest rows, earlier on a tie so the left column is the longer.
+    /// leaves the taller column with the fewest rows, taking the earlier one on a tie.
     /// </summary>
     internal static int BalancedSplit(IReadOnlyList<int> rowCounts)
     {
