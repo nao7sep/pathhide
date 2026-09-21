@@ -1,7 +1,8 @@
-using Avalonia;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using PathHide.Views;
 using Xunit;
 
@@ -9,37 +10,49 @@ namespace PathHide.Tests.Views;
 
 public sealed class WindowOverflowTests
 {
+    // The window carries no scroll region of its own: every pane here bounds itself and scrolls its
+    // own content, and the layout's floor fits inside any work area this app runs on, so the native
+    // minimum already keeps the window above that floor (app-chrome conventions). A viewport added
+    // back would be one that can never scroll — and the app-wide scroll rules that used to aim at it
+    // reached nothing else, because a type selector does not enter a control template.
     [AvaloniaFact]
-    public void Main_layout_scrolls_below_its_floor_and_fills_when_space_returns()
+    public void The_window_has_no_scroll_region_of_its_own()
     {
-        // Exercise the shipped XAML viewport without starting the app's stores or
-        // view model. A plain headless window supplies only its available size.
+        var window = new MainWindow();
+        try
+        {
+            var layout = window.FindControl<Control>("LayoutRoot")!;
+            Assert.Empty(layout.GetSelfAndVisualAncestors().OfType<ScrollViewer>());
+        }
+        finally
+        {
+            window.Content = null;
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
+    // The floor is what the window can never go below, so it is what the panes are clamped against.
+    [AvaloniaFact]
+    public void The_layout_keeps_its_derived_floor_and_fills_the_window_above_it()
+    {
         var source = new MainWindow();
-        var viewport = source.FindControl<ScrollViewer>("WindowViewport")!;
         var layout = source.FindControl<Control>("LayoutRoot")!;
         source.Content = null;
         source.Close();
         layout.MinWidth = 900;
-        layout.MinHeight = 700;
-        var host = new Window { Width = 500, Height = 300, Content = viewport };
+        layout.MinHeight = 400;
+
+        var host = new Window { Width = 1300, Height = 1000, Content = layout };
         host.Show();
         host.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
 
-        Assert.True(viewport.Extent.Width >= 900);
-        Assert.True(viewport.Extent.Height >= 700);
-        viewport.Offset = new Vector(200, 200);
-        Assert.True(viewport.Offset.X > 0);
-        Assert.True(viewport.Offset.Y > 0);
-
-        host.Width = 1300;
-        host.Height = 1000;
-        host.UpdateLayout();
-        Dispatcher.UIThread.RunJobs();
-        Assert.InRange(layout.Bounds.Width, viewport.Viewport.Width - 1, viewport.Viewport.Width + 1);
-        Assert.InRange(layout.Bounds.Height, viewport.Viewport.Height - 1, viewport.Viewport.Height + 1);
+        Assert.Equal(host.ClientSize.Width, layout.Bounds.Width, 0);
+        Assert.Equal(host.ClientSize.Height, layout.Bounds.Height, 0);
         Assert.Equal(900, layout.MinWidth);
-        Assert.Equal(700, layout.MinHeight);
+        Assert.Equal(400, layout.MinHeight);
         host.Close();
+        Dispatcher.UIThread.RunJobs();
     }
 }

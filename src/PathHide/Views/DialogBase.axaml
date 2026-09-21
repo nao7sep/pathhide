@@ -28,7 +28,6 @@
         <!-- The sole scroll region. The footer is docked outside it, so it stays reachable at any
              height the dialog is bounded to. -->
         <ScrollViewer x:Name="DialogScroll"
-                      AllowAutoHide="True"
                       HorizontalScrollBarVisibility="Disabled"
                       VerticalScrollBarVisibility="Auto">
             <ContentPresenter x:Name="DialogContent" Margin="24"/>

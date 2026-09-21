@@ -14,43 +14,6 @@ namespace PathHide.Tests;
 
 public sealed class AppStylesTests
 {
-    [AvaloniaFact]
-    public void A_scroll_bar_takes_its_own_width_instead_of_drawing_over_the_content()
-    {
-        // No width of its own: it takes the room the viewer leaves, which is the measurement.
-        var content = new Border { Height = 400 };
-        var viewer = new ScrollViewer
-        {
-            Content = content,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        };
-        var window = new Window { Content = viewer, Width = 200, Height = 120 };
-
-        try
-        {
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-            window.UpdateLayout();
-            Dispatcher.UIThread.RunJobs();
-
-            var bar = viewer.GetVisualDescendants().OfType<ScrollBar>()
-                .Single(candidate => candidate.Orientation == Avalonia.Layout.Orientation.Vertical
-                    && candidate.Bounds.Width > 0);
-
-            Assert.False(viewer.AllowAutoHide);
-            Assert.True(viewer.Extent.Height > viewer.Viewport.Height, "the viewer must actually overflow");
-
-            var contentRight = content.TranslatePoint(new Point(content.Bounds.Width, 0), viewer)!.Value.X;
-            var barLeft = bar.TranslatePoint(new Point(0, 0), viewer)!.Value.X;
-            Assert.True(contentRight <= barLeft + 0.5,
-                $"the content reaches {contentRight:F0} and the bar starts at {barLeft:F0}, so the bar covers it");
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
 
     // A state a class does not state at presenter level is answered by Fluent there instead, and
     // its answers replace rather than step: every colour code became the same 40% black wash under

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Platform;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -127,7 +128,7 @@ public partial class DialogBase : Window
     /// </summary>
     public Task ShowBoundedAsync(Window owner)
     {
-        BoundHeight(owner);
+        BoundHeight(owner.Screens.ScreenFromWindow(owner) ?? owner.Screens.Primary);
         return ShowDialog(owner);
     }
 
@@ -135,20 +136,12 @@ public partial class DialogBase : Window
     /// Bounds a dialog that will be shown without an owner — the startup-failure shell, which is the
     /// application's only window — to the screen alone. Call it before the window is shown.
     /// </summary>
-    protected void BoundHeightToScreen() => BoundHeight(null);
+    protected void BoundHeightToScreen() => BoundHeight(Screens.Primary);
 
-    private void BoundHeight(Window? owner)
-    {
-        // Before Show this window has no screen of its own, so the owner's is the one it will open on.
-        var screen = owner is null
-            ? Screens.Primary
-            : owner.Screens.ScreenFromWindow(owner) ?? owner.Screens.Primary;
-
+    private void BoundHeight(Screen? screen) =>
         MaxHeight = WindowMetrics.DialogMaxHeight(
-            owner?.ClientSize.Height ?? 0,
             screen?.WorkingArea.Height ?? 0,
             screen?.Scaling ?? 0);
-    }
 
     /// <summary>Allows a feature dialog to persist its draft before the shell closes.</summary>
     protected virtual bool TryCommit(string tag) => true;

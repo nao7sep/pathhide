@@ -24,7 +24,9 @@ public partial class MainWindow : Window
     // OnLoaded — where the platform command key (Cmd on macOS, Ctrl on Windows) and the view model
     // are both available — so a label can never describe a binding that does not exist. A MenuFlyout
     // item's own HotKey only registers while the flyout is open, so accelerators are matched at the
-    // window level in OnKeyDown, with InputGesture providing the visible menu association.
+    // window level in OnKeyDown. The menu does not repeat them: the shortcuts dialog is where this
+    // app lists its bindings, and a flyout that names two of them invites reading it as the whole
+    // set.
     private IReadOnlyList<ShortcutItem> _shortcuts = [];
     private (int X, int Y, double Width, double Height)? _normalGeometry;
 
@@ -187,9 +189,6 @@ public partial class MainWindow : Window
         // are both available, then point the accelerator-bearing menu items at the live gestures so
         // their visible hint always matches what OnKeyDown actually binds.
         _shortcuts = ShortcutCatalog.Build(this);
-        SettingsMenuItem.InputGesture = GestureFor(ShortcutAction.OpenSettings);
-        ShortcutsMenuItem.InputGesture = GestureFor(ShortcutAction.ShowShortcuts);
-
         ViewModel.ConfirmDestructiveAsync = request =>
             ConfirmDialog.ConfirmDestructiveAsync(this, request.Title, request.Message, request.ConfirmLabel);
         ViewModel.ShowNoticeAsync = (title, body) => NoticeDialog.ShowAsync(this, title, body);
@@ -467,8 +466,6 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private KeyGesture? GestureFor(ShortcutAction action) =>
-        _shortcuts.FirstOrDefault(i => i.Action == action)?.Gesture;
 
     // Delete removes the selected entries — but only while the list itself has focus. It is
     // wired on the grid, not the window, so the destructive command can never fire from a
