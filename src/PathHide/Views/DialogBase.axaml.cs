@@ -138,6 +138,19 @@ public partial class DialogBase : Window
     /// </summary>
     protected void BoundHeightToScreen() => BoundHeight(Screens.Primary);
 
+    /// <summary>
+    /// Undoes the two chrome settings this shell takes for granted, for the startup-failure notice —
+    /// the one dialog here that is not shown over an owner but *is* the application, its only window.
+    /// A window the shell does not list is one the user cannot bring back once anything covers it, and
+    /// centring on an owner that does not exist leaves the placement to a fallback. Call it before the
+    /// window is shown.
+    /// </summary>
+    protected static void ShowAsOnlyWindow(Window dialog)
+    {
+        dialog.ShowInTaskbar = true;
+        dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+    }
+
     private void BoundHeight(Screen? screen) =>
         MaxHeight = WindowMetrics.DialogMaxHeight(
             screen?.WorkingArea.Height ?? 0,

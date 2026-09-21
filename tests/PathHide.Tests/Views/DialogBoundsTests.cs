@@ -206,6 +206,26 @@ public sealed class DialogBoundsTests : IDisposable
         Assert.True(double.IsFinite(notice.MaxHeight), "the notice is bounded by nothing");
     }
 
+    // The same notice, as the application itself. Every other dialog here is shown over an owner, so the
+    // shell keeps them out of the taskbar and centres them on that owner — both wrong for the one window
+    // the user has: unlisted, it cannot be brought back once something covers it, and there is no owner
+    // to centre on. The shell's own defaults are asserted alongside, because they are what makes the
+    // factory's two lines mean anything.
+    [AvaloniaFact]
+    public void The_startup_failure_notice_takes_the_chrome_of_a_lone_window()
+    {
+        var notice = NoticeDialog.CreateStartupFailure("PathHide could not start", "Something went wrong.");
+        _open.Add(notice);
+        var owned = new DialogBase();
+        _open.Add(owned);
+
+        Assert.False(owned.ShowInTaskbar, "an owned dialog should stay out of the taskbar");
+        Assert.Equal(WindowStartupLocation.CenterOwner, owned.WindowStartupLocation);
+
+        Assert.True(notice.ShowInTaskbar, "the app's only window has to be listed");
+        Assert.Equal(WindowStartupLocation.CenterScreen, notice.WindowStartupLocation);
+    }
+
     public void Dispose()
     {
         for (var i = _open.Count - 1; i >= 0; i--)
