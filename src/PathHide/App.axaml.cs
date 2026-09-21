@@ -17,7 +17,13 @@ namespace PathHide;
 
 public partial class App : Application
 {
-    internal static string? StartupFailureMessage { get; set; }
+    internal static I18n.Message? StartupFailureMessage { get; set; }
+
+    /// <summary>
+    /// The computer's own languages, in order, as <c>LanguageBootstrap</c> read them before the app was
+    /// built. Handed to the view model so a language saved in Settings resolves System the same way.
+    /// </summary>
+    internal static IReadOnlyList<string> ComputerLanguages { get; set; } = [];
 
     // The main window, which the app menu's About and Settings items open through. Null while a
     // startup failure is shown instead, when those items are disabled.
@@ -47,7 +53,7 @@ public partial class App : Application
             if (StartupFailureMessage is { } startupFailure)
             {
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
-                    "PathHide could not start",
+                    I18n.Message.Of("startup.failedTitle"),
                     startupFailure);
                 base.OnFrameworkInitializationCompleted();
                 return;
@@ -77,7 +83,7 @@ public partial class App : Application
                 Log.Warn("startup: the path list could not be read; halting rather than starting empty",
                     new { quarantined = string.Join(", ", quarantined.Select(q => q.Path)) });
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
-                    "PathHide could not read your path list",
+                    I18n.Message.Of("startup.pathListTitle"),
                     FailurePresentation.PathListStartup());
                 RegisterOwnerActivation(desktop.MainWindow);
                 base.OnFrameworkInitializationCompleted();
@@ -87,7 +93,7 @@ public partial class App : Application
             {
                 Log.Error("startup: a settings file could not be read or set aside", ex);
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
-                    "PathHide could not start",
+                    I18n.Message.Of("startup.failedTitle"),
                     FailurePresentation.Startup());
                 RegisterOwnerActivation(desktop.MainWindow);
                 base.OnFrameworkInitializationCompleted();
@@ -140,8 +146,8 @@ public partial class App : Application
     /// </summary>
     private static MainWindowViewModel CreateMainViewModel()
     {
-        var pathListStore = new JsonStore<List<PathEntry>>("paths.json", "paths");
-        var settingsStore = new JsonStore<AppSettings>("config.json", "settings");
+        var pathListStore = new JsonStore<List<PathEntry>>("paths.json", QuarantineJournal.PathListLabel);
+        var settingsStore = new JsonStore<AppSettings>(AppSettings.FileName, QuarantineJournal.SettingsLabel);
         // Settings are re-derivable, so an unreadable config.json correctly falls back to
         // defaults; the recovery notice tells the user it happened. The path list does NOT —
         // see LoadPersistedState.
@@ -160,7 +166,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Log.Warn("config: first-run create failed", ex, new { file = "config.json" });
+            Log.Warn("config: first-run create failed", ex, new { file = AppSettings.FileName });
         }
 
         // Key effective configuration at startup (the conventions' baseline): every user-tunable
@@ -169,6 +175,8 @@ public partial class App : Application
         // complaint.
         Log.Info("config", new
         {
+            language = settings.Language,
+            theme = settings.Theme,
             hideMode = settings.WindowsHideMode,
             uiFontFamily = settings.UiFontFamily,
         });
@@ -177,6 +185,9 @@ public partial class App : Application
             ? new WindowsVisibilityService(() => settings.WindowsHideMode)
             : new MacVisibilityService();
 
-        return new MainWindowViewModel(visibilityService, pathListStore, settingsStore, settings);
+        return new MainWindowViewModel(visibilityService, pathListStore, settingsStore, settings)
+        {
+            ComputerLanguages = ComputerLanguages,
+        };
     }
 }

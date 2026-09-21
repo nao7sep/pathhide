@@ -1,0 +1,8 @@
+/* The permission prompts macOS shows when PathHide first reaches a protected location, in English.
+   The English here is Info.plist's own; a test holds the two to the same words. */
+
+"NSDesktopFolderUsageDescription" = "PathHide needs access to manage the hidden flag on items in your Desktop folder.";
+"NSDocumentsFolderUsageDescription" = "PathHide needs access to manage the hidden flag on items in your Documents folder.";
+"NSDownloadsFolderUsageDescription" = "PathHide needs access to manage the hidden flag on items in your Downloads folder.";
+"NSNetworkVolumesUsageDescription" = "PathHide needs access to manage the hidden flag on items on network volumes.";
+"NSRemovableVolumesUsageDescription" = "PathHide needs access to manage the hidden flag on items on removable volumes.";

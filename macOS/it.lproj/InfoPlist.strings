@@ -1,0 +1,8 @@
+/* The permission prompts macOS shows when PathHide first reaches a protected location, in Italian.
+   Each value translates the English in en.lproj/InfoPlist.strings. */
+
+"NSDesktopFolderUsageDescription" = "PathHide deve accedere alla cartella Scrivania per gestire il flag “nascosto” degli elementi al suo interno.";
+"NSDocumentsFolderUsageDescription" = "PathHide deve accedere alla cartella Documenti per gestire il flag “nascosto” degli elementi al suo interno.";
+"NSDownloadsFolderUsageDescription" = "PathHide deve accedere alla cartella Download per gestire il flag “nascosto” degli elementi al suo interno.";
+"NSNetworkVolumesUsageDescription" = "PathHide deve accedere ai volumi di rete per gestire il flag “nascosto” dei loro elementi.";
+"NSRemovableVolumesUsageDescription" = "PathHide deve accedere ai volumi rimovibili per gestire il flag “nascosto” dei loro elementi.";

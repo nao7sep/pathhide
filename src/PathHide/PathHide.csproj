@@ -23,6 +23,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The interface languages ship inside the assembly, so a catalogue cannot be separated from the
+         build that was tested against it and a language change never reads the disk. The logical name
+         is the default one, PathHide.I18n.Locales.<tag>.json (see I18n/Catalogue.cs). -->
+    <EmbeddedResource Include="I18n\Locales\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 

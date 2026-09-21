@@ -13,6 +13,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using PathHide.I18n;
 using PathHide.Services;
 using PathHide.ViewModels;
 
@@ -30,6 +31,11 @@ public partial class MainWindow : Window
     private IReadOnlyList<ShortcutItem> _shortcuts = [];
     private (int X, int Y, double Width, double Height)? _normalGeometry;
 
+    // Moving, resizing and a language change each post work for after the native events settle. Once
+    // the window has closed, its platform window is gone and asking it for a screen throws, so late
+    // work for a closed window is dropped.
+    private bool _closed;
+
     private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
 
     public MainWindow()
@@ -46,9 +52,9 @@ public partial class MainWindow : Window
         AddFoldersButton.Click += OnAddFoldersClick;
         RemoveButton.Click += OnRemoveClick;
 
-        OpenLogMenuItem.Header = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? "Show Log File in Explorer"
-            : "Show Log File in Finder";
+        Localized.SetHeader(OpenLogMenuItem, RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? "menu.showLogExplorer"
+            : "menu.showLogFinder");
         OpenLogMenuItem.Click += OnOpenLogClick;
         SettingsMenuItem.Click += OnSettingsClick;
         AboutMenuItem.Click += OnAboutClick;
@@ -65,6 +71,21 @@ public partial class MainWindow : Window
         ActionButtons.KeyDown += OnActionButtonsKeyDown;
 
         Loaded += OnLoaded;
+        ApplyColumnHeaders();
+
+        // While the window is open it answers a language change for what markup cannot hold a key
+        // for: the column headers, the view model's words, and the minimum width, which the toolbar's
+        // labels set. Only while it is open, so a closed window is never written to.
+        Opened += (_, _) =>
+        {
+            ApplyColumnHeaders();
+            Localizer.Changed += OnLanguageChanged;
+        };
+        Closed += (_, _) =>
+        {
+            _closed = true;
+            Localizer.Changed -= OnLanguageChanged;
+        };
         PositionChanged += (_, _) =>
         {
             RememberNormalGeometryAfterNativeEvents();
@@ -82,6 +103,36 @@ public partial class MainWindow : Window
     }
 
     private void OnScreensChanged(object? sender, EventArgs e) => ApplyNativeMinimum();
+
+    private void OnLanguageChanged()
+    {
+        ApplyColumnHeaders();
+        if (DataContext is MainWindowViewModel vm)
+            vm.Retranslate();
+
+        // The toolbar never wraps and the window's minimum width is the toolbar's, so new labels move
+        // the minimum, as a new font does. Measured after the layout pass has taken the new words.
+        Dispatcher.UIThread.Post(ApplyWindowMinimums, DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// Each path-list column's header, by the value the column sorts on, which is what identifies a
+    /// column in the markup. A column added there without a header here fails at the first lookup.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> ColumnHeaderKeys = new Dictionary<string, string>
+    {
+        [nameof(PathRowViewModel.Path)] = "grid.path",
+        [nameof(PathRowViewModel.PathFamily)] = "grid.family",
+        [nameof(PathRowViewModel.DesiredVisibility)] = "grid.desired",
+        [nameof(PathRowViewModel.ActualState)] = "grid.actual",
+        [nameof(PathRowViewModel.ItemKind)] = "grid.kind",
+    };
+
+    private void ApplyColumnHeaders()
+    {
+        foreach (var column in PathGrid.Columns)
+            column.Header = Localizer.T(ColumnHeaderKeys[column.SortMemberPath!]);
+    }
 
     public void RestoreWindowGeometry()
     {
@@ -140,7 +191,7 @@ public partial class MainWindow : Window
 
     private void RememberNormalGeometry()
     {
-        if (WindowState != WindowState.Normal)
+        if (_closed || WindowState != WindowState.Normal)
             return;
 
         // Avalonia reports macOS title-bar zoom as Normal. Judge the settled native frame too,
@@ -190,7 +241,7 @@ public partial class MainWindow : Window
         // their visible hint always matches what OnKeyDown actually binds.
         _shortcuts = ShortcutCatalog.Build(this);
         ViewModel.ConfirmDestructiveAsync = request =>
-            ConfirmDialog.ConfirmDestructiveAsync(this, request.Title, request.Message, request.ConfirmLabel);
+            ConfirmDialog.ConfirmDestructiveAsync(this, request.Title, request.Message, request.ConfirmLabelKey);
         ViewModel.ShowNoticeAsync = (title, body) => NoticeDialog.ShowAsync(this, title, body);
         ViewModel.Initialize();
         PathGrid.Columns.First(c => c.SortMemberPath == nameof(PathRowViewModel.Path))
@@ -232,6 +283,9 @@ public partial class MainWindow : Window
     /// </remarks>
     private void ApplyWindowMinimums()
     {
+        if (_closed)
+            return;
+
         Toolbar.Measure(Size.Infinity);
         StatusBar.Measure(Size.Infinity);
 
@@ -271,6 +325,7 @@ public partial class MainWindow : Window
     private async Task OpenSettingsAsync()
     {
         var dialog = new SettingsDialog(
+            ViewModel.Language,
             ViewModel.UiFontFamily,
             ViewModel.Theme,
             ViewModel.IsHiddenAndSystem,
@@ -297,7 +352,7 @@ public partial class MainWindow : Window
         {
             files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = "Add Files",
+                Title = Localizer.T("toolbar.addFiles"),
                 AllowMultiple = true,
             });
             ViewModel.ResolvePathPickerFailure();
@@ -330,7 +385,7 @@ public partial class MainWindow : Window
         {
             folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
             {
-                Title = "Add Directories",
+                Title = Localizer.T("toolbar.addDirectories"),
                 AllowMultiple = true,
             });
             ViewModel.ResolvePathPickerFailure();

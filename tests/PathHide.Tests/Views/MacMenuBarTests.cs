@@ -9,6 +9,8 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
+using PathHide.I18n;
+using PathHide.Tests.I18n;
 using PathHide.Views;
 using Xunit;
 using static PathHide.Views.MacMenuBar;
@@ -26,6 +28,25 @@ public sealed class MacMenuBarTests
     private const Modifiers Cmd = Modifiers.Command;
 
     // ── The layout ──────────────────────────────────────────────────────────────────────────────
+
+    // On the UI thread, like every test that changes the language: the change rewrites whatever
+    // on-screen text other tests have left registered, and Avalonia objects belong to that thread.
+    [AvaloniaFact]
+    public void The_bar_speaks_the_interface_language_and_keeps_its_roles()
+    {
+        // The titles come from the catalogue, so macOS's own Edit items land in a menu titled in the
+        // reader's language, and the Window menu is found by its role: a title compared to the English
+        // word "Window" would silently stop macOS listing the open windows in any other language.
+        using var japanese = Localizer.Speaking("ja");
+        var layout = Layout("PathHide");
+
+        Assert.Equal(new[] { MenuRole.App, MenuRole.Edit, MenuRole.Window }, layout.Select(menu => menu.Role));
+        Assert.Equal("PathHide", layout[0].Title);
+        Assert.Equal(Localizer.T("nativeMenu.edit"), layout[1].Title);
+        Assert.Equal(Localizer.T("nativeMenu.window"), layout[2].Title);
+        Assert.NotEqual(English.Of("nativeMenu.window"), layout[2].Title);
+        Assert.Equal(Localizer.T("nativeMenu.quit", ("app", "PathHide")), layout[0].Items.OfType<Item>().Last().Title);
+    }
 
     [Fact]
     public void The_bar_is_the_app_menu_then_Edit_then_Window()
@@ -182,7 +203,7 @@ public sealed class MacMenuBarTests
             var menu = ObjC.Send(ItemAt(bar.Bar, m), "submenu");
             Assert.Equal(layout[m].Title, ObjC.String(ObjC.Send(menu, "title")));
             Assert.Equal(layout[m].Items.Length, Count(menu));
-            if (layout[m].Title == "Window")
+            if (layout[m].Role == MenuRole.Window)
                 Assert.Equal(bar.Window, menu);
 
             for (var i = 0; i < layout[m].Items.Length; i++)

@@ -31,8 +31,15 @@ internal static class ObjC
     internal static IntPtr Send(IntPtr receiver, string selector, IntPtr argument) =>
         MsgSend(receiver, Sel(selector), argument);
 
+    internal static IntPtr Send(IntPtr receiver, string selector, IntPtr first, IntPtr second) =>
+        MsgSend(receiver, Sel(selector), first, second);
+
     internal static IntPtr Send(IntPtr receiver, string selector, IntPtr first, IntPtr second, IntPtr third) =>
         MsgSend(receiver, Sel(selector), first, second, third);
+
+    /// <summary>Sends a message taking one index, such as <c>objectAtIndex:</c>.</summary>
+    internal static IntPtr SendWithIndex(IntPtr receiver, string selector, ulong index) =>
+        MsgSendIndex(receiver, Sel(selector), index);
 
     internal static ulong SendForUInt(IntPtr receiver, string selector) => MsgSendForUInt(receiver, Sel(selector));
 
@@ -94,7 +101,13 @@ internal static class ObjC
     private static extern IntPtr MsgSend(IntPtr receiver, IntPtr selector, IntPtr argument);
 
     [DllImport(Runtime, EntryPoint = "objc_msgSend")]
+    private static extern IntPtr MsgSend(IntPtr receiver, IntPtr selector, IntPtr first, IntPtr second);
+
+    [DllImport(Runtime, EntryPoint = "objc_msgSend")]
     private static extern IntPtr MsgSend(IntPtr receiver, IntPtr selector, IntPtr first, IntPtr second, IntPtr third);
+
+    [DllImport(Runtime, EntryPoint = "objc_msgSend")]
+    private static extern IntPtr MsgSendIndex(IntPtr receiver, IntPtr selector, ulong index);
 
     [DllImport(Runtime, EntryPoint = "objc_msgSend")]
     private static extern ulong MsgSendForUInt(IntPtr receiver, IntPtr selector);

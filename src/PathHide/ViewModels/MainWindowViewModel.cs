@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using PathHide.I18n;
 using PathHide.Models;
 using PathHide.Services;
 using PathHide.Storage;
@@ -48,7 +49,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// Shows an informational notice (title, body). Supplied by the window, the
     /// same way <see cref="ConfirmDestructiveAsync"/> is.
     /// </summary>
-    public Func<string, string, Task>? ShowNoticeAsync { get; set; }
+    public Func<Message, Message, Task>? ShowNoticeAsync { get; set; }
 
     public ObservableCollection<PathRowViewModel> Rows { get; } = [];
 
@@ -97,6 +98,16 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The saved theme, used to seed the settings dialog.</summary>
     public ThemePreference Theme => _settings.Theme;
+
+    /// <summary>The saved language preference — a tag or System — used to seed the settings dialog.</summary>
+    public string Language => Languages.NormalizePreference(_settings.Language);
+
+    /// <summary>
+    /// The computer's own languages, in order, as <c>LanguageBootstrap</c> read them at launch. A
+    /// language saved in Settings resolves System against this same list, so System cannot mean one
+    /// language at launch and another after a Save.
+    /// </summary>
+    internal IReadOnlyList<string> ComputerLanguages { get; init; } = [];
     public int? WindowPositionX => _settings.WindowPositionX;
     public int? WindowPositionY => _settings.WindowPositionY;
     public double? WindowWidth => _settings.WindowWidth;
@@ -104,15 +115,19 @@ public partial class MainWindowViewModel : ObservableObject
     public bool WindowMaximized => _settings.WindowMaximized;
 
     public string ProgressText => ScanTotal > 0
-        ? $"Scanning {ScanProgress} / {ScanTotal}"
+        ? Localizer.T("status.scanning", ("done", ScanProgress), ("total", ScanTotal))
         : string.Empty;
 
-    public string StatusBarText => BuildSummary();
+    public string StatusBarText => Localizer.Of(Summary());
 
-    private string BuildSummary()
+    /// <summary>
+    /// The status bar's line: the entry count and each non-zero state, each counted in its own
+    /// sentence so it takes its own plural form, joined as the language joins them.
+    /// </summary>
+    internal Message Summary()
     {
         if (Rows.Count == 0)
-            return "No entries — drop files or folders here to get started";
+            return Message.Of("status.empty");
 
         var hidden = Rows.Count(r => r.ActualState == ActualState.Hidden);
         var visible = Rows.Count(r => r.ActualState == ActualState.Visible);
@@ -120,13 +135,29 @@ public partial class MainWindowViewModel : ObservableObject
         var pending = Rows.Count(r => r.ActualState == ActualState.Unknown);
         var problems = Rows.Count(r => r.ActualState is ActualState.AccessDenied or ActualState.Error);
 
-        var parts = new List<string> { $"{Rows.Count} entries" };
-        if (hidden > 0) parts.Add($"{hidden} hidden");
-        if (visible > 0) parts.Add($"{visible} visible");
-        if (missing > 0) parts.Add($"{missing} missing");
-        if (pending > 0) parts.Add($"{pending} pending");
-        if (problems > 0) parts.Add($"{problems} problems");
-        return string.Join("  ·  ", parts);
+        var parts = new List<Message> { Message.Of("status.entries", ("count", Rows.Count)) };
+        if (hidden > 0) parts.Add(Message.Of("status.hidden", ("count", hidden)));
+        if (visible > 0) parts.Add(Message.Of("status.visible", ("count", visible)));
+        if (missing > 0) parts.Add(Message.Of("status.missing", ("count", missing)));
+        if (pending > 0) parts.Add(Message.Of("status.pending", ("count", pending)));
+        if (problems > 0) parts.Add(Message.Of("status.problems", ("count", problems)));
+        return Message.Join("status.join", parts);
+    }
+
+    /// <summary>
+    /// Brings every word this view model has on screen into the current language. The window calls
+    /// it when the language changes while it is open: an empty name tells every binding on this view
+    /// model to re-read, and the rows and result strips, which hold their own words, re-announce
+    /// theirs.
+    /// </summary>
+    internal void Retranslate()
+    {
+        OnPropertyChanged(string.Empty);
+        foreach (var row in Rows)
+            row.Retranslate();
+        foreach (var result in OperationalResults)
+            result.Retranslate();
+        PathAddResult?.Retranslate();
     }
 
     /// <summary>
@@ -274,7 +305,7 @@ public partial class MainWindowViewModel : ObservableObject
     public void ReportLogRevealFailure() =>
         ShowOperationalResult(
             OperationalResultOwner.LogReveal,
-            "The log could not be shown. Try again or open the app’s log folder manually.",
+            FailurePresentation.LogReveal(),
             error: true);
 
     public void ResolveLogRevealFailure() =>
@@ -352,21 +383,21 @@ public partial class MainWindowViewModel : ObservableObject
         ApplyOutcome outcome)
     {
         var duplicates = duplicatePaths.Count;
-        var parts = new List<string>();
+        var parts = new List<Message>();
         if (added > 0)
-            parts.Add($"Added {added} path{(added == 1 ? string.Empty : "s")} to the list");
+            parts.Add(Message.Of("result.added", ("count", added)));
         if (outcome.Applied > 0)
-            parts.Add($"{outcome.Applied} hidden");
+            parts.Add(Message.Of("result.hidden", ("count", outcome.Applied)));
         if (duplicates > 0)
-            parts.Add(duplicates == 1 ? "1 path is already in the list" : $"{duplicates} paths are already in the list");
+            parts.Add(Message.Of("result.duplicates", ("count", duplicates)));
         if (invalid > 0)
-            parts.Add(invalid == 1 ? "1 path was unavailable or invalid" : $"{invalid} paths were unavailable or invalid");
+            parts.Add(Message.Of("result.invalid", ("count", invalid)));
         if (outcome.Unchanged > 0)
-            parts.Add(outcome.Unchanged == 1 ? "1 path did not become hidden" : $"{outcome.Unchanged} paths did not become hidden");
+            parts.Add(Message.Of("result.unchanged", ("count", outcome.Unchanged)));
         if (outcome.Missing > 0)
-            parts.Add(outcome.Missing == 1 ? "1 added path is missing" : $"{outcome.Missing} added paths are missing");
+            parts.Add(Message.Of("result.missing", ("count", outcome.Missing)));
         if (outcome.Errors > 0)
-            parts.Add(outcome.Errors == 1 ? "1 path could not be hidden" : $"{outcome.Errors} paths could not be hidden");
+            parts.Add(Message.Of("result.errors", ("count", outcome.Errors)));
 
         if (parts.Count == 0)
             return;
@@ -378,14 +409,14 @@ public partial class MainWindowViewModel : ObservableObject
                 : PathAddResultSeverity.Information;
 
         SetPathAddResult(
-            string.Join("; ", parts) + ".",
+            Message.Of("result.summary", "parts", Message.Join("result.join", parts)),
             severity,
             issuePaths: duplicatePaths.Concat(outcome.ProblemPaths),
             hasOpaqueIssues: invalid > 0);
     }
 
     private void SetPathAddResult(
-        string message,
+        Message message,
         PathAddResultSeverity severity,
         IEnumerable<string>? issuePaths = null,
         bool hasOpaqueIssues = false)
@@ -428,9 +459,9 @@ public partial class MainWindowViewModel : ObservableObject
         if (ConfirmDestructiveAsync is not null)
         {
             var confirmed = await ConfirmDestructiveAsync(new ConfirmRequest(
-                "Remove entries",
-                $"Remove {selected.Count} selected {(selected.Count == 1 ? "entry" : "entries")} from the list?",
-                "Remove"));
+                Message.Of("remove.title"),
+                Message.Of("remove.message", ("count", selected.Count)),
+                "common.remove"));
 
             if (!confirmed)
                 return;
@@ -581,15 +612,21 @@ public partial class MainWindowViewModel : ObservableObject
         await ShowNoticeAsync(title, body);
     }
 
-    /// <summary>Saves the complete Settings draft atomically and publishes it only after disk agrees.</summary>
-    public string? TryApplySettings(string family, bool hiddenAndSystem, ThemePreference theme)
+    /// <summary>
+    /// Saves the complete Settings draft atomically and publishes it only after disk agrees. Returns
+    /// what to tell the reader when the save failed, or null when it landed.
+    /// </summary>
+    public Message? TryApplySettings(string language, string family, bool hiddenAndSystem, ThemePreference theme)
     {
+        language = Languages.NormalizePreference(language);
         family = UiFontFamilyValue.Normalize(family);
         var newMode = hiddenAndSystem ? WindowsHideMode.HiddenAndSystem : WindowsHideMode.HiddenOnly;
-        if (_settings.UiFontFamily == family && _settings.WindowsHideMode == newMode && _settings.Theme == theme)
+        if (Language == language && _settings.UiFontFamily == family
+            && _settings.WindowsHideMode == newMode && _settings.Theme == theme)
             return null;
 
         var candidate = CopySettings();
+        candidate.Language = language;
         candidate.UiFontFamily = family;
         candidate.WindowsHideMode = newMode;
         candidate.Theme = theme;
@@ -606,6 +643,7 @@ public partial class MainWindowViewModel : ObservableObject
         var fontChanged = _settings.UiFontFamily != family;
         var modeChanged = _settings.WindowsHideMode != newMode;
         var themeChanged = _settings.Theme != theme;
+        _settings.Language = language;
         _settings.UiFontFamily = family;
         _settings.WindowsHideMode = newMode;
         _settings.Theme = theme;
@@ -618,7 +656,11 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(IsHiddenAndSystem));
         if (themeChanged)
             OnPropertyChanged(nameof(Theme));
-        Log.Info("settings: changed", new { family, mode = newMode, theme });
+        OnPropertyChanged(nameof(Language));
+        Log.Info("settings: changed", new { language, family, mode = newMode, theme });
+
+        // Last, once disk agrees: a language change redraws everything already on screen.
+        Localizer.Use(language, ComputerLanguages);
         return null;
     }
 
@@ -640,6 +682,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private AppSettings CopySettings() => new()
     {
+        Language = _settings.Language,
         UiFontFamily = _settings.UiFontFamily,
         Theme = _settings.Theme,
         WindowsHideMode = _settings.WindowsHideMode,
@@ -681,7 +724,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// right moment. Building the new list as a value makes a failed save a no-op by
     /// construction: nothing in memory moves until disk agrees.
     /// </remarks>
-    private bool TrySaveEntries(List<PathEntry> updated, out string? failure)
+    private bool TrySaveEntries(List<PathEntry> updated, out Message? failure)
     {
         failure = null;
         try
@@ -1004,16 +1047,20 @@ public partial class MainWindowViewModel : ObservableObject
 
         public bool HasProblems => Unchanged > 0 || Missing > 0 || Errors > 0;
 
-        public string Summary
+        /// <summary>
+        /// The counts, each in its own sentence, joined as the language joins them. Only shown when
+        /// something went wrong (<see cref="ShowApplyOutcome"/>), so there is always a count to show.
+        /// </summary>
+        public Message Summary
         {
             get
             {
-                var parts = new List<string>();
-                if (Applied > 0) parts.Add($"{Applied} applied");
-                if (Unchanged > 0) parts.Add($"{Unchanged} unchanged");
-                if (Missing > 0) parts.Add($"{Missing} missing");
-                if (Errors > 0) parts.Add($"{Errors} errors");
-                return parts.Count > 0 ? string.Join(", ", parts) : "Nothing to do";
+                var parts = new List<Message>();
+                if (Applied > 0) parts.Add(Message.Of("apply.applied", ("count", Applied)));
+                if (Unchanged > 0) parts.Add(Message.Of("apply.unchanged", ("count", Unchanged)));
+                if (Missing > 0) parts.Add(Message.Of("apply.missing", ("count", Missing)));
+                if (Errors > 0) parts.Add(Message.Of("apply.errors", ("count", Errors)));
+                return Message.Join("apply.join", parts);
             }
         }
     }
@@ -1069,7 +1116,7 @@ public partial class MainWindowViewModel : ObservableObject
         ResolveOperationalResult(OperationalResultOwner.Visibility);
     }
 
-    private void ShowOperationalResult(OperationalResultOwner owner, string message, bool error)
+    private void ShowOperationalResult(OperationalResultOwner owner, Message message, bool error)
     {
         Log.Info("operational result", new { owner, message, error });
         ResolveOperationalResult(owner);

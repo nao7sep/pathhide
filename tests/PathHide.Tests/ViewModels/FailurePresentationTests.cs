@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using PathHide.Tests.I18n;
 using PathHide.ViewModels;
 using Xunit;
 
@@ -26,7 +27,7 @@ public sealed class FailurePresentationTests
             FailurePresentation.PathListStartup(),
         };
 
-        Assert.All(messages, message => Assert.DoesNotContain(Hostile, message, StringComparison.Ordinal));
+        Assert.All(messages, message => Assert.DoesNotContain(Hostile, English.Of(message), StringComparison.Ordinal));
         Assert.NotNull(error.InnerException);
     }
 
@@ -35,8 +36,8 @@ public sealed class FailurePresentationTests
     {
         var error = new UnauthorizedAccessException(Hostile);
 
-        Assert.Contains("writable", FailurePresentation.SettingsSave(error), StringComparison.Ordinal);
-        Assert.Contains("writable", FailurePresentation.PathListSave(error), StringComparison.Ordinal);
-        Assert.Contains("permission", FailurePresentation.Scan(error), StringComparison.Ordinal);
+        Assert.Contains("writable", English.Of(FailurePresentation.SettingsSave(error)), StringComparison.Ordinal);
+        Assert.Contains("writable", English.Of(FailurePresentation.PathListSave(error)), StringComparison.Ordinal);
+        Assert.Contains("permission", English.Of(FailurePresentation.Scan(error)), StringComparison.Ordinal);
     }
 }

@@ -6,6 +6,7 @@ using PathHide.Models;
 using PathHide.Tests.Fakes;
 using PathHide.ViewModels;
 using PathHide.Views;
+using PathHide.Tests.I18n;
 using Xunit;
 
 namespace PathHide.Tests.Views;
@@ -28,8 +29,8 @@ public sealed class ViewActionBoundaryTests
 
         var result = Assert.Single(vm.OperationalResults);
         Assert.Equal(OperationalResultOwner.Window, result.Owner);
-        Assert.Contains("window action", result.Message);
-        Assert.DoesNotContain("EACCES", result.Message);
-        Assert.DoesNotContain("PATHHIDE-SHORTCUT-SENTINEL", result.Message);
+        Assert.Contains("window action", English.Of(result.Message));
+        Assert.DoesNotContain("EACCES", English.Of(result.Message));
+        Assert.DoesNotContain("PATHHIDE-SHORTCUT-SENTINEL", English.Of(result.Message));
     }
 }

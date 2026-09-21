@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using PathHide.Views;
+using PathHide.I18n;
 using Xunit;
 
 namespace PathHide.Tests.Views;
@@ -27,8 +28,8 @@ public sealed class DialogBaseLayoutTests
     public void The_body_sits_inside_a_vertical_scroll_region()
     {
         var dialog = (DialogBase)NoticeDialog.CreateStartupFailure(
-            "Title",
-            string.Join("\n", Enumerable.Range(0, 400).Select(i => $"line {i}")));
+            Message.Of("startup.failedTitle"),
+            Message.Of("failure.startupData"));
 
         var content = dialog.GetLogicalDescendants()
             .OfType<ContentPresenter>()
@@ -47,7 +48,7 @@ public sealed class DialogBaseLayoutTests
     {
         // If the buttons were inside the scrolled body they could be scrolled
         // out of view, which is the same failure by another route.
-        var dialog = (DialogBase)NoticeDialog.CreateStartupFailure("Title", "Body");
+        var dialog = (DialogBase)NoticeDialog.CreateStartupFailure(Message.Of("startup.failedTitle"), Message.Of("failure.startupStorage"));
 
         var footer = dialog.GetLogicalDescendants()
             .OfType<StackPanel>()

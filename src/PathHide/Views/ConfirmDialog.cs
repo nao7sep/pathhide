@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Media;
+using PathHide.I18n;
 
 namespace PathHide.Views;
 
@@ -12,22 +13,24 @@ namespace PathHide.Views;
 /// </summary>
 public sealed class ConfirmDialog : DialogBase
 {
-    private ConfirmDialog(string title, string message, string confirmLabel)
+    private ConfirmDialog(Message title, Message message, string confirmLabelKey)
     {
         Width = 400;
-        Title = title;
+        // A dialog's own words are rendered once, as it is built: it is modal, so the language cannot
+        // change while it is up, and its title and message carry values the catalogue fills in.
+        Title = Localizer.Of(title);
 
         SetContent(new TextBlock
         {
-            Text = message,
+            Text = Localizer.Of(message),
             TextWrapping = TextWrapping.Wrap,
             FontSize = 14,
         });
 
         var buttons = SetButtons(
         [
-            new DialogButton("Cancel", "cancel") { IsDefault = true },
-            new DialogButton(confirmLabel, "confirm", DialogButtonKind.Danger),
+            new DialogButton("common.cancel", "cancel") { IsDefault = true },
+            new DialogButton(confirmLabelKey, "confirm", DialogButtonKind.Danger),
         ]);
 
         SetInitialFocus(buttons["cancel"]);
@@ -40,9 +43,9 @@ public sealed class ConfirmDialog : DialogBase
     /// only if the user chooses the destructive action; Cancel, Escape, and window close all
     /// resolve to false, so the promise always settles on the safe path.
     /// </summary>
-    public static async Task<bool> ConfirmDestructiveAsync(Window owner, string title, string message, string confirmLabel)
+    public static async Task<bool> ConfirmDestructiveAsync(Window owner, Message title, Message message, string confirmLabelKey)
     {
-        var dialog = new ConfirmDialog(title, message, confirmLabel);
+        var dialog = new ConfirmDialog(title, message, confirmLabelKey);
         await dialog.ShowBoundedAsync(owner);
         return dialog.Confirmed;
     }

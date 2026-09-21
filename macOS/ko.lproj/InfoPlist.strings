@@ -1,0 +1,8 @@
+/* The permission prompts macOS shows when PathHide first reaches a protected location, in Korean.
+   Each place is named as Korean macOS names it in Privacy & Security. */
+
+"NSDesktopFolderUsageDescription" = "PathHide가 데스크탑 폴더에 있는 항목의 숨김 플래그를 관리하려면 접근 권한이 필요합니다.";
+"NSDocumentsFolderUsageDescription" = "PathHide가 문서 폴더에 있는 항목의 숨김 플래그를 관리하려면 접근 권한이 필요합니다.";
+"NSDownloadsFolderUsageDescription" = "PathHide가 다운로드 폴더에 있는 항목의 숨김 플래그를 관리하려면 접근 권한이 필요합니다.";
+"NSNetworkVolumesUsageDescription" = "PathHide가 네트워크 볼륨에 있는 항목의 숨김 플래그를 관리하려면 접근 권한이 필요합니다.";
+"NSRemovableVolumesUsageDescription" = "PathHide가 제거 가능한 볼륨에 있는 항목의 숨김 플래그를 관리하려면 접근 권한이 필요합니다.";

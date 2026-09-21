@@ -8,6 +8,7 @@ using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using PathHide.I18n;
 using PathHide.Services;
 
 namespace PathHide.Views;
@@ -25,23 +26,23 @@ public sealed class AboutDialog : DialogBase
     {
         _openExternal = openExternal;
         Width = 400;
-        Title = "About PathHide";
+        Localized.SetTitle(this, "about.title");
 
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown";
 
         var githubButton = new Button
         {
-            Content = ExternalLinkLabel("GitHub"),
+            Content = ExternalLinkLabel(Localizer.T("about.github")),
             Classes = { "utility" },
         };
-        githubButton.Click += (_, _) => OpenExternal(GitHubUrl, "GitHub");
+        githubButton.Click += (_, _) => OpenExternal(GitHubUrl, Message.Of("about.openGitHubFailed"));
 
         var issuesButton = new Button
         {
-            Content = ExternalLinkLabel("Report Issue"),
+            Content = ExternalLinkLabel(Localizer.T("about.reportIssue")),
             Classes = { "utility" },
         };
-        issuesButton.Click += (_, _) => OpenExternal($"{GitHubUrl}/issues", "the issue tracker");
+        issuesButton.Click += (_, _) => OpenExternal($"{GitHubUrl}/issues", Message.Of("about.openIssuesFailed"));
 
         _launchResultMessage = new TextBlock
         {
@@ -53,8 +54,8 @@ public sealed class AboutDialog : DialogBase
             Classes = { "resultClose" },
             VerticalAlignment = VerticalAlignment.Top,
         };
-        AutomationProperties.SetName(dismissResult, "Close result");
-        ToolTip.SetTip(dismissResult, "Close");
+        Localized.SetAutomationName(dismissResult, "common.closeResult");
+        Localized.SetToolTip(dismissResult, "common.close");
         var dismissMark = new Shapes.Path
         {
             Width = 10,
@@ -91,6 +92,8 @@ public sealed class AboutDialog : DialogBase
         Grid.SetColumn(dismissResult, 1);
         AutomationProperties.SetLiveSetting(_launchResult, AutomationLiveSetting.Assertive);
 
+        // The body's words are rendered once, as the dialog is built: it is modal, so the language
+        // cannot change while it is up, and the version is a value the catalogue fills in.
         var panel = new StackPanel
         {
             Spacing = 0,
@@ -105,13 +108,13 @@ public sealed class AboutDialog : DialogBase
                 },
                 new TextBlock
                 {
-                    Text = $"Version {version}",
+                    Text = Localizer.T("about.version", ("version", version)),
                     FontSize = 13,
                     Margin = new Avalonia.Thickness(0, 0, 0, 12),
                 }.Themed(TextBlock.ForegroundProperty, "TextSecondaryBrush"),
                 new TextBlock
                 {
-                    Text = "A desktop utility for macOS and Windows that hides or shows specific files and directories and remembers the desired visibility state of each entry.",
+                    Text = Localizer.T("about.description"),
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 13,
                     Margin = new Avalonia.Thickness(0, 0, 0, 16),
@@ -126,8 +129,10 @@ public sealed class AboutDialog : DialogBase
                 _launchResult,
                 new TextBlock
                 {
-                    Text = "© 2026 Yoshinao Inoguchi — GNU GPL v3 or later",
+                    Text = Localizer.T("about.licence"),
                     FontSize = 12,
+                    // "or later" is longer in most languages than the dialog's fixed width allows.
+                    TextWrapping = TextWrapping.Wrap,
                 }.Themed(TextBlock.ForegroundProperty, "TextSecondaryBrush"),
             },
         };
@@ -135,12 +140,12 @@ public sealed class AboutDialog : DialogBase
         SetContent(panel);
         var buttons = SetButtons(
         [
-            new DialogButton("Close", "close", DialogButtonKind.Primary) { IsDefault = true },
+            new DialogButton("common.close", "close", DialogButtonKind.Primary) { IsDefault = true },
         ]);
         SetInitialFocus(buttons["close"]);
     }
 
-    private void OpenExternal(string url, string destination)
+    private void OpenExternal(string url, Message failure)
     {
         if (_openExternal(url))
         {
@@ -148,7 +153,7 @@ public sealed class AboutDialog : DialogBase
             return;
         }
 
-        _launchResultMessage.Text = $"Couldn’t open {destination}. Check the log and try again.";
+        _launchResultMessage.Text = Localizer.Of(failure);
         _launchResult.IsVisible = true;
     }
 

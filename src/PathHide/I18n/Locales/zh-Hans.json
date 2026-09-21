@@ -1,0 +1,188 @@
+{
+  "about.description": "一款适用于 macOS 和 Windows 的桌面实用工具，可隐藏或显示指定的文件和文件夹，并记住每个条目期望的可见状态。",
+  "about.github": "GitHub",
+  "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 或更高版本",
+  "about.openGitHubFailed": "无法打开 GitHub。请查看日志后重试。",
+  "about.openIssuesFailed": "无法打开问题跟踪器。请查看日志后重试。",
+  "about.reportIssue": "报告问题",
+  "about.title": "关于 PathHide",
+  "about.version": "版本 {version}",
+  "actual.accessDenied": "拒绝访问",
+  "actual.error": "错误",
+  "actual.hidden": "已隐藏",
+  "actual.missing": "不存在",
+  "actual.unknown": "未检查",
+  "actual.visible": "可见",
+  "apply.applied": {
+    "other": "{count} 个已应用"
+  },
+  "apply.errors": {
+    "other": "{count} 个错误"
+  },
+  "apply.join": "{first}，{rest}",
+  "apply.missing": {
+    "other": "{count} 个不存在"
+  },
+  "apply.unchanged": {
+    "other": "{count} 个未生效"
+  },
+  "common.cancel": "取消",
+  "common.close": "关闭",
+  "common.closeResult": "关闭结果",
+  "common.remove": "从列表中移除",
+  "common.save": "保存",
+  "desired.hidden": "隐藏",
+  "desired.shown": "显示",
+  "dialog.discard": "放弃",
+  "dialog.discardMessage": "你有未保存的更改。要放弃这些更改并关闭吗？",
+  "dialog.discardTitle": "放弃更改",
+  "failure.logReveal": "PathHide 无法打开存放日志文件的文件夹。请重试，或自行打开 PathHide 数据文件夹中的 logs 文件夹。",
+  "failure.pathListSave": "无法保存路径列表。现有列表保持不变，请重试。",
+  "failure.pathListSavePermission": "无法保存路径列表。请检查 PathHide 数据文件夹是否可写，然后重试。",
+  "failure.pathListStartup": "无法读取你的路径列表。PathHide 没有覆盖该文件，而是将其移到一旁；也没有以空列表打开，而是停止了运行。你的文件既未被隐藏，也未被取消隐藏。若要保留你的列表，请修复 PathHide 移到一旁的文件（会话日志中记录了该文件的名称），将其改名为 paths.json 并放回 PathHide 数据文件夹，然后再次启动 PathHide。如果不这样做就启动 PathHide，它将以空列表打开。",
+  "failure.pathPicker": "无法打开路径选择器。路径列表保持不变，请再次尝试添加路径。",
+  "failure.scan": "无法完成路径扫描。现有结果仍会显示，请按“重新加载”重试。",
+  "failure.scanPermission": "部分路径无法扫描，因为 PathHide 没有检查它们的权限。",
+  "failure.settingsSave": "无法保存设置。你的更改仍然保留，请重试。",
+  "failure.settingsSavePermission": "无法保存设置。请检查 PathHide 数据文件夹是否可写，然后重试。",
+  "failure.startupData": "PathHide 的某个文件无法读取，PathHide 也无法将其移到一旁，因此没有改动该文件，以免将其覆盖。你的文件既未被隐藏，也未被取消隐藏。受影响的文件位于 PathHide 数据文件夹中：请修复或移走该文件，然后再次启动 PathHide。",
+  "failure.startupStorage": "PathHide 无法打开其数据文件夹。请检查该文件夹是否存在且可写，然后再次启动 PathHide。",
+  "failure.windowAction": "无法完成请求的窗口操作。请重试。",
+  "family.posix": "POSIX",
+  "family.unc": "UNC",
+  "family.windows": "Windows",
+  "grid.actual": "实际状态",
+  "grid.desired": "期望状态",
+  "grid.empty": "尚无条目。添加文件或文件夹，或将它们拖放到这里。",
+  "grid.family": "路径格式",
+  "grid.kind": "类型",
+  "grid.name": "路径条目",
+  "grid.path": "路径",
+  "kind.directory": "文件夹",
+  "kind.file": "文件",
+  "kind.other": "其他",
+  "kind.symlink": "符号链接",
+  "kind.unknown": "未知",
+  "menu.about": "关于",
+  "menu.button": "菜单",
+  "menu.settings": "设置",
+  "menu.shortcuts": "键盘快捷键",
+  "menu.showLogExplorer": "在文件资源管理器中显示日志文件",
+  "menu.showLogFinder": "在访达中显示日志文件",
+  "nativeMenu.about": "关于 {app}",
+  "nativeMenu.bringAllToFront": "前置全部窗口",
+  "nativeMenu.copy": "拷贝",
+  "nativeMenu.cut": "剪切",
+  "nativeMenu.edit": "编辑",
+  "nativeMenu.hide": "隐藏 {app}",
+  "nativeMenu.hideOthers": "隐藏其他",
+  "nativeMenu.minimize": "最小化",
+  "nativeMenu.paste": "粘贴",
+  "nativeMenu.quit": "退出 {app}",
+  "nativeMenu.redo": "重做",
+  "nativeMenu.selectAll": "全选",
+  "nativeMenu.services": "服务",
+  "nativeMenu.settings": "设置…",
+  "nativeMenu.showAll": "全部显示",
+  "nativeMenu.undo": "撤销",
+  "nativeMenu.window": "窗口",
+  "nativeMenu.zoom": "缩放",
+  "quarantine.manyBody": "PathHide 的部分文件无法读取，因此 PathHide 保留了它们而没有将其覆盖，并改用默认值启动。请在会话日志中查看所保留副本的位置。",
+  "quarantine.manyTitle": "PathHide 的部分文件已被重置",
+  "quarantine.pathListBody": "无法读取路径列表，因此 PathHide 保留了它而没有将其覆盖，屏幕上已有的条目也保持不变。请在会话日志中查看所保留副本的位置。",
+  "quarantine.pathListTitle": "无法重新加载路径列表",
+  "quarantine.settingsBody": "无法读取设置文件，因此 PathHide 保留了它而没有将其覆盖，并改用默认设置启动。请在会话日志中查看所保留副本的位置。",
+  "quarantine.settingsTitle": "设置文件已被重置",
+  "remove.message": {
+    "other": "要从列表中移除所选的 {count} 个条目吗？"
+  },
+  "remove.title": "从列表中移除条目",
+  "result.added": {
+    "other": "已将 {count} 个路径添加到列表"
+  },
+  "result.duplicates": {
+    "other": "{count} 个路径已在列表中"
+  },
+  "result.errors": {
+    "other": "{count} 个路径无法隐藏"
+  },
+  "result.hidden": {
+    "other": "已隐藏 {count} 个"
+  },
+  "result.invalid": {
+    "other": "{count} 个路径不可用或无效"
+  },
+  "result.join": "{first}；{rest}",
+  "result.missing": {
+    "other": "{count} 个已添加的路径不存在"
+  },
+  "result.summary": "{parts}。",
+  "result.unchanged": {
+    "other": "{count} 个路径的隐藏未生效"
+  },
+  "settings.hiddenAndSystem": "隐藏时同时设置“系统”属性（Windows）",
+  "settings.hideModeHint": "显示时，以及在此选项关闭的情况下隐藏时，PathHide 都会清除“系统”属性。文件或文件夹原本就带有的“系统”属性也会被清除，且 PathHide 无法将其恢复。",
+  "settings.language": "语言",
+  "settings.languageSystem": "跟随系统",
+  "settings.theme": "主题",
+  "settings.themeDark": "深色",
+  "settings.themeHint": "选择“跟随系统”时，主题会与电脑的外观保持一致。",
+  "settings.themeLight": "浅色",
+  "settings.themeSystem": "跟随系统",
+  "settings.title": "设置",
+  "settings.uiFont": "界面字体",
+  "settings.uiFontHint": "以英文逗号分隔；将使用其中第一个已安装的字体。如果留空，则使用默认字体（Inter）。",
+  "settings.windowsHideMode": "Windows 隐藏模式",
+  "shortcuts.addDirectories": "添加文件夹",
+  "shortcuts.addFiles": "添加文件",
+  "shortcuts.cancelScan": "取消正在进行的扫描",
+  "shortcuts.drop": "将文件或文件夹拖放到窗口上即可添加",
+  "shortcuts.dropLabel": "拖放",
+  "shortcuts.groupApp": "应用",
+  "shortcuts.groupFiles": "文件",
+  "shortcuts.groupList": "列表",
+  "shortcuts.groupNavigation": "导航",
+  "shortcuts.groupVisibility": "可见性",
+  "shortcuts.hideSelected": "隐藏所选条目",
+  "shortcuts.moveFocus": "在操作按钮之间移动焦点",
+  "shortcuts.moveSelection": "选择上方或下方的条目",
+  "shortcuts.reapplyAll": "为每个条目重新应用期望的可见性",
+  "shortcuts.reload": "重新加载条目并重新扫描磁盘状态",
+  "shortcuts.remove": "从列表中移除所选条目",
+  "shortcuts.settings": "打开设置",
+  "shortcuts.shortcuts": "显示此快捷键列表",
+  "shortcuts.showSelected": "显示所选条目",
+  "shortcuts.title": "键盘快捷键",
+  "startup.failedTitle": "PathHide 无法启动",
+  "startup.pathListTitle": "PathHide 无法读取你的路径列表",
+  "status.empty": "暂无条目——将文件或文件夹拖放到这里即可开始",
+  "status.entries": {
+    "other": "{count} 个条目"
+  },
+  "status.hidden": {
+    "other": "{count} 个已隐藏"
+  },
+  "status.join": "{first}  ·  {rest}",
+  "status.missing": {
+    "other": "{count} 个不存在"
+  },
+  "status.pending": {
+    "other": "{count} 个未检查"
+  },
+  "status.problems": {
+    "other": "{count} 个问题"
+  },
+  "status.scanning": "正在扫描 {done} / {total}",
+  "status.visible": {
+    "other": "{count} 个可见"
+  },
+  "toolbar.actions": "操作",
+  "toolbar.addDirectories": "添加文件夹",
+  "toolbar.addFiles": "添加文件",
+  "toolbar.hideAll": "全部隐藏",
+  "toolbar.hideSelected": "隐藏",
+  "toolbar.reapplyAll": "全部重新应用",
+  "toolbar.reload": "重新加载",
+  "toolbar.showAll": "全部显示",
+  "toolbar.showSelected": "显示"
+}

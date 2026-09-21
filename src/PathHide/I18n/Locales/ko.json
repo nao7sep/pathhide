@@ -1,0 +1,188 @@
+{
+  "about.description": "특정 파일과 폴더를 숨기거나 표시하고, 항목마다 원하는 표시 상태를 기억하는 macOS 및 Windows용 데스크톱 유틸리티입니다.",
+  "about.github": "GitHub",
+  "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 이상",
+  "about.openGitHubFailed": "GitHub을 열지 못했습니다. 로그를 확인한 뒤 다시 시도하십시오.",
+  "about.openIssuesFailed": "이슈 트래커를 열지 못했습니다. 로그를 확인한 뒤 다시 시도하십시오.",
+  "about.reportIssue": "문제 보고",
+  "about.title": "PathHide 정보",
+  "about.version": "버전 {version}",
+  "actual.accessDenied": "접근 거부",
+  "actual.error": "오류",
+  "actual.hidden": "숨김",
+  "actual.missing": "찾을 수 없음",
+  "actual.unknown": "미확인",
+  "actual.visible": "보임",
+  "apply.applied": {
+    "other": "적용됨 {count}개"
+  },
+  "apply.errors": {
+    "other": "오류 {count}개"
+  },
+  "apply.join": "{first}, {rest}",
+  "apply.missing": {
+    "other": "찾을 수 없음 {count}개"
+  },
+  "apply.unchanged": {
+    "other": "반영되지 않음 {count}개"
+  },
+  "common.cancel": "취소",
+  "common.close": "닫기",
+  "common.closeResult": "결과 닫기",
+  "common.remove": "목록에서 제거",
+  "common.save": "저장",
+  "desired.hidden": "숨김",
+  "desired.shown": "표시",
+  "dialog.discard": "폐기",
+  "dialog.discardMessage": "저장하지 않은 변경 사항이 있습니다. 폐기하고 닫으시겠습니까?",
+  "dialog.discardTitle": "변경 사항 폐기",
+  "failure.logReveal": "PathHide가 로그 파일이 있는 폴더를 열지 못했습니다. 다시 시도하거나 PathHide 데이터 폴더 안의 logs 폴더를 직접 여십시오.",
+  "failure.pathListSave": "경로 목록을 저장하지 못했습니다. 기존 목록은 변경되지 않았습니다. 다시 시도하십시오.",
+  "failure.pathListSavePermission": "경로 목록을 저장하지 못했습니다. PathHide 데이터 폴더에 쓸 수 있는지 확인한 뒤 다시 시도하십시오.",
+  "failure.pathListStartup": "경로 목록을 읽지 못했습니다. PathHide가 파일을 덮어쓰지 않고 따로 옮겨 두었으며, 빈 목록으로 열지 않고 실행을 멈췄습니다. 어떤 파일도 숨기거나 숨김 해제하지 않았습니다. 따로 옮겨 둔 파일의 이름은 세션 로그에 기록되어 있습니다. 목록을 유지하려면 그 파일을 복구하여 PathHide 데이터 폴더에 paths.json이라는 이름으로 다시 넣은 뒤 PathHide를 다시 시작하십시오. 그렇게 하지 않고 PathHide를 시작하면 빈 목록으로 열립니다.",
+  "failure.pathPicker": "경로 선택 창을 열지 못했습니다. 경로 목록은 변경되지 않았습니다. 경로를 다시 추가해 보십시오.",
+  "failure.scan": "경로 검사를 완료하지 못했습니다. 기존 결과는 그대로 표시됩니다. 다시 시도하려면 ‘새로 고침’을 누르십시오.",
+  "failure.scanPermission": "PathHide에 일부 경로를 확인할 권한이 없어 해당 경로를 검사하지 못했습니다.",
+  "failure.settingsSave": "설정을 저장하지 못했습니다. 변경한 내용은 그대로 남아 있습니다. 다시 시도하십시오.",
+  "failure.settingsSavePermission": "설정을 저장하지 못했습니다. PathHide 데이터 폴더에 쓸 수 있는지 확인한 뒤 다시 시도하십시오.",
+  "failure.startupData": "PathHide의 파일 중 하나를 읽지 못했고 PathHide가 그 파일을 따로 옮겨 둘 수도 없어, 덮어쓸 위험을 피하기 위해 그대로 두었습니다. 어떤 파일도 숨기거나 숨김 해제하지 않았습니다. 해당 파일은 PathHide 데이터 폴더에 있습니다. 그 파일을 복구하거나 다른 곳으로 옮긴 뒤 PathHide를 다시 시작하십시오.",
+  "failure.startupStorage": "PathHide가 데이터 폴더를 열지 못했습니다. 해당 폴더가 존재하고 쓸 수 있는지 확인한 뒤 PathHide를 다시 시작하십시오.",
+  "failure.windowAction": "요청한 창 작업을 완료하지 못했습니다. 다시 시도하십시오.",
+  "family.posix": "POSIX",
+  "family.unc": "UNC",
+  "family.windows": "Windows",
+  "grid.actual": "실제 상태",
+  "grid.desired": "원하는 상태",
+  "grid.empty": "아직 항목이 없습니다. 파일이나 폴더를 추가하거나 여기에 끌어다 놓으십시오.",
+  "grid.family": "형식",
+  "grid.kind": "종류",
+  "grid.name": "경로 항목",
+  "grid.path": "경로",
+  "kind.directory": "폴더",
+  "kind.file": "파일",
+  "kind.other": "기타",
+  "kind.symlink": "심볼릭 링크",
+  "kind.unknown": "알 수 없음",
+  "menu.about": "정보",
+  "menu.button": "메뉴",
+  "menu.settings": "설정",
+  "menu.shortcuts": "키보드 단축키",
+  "menu.showLogExplorer": "파일 탐색기에서 로그 파일 보기",
+  "menu.showLogFinder": "Finder에서 로그 파일 보기",
+  "nativeMenu.about": "{app}에 관하여",
+  "nativeMenu.bringAllToFront": "모두 앞으로 가져오기",
+  "nativeMenu.copy": "복사하기",
+  "nativeMenu.cut": "오려두기",
+  "nativeMenu.edit": "편집",
+  "nativeMenu.hide": "{app} 가리기",
+  "nativeMenu.hideOthers": "기타 가리기",
+  "nativeMenu.minimize": "최소화",
+  "nativeMenu.paste": "붙여넣기",
+  "nativeMenu.quit": "{app} 종료",
+  "nativeMenu.redo": "실행 복귀",
+  "nativeMenu.selectAll": "전체 선택",
+  "nativeMenu.services": "서비스",
+  "nativeMenu.settings": "설정…",
+  "nativeMenu.showAll": "모두 보기",
+  "nativeMenu.undo": "실행 취소",
+  "nativeMenu.window": "윈도우",
+  "nativeMenu.zoom": "확대/축소",
+  "quarantine.manyBody": "PathHide의 일부 파일을 읽을 수 없어 PathHide가 덮어쓰지 않고 보존했으며, 대신 기본값으로 시작했습니다. 보존된 사본의 위치는 세션 로그에서 확인하십시오.",
+  "quarantine.manyTitle": "PathHide의 일부 파일이 초기화되었습니다",
+  "quarantine.pathListBody": "경로 목록을 읽을 수 없어 PathHide가 덮어쓰지 않고 보존했으며, 이미 화면에 있던 항목은 그대로 유지했습니다. 보존된 사본의 위치는 세션 로그에서 확인하십시오.",
+  "quarantine.pathListTitle": "경로 목록을 다시 불러오지 못했습니다",
+  "quarantine.settingsBody": "설정 파일을 읽을 수 없어 PathHide가 덮어쓰지 않고 보존했으며, 대신 기본 설정으로 시작했습니다. 보존된 사본의 위치는 세션 로그에서 확인하십시오.",
+  "quarantine.settingsTitle": "설정 파일이 초기화되었습니다",
+  "remove.message": {
+    "other": "선택한 항목 {count}개를 목록에서 제거하시겠습니까?"
+  },
+  "remove.title": "목록에서 항목 제거",
+  "result.added": {
+    "other": "경로 {count}개를 목록에 추가했습니다"
+  },
+  "result.duplicates": {
+    "other": "경로 {count}개는 이미 목록에 있습니다"
+  },
+  "result.errors": {
+    "other": "경로 {count}개를 숨기지 못했습니다"
+  },
+  "result.hidden": {
+    "other": "경로 {count}개를 숨겼습니다"
+  },
+  "result.invalid": {
+    "other": "경로 {count}개는 사용할 수 없거나 유효하지 않습니다"
+  },
+  "result.join": "{first}. {rest}",
+  "result.missing": {
+    "other": "추가한 경로 {count}개를 찾을 수 없습니다"
+  },
+  "result.summary": "{parts}.",
+  "result.unchanged": {
+    "other": "경로 {count}개가 숨김 상태가 되지 않았습니다"
+  },
+  "settings.hiddenAndSystem": "숨길 때 시스템 특성도 설정(Windows)",
+  "settings.hideModeHint": "PathHide는 표시할 때와 이 옵션을 끈 채로 숨길 때 시스템 특성을 해제합니다. 파일이나 폴더에 원래 있던 시스템 특성도 해제되며, PathHide는 이를 복원할 수 없습니다.",
+  "settings.language": "언어",
+  "settings.languageSystem": "시스템",
+  "settings.theme": "테마",
+  "settings.themeDark": "다크",
+  "settings.themeHint": "시스템을 선택하면 테마가 컴퓨터의 화면 모드를 따릅니다.",
+  "settings.themeLight": "라이트",
+  "settings.themeSystem": "시스템",
+  "settings.title": "설정",
+  "settings.uiFont": "UI 글꼴",
+  "settings.uiFontHint": "쉼표로 구분하며, 설치된 첫 번째 글꼴을 사용합니다. 비워 두면 기본값(Inter)을 사용합니다.",
+  "settings.windowsHideMode": "Windows 숨기기 모드",
+  "shortcuts.addDirectories": "폴더 추가",
+  "shortcuts.addFiles": "파일 추가",
+  "shortcuts.cancelScan": "진행 중인 검사 취소",
+  "shortcuts.drop": "파일이나 폴더를 창에 끌어다 놓아 추가",
+  "shortcuts.dropLabel": "끌어서 놓기",
+  "shortcuts.groupApp": "앱",
+  "shortcuts.groupFiles": "파일",
+  "shortcuts.groupList": "목록",
+  "shortcuts.groupNavigation": "이동",
+  "shortcuts.groupVisibility": "표시 여부",
+  "shortcuts.hideSelected": "선택한 항목 숨기기",
+  "shortcuts.moveFocus": "작업 버튼 사이에서 포커스 이동",
+  "shortcuts.moveSelection": "위 또는 아래 항목 선택",
+  "shortcuts.reapplyAll": "모든 항목에 원하는 표시 상태를 다시 적용",
+  "shortcuts.reload": "항목을 다시 불러오고 디스크 상태를 다시 검사",
+  "shortcuts.remove": "선택한 항목을 목록에서 제거",
+  "shortcuts.settings": "설정 열기",
+  "shortcuts.shortcuts": "이 단축키 목록 표시",
+  "shortcuts.showSelected": "선택한 항목 표시",
+  "shortcuts.title": "키보드 단축키",
+  "startup.failedTitle": "PathHide를 시작하지 못했습니다",
+  "startup.pathListTitle": "PathHide가 경로 목록을 읽지 못했습니다",
+  "status.empty": "항목이 없습니다 — 시작하려면 파일이나 폴더를 여기에 끌어다 놓으십시오",
+  "status.entries": {
+    "other": "항목 {count}개"
+  },
+  "status.hidden": {
+    "other": "숨김 {count}개"
+  },
+  "status.join": "{first}  ·  {rest}",
+  "status.missing": {
+    "other": "찾을 수 없음 {count}개"
+  },
+  "status.pending": {
+    "other": "미확인 {count}개"
+  },
+  "status.problems": {
+    "other": "문제 {count}개"
+  },
+  "status.scanning": "검사 중 {done} / {total}",
+  "status.visible": {
+    "other": "보임 {count}개"
+  },
+  "toolbar.actions": "작업",
+  "toolbar.addDirectories": "폴더 추가",
+  "toolbar.addFiles": "파일 추가",
+  "toolbar.hideAll": "모두 숨기기",
+  "toolbar.hideSelected": "숨기기",
+  "toolbar.reapplyAll": "모두 다시 적용",
+  "toolbar.reload": "새로 고침",
+  "toolbar.showAll": "모두 표시",
+  "toolbar.showSelected": "표시"
+}

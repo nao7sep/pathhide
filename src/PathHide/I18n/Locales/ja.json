@@ -1,0 +1,188 @@
+{
+  "about.description": "macOS と Windows で特定のファイルやフォルダを非表示にしたり表示したりし、項目ごとに希望する表示状態を記憶するデスクトップユーティリティです。",
+  "about.github": "GitHub",
+  "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 以降",
+  "about.openGitHubFailed": "GitHub を開けませんでした。ログを確認して、もう一度お試しください。",
+  "about.openIssuesFailed": "問題の報告ページを開けませんでした。ログを確認して、もう一度お試しください。",
+  "about.reportIssue": "問題を報告",
+  "about.title": "PathHide について",
+  "about.version": "バージョン {version}",
+  "actual.accessDenied": "アクセス拒否",
+  "actual.error": "エラー",
+  "actual.hidden": "非表示",
+  "actual.missing": "見つからない",
+  "actual.unknown": "未確認",
+  "actual.visible": "表示",
+  "apply.applied": {
+    "other": "適用済み {count} 件"
+  },
+  "apply.errors": {
+    "other": "エラー {count} 件"
+  },
+  "apply.join": "{first}、{rest}",
+  "apply.missing": {
+    "other": "見つからない {count} 件"
+  },
+  "apply.unchanged": {
+    "other": "反映されなかった {count} 件"
+  },
+  "common.cancel": "キャンセル",
+  "common.close": "閉じる",
+  "common.closeResult": "結果を閉じる",
+  "common.remove": "一覧から削除",
+  "common.save": "保存",
+  "desired.hidden": "非表示",
+  "desired.shown": "表示",
+  "dialog.discard": "破棄",
+  "dialog.discardMessage": "保存していない変更があります。破棄して閉じますか？",
+  "dialog.discardTitle": "変更を破棄",
+  "failure.logReveal": "PathHide はログファイルのあるフォルダを開けませんでした。もう一度お試しいただくか、PathHide のデータフォルダ内にある logs フォルダを手動で開いてください。",
+  "failure.pathListSave": "パス一覧を保存できませんでした。既存の一覧は変更されていません。もう一度お試しください。",
+  "failure.pathListSavePermission": "パス一覧を保存できませんでした。PathHide のデータフォルダに書き込めるか確認してから、もう一度お試しください。",
+  "failure.pathListStartup": "パス一覧を読み取れませんでした。PathHide はそのファイルを上書きせずに退避し、空の一覧で開かずに停止しました。ファイルの非表示・再表示は行っていません。一覧を残すには、PathHide が退避したファイル（セッションログに名前が記録されています）を修復し、PathHide のデータフォルダに paths.json という名前で戻してから、PathHide をもう一度起動してください。そうせずに PathHide を起動すると、空の一覧で開きます。",
+  "failure.pathPicker": "パスの選択画面を開けませんでした。パス一覧は変更されていません。もう一度パスを追加してみてください。",
+  "failure.scan": "パスのスキャンを完了できませんでした。これまでの結果はそのまま表示されています。もう一度試すには「再読み込み」を押してください。",
+  "failure.scanPermission": "PathHide に調べる権限がなかったため、一部のパスをスキャンできませんでした。",
+  "failure.settingsSave": "設定を保存できませんでした。変更内容はそのまま残っています。もう一度お試しください。",
+  "failure.settingsSavePermission": "設定を保存できませんでした。PathHide のデータフォルダに書き込めるか確認してから、もう一度お試しください。",
+  "failure.startupData": "PathHide が使用するファイルの 1 つを読み取れず、PathHide はそれを退避することもできなかったため、上書きの危険を冒さずにそのまま残しました。ファイルの非表示・再表示は行っていません。該当するファイルは PathHide のデータフォルダにあります。修復または移動してから、PathHide をもう一度起動してください。",
+  "failure.startupStorage": "PathHide のデータフォルダを開けませんでした。そのフォルダが存在し、書き込み可能であることを確認してから、PathHide をもう一度起動してください。",
+  "failure.windowAction": "要求されたウインドウ操作を完了できませんでした。もう一度お試しください。",
+  "family.posix": "POSIX",
+  "family.unc": "UNC",
+  "family.windows": "Windows",
+  "grid.actual": "実際の状態",
+  "grid.desired": "希望の状態",
+  "grid.empty": "項目はまだありません。ファイルやフォルダを追加するか、ここにドロップしてください。",
+  "grid.family": "形式",
+  "grid.kind": "種類",
+  "grid.name": "パスの項目",
+  "grid.path": "パス",
+  "kind.directory": "フォルダ",
+  "kind.file": "ファイル",
+  "kind.other": "その他",
+  "kind.symlink": "シンボリックリンク",
+  "kind.unknown": "不明",
+  "menu.about": "PathHide について",
+  "menu.button": "メニュー",
+  "menu.settings": "設定",
+  "menu.shortcuts": "キーボードショートカット",
+  "menu.showLogExplorer": "ログファイルをエクスプローラーで表示",
+  "menu.showLogFinder": "ログファイルを Finder で表示",
+  "nativeMenu.about": "{app}について",
+  "nativeMenu.bringAllToFront": "すべてを手前に移動",
+  "nativeMenu.copy": "コピー",
+  "nativeMenu.cut": "カット",
+  "nativeMenu.edit": "編集",
+  "nativeMenu.hide": "{app}を非表示",
+  "nativeMenu.hideOthers": "ほかを非表示",
+  "nativeMenu.minimize": "しまう",
+  "nativeMenu.paste": "ペースト",
+  "nativeMenu.quit": "{app}を終了",
+  "nativeMenu.redo": "やり直す",
+  "nativeMenu.selectAll": "すべてを選択",
+  "nativeMenu.services": "サービス",
+  "nativeMenu.settings": "設定…",
+  "nativeMenu.showAll": "すべてを表示",
+  "nativeMenu.undo": "取り消す",
+  "nativeMenu.window": "ウインドウ",
+  "nativeMenu.zoom": "拡大/縮小",
+  "quarantine.manyBody": "PathHide が使用するファイルの一部を読み取れなかったため、PathHide はそれらを上書きせずに退避し、代わりに既定の内容で起動しました。退避したコピーの場所は、セッションログで確認してください。",
+  "quarantine.manyTitle": "PathHide が使用するファイルの一部がリセットされました",
+  "quarantine.pathListBody": "パス一覧を読み取れなかったため、PathHide はそのファイルを上書きせずに退避し、画面上の項目はそのまま残しました。退避したコピーの場所は、セッションログで確認してください。",
+  "quarantine.pathListTitle": "パス一覧を再読み込みできませんでした",
+  "quarantine.settingsBody": "設定ファイルを読み取れなかったため、PathHide はそのファイルを上書きせずに退避し、代わりに既定の設定で起動しました。退避したコピーの場所は、セッションログで確認してください。",
+  "quarantine.settingsTitle": "設定ファイルがリセットされました",
+  "remove.message": {
+    "other": "選択した {count} 件の項目を一覧から削除しますか？"
+  },
+  "remove.title": "項目を一覧から削除",
+  "result.added": {
+    "other": "パス {count} 件を一覧に追加しました"
+  },
+  "result.duplicates": {
+    "other": "パス {count} 件はすでに一覧にあります"
+  },
+  "result.errors": {
+    "other": "パス {count} 件を非表示にできませんでした"
+  },
+  "result.hidden": {
+    "other": "{count} 件を非表示にしました"
+  },
+  "result.invalid": {
+    "other": "パス {count} 件は利用できないか、無効でした"
+  },
+  "result.join": "{first}。{rest}",
+  "result.missing": {
+    "other": "追加したパスのうち {count} 件が見つかりません"
+  },
+  "result.summary": "{parts}。",
+  "result.unchanged": {
+    "other": "パス {count} 件は非表示になりませんでした"
+  },
+  "settings.hiddenAndSystem": "非表示時にシステム ファイル属性も設定する（Windows）",
+  "settings.hideModeHint": "PathHide は、表示するとき、およびこの設定がオフの状態で非表示にするときに、システム ファイル属性を解除します。ファイルやフォルダにもともと付いていたシステム ファイル属性も解除され、PathHide はそれを元に戻せません。",
+  "settings.language": "言語",
+  "settings.languageSystem": "システム",
+  "settings.theme": "テーマ",
+  "settings.themeDark": "ダーク",
+  "settings.themeHint": "「システム」を選ぶと、テーマはコンピュータの外観設定に従います。",
+  "settings.themeLight": "ライト",
+  "settings.themeSystem": "システム",
+  "settings.title": "設定",
+  "settings.uiFont": "UI フォント",
+  "settings.uiFontHint": "カンマ区切りで指定し、インストールされている最初のフォントを使用します。空欄の場合は既定のフォント（Inter）を使用します。",
+  "settings.windowsHideMode": "Windows の非表示モード",
+  "shortcuts.addDirectories": "フォルダを追加します",
+  "shortcuts.addFiles": "ファイルを追加します",
+  "shortcuts.cancelScan": "実行中のスキャンをキャンセルします",
+  "shortcuts.drop": "ファイルやフォルダをウインドウにドロップして追加します",
+  "shortcuts.dropLabel": "ドラッグ＆ドロップ",
+  "shortcuts.groupApp": "アプリ",
+  "shortcuts.groupFiles": "ファイル",
+  "shortcuts.groupList": "一覧",
+  "shortcuts.groupNavigation": "移動",
+  "shortcuts.groupVisibility": "表示状態",
+  "shortcuts.hideSelected": "選択した項目を非表示にします",
+  "shortcuts.moveFocus": "操作ボタン間でフォーカスを移動します",
+  "shortcuts.moveSelection": "上または下の項目を選択します",
+  "shortcuts.reapplyAll": "すべての項目に希望の表示状態を再適用します",
+  "shortcuts.reload": "項目を再読み込みし、ディスク上の状態を再スキャンします",
+  "shortcuts.remove": "選択した項目を一覧から削除します",
+  "shortcuts.settings": "設定を開きます",
+  "shortcuts.shortcuts": "このショートカット一覧を表示します",
+  "shortcuts.showSelected": "選択した項目を表示します",
+  "shortcuts.title": "キーボードショートカット",
+  "startup.failedTitle": "PathHide を起動できませんでした",
+  "startup.pathListTitle": "PathHide はパス一覧を読み取れませんでした",
+  "status.empty": "項目がありません — 始めるには、ファイルやフォルダをここにドロップしてください",
+  "status.entries": {
+    "other": "項目 {count} 件"
+  },
+  "status.hidden": {
+    "other": "非表示 {count} 件"
+  },
+  "status.join": "{first}  ·  {rest}",
+  "status.missing": {
+    "other": "見つからない {count} 件"
+  },
+  "status.pending": {
+    "other": "未確認 {count} 件"
+  },
+  "status.problems": {
+    "other": "問題 {count} 件"
+  },
+  "status.scanning": "スキャン中 {done} / {total}",
+  "status.visible": {
+    "other": "表示 {count} 件"
+  },
+  "toolbar.actions": "操作",
+  "toolbar.addDirectories": "フォルダを追加",
+  "toolbar.addFiles": "ファイルを追加",
+  "toolbar.hideAll": "すべて非表示",
+  "toolbar.hideSelected": "非表示",
+  "toolbar.reapplyAll": "すべて再適用",
+  "toolbar.reload": "再読み込み",
+  "toolbar.showAll": "すべて表示",
+  "toolbar.showSelected": "表示"
+}

@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform;
+using PathHide.I18n;
 using PathHide.Services;
 using static PathHide.Views.ObjC;
 
@@ -53,41 +54,64 @@ internal static class MacMenuBar
 
     internal static readonly string[] EditActions = ["undo:", "redo:", "cut:", "copy:", "paste:", "selectAll:"];
 
-    /// <summary>The bar's menus in order; a null item is a separator.</summary>
-    internal static IReadOnlyList<(string Title, Item?[] Items)> Layout(string appName) =>
-    [
-        (appName,
+    /// <summary>
+    /// Which menu this is, for the two AppKit has to be handed by name rather than by position. The
+    /// role, not the title, identifies them: a translated title would otherwise stop macOS from
+    /// filling the Window menu with the open windows.
+    /// </summary>
+    internal enum MenuRole
+    {
+        App,
+        Edit,
+        Window,
+    }
+
+    /// <summary>
+    /// The bar's menus in order; a null item is a separator. Titles come from the catalogue in the
+    /// language showing now, as a Mac app's own menus do, and the app's name is filled in rather than
+    /// glued on, because where the name sits in "About PathHide" differs between languages.
+    /// </summary>
+    internal static IReadOnlyList<(MenuRole Role, string Title, Item?[] Items)> Layout(string appName)
+    {
+        var t = Localizer.Current;
+        MessageValue app = ("app", appName);
+        return
         [
-            new($"About {appName}", AboutAction),
-            null,
-            new("Settings…", SettingsAction, ","),
-            null,
-            new("Services", ServicesSubmenu),
-            null,
-            new($"Hide {appName}", "hide:", "h"),
-            new("Hide Others", "hideOtherApplications:", "h", Modifiers.Command | Modifiers.Option),
-            new("Show All", "unhideAllApplications:"),
-            null,
-            new($"Quit {appName}", QuitAction, "q"),
-        ]),
-        ("Edit",
-        [
-            new("Undo", "undo:", "z"),
-            new("Redo", "redo:", "Z"),
-            null,
-            new("Cut", "cut:", "x"),
-            new("Copy", "copy:", "c"),
-            new("Paste", "paste:", "v"),
-            new("Select All", "selectAll:", "a"),
-        ]),
-        ("Window",
-        [
-            new("Minimize", "performMiniaturize:", "m"),
-            new("Zoom", "performZoom:"),
-            null,
-            new("Bring All to Front", "arrangeInFront:"),
-        ]),
-    ];
+            (MenuRole.App, appName,
+            [
+                new(t.T("nativeMenu.about", app), AboutAction),
+                null,
+                new(t.T("nativeMenu.settings"), SettingsAction, ","),
+                null,
+                new(t.T("nativeMenu.services"), ServicesSubmenu),
+                null,
+                new(t.T("nativeMenu.hide", app), "hide:", "h"),
+                new(t.T("nativeMenu.hideOthers"), "hideOtherApplications:", "h", Modifiers.Command | Modifiers.Option),
+                new(t.T("nativeMenu.showAll"), "unhideAllApplications:"),
+                null,
+                new(t.T("nativeMenu.quit", app), QuitAction, "q"),
+            ]),
+            // Titled in the interface language: macOS adds Emoji & Symbols, Start Dictation and
+            // AutoFill to this menu whatever it is called (app-chrome conventions).
+            (MenuRole.Edit, t.T("nativeMenu.edit"),
+            [
+                new(t.T("nativeMenu.undo"), "undo:", "z"),
+                new(t.T("nativeMenu.redo"), "redo:", "Z"),
+                null,
+                new(t.T("nativeMenu.cut"), "cut:", "x"),
+                new(t.T("nativeMenu.copy"), "copy:", "c"),
+                new(t.T("nativeMenu.paste"), "paste:", "v"),
+                new(t.T("nativeMenu.selectAll"), "selectAll:", "a"),
+            ]),
+            (MenuRole.Window, t.T("nativeMenu.window"),
+            [
+                new(t.T("nativeMenu.minimize"), "performMiniaturize:", "m"),
+                new(t.T("nativeMenu.zoom"), "performZoom:"),
+                null,
+                new(t.T("nativeMenu.bringAllToFront"), "arrangeInFront:"),
+            ]),
+        ];
+    }
 
     /// <summary>
     /// Avalonia's own macOS menus, turned off, which the app passes to its AppBuilder: NativeMenu would
@@ -164,6 +188,7 @@ internal static class MacMenuBar
             return;
         Installed = true;
         ConfigureAppActions(showAbout, showSettings, canShowAppDialogs);
+        s_appName = appName;
 
         try
         {
@@ -171,23 +196,51 @@ internal static class MacMenuBar
             // shortcuts only when that view can be taught the Edit actions; otherwise AppKit would swallow
             // the keys, so the items go without and the keys reach Avalonia as they would with no menu.
             var view = Class("AvnView");
-            var editShortcuts = CanTeachEditActions(view);
-            if (!editShortcuts)
+            s_editShortcuts = CanTeachEditActions(view);
+            if (!s_editShortcuts)
                 Log.Warn("ui: Avalonia's macOS view cannot take the Edit actions; the Edit menu leaves its shortcuts to Avalonia");
 
-            var bar = BuildBar(appName, CreateAppActionTarget(appName + "MenuActions"), editShortcuts);
-            if (editShortcuts)
+            // The action target is a class defined once for the process, so the bar can be rebuilt in a
+            // new language without defining it again.
+            s_appActionTarget = CreateAppActionTarget(appName + "MenuActions");
+            SetBar();
+            if (s_editShortcuts)
                 AddEditActions(view);
 
-            var app = Send(Class("NSApplication"), "sharedApplication");
-            Send(app, "setServicesMenu:", bar.Services);
-            Send(app, "setWindowsMenu:", bar.Window);
-            Send(app, "setMainMenu:", bar.Bar);
+            // A language saved in Settings redraws the bar at once, as every other surface is redrawn.
+            // The items macOS contributes itself follow at the next launch.
+            Localizer.Changed += OnLanguageChanged;
         }
         catch (Exception ex)
         {
             // Without the bar the app still runs; macOS shows its bare app menu.
             Log.Error("ui: the macOS menu bar could not be set", ex);
+        }
+    }
+
+    private static string s_appName = "";
+    private static IntPtr s_appActionTarget;
+    private static bool s_editShortcuts;
+
+    private static void SetBar()
+    {
+        var bar = BuildBar(s_appName, s_appActionTarget, s_editShortcuts);
+        var app = Send(Class("NSApplication"), "sharedApplication");
+        Send(app, "setServicesMenu:", bar.Services);
+        Send(app, "setWindowsMenu:", bar.Window);
+        Send(app, "setMainMenu:", bar.Bar);
+    }
+
+    private static void OnLanguageChanged()
+    {
+        try
+        {
+            SetBar();
+        }
+        catch (Exception ex)
+        {
+            // The bar keeps the language it was built in; nothing else is affected.
+            Log.Error("ui: the macOS menu bar could not be rebuilt in the new language", ex);
         }
     }
 
@@ -215,7 +268,7 @@ internal static class MacMenuBar
         var bar = NewMenu("");
         var services = IntPtr.Zero;
         var window = IntPtr.Zero;
-        foreach (var (title, items) in Layout(appName))
+        foreach (var (role, title, items) in Layout(appName))
         {
             var menu = NewMenu(title);
             foreach (var item in items)
@@ -239,7 +292,7 @@ internal static class MacMenuBar
                 Send(menu, "addItem:", native);
             }
 
-            if (title == "Window")
+            if (role == MenuRole.Window)
                 window = menu;
             Send(bar, "addItem:", NewSubmenuItem(title, menu));
         }

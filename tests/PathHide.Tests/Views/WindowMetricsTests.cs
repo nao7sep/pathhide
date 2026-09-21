@@ -91,7 +91,7 @@ public sealed class WindowMetricsTests
     // Mirrors the per-column minimums declared in Views/MainWindow.axaml. Kept here so the
     // derivation assertion reads against a concrete, known set; the separate axaml guard below
     // is what catches drift between this list and the actual XAML.
-    private static readonly double[] ColumnMinWidths = [240, 100, 90, 120, 110];
+    private static readonly double[] ColumnMinWidths = [240, 100, 110, 155, 160];
 
     // The list Border's 12px left+right margin is the only fixed chrome in WindowMetrics.
     // The scrollbar gutter comes from the live Fluent theme and is passed in by the view.

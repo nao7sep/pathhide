@@ -10,6 +10,8 @@
 
        Inputs, committed at the repo root beside this file:
          macOS/Info.plist   bundle identity and usage strings
+         macOS/<tag>.lproj/InfoPlist.strings
+                            the usage strings in each interface language
          macOS/icon.icns    classic icon (Info.plist CFBundleIconFile)
          macOS/Assets.car   Liquid Glass catalog (Info.plist CFBundleIconName), optional
 
@@ -43,6 +45,13 @@
 
     <Copy SourceFiles="$(MSBuildThisFileDirectory)macOS/Info.plist"
           DestinationFiles="$(_MacContents)/Info.plist" />
+    <!-- The permission prompts macOS shows for protected folders and volumes come from these, in
+         the language macOS settles on for the app from CFBundleLocalizations. -->
+    <ItemGroup>
+      <_MacLocalizedStrings Include="$(MSBuildThisFileDirectory)macOS/**/InfoPlist.strings" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_MacLocalizedStrings)"
+          DestinationFiles="@(_MacLocalizedStrings->'$(_MacResDir)/%(RecursiveDir)%(Filename)%(Extension)')" />
     <Copy SourceFiles="$(MSBuildThisFileDirectory)macOS/icon.icns"
           DestinationFolder="$(_MacResDir)" />
     <Copy SourceFiles="$(MSBuildThisFileDirectory)macOS/Assets.car"

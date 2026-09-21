@@ -29,6 +29,23 @@
     <string>0.1.0</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
+    <!-- The interface languages the app speaks. macOS reads this to decide the language of the menu
+         items AppKit draws itself (Services, Emoji & Symbols, Start Dictation), which the app then
+         points at the chosen language through AppleLanguages before AppKit starts
+         (I18n/LanguageBootstrap.cs). The catalogue gate holds this list to the app's own set. -->
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>de</string>
+        <string>es</string>
+        <string>fr</string>
+        <string>it</string>
+        <string>pt-BR</string>
+        <string>ru</string>
+        <string>ja</string>
+        <string>ko</string>
+        <string>zh-Hans</string>
+    </array>
     <key>LSMinimumSystemVersion</key>
     <string>11.0</string>
     <key>NSHighResolutionCapable</key>

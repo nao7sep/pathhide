@@ -1,0 +1,8 @@
+/* The permission prompts macOS shows when PathHide first reaches a protected location, in Simplified Chinese.
+   Each value translates the English in en.lproj; folder and volume names follow Simplified Chinese macOS. */
+
+"NSDesktopFolderUsageDescription" = "PathHide 需要访问权限，才能管理你的“桌面”文件夹中项目的隐藏标记。";
+"NSDocumentsFolderUsageDescription" = "PathHide 需要访问权限，才能管理你的“文稿”文件夹中项目的隐藏标记。";
+"NSDownloadsFolderUsageDescription" = "PathHide 需要访问权限，才能管理你的“下载”文件夹中项目的隐藏标记。";
+"NSNetworkVolumesUsageDescription" = "PathHide 需要访问权限，才能管理网络宗卷上项目的隐藏标记。";
+"NSRemovableVolumesUsageDescription" = "PathHide 需要访问权限，才能管理可移除宗卷上项目的隐藏标记。";

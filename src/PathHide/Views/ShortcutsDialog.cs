@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using PathHide.I18n;
 
 namespace PathHide.Views;
 
@@ -19,7 +20,7 @@ public sealed class ShortcutsDialog : DialogBase
     public ShortcutsDialog(IReadOnlyList<ShortcutItem> shortcuts)
     {
         Width = 820;
-        Title = "Keyboard Shortcuts";
+        Localized.SetTitle(this, "shortcuts.title");
 
         var groups = ShortcutCatalog.GroupOrder
             .Select(group => (Group: group, Rows: shortcuts.Where(s => s.Group == group).ToList()))
@@ -34,13 +35,14 @@ public sealed class ShortcutsDialog : DialogBase
             foreach (var (group, rows) in column == 0 ? groups.Take(split) : groups.Skip(split))
             {
                 var section = new StackPanel();
-                section.Children.Add(new TextBlock
+                var header = new TextBlock
                 {
-                    Text = ShortcutCatalog.GroupHeader(group),
                     FontWeight = FontWeight.SemiBold,
                     FontSize = 13,
                     Margin = new Thickness(2, 0, 0, 6),
-                }.Themed(TextBlock.ForegroundProperty, "TextSecondaryBrush"));
+                }.Themed(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+                Localized.SetText(header, ShortcutCatalog.GroupHeaderKey(group));
+                section.Children.Add(header);
                 section.Children.Add(BuildCard(rows));
                 stack.Children.Add(section);
             }
@@ -52,7 +54,7 @@ public sealed class ShortcutsDialog : DialogBase
         SetContent(columns);
         var buttons = SetButtons(
         [
-            new DialogButton("Close", "close", DialogButtonKind.Primary) { IsDefault = true },
+            new DialogButton("common.close", "close", DialogButtonKind.Primary) { IsDefault = true },
         ]);
         SetInitialFocus(buttons["close"]);
     }
@@ -121,10 +123,10 @@ public sealed class ShortcutsDialog : DialogBase
 
         var description = new TextBlock
         {
-            Text = item.Description,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
         }.Themed(TextBlock.ForegroundProperty, "TextPrimaryBrush");
+        Localized.SetText(description, item.DescriptionKey);
         Grid.SetColumn(description, 0);
         grid.Children.Add(description);
 
@@ -153,13 +155,18 @@ public sealed class ShortcutsDialog : DialogBase
         .Themed(Border.BackgroundProperty, "AppBackgroundBrush")
         .Themed(Border.BorderBrushProperty, "BorderBrush");
 
-    // A non-key affordance (drag and drop): plain right-aligned text, no keycap box.
-    private TextBlock PlainAffordance(string label) => new TextBlock
+    // A non-key affordance (drag and drop): plain right-aligned text, no keycap box. Words, not a key
+    // legend, so its label is a catalogue key.
+    private TextBlock PlainAffordance(string labelKey)
     {
-        Text = label,
-        FontWeight = FontWeight.SemiBold,
-        FontSize = 12,
-        HorizontalAlignment = HorizontalAlignment.Right,
-        VerticalAlignment = VerticalAlignment.Center,
-    }.Themed(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        var text = new TextBlock
+        {
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 12,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+        }.Themed(TextBlock.ForegroundProperty, "TextSecondaryBrush");
+        Localized.SetText(text, labelKey);
+        return text;
+    }
 }

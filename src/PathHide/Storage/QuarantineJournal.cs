@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using PathHide.I18n;
 
 namespace PathHide.Storage;
 
@@ -30,26 +31,33 @@ public static class QuarantineJournal
         return drained;
     }
 
+    /// <summary>The label the path list's store is created with (see <c>App.CreateMainViewModel</c>).</summary>
+    public const string PathListLabel = "paths";
+
+    /// <summary>The label the settings store is created with.</summary>
+    public const string SettingsLabel = "settings";
+
     /// <summary>
-    /// The recovery notice for a set of quarantined stores, naming which store
-    /// was reset. The wording used to be hardcoded for the path list, so a
-    /// quarantined settings file told the user their hidden-path list was in a
-    /// file that does not contain it.
+    /// The recovery notice for a set of quarantined stores, naming which store was reset. The wording
+    /// used to be hardcoded for the path list, so a quarantined settings file told the user their
+    /// hidden-path list was in a file that does not contain it.
     /// </summary>
-    public static (string Title, string Body) Describe(
+    /// <remarks>
+    /// Each store has its own sentences rather than a name slotted into one, because a store's name
+    /// changes the words around it in most languages. They also say different things: the settings
+    /// file is only read at startup, which then goes on with defaults, while the path list reaches
+    /// this notice only from Reload — an unreadable list at startup halts instead — and Reload keeps
+    /// the entries already on screen.
+    /// </remarks>
+    public static (Message Title, Message Body) Describe(
         IReadOnlyList<QuarantinedStore> quarantined)
     {
         var labels = quarantined.Select(q => q.Label).Distinct().ToArray();
-        var what = labels.Length == 1 ? $"The {labels[0]} file" : "Some files";
-        var title = labels.Length == 1
-            ? $"The {labels[0]} file was reset"
-            : "Some files were reset";
-
-        var body =
-            $"{what} could not be read, so PathHide preserved it rather than overwriting it. "
-            + "PathHide started with defaults in its place. Check the session log for the preserved "
-            + "copy's location.";
-
-        return (title, body);
+        return labels switch
+        {
+            [SettingsLabel] => (Message.Of("quarantine.settingsTitle"), Message.Of("quarantine.settingsBody")),
+            [PathListLabel] => (Message.Of("quarantine.pathListTitle"), Message.Of("quarantine.pathListBody")),
+            _ => (Message.Of("quarantine.manyTitle"), Message.Of("quarantine.manyBody")),
+        };
     }
 }

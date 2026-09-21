@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -40,9 +41,15 @@ public enum ShortcutAction
 /// pointer affordance (drag and drop) and carry just the label. <see cref="ShowAsKeycap"/> is true for
 /// everything that names a key and false for the non-key affordances rendered as plain text.
 /// </summary>
+/// <remarks>
+/// <see cref="DescriptionKey"/> is always a catalogue key. <see cref="Label"/> is the key legend,
+/// shown as written, because keyboard tokens stay English in every language
+/// (keyboard-shortcut conventions); for a non-key affordance, which is words rather than a key, it
+/// is a catalogue key too.
+/// </remarks>
 public sealed record ShortcutItem(
     ShortcutGroup Group,
-    string Description,
+    string DescriptionKey,
     string Label,
     KeyGesture? Gesture = null,
     ShortcutAction? Action = null,
@@ -57,7 +64,6 @@ public sealed record ShortcutItem(
 /// </summary>
 public static class ShortcutCatalog
 {
-    /// <summary>Section order for the help modal; only non-empty groups render.</summary>
     /// <summary>
     /// The order the shortcuts dialog lays its sections out in, and so the order its two columns
     /// divide. App sits with Files and Navigation rather than at the end: those three are the app and
@@ -75,14 +81,15 @@ public static class ShortcutCatalog
         ShortcutGroup.List,
     ];
 
-    public static string GroupHeader(ShortcutGroup group) => group switch
+    /// <summary>The catalogue key of a section's header.</summary>
+    public static string GroupHeaderKey(ShortcutGroup group) => group switch
     {
-        ShortcutGroup.Files => "Files",
-        ShortcutGroup.Visibility => "Visibility",
-        ShortcutGroup.List => "List",
-        ShortcutGroup.Navigation => "Navigation",
-        ShortcutGroup.App => "App",
-        _ => group.ToString(),
+        ShortcutGroup.Files => "shortcuts.groupFiles",
+        ShortcutGroup.Visibility => "shortcuts.groupVisibility",
+        ShortcutGroup.List => "shortcuts.groupList",
+        ShortcutGroup.Navigation => "shortcuts.groupNavigation",
+        ShortcutGroup.App => "shortcuts.groupApp",
+        _ => throw new ArgumentOutOfRangeException(nameof(group), group, null),
     };
 
     /// <summary>
@@ -111,33 +118,33 @@ public static class ShortcutCatalog
         var items = new List<ShortcutItem>
         {
             // Files
-            Command(ShortcutGroup.Files, "Add files", cmd, cmdLabel, shift: false, Key.O, "O", ShortcutAction.AddFiles),
-            Command(ShortcutGroup.Files, "Add directories", cmd, cmdLabel, shift: true, Key.O, "O", ShortcutAction.AddDirectories),
-            Display(ShortcutGroup.Files, "Add by dropping files or directories on the window", "Drag and drop", asKeycap: false),
+            Command(ShortcutGroup.Files, "shortcuts.addFiles", cmd, cmdLabel, shift: false, Key.O, "O", ShortcutAction.AddFiles),
+            Command(ShortcutGroup.Files, "shortcuts.addDirectories", cmd, cmdLabel, shift: true, Key.O, "O", ShortcutAction.AddDirectories),
+            Display(ShortcutGroup.Files, "shortcuts.drop", "shortcuts.dropLabel", asKeycap: false),
 
             // Navigation — owned by the action-button group and the grid, listed here for discoverability.
             // Buttons first, then the list, matching their top-to-bottom layout in the window.
-            Display(ShortcutGroup.Navigation, "Move focus between the action buttons", "Left/Right"),
-            Display(ShortcutGroup.Navigation, "Move the selection up or down the list", "Up/Down"),
+            Display(ShortcutGroup.Navigation, "shortcuts.moveFocus", "Left/Right"),
+            Display(ShortcutGroup.Navigation, "shortcuts.moveSelection", "Up/Down"),
 
             // Visibility — Shift on the letter keys avoids the macOS Cmd+H / Cmd+S system collisions.
-            Command(ShortcutGroup.Visibility, "Hide the selected entries", cmd, cmdLabel, shift: true, Key.H, "H", ShortcutAction.HideSelected),
-            Command(ShortcutGroup.Visibility, "Show the selected entries", cmd, cmdLabel, shift: true, Key.S, "S", ShortcutAction.ShowSelected),
-            Command(ShortcutGroup.Visibility, "Reapply the desired visibility to every entry", cmd, cmdLabel, shift: true, Key.R, "R", ShortcutAction.ReapplyAll),
+            Command(ShortcutGroup.Visibility, "shortcuts.hideSelected", cmd, cmdLabel, shift: true, Key.H, "H", ShortcutAction.HideSelected),
+            Command(ShortcutGroup.Visibility, "shortcuts.showSelected", cmd, cmdLabel, shift: true, Key.S, "S", ShortcutAction.ShowSelected),
+            Command(ShortcutGroup.Visibility, "shortcuts.reapplyAll", cmd, cmdLabel, shift: true, Key.R, "R", ShortcutAction.ReapplyAll),
 
             // List — scan-lifecycle commands first, the destructive Remove last (mirrors the toolbar's
             // Reload-before-Remove order; Cancel sits with Reload since both act on the scan).
-            Command(ShortcutGroup.List, "Reload entries and rescan disk state", cmd, cmdLabel, shift: false, Key.R, "R", ShortcutAction.Reload),
+            Command(ShortcutGroup.List, "shortcuts.reload", cmd, cmdLabel, shift: false, Key.R, "R", ShortcutAction.Reload),
             // Escape is a plain-key accelerator (no command modifier), active only while a scan runs.
-            new ShortcutItem(ShortcutGroup.List, "Cancel the running scan", "Escape",
+            new ShortcutItem(ShortcutGroup.List, "shortcuts.cancelScan", "Escape",
                 new KeyGesture(Key.Escape), ShortcutAction.CancelScan),
-            Display(ShortcutGroup.List, "Remove the selected entries", "Delete"),
+            Display(ShortcutGroup.List, "shortcuts.remove", "Delete"),
 
             // App. Settings is cross-platform — it was Windows-only until the UI-font
             // setting was added; HasWindowsHideMode is the platform-specific flag now,
             // and it gates a section INSIDE the dialog rather than the dialog itself.
-            Command(ShortcutGroup.App, "Open Settings", cmd, cmdLabel, shift: false, Key.OemComma, "Comma", ShortcutAction.OpenSettings),
-            Command(ShortcutGroup.App, "Show this shortcuts list", cmd, cmdLabel, shift: false, Key.OemQuestion, "Slash", ShortcutAction.ShowShortcuts),
+            Command(ShortcutGroup.App, "shortcuts.settings", cmd, cmdLabel, shift: false, Key.OemComma, "Comma", ShortcutAction.OpenSettings),
+            Command(ShortcutGroup.App, "shortcuts.shortcuts", cmd, cmdLabel, shift: false, Key.OemQuestion, "Slash", ShortcutAction.ShowShortcuts),
         };
 
         return items;
@@ -149,13 +156,13 @@ public static class ShortcutCatalog
     /// gesture's modifier is platform-resolved.
     /// </summary>
     private static ShortcutItem Command(
-        ShortcutGroup group, string description, KeyModifiers cmd, string cmdLabel, bool shift, Key key, string keyName, ShortcutAction action)
+        ShortcutGroup group, string descriptionKey, KeyModifiers cmd, string cmdLabel, bool shift, Key key, string keyName, ShortcutAction action)
     {
         var label = cmdLabel + "+" + (shift ? "Shift+" : "") + keyName;
         var modifiers = cmd | (shift ? KeyModifiers.Shift : KeyModifiers.None);
-        return new ShortcutItem(group, description, label, new KeyGesture(key, modifiers), action);
+        return new ShortcutItem(group, descriptionKey, label, new KeyGesture(key, modifiers), action);
     }
 
-    private static ShortcutItem Display(ShortcutGroup group, string description, string label, bool asKeycap = true) =>
-        new(group, description, label, ShowAsKeycap: asKeycap);
+    private static ShortcutItem Display(ShortcutGroup group, string descriptionKey, string label, bool asKeycap = true) =>
+        new(group, descriptionKey, label, ShowAsKeycap: asKeycap);
 }

@@ -1,39 +1,37 @@
 using System;
+using PathHide.I18n;
 
 namespace PathHide.ViewModels;
 
-/// <summary>Owns the user-safe presentation of failures whose diagnostics remain in the log.</summary>
+/// <summary>
+/// Owns the user-safe presentation of failures whose diagnostics remain in the log.
+///
+/// Each method answers with the key of a sentence, never the sentence: what the reader sees is
+/// chosen here, and which language they see it in is decided where it is shown.
+/// </summary>
 public static class FailurePresentation
 {
-    public static string StartupStorage() =>
-        "PathHide could not open its storage location. Check that the location exists and is writable, then restart PathHide.";
+    public static Message StartupStorage() => Message.Of("failure.startupStorage");
 
-    public static string SettingsSave(Exception error) => error is UnauthorizedAccessException
-        ? "Settings could not be saved. Check that the PathHide data folder is writable, then try again."
-        : "Settings could not be saved. Nothing was changed; try again.";
+    public static Message SettingsSave(Exception error) => error is UnauthorizedAccessException
+        ? Message.Of("failure.settingsSavePermission")
+        : Message.Of("failure.settingsSave");
 
-    public static string PathListSave(Exception error) => error is UnauthorizedAccessException
-        ? "The path list could not be saved. Check that the PathHide data folder is writable, then try again."
-        : "The path list could not be saved. Your existing list is unchanged; try again.";
+    public static Message PathListSave(Exception error) => error is UnauthorizedAccessException
+        ? Message.Of("failure.pathListSavePermission")
+        : Message.Of("failure.pathListSave");
 
-    public static string Scan(Exception error) => error is UnauthorizedAccessException
-        ? "Some paths could not be scanned because PathHide did not have permission to inspect them."
-        : "The path scan could not be completed. Your existing results are still shown; try Reload again.";
+    public static Message Scan(Exception error) => error is UnauthorizedAccessException
+        ? Message.Of("failure.scanPermission")
+        : Message.Of("failure.scan");
 
-    public static string PathPicker(Exception error) =>
-        "The path picker could not be opened. Your path list is unchanged; try adding paths again.";
+    public static Message PathPicker(Exception error) => Message.Of("failure.pathPicker");
 
-    public static string WindowAction(Exception error) =>
-        "The requested window action could not be completed. Try again.";
+    public static Message WindowAction(Exception error) => Message.Of("failure.windowAction");
 
-    public static string Startup() =>
-        "A settings file could not be read, and PathHide could not set it aside either, so it was left " +
-        "unchanged rather than risk overwriting it. Your files were not hidden or unhidden. Repair or " +
-        "move the affected file under the PathHide data folder, then start PathHide again.";
+    public static Message LogReveal() => Message.Of("failure.logReveal");
 
-    public static string PathListStartup() =>
-        "Your list of tracked paths could not be read, so PathHide preserved it rather than replacing " +
-        "it or starting with an empty list. Your files were not hidden or unhidden. Check the session " +
-        "log for the preserved copy, repair it or move it out of the way to start fresh, then start " +
-        "PathHide again.";
+    public static Message Startup() => Message.Of("failure.startupData");
+
+    public static Message PathListStartup() => Message.Of("failure.pathListStartup");
 }

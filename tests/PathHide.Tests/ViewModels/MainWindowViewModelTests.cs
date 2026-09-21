@@ -19,6 +19,8 @@ using CommunityToolkit.Mvvm.Input;
 using PathHide.Models;
 using PathHide.Services;
 using PathHide.Tests.Fakes;
+using PathHide.I18n;
+using PathHide.Tests.I18n;
 using PathHide.ViewModels;
 using PathHide.Views;
 using Xunit;
@@ -66,9 +68,9 @@ public class MainWindowViewModelTests
         Assert.False(vm.IsPathListEmpty);
         Assert.Equal("/foo", row.Path);
         var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
-        Assert.Equal("Added 1 path to the list; 1 hidden; 1 path is already in the list; 1 path was unavailable or invalid.", result.Message);
+        Assert.Equal("Added 1 path to the list; 1 hidden; 1 path is already in the list; 1 path was unavailable or invalid.", English.Of(result.Message));
         Assert.Equal(PathAddResultSeverity.Warning, result.Severity);
-        Assert.Equal(result.Message, result.AccessibleName);
+        Assert.Equal(English.Of(result.Message), result.Text);
         Assert.Equal(AutomationLiveSetting.Polite, result.LiveSetting);
         Assert.Contains("/foo", visibility.Hidden); // newly added entries default to Hidden and are applied
         Assert.Equal(1, paths.SaveCount);
@@ -86,9 +88,9 @@ public class MainWindowViewModelTests
 
         var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
         Assert.Equal(PathAddResultSeverity.Error, result.Severity);
-        Assert.Contains("path picker", result.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("EACCES", result.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("PATHHIDE-PICKER-SENTINEL", result.Message, StringComparison.Ordinal);
+        Assert.Contains("path picker", English.Of(result.Message), StringComparison.Ordinal);
+        Assert.DoesNotContain("EACCES", English.Of(result.Message), StringComparison.Ordinal);
+        Assert.DoesNotContain("PATHHIDE-PICKER-SENTINEL", English.Of(result.Message), StringComparison.Ordinal);
 
         vm.ResolvePathPickerFailure();
         Assert.Null(vm.PathAddResult);
@@ -105,13 +107,13 @@ public class MainWindowViewModelTests
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/same" });
 
         var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
-        Assert.Equal("1 path is already in the list.", result.Message);
+        Assert.Equal("1 path is already in the list.", English.Of(result.Message));
         Assert.Equal(PathAddResultSeverity.Information, result.Severity);
-        Assert.Equal(result.Message, result.AccessibleName);
+        Assert.Equal(English.Of(result.Message), result.Text);
         Assert.Equal(AutomationLiveSetting.Polite, result.LiveSetting);
 
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/other" });
-        Assert.Equal("1 path is already in the list.", vm.PathAddResult?.Message);
+        Assert.Equal("1 path is already in the list.", English.Of(vm.PathAddResult?.Message));
 
         vm.DismissPathAddResultCommand.Execute(null);
         Assert.False(vm.HasPathAddResult);
@@ -135,11 +137,11 @@ public class MainWindowViewModelTests
         var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
         Assert.Equal(
             "Added 1 path to the list; 1 path is already in the list; 1 path was unavailable or invalid; 1 path could not be hidden.",
-            result.Message);
+            English.Of(result.Message));
         Assert.Equal(PathAddResultSeverity.Error, result.Severity);
-        Assert.Equal(result.Message, result.AccessibleName);
+        Assert.Equal(English.Of(result.Message), result.Text);
         Assert.Equal(AutomationLiveSetting.Assertive, result.LiveSetting);
-        Assert.DoesNotContain("Error: ", result.AccessibleName, StringComparison.Ordinal);
+        Assert.DoesNotContain("Error: ", result.Text, StringComparison.Ordinal);
         Assert.Equal(2, vm.Rows.Count);
         Assert.Equal(ActualState.Visible, vm.Rows.Single(row => row.Path == "/cannot-hide").ActualState);
     }
@@ -162,7 +164,7 @@ public class MainWindowViewModelTests
         var row = Assert.Single(vm.Rows);
         Assert.Equal("/existing", row.Path);
         var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
-        Assert.Contains("path list could not be saved", result.Message);
+        Assert.Contains("path list could not be saved", English.Of(result.Message));
         Assert.Equal(PathAddResultSeverity.Error, result.Severity);
     }
 
@@ -187,7 +189,7 @@ public class MainWindowViewModelTests
         Assert.Equal(DesiredVisibility.Hidden, row.Entry.DesiredVisibility);
         Assert.DoesNotContain("/x", visibility.Shown);
         var failure = Assert.Single(vm.OperationalResults);
-        Assert.Contains("path list could not be saved", failure.Message);
+        Assert.Contains("path list could not be saved", English.Of(failure.Message));
         Assert.True(failure.IsError);
         Assert.Equal(AutomationLiveSetting.Assertive, failure.LiveSetting);
     }
@@ -475,7 +477,7 @@ public class MainWindowViewModelTests
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(visibility, paths);
 
-        (string Title, string Body)? shown = null;
+        (Message Title, Message Body)? shown = null;
         vm.ShowNoticeAsync = (title, body) =>
         {
             shown = (title, body);
@@ -488,9 +490,9 @@ public class MainWindowViewModelTests
         await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
 
         Assert.NotNull(shown);
-        Assert.Contains("paths", shown!.Value.Title);
-        Assert.Contains("session log", shown!.Value.Body);
-        Assert.DoesNotContain("/home/u/.pathhide", shown.Value.Body, StringComparison.Ordinal);
+        Assert.Equal("quarantine.pathListTitle", shown!.Value.Title.Key);
+        Assert.Contains("session log", English.Of(shown.Value.Body));
+        Assert.DoesNotContain("/home/u/.pathhide", English.Of(shown.Value.Body), StringComparison.Ordinal);
         // Drained, so a second reload does not repeat it.
         Assert.Empty(PathHide.Storage.QuarantineJournal.Drain());
     }
@@ -502,14 +504,19 @@ public class MainWindowViewModelTests
         // their hidden-path list was in a file that does not contain it.
         var settings = PathHide.Storage.QuarantineJournal.Describe(
             [new PathHide.Storage.QuarantinedStore("settings", "/r/config-x.invalid")]);
-        Assert.Contains("settings", settings.Title);
-        Assert.DoesNotContain("hidden-path list", settings.Body);
+        Assert.Contains("settings", English.Of(settings.Title));
+        Assert.DoesNotContain("path list", English.Of(settings.Body));
 
         var pathList = PathHide.Storage.QuarantineJournal.Describe(
             [new PathHide.Storage.QuarantinedStore("paths", "/r/paths-x.invalid")]);
-        Assert.Contains("paths", pathList.Title);
-        Assert.Contains("session log", pathList.Body);
-        Assert.DoesNotContain("/r/paths-x.invalid", pathList.Body, StringComparison.Ordinal);
+        Assert.Contains("path list", English.Of(pathList.Title));
+        Assert.Contains("session log", English.Of(pathList.Body));
+        Assert.DoesNotContain("/r/paths-x.invalid", English.Of(pathList.Body), StringComparison.Ordinal);
+
+        // Reload keeps the entries already on screen, so the path list's notice must not claim the
+        // app started over with defaults, as the settings file's rightly does.
+        Assert.DoesNotContain("default", English.Of(pathList.Body), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("default", English.Of(settings.Body), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -611,9 +618,9 @@ public class MainWindowViewModelTests
         Assert.NotNull(captured);
         // The destructive action must carry a specific, danger-styled label — never a generic
         // "Yes"/"OK" — and count-aware singular/plural copy (the modal-conventions fix).
-        Assert.Equal("Remove", captured!.ConfirmLabel);
-        Assert.Equal("Remove entries", captured.Title);
-        Assert.EndsWith(expectedMessageTail, captured.Message);
+        Assert.Equal("common.remove", captured!.ConfirmLabelKey);
+        Assert.Equal("Remove entries", English.Of(captured.Title));
+        Assert.EndsWith(expectedMessageTail, English.Of(captured.Message));
         // Declined: every row is still present.
         Assert.Equal(count, vm.Rows.Count);
     }
@@ -726,7 +733,7 @@ public class MainWindowViewModelTests
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
-        var failure = vm.TryApplySettings("  Menlo  ", hiddenAndSystem: true, ThemePreference.System);
+        var failure = vm.TryApplySettings(Languages.System, "  Menlo  ", hiddenAndSystem: true, ThemePreference.System);
 
         Assert.Null(failure);
         Assert.Equal(1, settingsStore.SaveCount);
@@ -795,7 +802,7 @@ public class MainWindowViewModelTests
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
-        var failure = vm.TryApplySettings(AppSettings.DefaultUiFontFamily, hiddenAndSystem: false, ThemePreference.Dark);
+        var failure = vm.TryApplySettings(Languages.System, AppSettings.DefaultUiFontFamily, hiddenAndSystem: false, ThemePreference.Dark);
 
         Assert.Null(failure);
         Assert.Equal(1, settingsStore.SaveCount);
@@ -813,7 +820,7 @@ public class MainWindowViewModelTests
         var vm = new MainWindowViewModel(
             new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
 
-        var failure = vm.TryApplySettings(AppSettings.DefaultUiFontFamily, hiddenAndSystem: false, ThemePreference.System);
+        var failure = vm.TryApplySettings(Languages.System, AppSettings.DefaultUiFontFamily, hiddenAndSystem: false, ThemePreference.System);
 
         Assert.Null(failure);
         Assert.Equal(0, settingsStore.SaveCount);
@@ -827,9 +834,9 @@ public class MainWindowViewModelTests
         var vm = new MainWindowViewModel(
             new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
 
-        var failure = vm.TryApplySettings("Menlo", hiddenAndSystem: true, ThemePreference.Dark);
+        var failure = vm.TryApplySettings(Languages.System, "Menlo", hiddenAndSystem: true, ThemePreference.Dark);
 
-        Assert.Contains("Settings could not be saved", failure);
+        Assert.Contains("Settings could not be saved", English.Of(failure));
         Assert.Equal(AppSettings.DefaultUiFontFamily, settings.UiFontFamily);
         Assert.Equal(WindowsHideMode.HiddenOnly, settings.WindowsHideMode);
         Assert.Equal(ThemePreference.System, settings.Theme);
@@ -875,8 +882,8 @@ public class MainWindowViewModelTests
 
         var result = Assert.Single(vm.OperationalResults);
         Assert.Equal(OperationalResultOwner.LogReveal, result.Owner);
-        Assert.Contains("log could not be shown", result.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("EACCES", result.Message, StringComparison.Ordinal);
+        Assert.Contains("could not open the folder that holds the log file", English.Of(result.Message), StringComparison.Ordinal);
+        Assert.DoesNotContain("EACCES", English.Of(result.Message), StringComparison.Ordinal);
 
         vm.ResolveLogRevealFailure();
         Assert.Empty(vm.OperationalResults);
@@ -896,7 +903,7 @@ public class MainWindowViewModelTests
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
         var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
-        Assert.Contains("1 path could not be hidden", result.Message);
+        Assert.Contains("1 path could not be hidden", English.Of(result.Message));
         Assert.Equal(PathAddResultSeverity.Error, result.Severity);
         Assert.Contains("/x", visibility.Inspected); // re-inspected after the failure
     }
@@ -936,8 +943,8 @@ public class MainWindowViewModelTests
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
         var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
-        Assert.Contains("1 path could not be hidden", result.Message);
-        Assert.DoesNotContain("elevated", result.Message);
+        Assert.Contains("1 path could not be hidden", English.Of(result.Message));
+        Assert.DoesNotContain("elevated", English.Of(result.Message));
         Assert.Equal(PathAddResultSeverity.Error, result.Severity);
     }
 
@@ -961,8 +968,8 @@ public class MainWindowViewModelTests
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
 
         var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
-        Assert.Contains("1 path could not be hidden", result.Message);
-        Assert.DoesNotContain("elevated", result.Message);
+        Assert.Contains("1 path could not be hidden", English.Of(result.Message));
+        Assert.DoesNotContain("elevated", English.Of(result.Message));
         Assert.Equal(PathAddResultSeverity.Error, result.Severity);
         // The write boundary is never crossed for an access-denied inspect.
         Assert.DoesNotContain("/x", visibility.Hidden);

@@ -20,6 +20,12 @@ public static class UiFontFamilyValue
 
 public sealed class AppSettings
 {
+    /// <summary>
+    /// The file these settings live in, under the storage root. Named here because the language is
+    /// read straight out of it before the store exists (<c>I18n/LanguageBootstrap.cs</c>).
+    /// </summary>
+    public const string FileName = "config.json";
+
     /// <summary>The bundled default UI (chrome) font, registered via <c>.WithInterFont()</c>.</summary>
     public const string DefaultUiFontFamily = "Inter";
 
@@ -31,6 +37,13 @@ public sealed class AppSettings
     /// The display name stays "Inter"; this URI is what actually loads it.
     /// </summary>
     public const string BundledUiFontUri = "fonts:Inter#Inter";
+
+    /// <summary>
+    /// The interface language: a BCP 47 tag from the set, or <c>system</c> to follow the computer's
+    /// own languages at each launch. Read before the app is built (<c>I18n/LanguageBootstrap.cs</c>)
+    /// so the first frame is already in it, and a missing or unknown value means System.
+    /// </summary>
+    public string Language { get; set; } = I18n.Languages.System;
 
     // App appearance — the UI (chrome) font family. Family only; an empty value falls back to the
     // bundled default (Inter). Applied app-wide.

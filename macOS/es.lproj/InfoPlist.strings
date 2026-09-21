@@ -1,0 +1,8 @@
+/* The permission prompts macOS shows when PathHide first reaches a protected location, in Spanish.
+   Each value translates the English in Info.plist; a test holds every language to the same keys. */
+
+"NSDesktopFolderUsageDescription" = "PathHide necesita acceso para gestionar el indicador “oculto” de los elementos de tu carpeta Escritorio.";
+"NSDocumentsFolderUsageDescription" = "PathHide necesita acceso para gestionar el indicador “oculto” de los elementos de tu carpeta Documentos.";
+"NSDownloadsFolderUsageDescription" = "PathHide necesita acceso para gestionar el indicador “oculto” de los elementos de tu carpeta Descargas.";
+"NSNetworkVolumesUsageDescription" = "PathHide necesita acceso para gestionar el indicador “oculto” de los elementos de los volúmenes de red.";
+"NSRemovableVolumesUsageDescription" = "PathHide necesita acceso para gestionar el indicador “oculto” de los elementos de los volúmenes extraíbles.";

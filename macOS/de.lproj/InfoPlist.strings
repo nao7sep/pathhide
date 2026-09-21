@@ -1,0 +1,8 @@
+/* The permission prompts macOS shows when PathHide first reaches a protected location, in German.
+   Folder and volume names follow macOS's own German privacy prompts. */
+
+"NSDesktopFolderUsageDescription" = "PathHide benötigt Zugriff, um das Flag „Versteckt“ von Objekten in Ihrem Ordner „Schreibtisch“ zu verwalten.";
+"NSDocumentsFolderUsageDescription" = "PathHide benötigt Zugriff, um das Flag „Versteckt“ von Objekten in Ihrem Ordner „Dokumente“ zu verwalten.";
+"NSDownloadsFolderUsageDescription" = "PathHide benötigt Zugriff, um das Flag „Versteckt“ von Objekten in Ihrem Ordner „Downloads“ zu verwalten.";
+"NSNetworkVolumesUsageDescription" = "PathHide benötigt Zugriff, um das Flag „Versteckt“ von Objekten auf Netzwerkvolumes zu verwalten.";
+"NSRemovableVolumesUsageDescription" = "PathHide benötigt Zugriff, um das Flag „Versteckt“ von Objekten auf Wechselmedien zu verwalten.";

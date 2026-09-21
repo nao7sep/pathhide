@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
+using PathHide.I18n;
 using PathHide.Services;
 using PathHide.Storage;
 using PathHide.Views;
@@ -20,6 +21,12 @@ sealed class Program
         if (args.Length > 0 && args[0] == ElevatedApplyCommand.Subcommand)
             return RunApplyMode(args);
 
+        // The interface language, before anything can draw and before Avalonia creates the macOS
+        // application object, which settles the language of the menu items AppKit contributes itself.
+        // It reads the saved preference straight from config.json and falls back to the computer's own
+        // languages, so it holds on the startup-failure path below, where there is no usable storage.
+        App.ComputerLanguages = LanguageBootstrap.Start();
+
         // Resolve and create the storage root before anything else reads or writes it.
         // An unusable PATHHIDE_HOME (or an unwritable home) is a startup error we report
         // and STOP on — never a silent fallback that lets the app run unable to persist.
@@ -31,6 +38,8 @@ sealed class Program
         }
         catch (Exception ex)
         {
+            // Diagnostics on stderr, which stay English with the exception's own message: this is the
+            // log channel, not an interface surface. What the reader sees is the notice window.
             Console.Error.WriteLine(
                 "PathHide cannot start: its storage location could not be created. " + ex.Message);
             App.StartupFailureMessage = ViewModels.FailurePresentation.StartupStorage();

@@ -6,6 +6,9 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using PathHide.Models;
 using PathHide.Views;
+using PathHide.I18n;
+using PathHide.Tests.I18n;
+using PathHide.ViewModels;
 using Xunit;
 
 namespace PathHide.Tests.Views;
@@ -13,14 +16,17 @@ namespace PathHide.Tests.Views;
 public sealed class SettingsDialogTests
 {
     [AvaloniaFact]
-    public void FailedSaveKeepsDraftAndDiagnosticPathOutOfInlineMessage()
+    public void FailedSaveShowsTheChosenFailureAndKeepsTheDraft()
     {
+        // The save answers with what to tell the reader, never with diagnostics: a failure can only
+        // be a catalogue message, so an exception's own text has no way into the dialog.
         var dialog = new SettingsDialog(
+            Languages.System,
             "Inter",
             ThemePreference.System,
             isHiddenAndSystem: false,
             showWindowsHideMode: false,
-            (_, _, _) => "Access to /private/test/config.tmp is denied.");
+            (_, _, _, _) => FailurePresentation.SettingsSave(new System.IO.IOException("Access to /private/test/config.tmp is denied.")));
         var font = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
         font.Text = "Menlo";
         var save = dialog.GetLogicalDescendants().OfType<Button>()
@@ -32,7 +38,7 @@ public sealed class SettingsDialogTests
         Assert.Equal("Menlo", font.Text);
         var error = dialog.GetLogicalDescendants().OfType<TextBlock>().Single(block =>
             block.IsVisible && block.Text?.Contains("could not be saved") == true);
-        Assert.Contains("try again", error.Text);
+        Assert.Equal(English.Of("failure.settingsSave"), error.Text);
         Assert.DoesNotContain("/private/test", error.Text);
 
         // A growing result remains in the shell's scrollable body. The fixed
@@ -51,11 +57,12 @@ public sealed class SettingsDialogTests
     {
         ThemePreference? saved = null;
         var dialog = new SettingsDialog(
+            Languages.System,
             "Inter",
             ThemePreference.Light,
             isHiddenAndSystem: false,
             showWindowsHideMode: false,
-            (_, _, theme) =>
+            (_, _, _, theme) =>
             {
                 saved = theme;
                 return null;

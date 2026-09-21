@@ -1,0 +1,8 @@
+/* The permission prompts macOS shows when PathHide first reaches a protected location, in Japanese.
+   The keys are Info.plist's own; en.lproj/InfoPlist.strings holds the English they translate. */
+
+"NSDesktopFolderUsageDescription" = "PathHide は、“デスクトップ”フォルダ内の項目の非表示フラグを管理するためにアクセスする必要があります。";
+"NSDocumentsFolderUsageDescription" = "PathHide は、“書類”フォルダ内の項目の非表示フラグを管理するためにアクセスする必要があります。";
+"NSDownloadsFolderUsageDescription" = "PathHide は、“ダウンロード”フォルダ内の項目の非表示フラグを管理するためにアクセスする必要があります。";
+"NSNetworkVolumesUsageDescription" = "PathHide は、ネットワークボリューム上の項目の非表示フラグを管理するためにアクセスする必要があります。";
+"NSRemovableVolumesUsageDescription" = "PathHide は、リムーバブルボリューム上の項目の非表示フラグを管理するためにアクセスする必要があります。";

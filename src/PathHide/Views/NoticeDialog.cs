@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Media;
+using PathHide.I18n;
 
 namespace PathHide.Views;
 
@@ -11,29 +12,31 @@ namespace PathHide.Views;
 /// </summary>
 public sealed class NoticeDialog : DialogBase
 {
-    private NoticeDialog(string title, string message)
+    private NoticeDialog(Message title, Message message)
     {
         Width = 440;
-        Title = title;
+        // Rendered once, as it is built: a notice is modal, or it is the application's only window,
+        // and in neither case can the language change while it is up.
+        Title = Localizer.Of(title);
 
         SetContent(new TextBlock
         {
-            Text = message,
+            Text = Localizer.Of(message),
             TextWrapping = TextWrapping.Wrap,
             FontSize = 14,
         });
 
-        var buttons = SetButtons([new DialogButton("Close", "close", DialogButtonKind.Primary) { IsDefault = true }]);
+        var buttons = SetButtons([new DialogButton("common.close", "close", DialogButtonKind.Primary) { IsDefault = true }]);
         SetInitialFocus(buttons["close"]);
     }
 
-    public static Task ShowAsync(Window owner, string title, string message) =>
+    public static Task ShowAsync(Window owner, Message title, Message message) =>
         new NoticeDialog(title, message).ShowBoundedAsync(owner);
 
     /// <summary>
     /// A startup failure notice used as the main window. Closing it ends the app.
     /// </summary>
-    public static Window CreateStartupFailure(string title, string message)
+    public static Window CreateStartupFailure(Message title, Message message)
     {
         var dialog = new NoticeDialog(title, message);
         dialog.BoundHeightToScreen();

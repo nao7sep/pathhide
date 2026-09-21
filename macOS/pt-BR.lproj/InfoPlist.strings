@@ -1,0 +1,8 @@
+/* The permission prompts macOS shows when PathHide first reaches a protected location, in Brazilian Portuguese.
+   Each place is named as macOS names it in Brazilian Portuguese (the Desktop folder is "Mesa"). */
+
+"NSDesktopFolderUsageDescription" = "O PathHide precisa de acesso para controlar se os itens da sua pasta Mesa ficam ocultos.";
+"NSDocumentsFolderUsageDescription" = "O PathHide precisa de acesso para controlar se os itens da sua pasta Documentos ficam ocultos.";
+"NSDownloadsFolderUsageDescription" = "O PathHide precisa de acesso para controlar se os itens da sua pasta Downloads ficam ocultos.";
+"NSNetworkVolumesUsageDescription" = "O PathHide precisa de acesso para controlar se os itens em volumes de rede ficam ocultos.";
+"NSRemovableVolumesUsageDescription" = "O PathHide precisa de acesso para controlar se os itens em volumes removíveis ficam ocultos.";

@@ -1,0 +1,8 @@
+/* The permission prompts macOS shows when PathHide first reaches a protected location, in Russian.
+   Each value translates the English in en.lproj/InfoPlist.strings. */
+
+"NSDesktopFolderUsageDescription" = "Приложению PathHide нужен доступ, чтобы управлять флагом скрытия у объектов на вашем Рабочем столе.";
+"NSDocumentsFolderUsageDescription" = "Приложению PathHide нужен доступ, чтобы управлять флагом скрытия у объектов в вашей папке «Документы».";
+"NSDownloadsFolderUsageDescription" = "Приложению PathHide нужен доступ, чтобы управлять флагом скрытия у объектов в вашей папке «Загрузки».";
+"NSNetworkVolumesUsageDescription" = "Приложению PathHide нужен доступ, чтобы управлять флагом скрытия у объектов на сетевых томах.";
+"NSRemovableVolumesUsageDescription" = "Приложению PathHide нужен доступ, чтобы управлять флагом скрытия у объектов на съемных томах.";

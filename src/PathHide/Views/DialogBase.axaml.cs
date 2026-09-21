@@ -28,7 +28,7 @@ public enum DialogButtonKind
 /// dialog should set <see cref="IsDefault"/>; that button is Enter-activated and should be
 /// the safest action (the commit for a benign form, Cancel for a destructive confirm).
 /// </summary>
-public sealed record DialogButton(string Label, string Tag, DialogButtonKind Kind = DialogButtonKind.Normal)
+public sealed record DialogButton(string LabelKey, string Tag, DialogButtonKind Kind = DialogButtonKind.Normal)
 {
     public bool IsDefault { get; init; }
 }
@@ -71,8 +71,8 @@ public partial class DialogBase : Window
     protected virtual bool HasUnsavedChanges => false;
 
     /// <summary>Discard-confirmation copy used when a dirty dialog is dismissed.</summary>
-    protected virtual (string Title, string Message) DiscardPrompt =>
-        ("Discard Changes", "You have unsaved changes. Discard them and close?");
+    protected virtual (I18n.Message Title, I18n.Message Message) DiscardPrompt =>
+        (I18n.Message.Of("dialog.discardTitle"), I18n.Message.Of("dialog.discardMessage"));
 
     protected void SetContent(Control content) => DialogContent.Content = content;
 
@@ -92,12 +92,13 @@ public partial class DialogBase : Window
         {
             var button = new Button
             {
-                Content = descriptor.Label,
                 Tag = descriptor.Tag,
                 MinWidth = 80,
                 HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
                 IsDefault = descriptor.IsDefault,
             };
+
+            I18n.Localized.SetContent(button, descriptor.LabelKey);
 
             switch (descriptor.Kind)
             {
@@ -205,7 +206,7 @@ public partial class DialogBase : Window
         // so the in-progress close is cancelled deterministically.
         e.Cancel = true;
         var (title, message) = DiscardPrompt;
-        if (await ConfirmDialog.ConfirmDestructiveAsync(this, title, message, "Discard"))
+        if (await ConfirmDialog.ConfirmDestructiveAsync(this, title, message, "dialog.discard"))
         {
             _bypassCloseGuard = true;
             Close();

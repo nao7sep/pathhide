@@ -1,0 +1,7 @@
+/* The permission prompts macOS shows when PathHide first reaches a protected location, in French. */
+
+"NSDesktopFolderUsageDescription" = "PathHide a besoin d’accéder à votre dossier Bureau pour gérer l’indicateur de masquage des éléments qu’il contient.";
+"NSDocumentsFolderUsageDescription" = "PathHide a besoin d’accéder à votre dossier Documents pour gérer l’indicateur de masquage des éléments qu’il contient.";
+"NSDownloadsFolderUsageDescription" = "PathHide a besoin d’accéder à votre dossier Téléchargements pour gérer l’indicateur de masquage des éléments qu’il contient.";
+"NSNetworkVolumesUsageDescription" = "PathHide a besoin d’accéder aux volumes réseau pour gérer l’indicateur de masquage des éléments qu’ils contiennent.";
+"NSRemovableVolumesUsageDescription" = "PathHide a besoin d’accéder aux volumes amovibles pour gérer l’indicateur de masquage des éléments qu’ils contiennent.";

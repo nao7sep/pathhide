@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using PathHide.Models;
 using PathHide.Views;
+using PathHide.I18n;
 using Xunit;
 
 namespace PathHide.Tests.Views;
@@ -35,7 +36,7 @@ public sealed class DialogBoundsTests : IDisposable
         return owner;
     }
 
-    private SettingsDialog Settings() => new SettingsDialog("Inter", ThemePreference.System, false, true, (_, _, _) => null);
+    private SettingsDialog Settings() => new SettingsDialog(Languages.System, "Inter", ThemePreference.System, false, true, (_, _, _, _) => null);
 
     private SettingsDialog OpenSettings(Window owner)
     {
@@ -180,7 +181,7 @@ public sealed class DialogBoundsTests : IDisposable
 
         foreach (var dialog in new Window[]
         {
-            new SettingsDialog("Inter", ThemePreference.System, false, true, (_, _, _) => null),
+            new SettingsDialog(Languages.System, "Inter", ThemePreference.System, false, true, (_, _, _, _) => null),
             new AboutDialog(_ => true),
             new ShortcutsDialog(ShortcutCatalog.Build(owner)),
         })
@@ -196,7 +197,7 @@ public sealed class DialogBoundsTests : IDisposable
     [AvaloniaFact]
     public void The_startup_failure_notice_is_bounded_by_the_screen()
     {
-        var notice = NoticeDialog.CreateStartupFailure("PathHide could not start", "Something went wrong.");
+        var notice = NoticeDialog.CreateStartupFailure(Message.Of("startup.failedTitle"), Message.Of("failure.startupStorage"));
         _open.Add(notice);
 
         var screen = notice.Screens.Primary!;
@@ -214,7 +215,7 @@ public sealed class DialogBoundsTests : IDisposable
     [AvaloniaFact]
     public void The_startup_failure_notice_takes_the_chrome_of_a_lone_window()
     {
-        var notice = NoticeDialog.CreateStartupFailure("PathHide could not start", "Something went wrong.");
+        var notice = NoticeDialog.CreateStartupFailure(Message.Of("startup.failedTitle"), Message.Of("failure.startupStorage"));
         _open.Add(notice);
         var owned = new DialogBase();
         _open.Add(owned);
