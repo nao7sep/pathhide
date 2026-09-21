@@ -13,13 +13,11 @@ using Xunit;
 
 namespace PathHide.Tests.Controls;
 
-public sealed class ImeTextBoxTests
+public sealed class ImeTextBoxTests : WindowTest
 {
-    private static T Host<T>(T content) where T : Control
+    private T Host<T>(T content) where T : Control
     {
-        var window = new Window { Content = content, Width = 400, Height = 300 };
-        window.Show();
-        Dispatcher.UIThread.RunJobs();
+        Show(new Window { Content = content, Width = 400, Height = 300 });
         return content;
     }
 
