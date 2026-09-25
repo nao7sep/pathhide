@@ -45,6 +45,15 @@ public sealed class FakeVisibilityService : IVisibilityService
     /// </summary>
     public TaskCompletionSource InspectEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <summary>
+    /// When set, <see cref="Hide"/> and <see cref="Show"/> block on this gate before writing, the
+    /// way a flag write on a stalled network share does. <see cref="WriteEntered"/> completes first.
+    /// </summary>
+    public ManualResetEventSlim? WriteGate { get; set; }
+
+    /// <summary>Completes the first time <see cref="Hide"/> or <see cref="Show"/> is entered.</summary>
+    public TaskCompletionSource WriteEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public void Set(string path, ActualState state, ItemKind kind = ItemKind.File)
         => _byPath[path] = new PathInspection(state, kind);
 
@@ -64,6 +73,9 @@ public sealed class FakeVisibilityService : IVisibilityService
 
     public void Hide(string path)
     {
+        WriteEntered.TrySetResult();
+        WriteGate?.Wait();
+
         var thrown = OnHide?.Invoke(path);
         if (thrown is not null)
             throw thrown;
@@ -76,6 +88,9 @@ public sealed class FakeVisibilityService : IVisibilityService
 
     public void Show(string path)
     {
+        WriteEntered.TrySetResult();
+        WriteGate?.Wait();
+
         Shown.Enqueue(path);
         _byPath[path] = new PathInspection(
             ActualState.Visible,

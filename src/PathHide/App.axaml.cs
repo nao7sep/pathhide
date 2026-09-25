@@ -185,7 +185,7 @@ public partial class App : Application
             ? new WindowsVisibilityService(() => settings.WindowsHideMode)
             : new MacVisibilityService();
 
-        return new MainWindowViewModel(visibilityService, pathListStore, settingsStore, settings)
+        return new MainWindowViewModel(new BoundedVisibility(visibilityService), pathListStore, settingsStore, settings)
         {
             ComputerLanguages = ComputerLanguages,
         };

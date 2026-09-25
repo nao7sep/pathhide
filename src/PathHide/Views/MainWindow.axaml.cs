@@ -330,7 +330,7 @@ public partial class MainWindow : Window
             ViewModel.Theme,
             ViewModel.IsHiddenAndSystem,
             ViewModel.HasWindowsHideMode,
-            ViewModel.TryApplySettings);
+            ViewModel.TryApplySettingsAsync);
         await dialog.ShowBoundedAsync(this);
 
         if (dialog.Accepted)
@@ -458,7 +458,7 @@ public partial class MainWindow : Window
             if (item.Gesture is { } gesture && item.Action is { } action && gesture.Matches(e))
             {
                 // Only mark handled when the action actually ran, so a gesture whose command is
-                // unavailable (e.g. Esc while not scanning) leaves the key to its default handling.
+                // unavailable (e.g. Esc while nothing is running) leaves the key to its default handling.
                 if (TryRunShortcut(action))
                     e.Handled = true;
                 return;
@@ -471,8 +471,8 @@ public partial class MainWindow : Window
         if (ShortcutRouter.IsViewAction(action))
             return RunViewAction(action);
 
-        // Esc cancels only while a scan is running; otherwise it stays unhandled.
-        if (action == ShortcutAction.CancelScan && !ViewModel.IsScanning)
+        // Esc cancels only while a scan or apply is running; otherwise it stays unhandled.
+        if (action == ShortcutAction.Cancel && !ViewModel.IsBusy)
             return false;
 
         var command = ShortcutRouter.CommandFor(ViewModel, action);
@@ -576,7 +576,7 @@ public partial class MainWindow : Window
 
     // The action bar is ONE tab stop (KeyboardNavigation.TabNavigation="Once" in the XAML),
     // and these keys move within it: Left/Right to the adjacent button, Home/End to the ends,
-    // skipping any currently hidden (Cancel, shown only while scanning) and stopping at the
+    // skipping any currently hidden (Cancel, shown only while scanning or applying) and stopping at the
     // ends rather than letting the key escape the group. Ten separately-tabbable buttons made
     // reaching the grid below cost up to ten Tab presses — and the bar's width is a user
     // preference, so it grew with every configured action.

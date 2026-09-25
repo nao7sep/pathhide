@@ -43,7 +43,7 @@ public class LabelFitTests : WindowTest
 
         var dialog = Show(new SettingsDialog(
             Languages.System, AppSettings.DefaultUiFontFamily, ThemePreference.System,
-            isHiddenAndSystem: false, showWindowsHideMode: true, (_, _, _, _) => null));
+            isHiddenAndSystem: false, showWindowsHideMode: true, (_, _, _, _) => Task.FromResult<Message?>(null)));
 
         // Section headers, the three theme choices, the checkbox and the two buttons.
         AssertNothingClipped(dialog, tag, atLeast: 10);

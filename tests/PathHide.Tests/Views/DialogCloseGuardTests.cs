@@ -48,6 +48,26 @@ public sealed class DialogCloseGuardTests
             reason, committing: false, hasUnsavedChanges: true));
     }
 
+    // --- A commit still saving ---
+
+    [Fact]
+    public void UserClose_WhileSaving_IsHeld()
+    {
+        // The save is off the UI thread now; a dismiss meanwhile would close over a save that may
+        // yet fail, with nowhere left to report it.
+        Assert.True(DialogCloseGuard.ShouldHoldForCommit(WindowCloseReason.WindowClosing, saving: true));
+        Assert.False(DialogCloseGuard.ShouldHoldForCommit(WindowCloseReason.WindowClosing, saving: false));
+    }
+
+    [Theory]
+    [InlineData(WindowCloseReason.OSShutdown)]
+    [InlineData(WindowCloseReason.ApplicationShutdown)]
+    [InlineData(WindowCloseReason.OwnerWindowClosing)]
+    public void NonUserClose_WhileSaving_NeverBlocks(WindowCloseReason reason)
+    {
+        Assert.False(DialogCloseGuard.ShouldHoldForCommit(reason, saving: true));
+    }
+
     // --- Which keys dismiss ---
 
     [Fact]

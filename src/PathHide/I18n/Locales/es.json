@@ -12,11 +12,17 @@
   "actual.hidden": "Oculto",
   "actual.missing": "No encontrado",
   "actual.unknown": "Sin comprobar",
+  "actual.unresponsive": "No responde",
   "actual.visible": "Visible",
   "apply.applied": {
     "one": "{count} aplicado",
     "many": "{count} de aplicados",
     "other": "{count} aplicados"
+  },
+  "apply.cancelled": {
+    "one": "{count} cancelado",
+    "many": "{count} de cancelados",
+    "other": "{count} cancelados"
   },
   "apply.errors": {
     "one": "{count} error",
@@ -33,6 +39,11 @@
     "one": "{count} no surtió efecto",
     "many": "{count} no surtieron efecto",
     "other": "{count} no surtieron efecto"
+  },
+  "apply.unresponsive": {
+    "one": "{count} no responde",
+    "many": "{count} no responden",
+    "other": "{count} no responden"
   },
   "common.cancel": "Cancelar",
   "common.close": "Cerrar",
@@ -112,6 +123,11 @@
     "many": "Se agregaron {count} de rutas a la lista",
     "other": "Se agregaron {count} rutas a la lista"
   },
+  "result.cancelled": {
+    "one": "se canceló el ocultamiento de {count} ruta",
+    "many": "se canceló el ocultamiento de {count} de rutas",
+    "other": "se canceló el ocultamiento de {count} rutas"
+  },
   "result.duplicates": {
     "one": "{count} ruta ya está en la lista",
     "many": "{count} de rutas ya están en la lista",
@@ -144,6 +160,11 @@
     "many": "{count} de rutas no quedaron ocultas",
     "other": "{count} rutas no quedaron ocultas"
   },
+  "result.unresponsive": {
+    "one": "{count} ruta no respondió",
+    "many": "{count} de rutas no respondieron",
+    "other": "{count} rutas no respondieron"
+  },
   "settings.hiddenAndSystem": "Al ocultar, activar también el atributo Sistema (Windows)",
   "settings.hideModeHint": "PathHide quita el atributo Sistema al mostrar, y también al ocultar si esta opción está desactivada. Esto incluye el atributo Sistema que un archivo o una carpeta ya tuviera, y PathHide no puede restaurarlo.",
   "settings.language": "Idioma",
@@ -159,7 +180,7 @@
   "settings.windowsHideMode": "Modo de ocultación en Windows",
   "shortcuts.addDirectories": "Agregar carpetas",
   "shortcuts.addFiles": "Agregar archivos",
-  "shortcuts.cancelScan": "Cancelar la comprobación en curso",
+  "shortcuts.cancel": "Cancelar la comprobación o el cambio de visibilidad en curso",
   "shortcuts.drop": "Agregar archivos o carpetas soltándolos en la ventana",
   "shortcuts.dropLabel": "Arrastrar y soltar",
   "shortcuts.groupApp": "Aplicación",

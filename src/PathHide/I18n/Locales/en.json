@@ -12,10 +12,15 @@
   "actual.hidden": "Hidden",
   "actual.missing": "Missing",
   "actual.unknown": "Not checked",
+  "actual.unresponsive": "Not responding",
   "actual.visible": "Visible",
   "apply.applied": {
     "one": "{count} applied",
     "other": "{count} applied"
+  },
+  "apply.cancelled": {
+    "one": "{count} cancelled",
+    "other": "{count} cancelled"
   },
   "apply.errors": {
     "one": "{count} error",
@@ -29,6 +34,10 @@
   "apply.unchanged": {
     "one": "{count} did not take effect",
     "other": "{count} did not take effect"
+  },
+  "apply.unresponsive": {
+    "one": "{count} not responding",
+    "other": "{count} not responding"
   },
   "common.cancel": "Cancel",
   "common.close": "Close",
@@ -106,6 +115,10 @@
     "one": "Added {count} path to the list",
     "other": "Added {count} paths to the list"
   },
+  "result.cancelled": {
+    "one": "hiding was cancelled for {count} path",
+    "other": "hiding was cancelled for {count} paths"
+  },
   "result.duplicates": {
     "one": "{count} path is already in the list",
     "other": "{count} paths are already in the list"
@@ -132,6 +145,10 @@
     "one": "{count} path did not become hidden",
     "other": "{count} paths did not become hidden"
   },
+  "result.unresponsive": {
+    "one": "{count} path did not respond",
+    "other": "{count} paths did not respond"
+  },
   "settings.hiddenAndSystem": "Also set the System attribute when hiding (Windows)",
   "settings.hideModeHint": "PathHide clears the System attribute when showing, and when hiding with this off. That includes a System attribute a file or folder already had, which PathHide cannot restore.",
   "settings.language": "Language",
@@ -147,7 +164,7 @@
   "settings.windowsHideMode": "Windows Hide Mode",
   "shortcuts.addDirectories": "Add directories",
   "shortcuts.addFiles": "Add files",
-  "shortcuts.cancelScan": "Cancel the running scan",
+  "shortcuts.cancel": "Cancel the running scan or visibility change",
   "shortcuts.drop": "Add by dropping files or directories on the window",
   "shortcuts.dropLabel": "Drag and drop",
   "shortcuts.groupApp": "App",

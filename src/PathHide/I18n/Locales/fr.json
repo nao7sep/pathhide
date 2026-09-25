@@ -12,11 +12,17 @@
   "actual.hidden": "Masqué",
   "actual.missing": "Introuvable",
   "actual.unknown": "Non vérifié",
+  "actual.unresponsive": "Ne répond pas",
   "actual.visible": "Visible",
   "apply.applied": {
     "one": "{count} appliqué",
     "many": "{count} appliqués",
     "other": "{count} appliqués"
+  },
+  "apply.cancelled": {
+    "one": "{count} annulé",
+    "many": "{count} annulés",
+    "other": "{count} annulés"
   },
   "apply.errors": {
     "one": "{count} erreur",
@@ -33,6 +39,11 @@
     "one": "{count} n’a pas pris effet",
     "many": "{count} n’ont pas pris effet",
     "other": "{count} n’ont pas pris effet"
+  },
+  "apply.unresponsive": {
+    "one": "{count} ne répond pas",
+    "many": "{count} ne répondent pas",
+    "other": "{count} ne répondent pas"
   },
   "common.cancel": "Annuler",
   "common.close": "Fermer",
@@ -112,6 +123,11 @@
     "many": "{count} de chemins ajoutés à la liste",
     "other": "{count} chemins ajoutés à la liste"
   },
+  "result.cancelled": {
+    "one": "masquage annulé pour {count} chemin",
+    "many": "masquage annulé pour {count} de chemins",
+    "other": "masquage annulé pour {count} chemins"
+  },
   "result.duplicates": {
     "one": "{count} chemin est déjà dans la liste",
     "many": "{count} de chemins sont déjà dans la liste",
@@ -144,6 +160,11 @@
     "many": "{count} de chemins ne sont toujours pas masqués",
     "other": "{count} chemins ne sont toujours pas masqués"
   },
+  "result.unresponsive": {
+    "one": "{count} chemin n’a pas répondu",
+    "many": "{count} de chemins n’ont pas répondu",
+    "other": "{count} chemins n’ont pas répondu"
+  },
   "settings.hiddenAndSystem": "Définir aussi l’attribut Système lors du masquage (Windows)",
   "settings.hideModeHint": "PathHide retire l’attribut Système lors de l’affichage, ainsi que lors du masquage si cette option est désactivée. Cela inclut un attribut Système qu’un fichier ou un dossier avait déjà, et que PathHide ne peut pas rétablir.",
   "settings.language": "Langue",
@@ -159,7 +180,7 @@
   "settings.windowsHideMode": "Mode de masquage sous Windows",
   "shortcuts.addDirectories": "Ajouter des dossiers",
   "shortcuts.addFiles": "Ajouter des fichiers",
-  "shortcuts.cancelScan": "Annuler l’analyse en cours",
+  "shortcuts.cancel": "Annuler l’analyse ou le changement de visibilité en cours",
   "shortcuts.drop": "Ajouter en déposant des fichiers ou des dossiers sur la fenêtre",
   "shortcuts.dropLabel": "Glisser-déposer",
   "shortcuts.groupApp": "Application",

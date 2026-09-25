@@ -51,6 +51,10 @@ public partial class DialogBase : Window
     private Control? _initialFocusControl;
     private bool _bypassCloseGuard;
 
+    // True while a commit button's TryCommitAsync is saving: a second click, Enter or Escape
+    // does nothing until it has finished.
+    private bool _saving;
+
     /// <summary>Tag of the button the user activated, or <c>null</c> if the dialog was dismissed.</summary>
     public string? ResultTag { get; private set; }
 
@@ -157,8 +161,11 @@ public partial class DialogBase : Window
             screen?.WorkingArea.Height ?? 0,
             screen?.Scaling ?? 0);
 
-    /// <summary>Allows a feature dialog to persist its draft before the shell closes.</summary>
-    protected virtual bool TryCommit(string tag) => true;
+    /// <summary>
+    /// Allows a feature dialog to persist its draft before the shell closes. Returns false to keep
+    /// the dialog open (a failed save it has reported in place).
+    /// </summary>
+    protected virtual Task<bool> TryCommitAsync(string tag) => Task.FromResult(true);
 
     private void OnOpened(object? sender, EventArgs e)
     {
@@ -181,14 +188,31 @@ public partial class DialogBase : Window
             Close();
     }
 
-    private void OnButtonClick(object? sender, RoutedEventArgs e)
+    private async void OnButtonClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Button button)
+        if (sender is not Button button || _saving)
             return;
 
         var tag = button.Tag as string;
-        if (tag is null || (_commitButtons.Contains(button) && !TryCommit(tag)))
+        if (tag is null)
             return;
+
+        if (_commitButtons.Contains(button))
+        {
+            _saving = true;
+            bool committed;
+            try
+            {
+                committed = await TryCommitAsync(tag);
+            }
+            finally
+            {
+                _saving = false;
+            }
+
+            if (!committed)
+                return;
+        }
 
         ResultTag = tag;
         if (_commitButtons.Contains(button))
@@ -199,6 +223,12 @@ public partial class DialogBase : Window
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        if (DialogCloseGuard.ShouldHoldForCommit(e.CloseReason, _saving))
+        {
+            e.Cancel = true;
+            return;
+        }
+
         if (!DialogCloseGuard.ShouldConfirmDiscard(e.CloseReason, _bypassCloseGuard, HasUnsavedChanges))
             return;
 

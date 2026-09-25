@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using PathHide.Models;
+using PathHide.Services;
 using PathHide.Tests.Fakes;
 using PathHide.ViewModels;
 using PathHide.Views;
@@ -14,7 +15,7 @@ public sealed class ShortcutRouterTests
     {
         var settingsStore = new FakeJsonStore<AppSettings>();
         return new MainWindowViewModel(
-            new FakeVisibilityService(),
+            new BoundedVisibility(new FakeVisibilityService()),
             new FakeJsonStore<List<PathEntry>>(),
             settingsStore,
             settingsStore.Load().Value);
@@ -25,7 +26,7 @@ public sealed class ShortcutRouterTests
     [InlineData(ShortcutAction.ShowSelected)]
     [InlineData(ShortcutAction.ReapplyAll)]
     [InlineData(ShortcutAction.Reload)]
-    [InlineData(ShortcutAction.CancelScan)]
+    [InlineData(ShortcutAction.Cancel)]
     public void CommandFor_ReturnsACommand_ForCommandBackedActions(ShortcutAction action)
     {
         Assert.NotNull(ShortcutRouter.CommandFor(NewViewModel(), action));

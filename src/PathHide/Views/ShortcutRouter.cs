@@ -8,7 +8,7 @@ namespace PathHide.Views;
 /// Routes a window-level <see cref="ShortcutAction"/> to the view-model command it runs, or marks it as
 /// one the window dispatches itself (a picker or dialog). Pulled out of the window so a test can assert
 /// every action is routed — the previous in-window switch's <c>default</c> arm let a newly-added action
-/// silently no-op. The runtime guards stay in the window — a scan must be running for Cancel — because
+/// silently no-op. The runtime guards stay in the window — a scan or apply must be running for Cancel — because
 /// those read live view/VM state, not a static action-to-command map.
 /// </summary>
 public static class ShortcutRouter
@@ -20,7 +20,7 @@ public static class ShortcutRouter
         ShortcutAction.ShowSelected => vm.ShowSelectedCommand,
         ShortcutAction.ReapplyAll => vm.ReapplyAllCommand,
         ShortcutAction.Reload => vm.ReloadCommand,
-        ShortcutAction.CancelScan => vm.CancelScanCommand,
+        ShortcutAction.Cancel => vm.CancelCommand,
         _ => null,
     };
 

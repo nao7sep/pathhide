@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using PathHide.Models;
+using PathHide.Services;
 using PathHide.Tests.Fakes;
 using PathHide.ViewModels;
 using PathHide.Views;
@@ -18,7 +19,7 @@ public sealed class ViewActionBoundaryTests
     {
         var settings = new FakeJsonStore<AppSettings>();
         var vm = new MainWindowViewModel(
-            new FakeVisibilityService(),
+            new BoundedVisibility(new FakeVisibilityService()),
             new FakeJsonStore<List<PathEntry>>(),
             settings,
             settings.Load().Value);

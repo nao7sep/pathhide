@@ -12,9 +12,13 @@
   "actual.hidden": "已隐藏",
   "actual.missing": "不存在",
   "actual.unknown": "未检查",
+  "actual.unresponsive": "无响应",
   "actual.visible": "可见",
   "apply.applied": {
     "other": "{count} 个已应用"
+  },
+  "apply.cancelled": {
+    "other": "{count} 个已取消"
   },
   "apply.errors": {
     "other": "{count} 个错误"
@@ -25,6 +29,9 @@
   },
   "apply.unchanged": {
     "other": "{count} 个未生效"
+  },
+  "apply.unresponsive": {
+    "other": "{count} 个无响应"
   },
   "common.cancel": "取消",
   "common.close": "关闭",
@@ -100,6 +107,9 @@
   "result.added": {
     "other": "已将 {count} 个路径添加到列表"
   },
+  "result.cancelled": {
+    "other": "{count} 个路径的隐藏操作已取消"
+  },
   "result.duplicates": {
     "other": "{count} 个路径已在列表中"
   },
@@ -120,6 +130,9 @@
   "result.unchanged": {
     "other": "{count} 个路径的隐藏未生效"
   },
+  "result.unresponsive": {
+    "other": "{count} 个路径没有响应"
+  },
   "settings.hiddenAndSystem": "隐藏时同时设置“系统”属性（Windows）",
   "settings.hideModeHint": "显示时，以及在此选项关闭的情况下隐藏时，PathHide 都会清除“系统”属性。文件或文件夹原本就带有的“系统”属性也会被清除，且 PathHide 无法将其恢复。",
   "settings.language": "语言",
@@ -135,7 +148,7 @@
   "settings.windowsHideMode": "Windows 隐藏模式",
   "shortcuts.addDirectories": "添加文件夹",
   "shortcuts.addFiles": "添加文件",
-  "shortcuts.cancelScan": "取消正在进行的扫描",
+  "shortcuts.cancel": "取消正在进行的扫描或可见性更改",
   "shortcuts.drop": "将文件或文件夹拖放到窗口上即可添加",
   "shortcuts.dropLabel": "拖放",
   "shortcuts.groupApp": "应用",

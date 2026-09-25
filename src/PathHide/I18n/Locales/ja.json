@@ -12,9 +12,13 @@
   "actual.hidden": "非表示",
   "actual.missing": "見つからない",
   "actual.unknown": "未確認",
+  "actual.unresponsive": "応答なし",
   "actual.visible": "表示",
   "apply.applied": {
     "other": "適用済み {count} 件"
+  },
+  "apply.cancelled": {
+    "other": "キャンセル {count} 件"
   },
   "apply.errors": {
     "other": "エラー {count} 件"
@@ -25,6 +29,9 @@
   },
   "apply.unchanged": {
     "other": "反映されなかった {count} 件"
+  },
+  "apply.unresponsive": {
+    "other": "応答なし {count} 件"
   },
   "common.cancel": "キャンセル",
   "common.close": "閉じる",
@@ -100,6 +107,9 @@
   "result.added": {
     "other": "パス {count} 件を一覧に追加しました"
   },
+  "result.cancelled": {
+    "other": "パス {count} 件の非表示処理をキャンセルしました"
+  },
   "result.duplicates": {
     "other": "パス {count} 件はすでに一覧にあります"
   },
@@ -120,6 +130,9 @@
   "result.unchanged": {
     "other": "パス {count} 件は非表示になりませんでした"
   },
+  "result.unresponsive": {
+    "other": "パス {count} 件が応答しませんでした"
+  },
   "settings.hiddenAndSystem": "非表示時にシステム ファイル属性も設定する（Windows）",
   "settings.hideModeHint": "PathHide は、表示するとき、およびこの設定がオフの状態で非表示にするときに、システム ファイル属性を解除します。ファイルやフォルダにもともと付いていたシステム ファイル属性も解除され、PathHide はそれを元に戻せません。",
   "settings.language": "言語",
@@ -135,7 +148,7 @@
   "settings.windowsHideMode": "Windows の非表示モード",
   "shortcuts.addDirectories": "フォルダを追加します",
   "shortcuts.addFiles": "ファイルを追加します",
-  "shortcuts.cancelScan": "実行中のスキャンをキャンセルします",
+  "shortcuts.cancel": "実行中のスキャンまたは表示状態の変更をキャンセルします",
   "shortcuts.drop": "ファイルやフォルダをウインドウにドロップして追加します",
   "shortcuts.dropLabel": "ドラッグ＆ドロップ",
   "shortcuts.groupApp": "アプリ",

@@ -12,11 +12,17 @@
   "actual.hidden": "Nascosto",
   "actual.missing": "Mancante",
   "actual.unknown": "Non verificato",
+  "actual.unresponsive": "Non risponde",
   "actual.visible": "Visibile",
   "apply.applied": {
     "one": "{count} applicato",
     "many": "{count} applicati",
     "other": "{count} applicati"
+  },
+  "apply.cancelled": {
+    "one": "{count} annullato",
+    "many": "{count} annullati",
+    "other": "{count} annullati"
   },
   "apply.errors": {
     "one": "{count} errore",
@@ -33,6 +39,11 @@
     "one": "{count} senza effetto",
     "many": "{count} senza effetto",
     "other": "{count} senza effetto"
+  },
+  "apply.unresponsive": {
+    "one": "{count} non risponde",
+    "many": "{count} non rispondono",
+    "other": "{count} non rispondono"
   },
   "common.cancel": "Annulla",
   "common.close": "Chiudi",
@@ -112,6 +123,11 @@
     "many": "Aggiunti {count} di percorsi all’elenco",
     "other": "Aggiunti {count} percorsi all’elenco"
   },
+  "result.cancelled": {
+    "one": "occultamento annullato per {count} percorso",
+    "many": "occultamento annullato per {count} di percorsi",
+    "other": "occultamento annullato per {count} percorsi"
+  },
   "result.duplicates": {
     "one": "{count} percorso è già nell’elenco",
     "many": "{count} di percorsi sono già nell’elenco",
@@ -144,6 +160,11 @@
     "many": "{count} di percorsi non risultano nascosti",
     "other": "{count} percorsi non risultano nascosti"
   },
+  "result.unresponsive": {
+    "one": "{count} percorso non ha risposto",
+    "many": "{count} di percorsi non hanno risposto",
+    "other": "{count} percorsi non hanno risposto"
+  },
   "settings.hiddenAndSystem": "Imposta anche l’attributo di sistema quando nascondi (Windows)",
   "settings.hideModeHint": "PathHide rimuove l’attributo di sistema quando mostra un elemento e, se questa opzione è disattivata, anche quando lo nasconde. L’attributo viene rimosso anche da un file o da una cartella che lo aveva già, e PathHide non può ripristinarlo.",
   "settings.language": "Lingua",
@@ -159,7 +180,7 @@
   "settings.windowsHideMode": "Modalità di occultamento su Windows",
   "shortcuts.addDirectories": "Aggiungi cartelle",
   "shortcuts.addFiles": "Aggiungi file",
-  "shortcuts.cancelScan": "Annulla la scansione in corso",
+  "shortcuts.cancel": "Annulla la scansione o la modifica della visibilità in corso",
   "shortcuts.drop": "Aggiungi trascinando file o cartelle sulla finestra",
   "shortcuts.dropLabel": "Trascina e rilascia",
   "shortcuts.groupApp": "Applicazione",

@@ -12,9 +12,13 @@
   "actual.hidden": "숨김",
   "actual.missing": "찾을 수 없음",
   "actual.unknown": "미확인",
+  "actual.unresponsive": "응답 없음",
   "actual.visible": "보임",
   "apply.applied": {
     "other": "적용됨 {count}개"
+  },
+  "apply.cancelled": {
+    "other": "취소됨 {count}개"
   },
   "apply.errors": {
     "other": "오류 {count}개"
@@ -25,6 +29,9 @@
   },
   "apply.unchanged": {
     "other": "반영되지 않음 {count}개"
+  },
+  "apply.unresponsive": {
+    "other": "응답 없음 {count}개"
   },
   "common.cancel": "취소",
   "common.close": "닫기",
@@ -100,6 +107,9 @@
   "result.added": {
     "other": "경로 {count}개를 목록에 추가했습니다"
   },
+  "result.cancelled": {
+    "other": "경로 {count}개의 숨기기 작업이 취소되었습니다"
+  },
   "result.duplicates": {
     "other": "경로 {count}개는 이미 목록에 있습니다"
   },
@@ -120,6 +130,9 @@
   "result.unchanged": {
     "other": "경로 {count}개가 숨김 상태가 되지 않았습니다"
   },
+  "result.unresponsive": {
+    "other": "경로 {count}개가 응답하지 않았습니다"
+  },
   "settings.hiddenAndSystem": "숨길 때 시스템 특성도 설정(Windows)",
   "settings.hideModeHint": "PathHide는 표시할 때와 이 옵션을 끈 채로 숨길 때 시스템 특성을 해제합니다. 파일이나 폴더에 원래 있던 시스템 특성도 해제되며, PathHide는 이를 복원할 수 없습니다.",
   "settings.language": "언어",
@@ -135,7 +148,7 @@
   "settings.windowsHideMode": "Windows 숨기기 모드",
   "shortcuts.addDirectories": "폴더 추가",
   "shortcuts.addFiles": "파일 추가",
-  "shortcuts.cancelScan": "진행 중인 검사 취소",
+  "shortcuts.cancel": "진행 중인 검사 또는 표시 상태 변경 취소",
   "shortcuts.drop": "파일이나 폴더를 창에 끌어다 놓아 추가",
   "shortcuts.dropLabel": "끌어서 놓기",
   "shortcuts.groupApp": "앱",

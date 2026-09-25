@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using PathHide.Storage;
 
 namespace PathHide.Tests.Fakes;
@@ -24,16 +25,25 @@ public sealed class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
     /// <see cref="CreateIfMissing"/> models the real store's absence-only trigger.</summary>
     public bool FileExists { get; set; }
 
+    /// <summary>When set, <see cref="Load"/> blocks on this gate first, like a read from a slow share.</summary>
+    public ManualResetEventSlim? LoadGate { get; set; }
+
     public LoadedStore<T> Load()
     {
+        LoadGate?.Wait();
         LoadCount++;
         return LoadIsUnreadable
             ? new LoadedStore<T>(new T(), WasUnreadable: true)
             : new LoadedStore<T>(Value, WasUnreadable: false);
     }
 
+    /// <summary>When set, <see cref="Save"/> blocks on this gate first, like a write to a slow share.</summary>
+    public ManualResetEventSlim? SaveGate { get; set; }
+
     public void Save(T value)
     {
+        SaveGate?.Wait();
+
         if (ThrowOnSave)
             throw new IOException("save failed (test)");
 

@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -26,7 +27,7 @@ public sealed class SettingsDialogTests
             ThemePreference.System,
             isHiddenAndSystem: false,
             showWindowsHideMode: false,
-            (_, _, _, _) => FailurePresentation.SettingsSave(new System.IO.IOException("Access to /private/test/config.tmp is denied.")));
+            (_, _, _, _) => Task.FromResult<Message?>(FailurePresentation.SettingsSave(new System.IO.IOException("Access to /private/test/config.tmp is denied."))));
         var font = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
         font.Text = "Menlo";
         var save = dialog.GetLogicalDescendants().OfType<Button>()
@@ -65,7 +66,7 @@ public sealed class SettingsDialogTests
             (_, _, _, theme) =>
             {
                 saved = theme;
-                return null;
+                return Task.FromResult<Message?>(null);
             });
         var radios = dialog.GetLogicalDescendants().OfType<RadioButton>().ToList();
         var save = dialog.GetLogicalDescendants().OfType<Button>()

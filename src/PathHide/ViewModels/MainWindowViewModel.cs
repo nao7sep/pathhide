@@ -19,7 +19,7 @@ public partial class MainWindowViewModel : ObservableObject
 {
     private readonly IJsonStore<List<PathEntry>> _pathListStore;
     private readonly IJsonStore<AppSettings> _settingsStore;
-    private readonly IVisibilityService _visibilityService;
+    private readonly BoundedVisibility _visibility;
     private readonly PathScanner _scanner;
 
     // The same AppSettings instance the Windows visibility service closes over (wired in
@@ -29,6 +29,14 @@ public partial class MainWindowViewModel : ObservableObject
 
     private List<PathEntry> _entries = [];
     private CancellationTokenSource? _scanCts;
+    private CancellationTokenSource? _applyCts;
+
+    // Serializes every settings write with the publish that follows it. A Settings save runs on a
+    // worker thread and the window-placement save runs on the UI thread as the window closes, and
+    // each builds its candidate from the live settings: unserialized, the later write would put back
+    // what the earlier one had just changed. A plain lock, because neither holder ever waits for the
+    // UI thread while holding it.
+    private readonly object _settingsWrite = new();
     private Task _scanTask = Task.CompletedTask;
 
     // Test seam (PathHide.Tests via InternalsVisibleTo): await the in-flight background scan
@@ -65,7 +73,16 @@ public partial class MainWindowViewModel : ObservableObject
     private int _scanProgress;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBusy))]
     private bool _isScanning;
+
+    /// <summary>Whether a visibility change is being applied to disk.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBusy))]
+    private bool _isApplying;
+
+    /// <summary>Whether there is a scan or an apply for <see cref="CancelCommand"/> to stop.</summary>
+    public bool IsBusy => IsScanning || IsApplying;
 
     public ObservableCollection<OperationalResultViewModel> OperationalResults { get; } = [];
 
@@ -88,7 +105,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// Current Windows hide mode as a bool, used to seed the settings dialog. Read-only:
-    /// the complete dialog draft is changed and persisted through <see cref="TryApplySettings"/>,
+    /// the complete dialog draft is changed and persisted through <see cref="TryApplySettingsAsync"/>,
     /// never through a bound setter, so there is no save side effect on assignment.
     /// </summary>
     public bool IsHiddenAndSystem => _settings.WindowsHideMode == WindowsHideMode.HiddenAndSystem;
@@ -133,7 +150,7 @@ public partial class MainWindowViewModel : ObservableObject
         var visible = Rows.Count(r => r.ActualState == ActualState.Visible);
         var missing = Rows.Count(r => r.ActualState == ActualState.Missing);
         var pending = Rows.Count(r => r.ActualState == ActualState.Unknown);
-        var problems = Rows.Count(r => r.ActualState is ActualState.AccessDenied or ActualState.Error);
+        var problems = Rows.Count(r => r.ActualState is ActualState.AccessDenied or ActualState.Error or ActualState.Unresponsive);
 
         var parts = new List<Message> { Message.Of("status.entries", ("count", Rows.Count)) };
         if (hidden > 0) parts.Add(Message.Of("status.hidden", ("count", hidden)));
@@ -163,8 +180,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// All dependencies are supplied by the composition root (see <c>App</c>),
     /// including the already-loaded <paramref name="settings"/>. The Windows
-    /// visibility service closes over that same instance to read the current hide
-    /// mode, so the view model mutates it in place rather than replacing it.
+    /// visibility service behind <paramref name="visibility"/> closes over that same
+    /// instance to read the current hide mode, so the view model mutates it in place
+    /// rather than replacing it.
     /// </summary>
     /// <remarks>
     /// Construction is side-effect-free: no disk I/O and no scan happen here, so the
@@ -172,16 +190,16 @@ public partial class MainWindowViewModel : ObservableObject
     /// once the view is ready to load entries and start scanning.
     /// </remarks>
     public MainWindowViewModel(
-        IVisibilityService visibilityService,
+        BoundedVisibility visibility,
         IJsonStore<List<PathEntry>> pathListStore,
         IJsonStore<AppSettings> settingsStore,
         AppSettings settings)
     {
-        _visibilityService = visibilityService;
+        _visibility = visibility;
         _pathListStore = pathListStore;
         _settingsStore = settingsStore;
         _settings = settings;
-        _scanner = new PathScanner(visibilityService);
+        _scanner = new PathScanner(visibility);
         Rows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsPathListEmpty));
         ApplyUiFont();
     }
@@ -353,10 +371,11 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        if (!TrySaveEntries(updated, out var saveFailure))
+        var saveFailure = await TrySaveEntriesAsync(updated);
+        if (saveFailure is not null)
         {
             SetPathAddResult(
-                saveFailure!,
+                saveFailure,
                 PathAddResultSeverity.Error,
                 issuePaths: addedPaths);
             return;
@@ -398,13 +417,17 @@ public partial class MainWindowViewModel : ObservableObject
             parts.Add(Message.Of("result.missing", ("count", outcome.Missing)));
         if (outcome.Errors > 0)
             parts.Add(Message.Of("result.errors", ("count", outcome.Errors)));
+        if (outcome.Unresponsive > 0)
+            parts.Add(Message.Of("result.unresponsive", ("count", outcome.Unresponsive)));
+        if (outcome.Cancelled > 0)
+            parts.Add(Message.Of("result.cancelled", ("count", outcome.Cancelled)));
 
         if (parts.Count == 0)
             return;
 
-        var severity = outcome.Errors > 0
+        var severity = outcome.HasFailures
             ? PathAddResultSeverity.Error
-            : invalid > 0 || outcome.Unchanged > 0 || outcome.Missing > 0
+            : invalid > 0 || outcome.Unchanged > 0 || outcome.Missing > 0 || outcome.Cancelled > 0
                 ? PathAddResultSeverity.Warning
                 : PathAddResultSeverity.Information;
 
@@ -472,9 +495,10 @@ public partial class MainWindowViewModel : ObservableObject
 
         Log.Info("remove paths", new { removed = selected.Count });
 
-        if (!TrySaveEntries(updated, out var saveFailure))
+        var saveFailure = await TrySaveEntriesAsync(updated);
+        if (saveFailure is not null)
         {
-            ShowOperationalResult(OperationalResultOwner.PathStore, saveFailure!, error: true);
+            ShowOperationalResult(OperationalResultOwner.PathStore, saveFailure, error: true);
             return;
         }
 
@@ -512,11 +536,12 @@ public partial class MainWindowViewModel : ObservableObject
                     : entry)
                 .ToList();
 
-            // The rows take the new value from the save, not before it: TrySaveEntries
+            // The rows take the new value from the save, not before it: TrySaveEntriesAsync
             // re-syncs them, so ApplyDesiredStateAsync below reads the committed state.
-            if (!TrySaveEntries(updated, out var saveFailure))
+            var saveFailure = await TrySaveEntriesAsync(updated);
+            if (saveFailure is not null)
             {
-                ShowOperationalResult(OperationalResultOwner.PathStore, saveFailure!, error: true);
+                ShowOperationalResult(OperationalResultOwner.PathStore, saveFailure, error: true);
                 return;
             }
             ResolveOperationalResult(OperationalResultOwner.PathStore);
@@ -568,7 +593,8 @@ public partial class MainWindowViewModel : ObservableObject
         // a freshly loaded settings object back into the shared instance field-by-field would
         // be both brittle (it silently couples to AppSettings having one field) and pointless.
         Log.Info("reload");
-        var reloaded = _pathListStore.Load();
+        // Off the UI thread: the data folder may sit on a slow or redirected profile share.
+        var reloaded = await Task.Run(_pathListStore.Load);
         if (reloaded.WasUnreadable)
         {
             // Mid-session there is nothing to halt: the app is already running
@@ -613,26 +639,26 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Saves the complete Settings draft atomically and publishes it only after disk agrees. Returns
-    /// what to tell the reader when the save failed, or null when it landed.
+    /// Saves the complete Settings draft atomically, off the UI thread, and publishes it only after
+    /// disk agrees. Returns what to tell the reader when the save failed, or null when it landed.
     /// </summary>
-    public Message? TryApplySettings(string language, string family, bool hiddenAndSystem, ThemePreference theme)
+    public async Task<Message?> TryApplySettingsAsync(
+        string language, string family, bool hiddenAndSystem, ThemePreference theme)
     {
         language = Languages.NormalizePreference(language);
         family = UiFontFamilyValue.Normalize(family);
         var newMode = hiddenAndSystem ? WindowsHideMode.HiddenAndSystem : WindowsHideMode.HiddenOnly;
-        if (Language == language && _settings.UiFontFamily == family
-            && _settings.WindowsHideMode == newMode && _settings.Theme == theme)
-            return null;
 
-        var candidate = CopySettings();
-        candidate.Language = language;
-        candidate.UiFontFamily = family;
-        candidate.WindowsHideMode = newMode;
-        candidate.Theme = theme;
+        AppSettings? previous;
         try
         {
-            _settingsStore.Save(candidate);
+            previous = await Task.Run(() => CommitSettings(candidate =>
+            {
+                candidate.Language = language;
+                candidate.UiFontFamily = family;
+                candidate.WindowsHideMode = newMode;
+                candidate.Theme = theme;
+            }));
         }
         catch (Exception ex)
         {
@@ -640,21 +666,17 @@ public partial class MainWindowViewModel : ObservableObject
             return FailurePresentation.SettingsSave(ex);
         }
 
-        var fontChanged = _settings.UiFontFamily != family;
-        var modeChanged = _settings.WindowsHideMode != newMode;
-        var themeChanged = _settings.Theme != theme;
-        _settings.Language = language;
-        _settings.UiFontFamily = family;
-        _settings.WindowsHideMode = newMode;
-        _settings.Theme = theme;
-        if (fontChanged)
+        if (previous is null)
+            return null;
+
+        if (previous.UiFontFamily != family)
         {
             ApplyUiFont();
             OnPropertyChanged(nameof(UiFontFamily));
         }
-        if (modeChanged)
+        if (previous.WindowsHideMode != newMode)
             OnPropertyChanged(nameof(IsHiddenAndSystem));
-        if (themeChanged)
+        if (previous.Theme != theme)
             OnPropertyChanged(nameof(Theme));
         OnPropertyChanged(nameof(Language));
         Log.Info("settings: changed", new { language, family, mode = newMode, theme });
@@ -664,21 +686,62 @@ public partial class MainWindowViewModel : ObservableObject
         return null;
     }
 
-    public void SaveWindowPlacement(int x, int y, double width, double height, bool maximized)
+    /// <summary>
+    /// Saves the window placement. Synchronous on purpose: it runs as the window closes, and the
+    /// write must finish before the process exits — on a worker thread it would be cut off, and
+    /// the placement lost, when the app quits.
+    /// </summary>
+    public void SaveWindowPlacement(int x, int y, double width, double height, bool maximized) =>
+        CommitSettings(candidate =>
+        {
+            candidate.WindowPositionX = x;
+            candidate.WindowPositionY = y;
+            candidate.WindowWidth = width;
+            candidate.WindowHeight = height;
+            candidate.WindowMaximized = maximized;
+        });
+
+    /// <summary>
+    /// Applies <paramref name="change"/> to a copy of the live settings, saves the copy, and only then
+    /// copies it into the live instance (which the Windows visibility service reads). Returns the
+    /// settings as they were before, or null when the change left them as they were, in which case
+    /// nothing is written. A failed save throws and leaves the live settings untouched.
+    /// </summary>
+    private AppSettings? CommitSettings(Action<AppSettings> change)
     {
-        var candidate = CopySettings();
-        candidate.WindowPositionX = x;
-        candidate.WindowPositionY = y;
-        candidate.WindowWidth = width;
-        candidate.WindowHeight = height;
-        candidate.WindowMaximized = maximized;
-        _settingsStore.Save(candidate);
-        _settings.WindowPositionX = x;
-        _settings.WindowPositionY = y;
-        _settings.WindowWidth = width;
-        _settings.WindowHeight = height;
-        _settings.WindowMaximized = maximized;
+        lock (_settingsWrite)
+        {
+            var previous = CopySettings();
+            var candidate = CopySettings();
+            change(candidate);
+            if (SameSettings(previous, candidate))
+                return null;
+
+            _settingsStore.Save(candidate);
+
+            _settings.Language = candidate.Language;
+            _settings.UiFontFamily = candidate.UiFontFamily;
+            _settings.WindowsHideMode = candidate.WindowsHideMode;
+            _settings.Theme = candidate.Theme;
+            _settings.WindowPositionX = candidate.WindowPositionX;
+            _settings.WindowPositionY = candidate.WindowPositionY;
+            _settings.WindowWidth = candidate.WindowWidth;
+            _settings.WindowHeight = candidate.WindowHeight;
+            _settings.WindowMaximized = candidate.WindowMaximized;
+            return previous;
+        }
     }
+
+    private static bool SameSettings(AppSettings a, AppSettings b) =>
+        Languages.NormalizePreference(a.Language) == Languages.NormalizePreference(b.Language)
+        && a.UiFontFamily == b.UiFontFamily
+        && a.WindowsHideMode == b.WindowsHideMode
+        && a.Theme == b.Theme
+        && a.WindowPositionX == b.WindowPositionX
+        && a.WindowPositionY == b.WindowPositionY
+        && a.WindowWidth == b.WindowWidth
+        && a.WindowHeight == b.WindowHeight
+        && a.WindowMaximized == b.WindowMaximized;
 
     private AppSettings CopySettings() => new()
     {
@@ -705,17 +768,20 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    /// <summary>Stops the running scan, or the running apply, whichever there is.</summary>
     [RelayCommand]
-    private void CancelScan()
+    private void Cancel()
     {
         _scanCts?.Cancel();
+        _applyCts?.Cancel();
     }
 
     // --- Internals ---
 
     /// <summary>
-    /// Persists <paramref name="updated"/> and, only if the save lands, makes it the live entry
-    /// list and re-syncs the rows. Returns false when the save failed, having changed nothing.
+    /// Persists <paramref name="updated"/> off the UI thread and, only if the save lands, makes it the
+    /// live entry list and re-syncs the rows. Returns what to tell the user when the save failed,
+    /// having changed nothing, or null when it landed.
     /// </summary>
     /// <remarks>
     /// Commit after save, never mutate-then-roll-back. The previous shape deep-cloned the list,
@@ -723,26 +789,28 @@ public partial class MainWindowViewModel : ObservableObject
     /// correctness of every mutating command rested on each one remembering to snapshot at the
     /// right moment. Building the new list as a value makes a failed save a no-op by
     /// construction: nothing in memory moves until disk agrees.
+    /// <para>The save is a write-then-rename plus a backup-store transaction that may wait seconds
+    /// for SQLite's write lock, and the data folder may sit on a redirected profile share, so it
+    /// never runs on the UI thread. Every caller holds the mutation gate, so saves stay ordered.</para>
     /// </remarks>
-    private bool TrySaveEntries(List<PathEntry> updated, out Message? failure)
+    private async Task<Message?> TrySaveEntriesAsync(List<PathEntry> updated)
     {
-        failure = null;
+        // Sort a snapshot so paths.json is diff-stable without imposing that order on the
+        // live list. UI ordering is a separate concern handled by the DataGrid's own sort.
+        var snapshot = updated.OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase).ToList();
         try
         {
-            // Sort a snapshot so paths.json is diff-stable without imposing that order on the
-            // live list. UI ordering is a separate concern handled by the DataGrid's own sort.
-            _pathListStore.Save(updated.OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase).ToList());
+            await Task.Run(() => _pathListStore.Save(snapshot));
         }
         catch (Exception ex)
         {
             Log.Error("paths: save failed", ex);
-            failure = FailurePresentation.PathListSave(ex);
-            return false;
+            return FailurePresentation.PathListSave(ex);
         }
 
         _entries = updated;
         SyncRowsWithEntries();
-        return true;
+        return null;
     }
 
     private void StartBackgroundScan()
@@ -891,7 +959,34 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Applies each target's desired visibility, cancellable through <see cref="CancelCommand"/>.
+    /// </summary>
+    /// <remarks>
+    /// Every file-system call goes through <see cref="BoundedVisibility"/>, so one stalled network
+    /// share or half-ejected volume costs its path a bounded wait and an Unresponsive verdict, never
+    /// the whole command: the caller holds the mutation gate throughout, and an unbounded stat here
+    /// once kept every other command queued behind it until the app was force-quit.
+    /// </remarks>
     private async Task<ApplyOutcome> ApplyDesiredStateAsync(List<PathRowViewModel> targets)
+    {
+        using var applyCts = new CancellationTokenSource();
+        _applyCts = applyCts;
+        IsApplying = true;
+        try
+        {
+            return await ApplyAsync(targets, applyCts.Token);
+        }
+        finally
+        {
+            // Nulled before the using disposes the source, with no await between, so Cancel never
+            // reaches a disposed source.
+            _applyCts = null;
+            IsApplying = false;
+        }
+    }
+
+    private async Task<ApplyOutcome> ApplyAsync(List<PathRowViewModel> targets, CancellationToken token)
     {
         Log.Info("apply: start", new { count = targets.Count });
 
@@ -899,14 +994,31 @@ public partial class MainWindowViewModel : ObservableObject
         var unchanged = 0;
         var missing = 0;
         var errors = 0;
+        var unresponsive = 0;
+        var cancelled = 0;
         var problemPaths = new List<string>();
         var retryBucket = new List<PathRowViewModel>();
 
-        foreach (var row in targets)
+        void MarkUnresponsive(PathRowViewModel row)
         {
+            unresponsive++;
+            problemPaths.Add(row.Path);
+            row.ActualState = ActualState.Unresponsive;
+        }
+
+        for (var index = 0; index < targets.Count; index++)
+        {
+            var row = targets[index];
+            var written = false;
             try
             {
-                var inspection = await Task.Run(() => _visibilityService.Inspect(row.Path));
+                var inspection = await _visibility.InspectAsync(row.Path, token);
+
+                if (inspection.ActualState == ActualState.Unresponsive)
+                {
+                    MarkUnresponsive(row);
+                    continue;
+                }
 
                 if (inspection.ActualState == ActualState.Missing)
                 {
@@ -939,15 +1051,15 @@ public partial class MainWindowViewModel : ObservableObject
                     continue;
                 }
 
-                await Task.Run(() =>
-                {
-                    if (row.Entry.DesiredVisibility == DesiredVisibility.Hidden)
-                        _visibilityService.Hide(row.Path);
-                    else
-                        _visibilityService.Show(row.Path);
-                });
+                written = true;
+                await _visibility.WriteAsync(row.Path, row.Entry.DesiredVisibility, token);
 
-                var updated = await Task.Run(() => _visibilityService.Inspect(row.Path));
+                var updated = await _visibility.InspectAsync(row.Path, token);
+                if (updated.ActualState == ActualState.Unresponsive)
+                {
+                    MarkUnresponsive(row);
+                    continue;
+                }
                 row.ApplyScanResult(updated, row.PathFamily);
 
                 // Count what actually moved, not what was attempted. A write can
@@ -976,6 +1088,23 @@ public partial class MainWindowViewModel : ObservableObject
                     });
                 }
             }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // A path whose write was under way may or may not have changed — the call was
+                // abandoned, not undone — so its row no longer claims a state. The rest were
+                // never written.
+                if (written)
+                    row.ActualState = ActualState.Unknown;
+                var skipped = targets.Skip(index).ToList();
+                cancelled += skipped.Count;
+                problemPaths.AddRange(skipped.Select(r => r.Path));
+                Log.Info("apply: cancelled", new { skipped = skipped.Count });
+                break;
+            }
+            catch (TimeoutException)
+            {
+                MarkUnresponsive(row);
+            }
             catch (UnauthorizedAccessException) when (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 // Access-denied on Windows is recoverable via a single elevated retry
@@ -988,18 +1117,26 @@ public partial class MainWindowViewModel : ObservableObject
                 Log.Error("apply: failed", ex, new { path = row.Path });
                 errors++;
                 problemPaths.Add(row.Path);
-                var recheck = await Task.Run(() => _visibilityService.Inspect(row.Path));
+                // Not cancellable, so it cannot throw out of this handler; still bounded.
+                var recheck = await _visibility.InspectAsync(row.Path, CancellationToken.None);
                 row.ApplyScanResult(recheck, row.PathFamily);
             }
         }
 
         int? elevationExitCode = null;
 
+        // A cancelled apply does not go on to raise an elevation prompt: the retry rows are
+        // counted as cancelled, untouched.
+        if (retryBucket.Count > 0 && token.IsCancellationRequested)
+        {
+            cancelled += retryBucket.Count;
+            problemPaths.AddRange(retryBucket.Select(r => r.Path));
+        }
         // retryBucket is only ever populated on Windows (the catch above is filtered to
         // Windows), so this platform check is logically redundant — but it is REQUIRED, not
         // documentary: it is the guard the CA1416 analyzer needs to permit the
         // [SupportedOSPlatform("windows")] call to ApplyAsync below. Do not remove it.
-        if (retryBucket.Count > 0 && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        else if (retryBucket.Count > 0 && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             var buckets = Services.ElevatedApplyCommand.Partition(
                 retryBucket.Select(r => (r.Path, r.Entry.DesiredVisibility)),
@@ -1013,7 +1150,7 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 // Re-inspect only to refresh what the row shows; the success/error verdict
                 // comes from the elevated child's own per-path report (see DecideElevatedRow).
-                var recheck = await Task.Run(() => _visibilityService.Inspect(row.Path));
+                var recheck = await _visibility.InspectAsync(row.Path, CancellationToken.None);
                 bool? childOk = outcome.Results.TryGetValue(row.Path, out var ok) ? ok : null;
 
                 var (display, wasApplied) = DecideElevatedRow(row.Entry.DesiredVisibility, childOk, recheck);
@@ -1030,10 +1167,10 @@ public partial class MainWindowViewModel : ObservableObject
 
         // elevationExitCode is a coarse diagnostic kept in the structured log; the user-facing
         // tally below is built per-path, so the raw child exit code is not surfaced to the UI.
-        Log.Info("apply: done", new { applied, unchanged, missing, errors, elevationExitCode });
+        Log.Info("apply: done", new { applied, unchanged, missing, errors, unresponsive, cancelled, elevationExitCode });
         OnPropertyChanged(nameof(StatusBarText));
 
-        return new ApplyOutcome(applied, unchanged, missing, errors, problemPaths);
+        return new ApplyOutcome(applied, unchanged, missing, errors, unresponsive, cancelled, problemPaths);
     }
 
     private readonly record struct ApplyOutcome(
@@ -1041,11 +1178,16 @@ public partial class MainWindowViewModel : ObservableObject
         int Unchanged,
         int Missing,
         int Errors,
+        int Unresponsive,
+        int Cancelled,
         IReadOnlyList<string> ProblemPaths)
     {
-        public static ApplyOutcome Empty { get; } = new(0, 0, 0, 0, []);
+        public static ApplyOutcome Empty { get; } = new(0, 0, 0, 0, 0, 0, []);
 
-        public bool HasProblems => Unchanged > 0 || Missing > 0 || Errors > 0;
+        public bool HasProblems => Unchanged > 0 || Missing > 0 || Errors > 0 || Unresponsive > 0 || Cancelled > 0;
+
+        /// <summary>A path that failed or never answered; either is shown as an error.</summary>
+        public bool HasFailures => Errors > 0 || Unresponsive > 0;
 
         /// <summary>
         /// The counts, each in its own sentence, joined as the language joins them. Only shown when
@@ -1060,6 +1202,8 @@ public partial class MainWindowViewModel : ObservableObject
                 if (Unchanged > 0) parts.Add(Message.Of("apply.unchanged", ("count", Unchanged)));
                 if (Missing > 0) parts.Add(Message.Of("apply.missing", ("count", Missing)));
                 if (Errors > 0) parts.Add(Message.Of("apply.errors", ("count", Errors)));
+                if (Unresponsive > 0) parts.Add(Message.Of("apply.unresponsive", ("count", Unresponsive)));
+                if (Cancelled > 0) parts.Add(Message.Of("apply.cancelled", ("count", Cancelled)));
                 return Message.Join("apply.join", parts);
             }
         }
@@ -1101,7 +1245,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void ShowApplyOutcome(ApplyOutcome outcome)
     {
-        if (outcome.Errors > 0)
+        if (outcome.HasFailures)
         {
             ShowOperationalResult(OperationalResultOwner.Visibility, outcome.Summary, error: true);
             return;

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
@@ -31,7 +32,7 @@ public sealed class SettingsDialog : DialogBase
     private readonly ThemePreference _originalTheme;
     private readonly Button _saveButton;
     private readonly TextBlock _saveError;
-    private readonly Func<string, string, bool, ThemePreference, Message?> _trySave;
+    private readonly Func<string, string, bool, ThemePreference, Task<Message?>> _trySave;
 
     public bool Accepted => ResultTag == "save";
     public string SelectedLanguage => ((LanguageOption)_languageBox.SelectedItem!).Value;
@@ -46,7 +47,7 @@ public sealed class SettingsDialog : DialogBase
         ThemePreference theme,
         bool isHiddenAndSystem,
         bool showWindowsHideMode,
-        Func<string, string, bool, ThemePreference, Message?> trySave)
+        Func<string, string, bool, ThemePreference, Task<Message?>> trySave)
     {
         _trySave = trySave;
         _originalLanguage = Languages.NormalizePreference(language);
@@ -172,14 +173,14 @@ public sealed class SettingsDialog : DialogBase
         || IsHiddenAndSystem != _originalIsHiddenAndSystem
         || SelectedTheme != _originalTheme;
 
-    protected override bool TryCommit(string tag)
+    protected override async Task<bool> TryCommitAsync(string tag)
     {
         if (tag != "save")
             return true;
 
         _saveError.IsVisible = false;
         _saveError.Text = string.Empty;
-        var failure = _trySave(SelectedLanguage, UiFontFamily, IsHiddenAndSystem, SelectedTheme);
+        var failure = await _trySave(SelectedLanguage, UiFontFamily, IsHiddenAndSystem, SelectedTheme);
         if (failure is null)
             return true;
 

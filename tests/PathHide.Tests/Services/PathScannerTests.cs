@@ -29,7 +29,7 @@ public class PathScannerTests
     public async Task ScanAsync_YieldsOneResultPerEntry_InOrder()
     {
         var fake = new FakeVisibilityService();
-        var scanner = new PathScanner(fake);
+        var scanner = new PathScanner(new BoundedVisibility(fake));
         var entries = new[] { Entry("/a"), Entry("/b"), Entry("/c") };
 
         var results = await CollectAsync(scanner, entries, token: TestContext.Current.CancellationToken);
@@ -44,7 +44,7 @@ public class PathScannerTests
     public async Task ScanAsync_UnparseablePath_ReportsErrorWithoutInspecting()
     {
         var fake = new FakeVisibilityService();
-        var scanner = new PathScanner(fake);
+        var scanner = new PathScanner(new BoundedVisibility(fake));
 
         var results = await CollectAsync(scanner, new[] { Entry("not-absolute") }, token: TestContext.Current.CancellationToken);
 
@@ -60,7 +60,7 @@ public class PathScannerTests
     {
         var fake = new FakeVisibilityService();
         fake.Set("/x", ActualState.Hidden, ItemKind.Directory);
-        var scanner = new PathScanner(fake);
+        var scanner = new PathScanner(new BoundedVisibility(fake));
 
         var results = await CollectAsync(scanner, new[] { Entry("/x") }, token: TestContext.Current.CancellationToken);
 
@@ -75,7 +75,7 @@ public class PathScannerTests
     public async Task ScanAsync_CancelledToken_ThrowsOperationCanceled()
     {
         var fake = new FakeVisibilityService();
-        var scanner = new PathScanner(fake);
+        var scanner = new PathScanner(new BoundedVisibility(fake));
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
@@ -94,7 +94,7 @@ public class PathScannerTests
         // dead behind it, since each pauses the scan and then awaits it with no timeout.
         using var gate = new ManualResetEventSlim(initialState: false);
         var visibility = new FakeVisibilityService { InspectGate = gate };
-        var scanner = new PathScanner(visibility);
+        var scanner = new PathScanner(new BoundedVisibility(visibility));
         using var cts = new CancellationTokenSource();
 
         var scan = CollectAsync(scanner, [Entry("/blocked"), Entry("/never-reached")], token: cts.Token);

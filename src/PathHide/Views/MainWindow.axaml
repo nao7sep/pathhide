@@ -106,8 +106,8 @@
                              grid's post-delete selection recovery with the Delete key. -->
                         <Button i18n:Localized.Content="common.remove" Classes="destructive" x:Name="RemoveButton"/>
                         <Button i18n:Localized.Content="common.cancel" Classes="cancel"
-                                Command="{Binding CancelScanCommand}"
-                                IsVisible="{Binding IsScanning}"/>
+                                Command="{Binding CancelCommand}"
+                                IsVisible="{Binding IsBusy}"/>
                     </StackPanel>
                 </StackPanel>
             </DockPanel>

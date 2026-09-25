@@ -80,7 +80,7 @@ public class RenderedKeyTests : WindowTest
         var dialog = Show(new SettingsDialog(
             Languages.System, AppSettings.DefaultUiFontFamily, ThemePreference.System,
             isHiddenAndSystem: false, showWindowsHideMode: true,
-            (_, _, _, _) => Message.Of("failure.settingsSave")));
+            (_, _, _, _) => Task.FromResult<Message?>(Message.Of("failure.settingsSave"))));
 
         AssertNoKeys(dialog);
     }

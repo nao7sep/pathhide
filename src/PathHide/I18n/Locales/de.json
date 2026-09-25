@@ -12,10 +12,15 @@
   "actual.hidden": "Versteckt",
   "actual.missing": "Fehlt",
   "actual.unknown": "Ungeprüft",
+  "actual.unresponsive": "Reagiert nicht",
   "actual.visible": "Sichtbar",
   "apply.applied": {
     "one": "{count} angewendet",
     "other": "{count} angewendet"
+  },
+  "apply.cancelled": {
+    "one": "{count} abgebrochen",
+    "other": "{count} abgebrochen"
   },
   "apply.errors": {
     "one": "{count} Fehler",
@@ -29,6 +34,10 @@
   "apply.unchanged": {
     "one": "{count} wurde nicht wirksam",
     "other": "{count} wurden nicht wirksam"
+  },
+  "apply.unresponsive": {
+    "one": "{count} reagiert nicht",
+    "other": "{count} reagieren nicht"
   },
   "common.cancel": "Abbrechen",
   "common.close": "Schließen",
@@ -106,6 +115,10 @@
     "one": "{count} Pfad zur Liste hinzugefügt",
     "other": "{count} Pfade zur Liste hinzugefügt"
   },
+  "result.cancelled": {
+    "one": "Verstecken für {count} Pfad abgebrochen",
+    "other": "Verstecken für {count} Pfade abgebrochen"
+  },
   "result.duplicates": {
     "one": "{count} Pfad ist bereits in der Liste",
     "other": "{count} Pfade sind bereits in der Liste"
@@ -132,6 +145,10 @@
     "one": "{count} Pfad wurde nicht versteckt",
     "other": "{count} Pfade wurden nicht versteckt"
   },
+  "result.unresponsive": {
+    "one": "{count} Pfad hat nicht reagiert",
+    "other": "{count} Pfade haben nicht reagiert"
+  },
   "settings.hiddenAndSystem": "Beim Verstecken auch das Systemattribut setzen (Windows)",
   "settings.hideModeHint": "PathHide entfernt das Systemattribut beim Anzeigen und, wenn diese Option deaktiviert ist, auch beim Verstecken. Das gilt auch für ein Systemattribut, das eine Datei oder ein Ordner bereits hatte; PathHide kann es nicht wiederherstellen.",
   "settings.language": "Sprache",
@@ -147,7 +164,7 @@
   "settings.windowsHideMode": "Verstecken unter Windows",
   "shortcuts.addDirectories": "Ordner hinzufügen",
   "shortcuts.addFiles": "Dateien hinzufügen",
-  "shortcuts.cancelScan": "Laufende Prüfung abbrechen",
+  "shortcuts.cancel": "Laufende Prüfung oder Sichtbarkeitsänderung abbrechen",
   "shortcuts.drop": "Dateien oder Ordner hinzufügen, indem Sie sie im Fenster ablegen",
   "shortcuts.dropLabel": "Ziehen und Ablegen",
   "shortcuts.groupApp": "Anwendung",

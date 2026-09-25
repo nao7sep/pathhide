@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using PathHide.I18n;
 using PathHide.Models;
+using PathHide.Services;
 using PathHide.Tests.Fakes;
 using PathHide.ViewModels;
 using PathHide.Views;
@@ -100,7 +101,7 @@ public class LanguageChangeTests : WindowTest
     {
         var dialog = Show(new SettingsDialog(
             Languages.System, AppSettings.DefaultUiFontFamily, ThemePreference.System,
-            isHiddenAndSystem: false, showWindowsHideMode: true, (_, _, _, _) => null));
+            isHiddenAndSystem: false, showWindowsHideMode: true, (_, _, _, _) => Task.FromResult<Message?>(null)));
 
         var theme = dialog.GetVisualDescendants().OfType<TextBlock>()
             .Single(text => text.Text == English.Of("settings.theme"));
@@ -162,7 +163,7 @@ public class LanguageChangeTests : WindowTest
     {
         var dialog = Show(new SettingsDialog(
             Languages.System, AppSettings.DefaultUiFontFamily, ThemePreference.System,
-            isHiddenAndSystem: false, showWindowsHideMode: false, (_, _, _, _) => null));
+            isHiddenAndSystem: false, showWindowsHideMode: false, (_, _, _, _) => Task.FromResult<Message?>(null)));
         var save = Button(dialog, English.Of("common.save"));
         var languages = dialog.GetVisualDescendants().OfType<ComboBox>().Single();
         Assert.False(save.IsEnabled);
@@ -174,17 +175,17 @@ public class LanguageChangeTests : WindowTest
     }
 
     [AvaloniaFact]
-    public void a_saved_language_is_spoken_at_once_and_stored()
+    public async Task a_saved_language_is_spoken_at_once_and_stored()
     {
         var settings = new FakeJsonStore<AppSettings>();
         var viewModel = new MainWindowViewModel(
-            new FakeVisibilityService(), new FakeJsonStore<System.Collections.Generic.List<PathEntry>>(),
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<System.Collections.Generic.List<PathEntry>>(),
             settings, settings.Load().Value);
         // Speaking the current language is only the guard: it puts the language and the preference
         // back exactly when the test ends, whatever the save did to them.
         using var restore = Localizer.Speaking(Localizer.Language);
 
-        Assert.Null(viewModel.TryApplySettings("de", AppSettings.DefaultUiFontFamily, false, ThemePreference.System));
+        Assert.Null(await viewModel.TryApplySettingsAsync("de", AppSettings.DefaultUiFontFamily, false, ThemePreference.System));
 
         Assert.Equal("de", Localizer.Language);
         Assert.Equal("de", settings.LastSaved!.Language);

@@ -27,6 +27,14 @@ public static class DialogCloseGuard
            && hasUnsavedChanges;
 
     /// <summary>
+    /// Should a pending close be held because a commit is still saving? Only a user dismiss is:
+    /// the save is already under way and will close the dialog itself when it lands, or report
+    /// its failure in the dialog. Owner close, app shutdown and OS shutdown still never block.
+    /// </summary>
+    public static bool ShouldHoldForCommit(WindowCloseReason reason, bool saving)
+        => saving && reason == WindowCloseReason.WindowClosing;
+
+    /// <summary>
     /// Whether a key press should dismiss the dialog.
     /// </summary>
     /// <remarks>

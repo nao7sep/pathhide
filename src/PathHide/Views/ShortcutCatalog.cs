@@ -29,7 +29,7 @@ public enum ShortcutAction
     ShowSelected,
     ReapplyAll,
     Reload,
-    CancelScan,
+    Cancel,
     OpenSettings,
     ShowShortcuts,
 }
@@ -135,9 +135,9 @@ public static class ShortcutCatalog
             // List — scan-lifecycle commands first, the destructive Remove last (mirrors the toolbar's
             // Reload-before-Remove order; Cancel sits with Reload since both act on the scan).
             Command(ShortcutGroup.List, "shortcuts.reload", cmd, cmdLabel, shift: false, Key.R, "R", ShortcutAction.Reload),
-            // Escape is a plain-key accelerator (no command modifier), active only while a scan runs.
-            new ShortcutItem(ShortcutGroup.List, "shortcuts.cancelScan", "Escape",
-                new KeyGesture(Key.Escape), ShortcutAction.CancelScan),
+            // Escape is a plain-key accelerator (no command modifier), active only while a scan or apply runs.
+            new ShortcutItem(ShortcutGroup.List, "shortcuts.cancel", "Escape",
+                new KeyGesture(Key.Escape), ShortcutAction.Cancel),
             Display(ShortcutGroup.List, "shortcuts.remove", "Delete"),
 
             // App. Settings is cross-platform — it was Windows-only until the UI-font

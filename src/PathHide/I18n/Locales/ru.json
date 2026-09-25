@@ -12,12 +12,19 @@
   "actual.hidden": "Скрытый",
   "actual.missing": "Отсутствует",
   "actual.unknown": "Не проверено",
+  "actual.unresponsive": "Не отвечает",
   "actual.visible": "Видимый",
   "apply.applied": {
     "one": "{count} успешно",
     "few": "{count} успешно",
     "many": "{count} успешно",
     "other": "{count} успешно"
+  },
+  "apply.cancelled": {
+    "one": "{count} отменён",
+    "few": "{count} отменено",
+    "many": "{count} отменено",
+    "other": "{count} отменено"
   },
   "apply.errors": {
     "one": "{count} ошибка",
@@ -37,6 +44,12 @@
     "few": "{count} безрезультатно",
     "many": "{count} безрезультатно",
     "other": "{count} безрезультатно"
+  },
+  "apply.unresponsive": {
+    "one": "{count} не отвечает",
+    "few": "{count} не отвечают",
+    "many": "{count} не отвечают",
+    "other": "{count} не отвечает"
   },
   "common.cancel": "Отмена",
   "common.close": "Закрыть",
@@ -118,6 +131,12 @@
     "many": "В список добавлено {count} путей",
     "other": "В список добавлено {count} пути"
   },
+  "result.cancelled": {
+    "one": "скрытие отменено для {count} пути",
+    "few": "скрытие отменено для {count} путей",
+    "many": "скрытие отменено для {count} путей",
+    "other": "скрытие отменено для {count} пути"
+  },
   "result.duplicates": {
     "one": "{count} путь уже есть в списке",
     "few": "{count} пути уже есть в списке",
@@ -156,6 +175,12 @@
     "many": "{count} путей не стали скрытыми",
     "other": "{count} пути не стало скрытым"
   },
+  "result.unresponsive": {
+    "one": "{count} путь не ответил",
+    "few": "{count} пути не ответили",
+    "many": "{count} путей не ответили",
+    "other": "{count} пути не ответило"
+  },
   "settings.hiddenAndSystem": "При скрытии также устанавливать атрибут «Системный» (Windows)",
   "settings.hideModeHint": "PathHide снимает атрибут «Системный» при показе, а также при скрытии, если этот параметр выключен. Это касается и атрибута «Системный», который уже был у файла или папки: восстановить его PathHide не сможет.",
   "settings.language": "Язык",
@@ -171,7 +196,7 @@
   "settings.windowsHideMode": "Режим скрытия в Windows",
   "shortcuts.addDirectories": "Добавить папки",
   "shortcuts.addFiles": "Добавить файлы",
-  "shortcuts.cancelScan": "Отменить текущее сканирование",
+  "shortcuts.cancel": "Отменить текущее сканирование или изменение видимости",
   "shortcuts.drop": "Добавить, перетащив файлы или папки в окно",
   "shortcuts.dropLabel": "Перетаскивание",
   "shortcuts.groupApp": "Приложение",
