@@ -21,8 +21,15 @@ public static class QuarantineJournal
 {
     private static readonly List<QuarantinedStore> Entries = [];
 
-    public static void Record(string label, string quarantinePath) =>
-        Entries.Add(new QuarantinedStore(label, quarantinePath));
+    /// <remarks>
+    /// Window state is disposable presentation state: its reset is a warning in the log, which the
+    /// store has already written, and no notice to the user (storage-path conventions).
+    /// </remarks>
+    public static void Record(string label, string quarantinePath)
+    {
+        if (label != StateLabel)
+            Entries.Add(new QuarantinedStore(label, quarantinePath));
+    }
 
     public static IReadOnlyList<QuarantinedStore> Drain()
     {
@@ -36,6 +43,9 @@ public static class QuarantineJournal
 
     /// <summary>The label the settings store is created with.</summary>
     public const string SettingsLabel = "settings";
+
+    /// <summary>The label the window-state store is created with.</summary>
+    public const string StateLabel = "state";
 
     /// <summary>
     /// The recovery notice for a set of quarantined stores, naming which store was reset. The wording

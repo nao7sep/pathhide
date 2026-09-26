@@ -19,6 +19,7 @@ public partial class MainWindowViewModel : ObservableObject
 {
     private readonly IJsonStore<List<PathEntry>> _pathListStore;
     private readonly IJsonStore<AppSettings> _settingsStore;
+    private readonly IJsonStore<AppState> _stateStore;
     private readonly BoundedVisibility _visibility;
     private readonly PathScanner _scanner;
 
@@ -27,16 +28,13 @@ public partial class MainWindowViewModel : ObservableObject
     // or the service would read stale state.
     private readonly AppSettings _settings;
 
+    // The window state as last saved; replaced only once a save of its successor lands.
+    private AppState _state;
+
     private List<PathEntry> _entries = [];
     private CancellationTokenSource? _scanCts;
     private CancellationTokenSource? _applyCts;
 
-    // Serializes every settings write with the publish that follows it. A Settings save runs on a
-    // worker thread and the window-placement save runs on the UI thread as the window closes, and
-    // each builds its candidate from the live settings: unserialized, the later write would put back
-    // what the earlier one had just changed. A plain lock, because neither holder ever waits for the
-    // UI thread while holding it.
-    private readonly object _settingsWrite = new();
     private Task _scanTask = Task.CompletedTask;
 
     // Test seam (PathHide.Tests via InternalsVisibleTo): await the in-flight background scan
@@ -125,11 +123,11 @@ public partial class MainWindowViewModel : ObservableObject
     /// language at launch and another after a Save.
     /// </summary>
     internal IReadOnlyList<string> ComputerLanguages { get; init; } = [];
-    public int? WindowPositionX => _settings.WindowPositionX;
-    public int? WindowPositionY => _settings.WindowPositionY;
-    public double? WindowWidth => _settings.WindowWidth;
-    public double? WindowHeight => _settings.WindowHeight;
-    public bool WindowMaximized => _settings.WindowMaximized;
+    public int? WindowPositionX => _state.WindowPositionX;
+    public int? WindowPositionY => _state.WindowPositionY;
+    public double? WindowWidth => _state.WindowWidth;
+    public double? WindowHeight => _state.WindowHeight;
+    public bool WindowMaximized => _state.WindowMaximized;
 
     public string ProgressText => ScanTotal > 0
         ? Localizer.T("status.scanning", ("done", ScanProgress), ("total", ScanTotal))
@@ -179,7 +177,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// All dependencies are supplied by the composition root (see <c>App</c>),
-    /// including the already-loaded <paramref name="settings"/>. The Windows
+    /// including the already-loaded <paramref name="settings"/> and <paramref name="state"/>. The Windows
     /// visibility service behind <paramref name="visibility"/> closes over that same
     /// instance to read the current hide mode, so the view model mutates it in place
     /// rather than replacing it.
@@ -193,12 +191,16 @@ public partial class MainWindowViewModel : ObservableObject
         BoundedVisibility visibility,
         IJsonStore<List<PathEntry>> pathListStore,
         IJsonStore<AppSettings> settingsStore,
-        AppSettings settings)
+        AppSettings settings,
+        IJsonStore<AppState> stateStore,
+        AppState state)
     {
         _visibility = visibility;
         _pathListStore = pathListStore;
         _settingsStore = settingsStore;
         _settings = settings;
+        _stateStore = stateStore;
+        _state = state;
         _scanner = new PathScanner(visibility);
         Rows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsPathListEmpty));
         ApplyUiFont();
@@ -729,19 +731,33 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Saves the window placement. Synchronous on purpose: it runs as the window closes, and the
-    /// write must finish before the process exits — on a worker thread it would be cut off, and
-    /// the placement lost, when the app quits.
+    /// Saves the window placement to the state store, never the settings. Synchronous on purpose: it
+    /// runs as the window closes, and the write must finish before the process exits — on a worker
+    /// thread it would be cut off, and the placement lost, when the app quits. An unchanged placement
+    /// writes nothing; a failed save throws and leaves the live placement untouched.
     /// </summary>
-    public void SaveWindowPlacement(int x, int y, double width, double height, bool maximized) =>
-        CommitSettings(candidate =>
+    public void SaveWindowPlacement(int x, int y, double width, double height, bool maximized)
+    {
+        var candidate = new AppState
         {
-            candidate.WindowPositionX = x;
-            candidate.WindowPositionY = y;
-            candidate.WindowWidth = width;
-            candidate.WindowHeight = height;
-            candidate.WindowMaximized = maximized;
-        });
+            WindowPositionX = x,
+            WindowPositionY = y,
+            WindowWidth = width,
+            WindowHeight = height,
+            WindowMaximized = maximized,
+        };
+        if (_state.WindowPositionX == x
+            && _state.WindowPositionY == y
+            && _state.WindowWidth == width
+            && _state.WindowHeight == height
+            && _state.WindowMaximized == maximized)
+        {
+            return;
+        }
+
+        _stateStore.Save(candidate);
+        _state = candidate;
+    }
 
     /// <summary>
     /// Applies <paramref name="change"/> to a copy of the live settings, saves the copy, and only then
@@ -749,41 +765,31 @@ public partial class MainWindowViewModel : ObservableObject
     /// settings as they were before, or null when the change left them as they were, in which case
     /// nothing is written. A failed save throws and leaves the live settings untouched.
     /// </summary>
+    /// <remarks>
+    /// The Settings dialog is the one writer, and it holds while its save runs, so saves never overlap.
+    /// </remarks>
     private AppSettings? CommitSettings(Action<AppSettings> change)
     {
-        lock (_settingsWrite)
-        {
-            var previous = CopySettings();
-            var candidate = CopySettings();
-            change(candidate);
-            if (SameSettings(previous, candidate))
-                return null;
+        var previous = CopySettings();
+        var candidate = CopySettings();
+        change(candidate);
+        if (SameSettings(previous, candidate))
+            return null;
 
-            _settingsStore.Save(candidate);
+        _settingsStore.Save(candidate);
 
-            _settings.Language = candidate.Language;
-            _settings.UiFontFamily = candidate.UiFontFamily;
-            _settings.WindowsHideMode = candidate.WindowsHideMode;
-            _settings.Theme = candidate.Theme;
-            _settings.WindowPositionX = candidate.WindowPositionX;
-            _settings.WindowPositionY = candidate.WindowPositionY;
-            _settings.WindowWidth = candidate.WindowWidth;
-            _settings.WindowHeight = candidate.WindowHeight;
-            _settings.WindowMaximized = candidate.WindowMaximized;
-            return previous;
-        }
+        _settings.Language = candidate.Language;
+        _settings.UiFontFamily = candidate.UiFontFamily;
+        _settings.WindowsHideMode = candidate.WindowsHideMode;
+        _settings.Theme = candidate.Theme;
+        return previous;
     }
 
     private static bool SameSettings(AppSettings a, AppSettings b) =>
         Languages.NormalizePreference(a.Language) == Languages.NormalizePreference(b.Language)
         && a.UiFontFamily == b.UiFontFamily
         && a.WindowsHideMode == b.WindowsHideMode
-        && a.Theme == b.Theme
-        && a.WindowPositionX == b.WindowPositionX
-        && a.WindowPositionY == b.WindowPositionY
-        && a.WindowWidth == b.WindowWidth
-        && a.WindowHeight == b.WindowHeight
-        && a.WindowMaximized == b.WindowMaximized;
+        && a.Theme == b.Theme;
 
     private AppSettings CopySettings() => new()
     {
@@ -791,11 +797,6 @@ public partial class MainWindowViewModel : ObservableObject
         UiFontFamily = _settings.UiFontFamily,
         Theme = _settings.Theme,
         WindowsHideMode = _settings.WindowsHideMode,
-        WindowPositionX = _settings.WindowPositionX,
-        WindowPositionY = _settings.WindowPositionY,
-        WindowWidth = _settings.WindowWidth,
-        WindowHeight = _settings.WindowHeight,
-        WindowMaximized = _settings.WindowMaximized,
     };
 
     /// <summary>

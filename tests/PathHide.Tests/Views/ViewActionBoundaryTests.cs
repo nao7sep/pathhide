@@ -22,7 +22,9 @@ public sealed class ViewActionBoundaryTests
             new BoundedVisibility(new FakeVisibilityService()),
             new FakeJsonStore<List<PathEntry>>(),
             settings,
-            settings.Load().Value);
+            settings.Load().Value,
+            new FakeJsonStore<AppState>(),
+            new AppState());
         var window = new MainWindow { DataContext = vm };
         var hostile = new IOException("EACCES IPC /private/tmp/PATHHIDE-SHORTCUT-SENTINEL");
 

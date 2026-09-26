@@ -51,7 +51,7 @@ public class MainWindowViewModelTests
     {
         var settingsStore = settings ?? new FakeJsonStore<AppSettings>();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(visibility, responseTimeout), paths, settingsStore, settingsStore.Load().Value);
+            new BoundedVisibility(visibility, responseTimeout), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
         vm.Initialize();
         return vm;
     }
@@ -487,7 +487,7 @@ public class MainWindowViewModelTests
         var settingsStore = new FakeJsonStore<AppSettings> { SaveGate = gate };
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
 
         var save = vm.TryApplySettingsAsync(Languages.System, AppSettings.DefaultUiFontFamily, hiddenAndSystem: false, ThemePreference.Dark);
         var returnedWhileSaving = !gate.IsSet;
@@ -562,7 +562,9 @@ public class MainWindowViewModelTests
             new BoundedVisibility(visibility),
             paths,
             settingsStore,
-            settingsStore.Load().Value);
+            settingsStore.Load().Value,
+            new FakeJsonStore<AppState>(),
+            new AppState());
         var window = new MainWindow { DataContext = vm };
         var source = Path.GetTempFileName();
 
@@ -631,7 +633,9 @@ public class MainWindowViewModelTests
             new BoundedVisibility(visibility),
             paths,
             settingsStore,
-            settingsStore.Load().Value);
+            settingsStore.Load().Value,
+            new FakeJsonStore<AppState>(),
+            new AppState());
         var window = new MainWindow { DataContext = vm };
 
         try
@@ -693,7 +697,7 @@ public class MainWindowViewModelTests
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>> { LoadIsUnreadable = true };
         var settingsStore = new FakeJsonStore<AppSettings>();
-        var vm = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settingsStore, settingsStore.Load().Value);
+        var vm = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
 
         Assert.Throws<PathHide.Storage.PathListUnreadableException>(() => vm.LoadPersistedState());
     }
@@ -943,7 +947,7 @@ public class MainWindowViewModelTests
             Value = new List<PathEntry> { Entry("/a"), Entry("/b") },
         };
         var settingsStore = new FakeJsonStore<AppSettings>();
-        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value);
+        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
 
         // Construction is side-effect-free: the persisted entries are not read yet.
         Assert.Empty(vm.Rows);
@@ -961,7 +965,7 @@ public class MainWindowViewModelTests
             Value = new List<PathEntry> { Entry("/a") },
         };
         var settingsStore = new FakeJsonStore<AppSettings>();
-        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value);
+        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
 
         vm.Initialize();
         vm.Initialize();
@@ -980,13 +984,10 @@ public class MainWindowViewModelTests
     {
         var settingsStore = new FakeJsonStore<AppSettings>();
         var settings = settingsStore.Load().Value;
-        settings.WindowPositionX = -1200;
-        settings.WindowPositionY = 80;
-        settings.WindowWidth = 1100;
-        settings.WindowHeight = 720;
-        settings.WindowMaximized = true;
+        var stateStore = new FakeJsonStore<AppState>();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings,
+            stateStore, new AppState { WindowPositionX = -1200, WindowWidth = 1100 });
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
@@ -996,34 +997,36 @@ public class MainWindowViewModelTests
         Assert.Equal(1, settingsStore.SaveCount);
         Assert.Equal("Menlo", settingsStore.LastSaved!.UiFontFamily);
         Assert.Equal(WindowsHideMode.HiddenAndSystem, settingsStore.LastSaved.WindowsHideMode);
-        Assert.Equal(-1200, settingsStore.LastSaved.WindowPositionX);
-        Assert.Equal(80, settingsStore.LastSaved.WindowPositionY);
-        Assert.Equal(1100, settingsStore.LastSaved.WindowWidth);
-        Assert.Equal(720, settingsStore.LastSaved.WindowHeight);
-        Assert.True(settingsStore.LastSaved.WindowMaximized);
         Assert.Equal("Menlo", settings.UiFontFamily);
         Assert.True(vm.IsHiddenAndSystem);
         Assert.Contains(nameof(MainWindowViewModel.UiFontFamily), changed);
         Assert.Contains(nameof(MainWindowViewModel.IsHiddenAndSystem), changed);
         Assert.Empty(vm.OperationalResults);
+        // A settings save leaves the window state alone.
+        Assert.Equal(0, stateStore.SaveCount);
+        Assert.Equal(-1200, vm.WindowPositionX);
+        Assert.Equal(1100, vm.WindowWidth);
     }
 
     [Fact]
-    public void SaveWindowPlacement_PersistsAndPublishesAllFivePrimitives()
+    public void SaveWindowPlacement_PersistsAllFivePrimitivesToTheStateStoreOnly()
     {
         var settingsStore = new FakeJsonStore<AppSettings>();
-        var settings = settingsStore.Load().Value;
+        var stateStore = new FakeJsonStore<AppState>();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value,
+            stateStore, new AppState());
 
         vm.SaveWindowPlacement(-900, 40, 1180.5, 700.25, maximized: true);
+        vm.SaveWindowPlacement(-900, 40, 1180.5, 700.25, maximized: true);
 
-        Assert.Equal(1, settingsStore.SaveCount);
-        Assert.Equal(-900, settingsStore.LastSaved!.WindowPositionX);
-        Assert.Equal(40, settingsStore.LastSaved.WindowPositionY);
-        Assert.Equal(1180.5, settingsStore.LastSaved.WindowWidth);
-        Assert.Equal(700.25, settingsStore.LastSaved.WindowHeight);
-        Assert.True(settingsStore.LastSaved.WindowMaximized);
+        Assert.Equal(0, settingsStore.SaveCount);
+        Assert.Equal(1, stateStore.SaveCount);
+        Assert.Equal(-900, stateStore.LastSaved!.WindowPositionX);
+        Assert.Equal(40, stateStore.LastSaved.WindowPositionY);
+        Assert.Equal(1180.5, stateStore.LastSaved.WindowWidth);
+        Assert.Equal(700.25, stateStore.LastSaved.WindowHeight);
+        Assert.True(stateStore.LastSaved.WindowMaximized);
         Assert.Equal(-900, vm.WindowPositionX);
         Assert.Equal(40, vm.WindowPositionY);
         Assert.Equal(1180.5, vm.WindowWidth);
@@ -1034,10 +1037,10 @@ public class MainWindowViewModelTests
     [Fact]
     public void SaveWindowPlacement_FailureLeavesLivePlacementUntouched()
     {
-        var settingsStore = new FakeJsonStore<AppSettings> { ThrowOnSave = true };
-        var settings = settingsStore.Load().Value;
+        var settingsStore = new FakeJsonStore<AppSettings>();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value,
+            new FakeJsonStore<AppState> { ThrowOnSave = true }, new AppState());
 
         Assert.Throws<IOException>(() => vm.SaveWindowPlacement(10, 20, 1000, 700, maximized: true));
 
@@ -1055,7 +1058,7 @@ public class MainWindowViewModelTests
         var settings = settingsStore.Load().Value;
         Assert.Equal(ThemePreference.System, settings.Theme);
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
@@ -1075,7 +1078,7 @@ public class MainWindowViewModelTests
         var settingsStore = new FakeJsonStore<AppSettings>();
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
 
         var failure = await vm.TryApplySettingsAsync(Languages.System, AppSettings.DefaultUiFontFamily, hiddenAndSystem: false, ThemePreference.System);
 
@@ -1089,7 +1092,7 @@ public class MainWindowViewModelTests
         var settingsStore = new FakeJsonStore<AppSettings> { ThrowOnSave = true };
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings);
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
 
         var failure = await vm.TryApplySettingsAsync(Languages.System, "Menlo", hiddenAndSystem: true, ThemePreference.Dark);
 

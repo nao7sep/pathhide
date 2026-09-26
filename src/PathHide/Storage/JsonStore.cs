@@ -186,9 +186,10 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         // BackupStore.Record catches, logs once, and swallows every failure, so a backup problem can never
         // break the save that already succeeded above (data-backup conventions).
         //
-        // record: config.json (durable user settings) and paths.json (the user's tracked path list — the
-        // externally-linked locations whose loss would strand their work) both flow through here, so both
-        // are captured on every real save. This is the ONLY managed-text write site in the app.
+        // record: config.json (durable user settings), state.json (window state, recorded like every
+        // other managed store) and paths.json (the user's tracked path list — the externally-linked
+        // locations whose loss would strand their work) all flow through here, so each is captured on
+        // every real save. This is the ONLY managed-text write site in the app.
         BackupStore.Record(_filePath, bytes);
     }
 

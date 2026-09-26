@@ -63,6 +63,21 @@ public sealed class JsonStoreTests : IDisposable
         store.Save(new AppSettings
         {
             WindowsHideMode = WindowsHideMode.HiddenAndSystem,
+            Theme = ThemePreference.Dark,
+        });
+
+        var loaded = store.Load().Value;
+
+        Assert.Equal(WindowsHideMode.HiddenAndSystem, loaded.WindowsHideMode);
+        Assert.Equal(ThemePreference.Dark, loaded.Theme);
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsWindowState()
+    {
+        var store = new JsonStore<AppState>(AppState.FileName, QuarantineJournal.StateLabel);
+        store.Save(new AppState
+        {
             WindowPositionX = -1200,
             WindowPositionY = 80,
             WindowWidth = 1100.5,
@@ -72,7 +87,6 @@ public sealed class JsonStoreTests : IDisposable
 
         var loaded = store.Load().Value;
 
-        Assert.Equal(WindowsHideMode.HiddenAndSystem, loaded.WindowsHideMode);
         Assert.Equal(-1200, loaded.WindowPositionX);
         Assert.Equal(80, loaded.WindowPositionY);
         Assert.Equal(1100.5, loaded.WindowWidth);

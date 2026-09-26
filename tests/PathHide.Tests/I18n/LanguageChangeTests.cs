@@ -180,7 +180,7 @@ public class LanguageChangeTests : WindowTest
         var settings = new FakeJsonStore<AppSettings>();
         var viewModel = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<System.Collections.Generic.List<PathEntry>>(),
-            settings, settings.Load().Value);
+            settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
         // Speaking the current language is only the guard: it puts the language and the preference
         // back exactly when the test ends, whatever the save did to them.
         using var restore = Localizer.Speaking(Localizer.Language);

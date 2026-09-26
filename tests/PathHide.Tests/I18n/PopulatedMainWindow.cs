@@ -40,7 +40,7 @@ internal static class PopulatedMainWindow
             ],
         };
         var settings = new FakeJsonStore<AppSettings>();
-        var viewModel = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settings, settings.Load().Value);
+        var viewModel = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
         return (new MainWindow { DataContext = viewModel }, viewModel);
     }
 
@@ -49,7 +49,7 @@ internal static class PopulatedMainWindow
     {
         var settings = new FakeJsonStore<AppSettings>();
         var viewModel = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings, settings.Load().Value);
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
         return new MainWindow { DataContext = viewModel };
     }
 

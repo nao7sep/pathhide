@@ -54,13 +54,4 @@ public sealed class AppSettings
     public ThemePreference Theme { get; set; } = ThemePreference.System;
 
     public WindowsHideMode WindowsHideMode { get; set; } = WindowsHideMode.HiddenOnly;
-
-    // Last normal main-window geometry. Nullable primitives distinguish an absent
-    // placement from coordinates at the origin; negative positions are valid on
-    // displays left of or above the primary display.
-    public int? WindowPositionX { get; set; }
-    public int? WindowPositionY { get; set; }
-    public double? WindowWidth { get; set; }
-    public double? WindowHeight { get; set; }
-    public bool WindowMaximized { get; set; }
 }

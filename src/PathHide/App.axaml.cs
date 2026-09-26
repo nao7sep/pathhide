@@ -141,8 +141,9 @@ public partial class App : Application
     /// <summary>
     /// Composition root: builds persistence, the OS-appropriate visibility service,
     /// and the view model. Settings are loaded here because the Windows service closes
-    /// over the loaded instance to read the current hide mode; path entries are loaded
-    /// later, when the window calls <see cref="MainWindowViewModel.Initialize"/>.
+    /// over the loaded instance to read the current hide mode, and window state because the
+    /// window is placed before it is shown; path entries are loaded later, when the window
+    /// calls <see cref="MainWindowViewModel.Initialize"/>.
     /// </summary>
     private static MainWindowViewModel CreateMainViewModel()
     {
@@ -169,6 +170,21 @@ public partial class App : Application
             Log.Warn("config: first-run create failed", ex, new { file = AppSettings.FileName });
         }
 
+        // Window state has its own store. Earlier versions kept the window geometry in config.json;
+        // move it across before the state is read. State is disposable, so a failed move is logged
+        // and the window opens at its designed default.
+        var stateStore = new JsonStore<AppState>(AppState.FileName, QuarantineJournal.StateLabel);
+        try
+        {
+            WindowStateMigration.Run(
+                System.IO.Path.Combine(StorageRoot.Directory, AppSettings.FileName), stateStore, settingsStore, settings);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("state: moving the window geometry out of config.json failed", ex);
+        }
+        var state = stateStore.Load().Value;
+
         // Key effective configuration at startup (the conventions' baseline): every user-tunable
         // setting, not a subset. Logging only the hide mode meant a session log could not answer
         // which UI font was in effect — the one setting that plausibly explains a rendering
@@ -185,7 +201,7 @@ public partial class App : Application
             ? new WindowsVisibilityService(() => settings.WindowsHideMode)
             : new MacVisibilityService();
 
-        return new MainWindowViewModel(new BoundedVisibility(visibilityService), pathListStore, settingsStore, settings)
+        return new MainWindowViewModel(new BoundedVisibility(visibilityService), pathListStore, settingsStore, settings, stateStore, state)
         {
             ComputerLanguages = ComputerLanguages,
         };
