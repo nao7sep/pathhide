@@ -40,6 +40,19 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
+      # The tag names the release, the SSOT (Directory.Build.props) names every
+      # artifact: a mismatch stops here, before anything is built.
+      - name: Verify tag matches project version
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="$(dotnet msbuild src/PathHide/PathHide.csproj -getProperty:Version)"
+          if [ "$RELEASE_TAG" != "v$version" ]; then
+            echo "::error::Release tag $RELEASE_TAG does not match the project version v$version in Directory.Build.props"
+            exit 1
+          fi
       - run: dotnet test -c Release
 
   build:
