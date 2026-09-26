@@ -518,6 +518,40 @@ public class MainWindowViewModelTests
         Assert.Equal(2, paths.LoadCount);
     }
 
+    [Fact]
+    public async Task Reload_ReleasesTheGateSoACommandPausesItsScan()
+    {
+        // Entries on a share that has stopped answering make a Reload scan run for minutes.
+        // Reload must hand that scan to the background, so a Hide issued meanwhile pauses it
+        // like any other scan instead of waiting behind it.
+        using var gate = new ManualResetEventSlim(false);
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+        paths.Value = [Entry("/nas/a"), Entry("/nas/b")];
+        visibility.InspectGate = gate;
+        try
+        {
+            var reload = ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
+            await visibility.InspectEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            Assert.Same(reload, await Task.WhenAny(reload, Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken)));
+            Assert.True(vm.IsScanning);
+
+            vm.Rows.Single(r => r.Path == "/nas/a").IsSelected = true;
+            var hide = vm.HideSelectedCommand.ExecuteAsync(null);
+            // The pause has cancelled the scan; let its stuck inspection return so the Hide runs.
+            gate.Set();
+            await hide.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+            Assert.Equal(DesiredVisibility.Hidden, paths.Value.Single(e => e.Path == "/nas/a").DesiredVisibility);
+            Assert.Contains("/nas/a", visibility.Hidden);
+        }
+        finally
+        {
+            gate.Set();
+        }
+    }
+
     [AvaloniaFact]
     public async Task PathListReceiver_RoutesNativeFilesAndNeighboringToolbarDenies()
     {
@@ -884,8 +918,9 @@ public class MainWindowViewModelTests
         };
         var vm = CreateViewModel(visibility, paths);
 
-        // ReloadAsync re-runs the scan and awaits it, so all rows have a settled state.
+        // Reload starts a fresh background scan; awaiting it settles every row.
         await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
+        await vm.ScanTask;
 
         Assert.Equal("3 entries  ·  1 hidden  ·  1 visible  ·  1 missing", vm.StatusBarText);
     }

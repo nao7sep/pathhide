@@ -623,8 +623,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     // Reload takes the gate like every other mutating command, but not MutateAsync's
-    // pause-then-resume: it always ends by starting a fresh scan of the reloaded list,
-    // rather than putting back the one it interrupted.
+    // pause-then-resume: it always ends by starting a fresh background scan of the reloaded
+    // list, rather than putting back the one it interrupted. That scan runs after the gate is
+    // released, like every other, so the next command pauses it instead of queueing behind it.
     private Task ReloadAsync() => UnderMutationGateAsync(async () =>
     {
         await PauseScanningAsync();
@@ -658,8 +659,7 @@ public partial class MainWindowViewModel : ObservableObject
         // notice, no explanation, and no pointer to the quarantined file.
         await ReportQuarantinesAsync();
 
-        _scanTask = RunScanAsync();
-        await _scanTask;
+        StartBackgroundScan();
     });
 
     /// <summary>
