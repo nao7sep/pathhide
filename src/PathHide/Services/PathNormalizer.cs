@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using PathHide.Models;
 
 namespace PathHide.Services;
@@ -99,6 +98,12 @@ public static class PathNormalizer
         return trimmed;
     }
 
+    /// <summary>
+    /// Whether two stored paths name the same entry. Pure: a string comparison of the normalized
+    /// forms, so it is safe on the UI thread and in any loop. Aliases in a parent directory are
+    /// resolved once, when a path is added (<see cref="IdentityParent"/>, <see cref="Rebase"/>),
+    /// never here.
+    /// </summary>
     public static bool AreEqual(string a, string b)
     {
         var aIsNormalized = TryNormalize(a, out var normalizedA, out var familyA);
@@ -111,42 +116,45 @@ public static class PathNormalizer
 
             // Case-insensitive for every family, including POSIX.
             //
-            // This comparison answers "are these the same file?", and its three
-            // callers all use it for identity: the add-time duplicate check and
-            // the two row/entry reconciliations. macOS is PathHide's only POSIX
-            // target and its default APFS volume is case-insensitive, so
-            // comparing Ordinal there let two spellings of ONE file become two
-            // entries with independent desired states — the rows then contradict
-            // each other and whichever applies last silently flips the file,
-            // reverting what the user just asked for.
+            // This comparison answers "are these the same file?", and its callers
+            // all use it for identity. macOS is PathHide's only POSIX target and
+            // its default APFS volume is case-insensitive, so comparing Ordinal
+            // there let two spellings of ONE file become two entries with
+            // independent desired states — the rows then contradict each other and
+            // whichever applies last silently flips the file, reverting what the
+            // user just asked for.
             //
             // A case-SENSITIVE APFS volume is opt-in and rare, and the failure
             // there is the harmless direction: a second genuinely-distinct entry
             // is refused as a duplicate, visibly and without touching anything.
             // The default direction was the destructive one.
-            if (familyA == PathFamily.Posix && OperatingSystem.IsMacOS())
-            {
-                normalizedA = ResolveParentAliases(normalizedA!);
-                normalizedB = ResolveParentAliases(normalizedB!);
-            }
-
             return string.Equals(normalizedA, normalizedB, StringComparison.OrdinalIgnoreCase);
         }
 
         return string.Equals(a, b, StringComparison.Ordinal);
     }
 
-    private static string ResolveParentAliases(string path)
+    /// <summary>
+    /// The directory whose aliases decide a normalized POSIX path's identity — its parent — or null
+    /// for a root-level item or a Windows or UNC path. Only the parent: the item itself may be a link,
+    /// and PathHide operates on that link rather than its target.
+    /// </summary>
+    public static string? IdentityParent(string normalized)
     {
-        var parent = Path.GetDirectoryName(path);
-        var name = Path.GetFileName(path);
-        if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(name))
-            return path;
+        if (!TryNormalize(normalized, out var path, out var family) || family != PathFamily.Posix)
+            return null;
 
-        // Resolve only the parent. The final component may itself be a symlink,
-        // and PathHide deliberately operates on that link rather than its target.
-        return MacFs.TryRealPath(parent, out var resolvedParent)
-            ? Path.Combine(resolvedParent, name)
-            : path;
+        var slash = path.LastIndexOf('/');
+        return slash <= 0 ? null : path[..slash];
+    }
+
+    /// <summary>
+    /// <paramref name="normalized"/> moved under <paramref name="resolvedParent"/>, the resolved
+    /// spelling of its <see cref="IdentityParent"/>.
+    /// </summary>
+    public static string Rebase(string normalized, string resolvedParent)
+    {
+        var name = normalized[(normalized.LastIndexOf('/') + 1)..];
+        return resolvedParent.EndsWith('/') ? resolvedParent + name : resolvedParent + "/" + name;
     }
 }

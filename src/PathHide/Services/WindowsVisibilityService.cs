@@ -75,6 +75,12 @@ public sealed class WindowsVisibilityService : IVisibilityService
         File.SetAttributes(path, attrs);
     }
 
+    /// <summary>
+    /// Nothing to resolve: a drive or share path already compares case-insensitively, and the app
+    /// operates on the path the user picked, reparse points included.
+    /// </summary>
+    public string? ResolveDirectory(string directory) => null;
+
     private static ItemKind DetectKind(FileAttributes attrs)
     {
         if (attrs.HasFlag(FileAttributes.ReparsePoint))

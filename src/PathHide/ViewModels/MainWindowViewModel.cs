@@ -329,7 +329,11 @@ public partial class MainWindowViewModel : ObservableObject
     public void ResolveLogRevealFailure() =>
         ResolveOperationalResult(OperationalResultOwner.LogReveal);
 
-    private Task AddPathsCoreAsync(IEnumerable<string> paths, int unavailable) => MutateAsync(async () =>
+    /// <remarks>
+    /// Adding is the act of hiding, so the whole add — deciding each path's identity, saving, hiding —
+    /// runs as one cancellable operation, with Cancel shown throughout.
+    /// </remarks>
+    private Task AddPathsCoreAsync(IEnumerable<string> paths, int unavailable) => MutateAsync(() => RunCancellableAsync(async token =>
     {
         var added = 0;
         var duplicates = 0;
@@ -338,6 +342,7 @@ public partial class MainWindowViewModel : ObservableObject
         var addedPaths = new List<string>();
         var updated = new List<PathEntry>(_entries);
 
+        var accepted = new List<string>();
         foreach (var raw in paths)
         {
             if (!PathNormalizer.TryNormalize(raw, out var normalized, out _))
@@ -346,20 +351,24 @@ public partial class MainWindowViewModel : ObservableObject
                 invalid++;
                 continue;
             }
+            accepted.Add(normalized);
+        }
 
-            if (updated.Any(e => PathNormalizer.AreEqual(e.Path, normalized)))
+        foreach (var candidate in await ResolveIdentitiesAsync(accepted, token))
+        {
+            if (updated.Any(e => PathNormalizer.AreEqual(e.Path, candidate)))
             {
                 duplicates++;
-                duplicatePaths.Add(normalized);
+                duplicatePaths.Add(candidate);
                 continue;
             }
 
             updated.Add(new PathEntry
             {
-                Path = normalized,
+                Path = candidate,
                 DesiredVisibility = DesiredVisibility.Hidden,
             });
-            addedPaths.Add(normalized);
+            addedPaths.Add(candidate);
             added++;
         }
 
@@ -381,10 +390,10 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var newRows = Rows
-            .Where(r => addedPaths.Any(path => PathNormalizer.AreEqual(path, r.Path)))
-            .ToList();
-        var outcome = await ApplyDesiredStateAsync(newRows);
+        // Rows carry their entry's stored string, so an exact match finds the new ones.
+        var addedSet = new HashSet<string>(addedPaths, StringComparer.Ordinal);
+        var newRows = Rows.Where(r => addedSet.Contains(r.Path)).ToList();
+        var outcome = await ApplyAsync(newRows, token);
         if (duplicates > 0 || invalid > 0 || outcome.HasProblems)
         {
             ShowPathAddResult(added, duplicatePaths, invalid, outcome);
@@ -393,7 +402,40 @@ public partial class MainWindowViewModel : ObservableObject
         {
             ClearPathAddResultIfResolvedBy(addedPaths);
         }
-    });
+    }));
+
+    /// <summary>
+    /// Decides each new path's identity: its parent directory's aliases resolved, so two spellings of
+    /// one file become one entry. Done once, here, through the bounded owner, so every later
+    /// comparison is a pure string match. A parent that does not answer, cannot be resolved, or is
+    /// reached after a cancel keeps the spelling it was given.
+    /// </summary>
+    private async Task<List<string>> ResolveIdentitiesAsync(List<string> paths, CancellationToken token)
+    {
+        // One resolution per parent: a batch dropped from one folder asks once.
+        var resolvedParents = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var identities = new List<string>(paths.Count);
+        foreach (var path in paths)
+        {
+            var parent = PathNormalizer.IdentityParent(path);
+            if (parent is not null && !resolvedParents.ContainsKey(parent) && !token.IsCancellationRequested)
+            {
+                try
+                {
+                    resolvedParents[parent] = await _visibility.ResolveDirectoryAsync(parent, token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    Log.Info("add: cancelled while resolving paths");
+                }
+            }
+
+            identities.Add(parent is not null && resolvedParents.GetValueOrDefault(parent) is { } resolved
+                ? PathNormalizer.Rebase(path, resolved)
+                : path);
+        }
+        return identities;
+    }
 
     private void ShowPathAddResult(
         int added,
@@ -853,23 +895,25 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private void SyncRowsWithEntries()
     {
-        var remainingRows = Rows.ToList();
+        // Keyed by the stored path: a row carries its entry's exact string, and every entry was
+        // given its identity when it was added, so matching is a lookup, not a comparison per pair.
+        var remainingRows = Rows
+            .GroupBy(row => row.Path, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => new Queue<PathRowViewModel>(group), StringComparer.Ordinal);
 
         var desiredRows = new List<PathRowViewModel>(_entries.Count);
 
         foreach (var entry in _entries)
         {
-            var existingIndex = remainingRows.FindIndex(row => PathNormalizer.AreEqual(row.Path, entry.Path));
             PathRowViewModel row;
-            if (existingIndex < 0)
+            if (remainingRows.TryGetValue(entry.Path, out var matches) && matches.TryDequeue(out var existing))
             {
-                row = new PathRowViewModel(entry);
+                row = existing;
+                row.SyncEntry(entry);
             }
             else
             {
-                row = remainingRows[existingIndex];
-                remainingRows.RemoveAt(existingIndex);
-                row.SyncEntry(entry);
+                row = new PathRowViewModel(entry);
             }
 
             if (PathNormalizer.TryNormalize(entry.Path, out _, out var family))
@@ -968,14 +1012,21 @@ public partial class MainWindowViewModel : ObservableObject
     /// the whole command: the caller holds the mutation gate throughout, and an unbounded stat here
     /// once kept every other command queued behind it until the app was force-quit.
     /// </remarks>
-    private async Task<ApplyOutcome> ApplyDesiredStateAsync(List<PathRowViewModel> targets)
+    private Task<ApplyOutcome> ApplyDesiredStateAsync(List<PathRowViewModel> targets) =>
+        RunCancellableAsync(token => ApplyAsync(targets, token));
+
+    /// <summary>
+    /// Runs <paramref name="body"/> as the one operation <see cref="CancelCommand"/> stops, with
+    /// <see cref="IsApplying"/> set for its duration.
+    /// </summary>
+    private async Task<T> RunCancellableAsync<T>(Func<CancellationToken, Task<T>> body)
     {
         using var applyCts = new CancellationTokenSource();
         _applyCts = applyCts;
         IsApplying = true;
         try
         {
-            return await ApplyAsync(targets, applyCts.Token);
+            return await body(applyCts.Token);
         }
         finally
         {
@@ -985,6 +1036,13 @@ public partial class MainWindowViewModel : ObservableObject
             IsApplying = false;
         }
     }
+
+    private Task RunCancellableAsync(Func<CancellationToken, Task> body) =>
+        RunCancellableAsync(async token =>
+        {
+            await body(token);
+            return true;
+        });
 
     private async Task<ApplyOutcome> ApplyAsync(List<PathRowViewModel> targets, CancellationToken token)
     {

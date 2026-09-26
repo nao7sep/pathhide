@@ -56,9 +56,9 @@ internal static partial class MacFs
         => followSymlinks ? chflags(path, flags) : lchflags(path, flags);
 
     /// <summary>
-    /// Resolves aliases in an existing directory path. Callers use this only as
-    /// an identity descriptor; the user-authored path remains authoritative for
-    /// storage and visibility operations.
+    /// Resolves aliases in an existing directory path. Called only for the parent
+    /// of a path being added, never the item itself, which may be a link the user
+    /// means to hide.
     /// </summary>
     public static bool TryRealPath(string path, out string resolved)
     {

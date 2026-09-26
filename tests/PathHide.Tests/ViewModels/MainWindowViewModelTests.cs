@@ -79,6 +79,62 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task AddPaths_StoresTheResolvedParentSoAnAliasSpellingIsADuplicate()
+    {
+        var visibility = new FakeVisibilityService();
+        visibility.Aliases["/tmp"] = "/private/tmp";
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/tmp/a", "/tmp/b" });
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/private/tmp/a" });
+
+        Assert.Equal(new[] { "/private/tmp/a", "/private/tmp/b" }, paths.Value.Select(e => e.Path));
+        Assert.Equal("1 path is already in the list.", English.Of(vm.PathAddResult?.Message));
+        // One resolution per parent per add, and none for the saves, syncs and comparisons after it.
+        Assert.Equal(new[] { "/tmp", "/private/tmp" }, visibility.Resolved);
+    }
+
+    [Fact]
+    public async Task Saves_and_reloads_never_resolve_paths_again()
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>
+        {
+            Value = [Entry("/Volumes/NAS/a"), Entry("/Volumes/NAS/b")],
+        };
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+
+        foreach (var row in vm.Rows)
+            row.IsSelected = true;
+        await vm.ShowSelectedCommand.ExecuteAsync(null);
+        await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
+        await vm.ScanTask;
+
+        Assert.Empty(visibility.Resolved);
+    }
+
+    [Fact]
+    public async Task AddPaths_UnderAnUnresponsiveParentKeepsTheGivenSpellingWithinTheBound()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var visibility = new FakeVisibilityService { ResolveGate = gate };
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths, responseTimeout: TimeSpan.FromMilliseconds(100));
+        try
+        {
+            await vm.AddPathsCommand.ExecuteAsync(new[] { "/Volumes/NAS/a" });
+
+            Assert.Equal("/Volumes/NAS/a", Assert.Single(paths.Value).Path);
+        }
+        finally
+        {
+            gate.Set();
+        }
+    }
+
+    [Fact]
     public void Path_picker_failure_uses_the_add_receiver_without_diagnostics()
     {
         var vm = CreateViewModel(

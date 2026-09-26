@@ -105,26 +105,33 @@ public class PathNormalizerTests
     }
 
     [Fact]
-    public void AreEqual_MacOS_ResolvesParentDirectoryAliasesWithoutFollowingTheItem()
+    public void AreEqual_IsAPureComparison_ThatNeverResolvesAliases()
     {
-        if (!OperatingSystem.IsMacOS())
-            return;
+        // Identity is decided when a path is added; comparing never touches the file system, so
+        // an alias spelling and its resolved spelling are different strings here.
+        Assert.False(PathNormalizer.AreEqual("/tmp/capture.txt", "/private/tmp/capture.txt"));
+    }
 
-        var directoryName = $"pathhide-normalizer-{Guid.NewGuid():N}";
-        var publicParent = Path.Combine("/tmp", directoryName);
-        var resolvedParent = Path.Combine("/private/tmp", directoryName);
-        Directory.CreateDirectory(publicParent);
+    // --- IdentityParent / Rebase ---
 
-        try
-        {
-            Assert.True(PathNormalizer.AreEqual(
-                Path.Combine(publicParent, "capture.txt"),
-                Path.Combine(resolvedParent, "capture.txt")));
-        }
-        finally
-        {
-            Directory.Delete(publicParent);
-        }
+    [Theory]
+    [InlineData("/Users/x/Report.pdf", "/Users/x")]
+    [InlineData("/Users/x/Folder/", "/Users/x")]
+    [InlineData("/top", null)]
+    [InlineData("/", null)]
+    [InlineData(@"C:\Users\x\file", null)]
+    [InlineData(@"\\server\share\file", null)]
+    [InlineData("relative/file", null)]
+    public void IdentityParent_IsTheParentOfAPosixPathOnly(string path, string? expected)
+    {
+        Assert.Equal(expected, PathNormalizer.IdentityParent(path));
+    }
+
+    [Fact]
+    public void Rebase_KeepsTheItemAndReplacesItsParent()
+    {
+        Assert.Equal("/private/tmp/capture.txt", PathNormalizer.Rebase("/tmp/capture.txt", "/private/tmp"));
+        Assert.Equal("/capture.txt", PathNormalizer.Rebase("/link/capture.txt", "/"));
     }
 
     // --- AreEqual: Windows / UNC are case-insensitive ---

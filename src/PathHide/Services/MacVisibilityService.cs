@@ -57,6 +57,24 @@ public sealed class MacVisibilityService : IVisibilityService
         SetHidden(path, hidden: false);
     }
 
+    /// <summary>
+    /// Resolves the directory's aliases — <c>/tmp</c> to <c>/private/tmp</c>, a firmlinked
+    /// <c>/Volumes/Macintosh HD/Users</c> to <c>/Users</c> — so two spellings of one parent name one
+    /// entry.
+    /// </summary>
+    public string? ResolveDirectory(string directory)
+    {
+        try
+        {
+            return MacFs.TryRealPath(directory, out var resolved) ? resolved : null;
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("resolve directory: failed", ex, new { directory });
+            return null;
+        }
+    }
+
     private static void SetHidden(string path, bool hidden)
     {
         // Never follow a symlink. The user selected THIS path, so this path is

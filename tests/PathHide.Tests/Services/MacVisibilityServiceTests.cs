@@ -275,4 +275,25 @@ public sealed class MacVisibilityServiceTests : IDisposable
         _service.Show(link);
         Assert.Equal(ActualState.Visible, _service.Inspect(link).ActualState);
     }
+
+    [MacOnlyFact]
+    public void ResolveDirectory_ResolvesAParentAlias()
+    {
+        var name = $"pathhide-resolve-{NanoId.New()}";
+        Directory.CreateDirectory(Path.Combine("/tmp", name));
+        try
+        {
+            Assert.Equal(Path.Combine("/private/tmp", name), _service.ResolveDirectory(Path.Combine("/tmp", name)));
+        }
+        finally
+        {
+            Directory.Delete(Path.Combine("/tmp", name));
+        }
+    }
+
+    [MacOnlyFact]
+    public void ResolveDirectory_HasNoAnswerForAMissingDirectory()
+    {
+        Assert.Null(_service.ResolveDirectory(Path.Combine(_dir, "absent")));
+    }
 }

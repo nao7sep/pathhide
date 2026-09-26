@@ -63,6 +63,23 @@ public sealed class BoundedVisibility
     }
 
     /// <summary>
+    /// Resolves the aliases in <paramref name="directory"/>. A directory that does not answer in time
+    /// has no resolution, like one that cannot be resolved: null. Throws only
+    /// <see cref="OperationCanceledException"/>, when the caller cancels.
+    /// </summary>
+    public async Task<string?> ResolveDirectoryAsync(string directory, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await RunAsync(directory, () => _service.ResolveDirectory(directory), cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Hides or shows <paramref name="path"/>. Throws <see cref="TimeoutException"/> when the path does
     /// not answer in time, <see cref="OperationCanceledException"/> when the caller cancels, and
     /// whatever the write itself threw otherwise.

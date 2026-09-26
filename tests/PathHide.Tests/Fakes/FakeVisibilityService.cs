@@ -54,6 +54,15 @@ public sealed class FakeVisibilityService : IVisibilityService
     /// <summary>Completes the first time <see cref="Hide"/> or <see cref="Show"/> is entered.</summary>
     public TaskCompletionSource WriteEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <summary>Directory resolutions <see cref="ResolveDirectory"/> answers with; any other resolves to null.</summary>
+    public Dictionary<string, string> Aliases { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Every directory <see cref="ResolveDirectory"/> was asked about.</summary>
+    public ConcurrentQueue<string> Resolved { get; } = new();
+
+    /// <summary>When set, <see cref="ResolveDirectory"/> blocks on this gate, like a realpath on a dead share.</summary>
+    public ManualResetEventSlim? ResolveGate { get; set; }
+
     public void Set(string path, ActualState state, ItemKind kind = ItemKind.File)
         => _byPath[path] = new PathInspection(state, kind);
 
@@ -69,6 +78,13 @@ public sealed class FakeVisibilityService : IVisibilityService
         InspectGate?.Wait();
 
         return _byPath.TryGetValue(path, out var inspection) ? inspection : Default;
+    }
+
+    public string? ResolveDirectory(string directory)
+    {
+        Resolved.Enqueue(directory);
+        ResolveGate?.Wait();
+        return Aliases.TryGetValue(directory, out var resolved) ? resolved : null;
     }
 
     public void Hide(string path)

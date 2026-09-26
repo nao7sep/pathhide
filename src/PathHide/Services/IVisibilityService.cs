@@ -12,4 +12,12 @@ public interface IVisibilityService
     PathInspection Inspect(string path);
     void Hide(string path);
     void Show(string path);
+
+    /// <summary>
+    /// The spelling of an existing <paramref name="directory"/> with every alias in it resolved, or
+    /// null when the platform has none to resolve or the directory cannot be resolved. Decides a
+    /// new entry's identity once, when it is added (see <see cref="PathNormalizer.Rebase"/>).
+    /// Implementations must not throw.
+    /// </summary>
+    string? ResolveDirectory(string directory);
 }
