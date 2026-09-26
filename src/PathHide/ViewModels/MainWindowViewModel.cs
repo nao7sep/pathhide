@@ -1201,11 +1201,21 @@ public partial class MainWindowViewModel : ObservableObject
                 _settings.WindowsHideMode);
 
             var outcome = await Services.WindowsElevatedApplicator.ApplyAsync(
-                buckets.ToHide, buckets.ToHideWithSystem, buckets.ToShow);
+                buckets.ToHide, buckets.ToHideWithSystem, buckets.ToShow, token);
             elevationExitCode = outcome.ExitCode;
 
             foreach (var row in retryBucket)
             {
+                // A cancel stopped the wait, not the child: a path it had not reported on may
+                // still change, so its row no longer claims a state.
+                if (token.IsCancellationRequested && !outcome.Results.ContainsKey(row.Path))
+                {
+                    row.ActualState = ActualState.Unknown;
+                    cancelled++;
+                    problemPaths.Add(row.Path);
+                    continue;
+                }
+
                 // Re-inspect only to refresh what the row shows; the success/error verdict
                 // comes from the elevated child's own per-path report (see DecideElevatedRow).
                 var recheck = await _visibility.InspectAsync(row.Path, CancellationToken.None);

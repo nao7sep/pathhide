@@ -43,11 +43,21 @@ public static class WindowsElevatedApplicator
     /// </summary>
     private static readonly TimeSpan ChildTimeout = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// Runs the elevated child and waits for it within <see cref="ChildTimeout"/>, or until
+    /// <paramref name="cancellationToken"/> is cancelled. A cancel ends the wait the way the
+    /// timeout does: the child, which this process cannot stop, finishes on its own, and the
+    /// outcome carries only the paths it had reported by then.
+    /// </summary>
     public static async Task<ElevatedApplyOutcome> ApplyAsync(
         IEnumerable<string> toHide,
         IEnumerable<string> toHideWithSystem,
-        IEnumerable<string> toShow)
+        IEnumerable<string> toShow,
+        CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested)
+            return new ElevatedApplyOutcome(-1, EmptyResults);
+
         var exePath = Environment.ProcessPath;
         if (string.IsNullOrEmpty(exePath))
         {
@@ -108,10 +118,11 @@ public static class WindowsElevatedApplicator
                 return new ElevatedApplyOutcome(-1, EmptyResults);
             }
 
-            using var timeout = new CancellationTokenSource(ChildTimeout);
+            using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            wait.CancelAfter(ChildTimeout);
             try
             {
-                await process.WaitForExitAsync(timeout.Token);
+                await process.WaitForExitAsync(wait.Token);
             }
             catch (OperationCanceledException)
             {
@@ -119,14 +130,25 @@ public static class WindowsElevatedApplicator
                 // token is not ours to signal. Stop waiting and report what it managed to
                 // write: the child appends each result as its path completes, so a partial file
                 // is authoritative for the paths it names, and the caller treats an unreported
-                // path as unknown.
+                // path as unknown, or as cancelled when the user cancelled.
                 var partial = ReadResults(resultsPath);
-                Log.Error("elevated apply: child did not exit within the timeout", new
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    timeoutSeconds = (int)ChildTimeout.TotalSeconds,
-                    reported = partial.Count,
-                    totalPaths,
-                });
+                    Log.Info("elevated apply: cancelled; the child finishes on its own", new
+                    {
+                        reported = partial.Count,
+                        totalPaths,
+                    });
+                }
+                else
+                {
+                    Log.Error("elevated apply: child did not exit within the timeout", new
+                    {
+                        timeoutSeconds = (int)ChildTimeout.TotalSeconds,
+                        reported = partial.Count,
+                        totalPaths,
+                    });
+                }
 
                 // The finally below deletes the file, but the child is still running and will
                 // keep appending to it — and for an app whose purpose is concealing these paths,
