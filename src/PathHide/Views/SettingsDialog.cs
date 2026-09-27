@@ -90,7 +90,7 @@ public sealed class SettingsDialog : DialogBase
         Localized.SetText(themeHint, "settings.themeHint");
         themeHint[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("TextSecondaryBrush");
 
-        _uiFontBox = new ImeTextBox { Text = uiFontFamily, PlaceholderText = AppSettings.DefaultUiFontFamily };
+        _uiFontBox = new ImeTextBox { Text = uiFontFamily, PlaceholderText = AppSettings.DefaultUiFontName };
         // A sentence, so it wraps inside the dialog's fixed width rather than running past it.
         var hiddenAndSystemLabel = new TextBlock { TextWrapping = TextWrapping.Wrap };
         Localized.SetText(hiddenAndSystemLabel, "settings.hiddenAndSystem");

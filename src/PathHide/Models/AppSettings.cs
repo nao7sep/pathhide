@@ -26,8 +26,17 @@ public sealed class AppSettings
     /// </summary>
     public const string FileName = "config.json";
 
-    /// <summary>The bundled default UI (chrome) font, registered via <c>.WithInterFont()</c>.</summary>
-    public const string DefaultUiFontFamily = "Inter";
+    /// <summary>
+    /// The default UI (chrome) font's display name, shown as the empty field's placeholder. The
+    /// setting never stores it: an empty value resolves to <see cref="BundledUiFontUri"/>.
+    /// </summary>
+    public const string DefaultUiFontName = "Inter";
+
+    /// <summary>
+    /// UI-font values earlier versions stored as the default. A stored value equal to one of them is
+    /// cleared on load, so a later change of the default reaches the user who never chose a font.
+    /// </summary>
+    private static readonly string[] FormerDefaultUiFontFamilies = ["Inter"];
 
     /// <summary>
     /// The bundled Inter as the font manager reaches it. A bare "Inter" does NOT resolve
@@ -45,13 +54,26 @@ public sealed class AppSettings
     /// </summary>
     public string Language { get; set; } = I18n.Languages.System;
 
-    // App appearance — the UI (chrome) font family. Family only; an empty value falls back to the
-    // bundled default (Inter). Applied app-wide.
-    public string UiFontFamily { get; set; } = DefaultUiFontFamily;
+    // App appearance — the UI (chrome) font family. Family only; empty until the user types one,
+    // and an empty value resolves to the bundled default (Inter). Applied app-wide.
+    public string UiFontFamily { get; set; } = string.Empty;
 
     // App appearance — the theme. System follows the OS; applied app-wide before the main window
     // exists and again on each Save.
     public ThemePreference Theme { get; set; } = ThemePreference.System;
 
     public WindowsHideMode WindowsHideMode { get; set; } = WindowsHideMode.HiddenOnly;
+
+    /// <summary>
+    /// Clears a UI-font value that is only a former default, which earlier versions stored for every
+    /// user. Returns whether it changed anything, so the caller can save the cleared value.
+    /// </summary>
+    public bool ClearFormerDefaultUiFont()
+    {
+        if (Array.IndexOf(FormerDefaultUiFontFamilies, UiFontFamilyValue.Normalize(UiFontFamily)) < 0)
+            return false;
+
+        UiFontFamily = string.Empty;
+        return true;
+    }
 }

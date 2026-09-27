@@ -30,10 +30,31 @@ public sealed class UiFontTests
     }
 
     [Fact]
-    public void Default_ui_font_is_the_bundled_inter()
+    public void Default_ui_font_stores_nothing_and_names_inter_as_the_placeholder()
     {
-        Assert.Equal("Inter", new AppSettings().UiFontFamily);
-        Assert.Equal("Inter", AppSettings.DefaultUiFontFamily);
+        Assert.Equal(string.Empty, new AppSettings().UiFontFamily);
+        Assert.Equal("Inter", AppSettings.DefaultUiFontName);
+    }
+
+    [Theory]
+    [InlineData("Inter")]
+    [InlineData("  Inter ")]
+    public void A_stored_former_default_is_cleared(string stored)
+    {
+        var settings = new AppSettings { UiFontFamily = stored };
+        Assert.True(settings.ClearFormerDefaultUiFont());
+        Assert.Equal(string.Empty, settings.UiFontFamily);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Menlo")]
+    [InlineData("Inter, Menlo")]
+    public void A_chosen_or_empty_ui_font_is_kept(string stored)
+    {
+        var settings = new AppSettings { UiFontFamily = stored };
+        Assert.False(settings.ClearFormerDefaultUiFont());
+        Assert.Equal(stored, settings.UiFontFamily);
     }
 
     [Fact]

@@ -25,6 +25,10 @@ public sealed class FontResolutionTests
     }
 
     [AvaloniaFact]
+    public void AnEmptySettingResolvesToTheBundledUri() =>
+        Assert.Equal(new FontFamily(AppSettings.BundledUiFontUri), UiFont.Resolve(new AppSettings().UiFontFamily));
+
+    [AvaloniaFact]
     public void ResolverFallbackResolvesToInter()
     {
         var typeface = new Typeface(UiFont.Resolve("No Such Font 99999"));

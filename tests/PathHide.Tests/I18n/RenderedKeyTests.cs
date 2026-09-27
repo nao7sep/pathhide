@@ -78,7 +78,7 @@ public class RenderedKeyTests : WindowTest
     {
         // With the Windows-only section on, and a failed save's sentence on screen.
         var dialog = Show(new SettingsDialog(
-            Languages.System, AppSettings.DefaultUiFontFamily, ThemePreference.System,
+            Languages.System, string.Empty, ThemePreference.System,
             isHiddenAndSystem: false, showWindowsHideMode: true,
             (_, _, _, _) => Task.FromResult<Message?>(Message.Of("failure.settingsSave"))));
 

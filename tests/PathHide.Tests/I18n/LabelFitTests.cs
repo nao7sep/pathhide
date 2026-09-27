@@ -42,7 +42,7 @@ public class LabelFitTests : WindowTest
         using var speaking = Localizer.Speaking(tag);
 
         var dialog = Show(new SettingsDialog(
-            Languages.System, AppSettings.DefaultUiFontFamily, ThemePreference.System,
+            Languages.System, string.Empty, ThemePreference.System,
             isHiddenAndSystem: false, showWindowsHideMode: true, (_, _, _, _) => Task.FromResult<Message?>(null)));
 
         // Section headers, the three theme choices, the checkbox and the two buttons.

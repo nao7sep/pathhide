@@ -100,7 +100,7 @@ public class LanguageChangeTests : WindowTest
     public void a_dialog_built_in_code_follows_the_language()
     {
         var dialog = Show(new SettingsDialog(
-            Languages.System, AppSettings.DefaultUiFontFamily, ThemePreference.System,
+            Languages.System, string.Empty, ThemePreference.System,
             isHiddenAndSystem: false, showWindowsHideMode: true, (_, _, _, _) => Task.FromResult<Message?>(null)));
 
         var theme = dialog.GetVisualDescendants().OfType<TextBlock>()
@@ -162,7 +162,7 @@ public class LanguageChangeTests : WindowTest
     public void choosing_a_language_enables_save()
     {
         var dialog = Show(new SettingsDialog(
-            Languages.System, AppSettings.DefaultUiFontFamily, ThemePreference.System,
+            Languages.System, string.Empty, ThemePreference.System,
             isHiddenAndSystem: false, showWindowsHideMode: false, (_, _, _, _) => Task.FromResult<Message?>(null)));
         var save = Button(dialog, English.Of("common.save"));
         var languages = dialog.GetVisualDescendants().OfType<ComboBox>().Single();
@@ -185,7 +185,7 @@ public class LanguageChangeTests : WindowTest
         // back exactly when the test ends, whatever the save did to them.
         using var restore = Localizer.Speaking(Localizer.Language);
 
-        Assert.Null(await viewModel.TryApplySettingsAsync("de", AppSettings.DefaultUiFontFamily, false, ThemePreference.System));
+        Assert.Null(await viewModel.TryApplySettingsAsync("de", string.Empty, false, ThemePreference.System));
 
         Assert.Equal("de", Localizer.Language);
         Assert.Equal("de", settings.LastSaved!.Language);

@@ -154,6 +154,22 @@ public partial class App : Application
         // see LoadPersistedState.
         var settings = settingsStore.Load().Value;
 
+        // Earlier versions stored the default UI font instead of leaving the setting empty; clear
+        // it so the user who never chose a font follows the default. A failed save only repeats
+        // the clear next launch.
+        if (settings.ClearFormerDefaultUiFont())
+        {
+            try
+            {
+                settingsStore.Save(settings);
+                Log.Info("config: cleared a stored default UI font");
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("config: clearing the stored default UI font failed", ex, new { file = AppSettings.FileName });
+            }
+        }
+
         // Create config.json on first run so the settings file exists on disk immediately, not only
         // after the first save (storage-path conventions, "Materializing settings on first run"). This
         // runs here — right after the load populates `settings`, before the visibility service and the

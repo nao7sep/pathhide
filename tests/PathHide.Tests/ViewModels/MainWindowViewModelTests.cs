@@ -489,7 +489,7 @@ public class MainWindowViewModelTests
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
 
-        var save = vm.TryApplySettingsAsync(Languages.System, AppSettings.DefaultUiFontFamily, hiddenAndSystem: false, ThemePreference.Dark);
+        var save = vm.TryApplySettingsAsync(Languages.System, string.Empty, hiddenAndSystem: false, ThemePreference.Dark);
         var returnedWhileSaving = !gate.IsSet;
         gate.Set();
         Assert.Null(await save);
@@ -1062,7 +1062,7 @@ public class MainWindowViewModelTests
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
-        var failure = await vm.TryApplySettingsAsync(Languages.System, AppSettings.DefaultUiFontFamily, hiddenAndSystem: false, ThemePreference.Dark);
+        var failure = await vm.TryApplySettingsAsync(Languages.System, string.Empty, hiddenAndSystem: false, ThemePreference.Dark);
 
         Assert.Null(failure);
         Assert.Equal(1, settingsStore.SaveCount);
@@ -1080,7 +1080,7 @@ public class MainWindowViewModelTests
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
 
-        var failure = await vm.TryApplySettingsAsync(Languages.System, AppSettings.DefaultUiFontFamily, hiddenAndSystem: false, ThemePreference.System);
+        var failure = await vm.TryApplySettingsAsync(Languages.System, string.Empty, hiddenAndSystem: false, ThemePreference.System);
 
         Assert.Null(failure);
         Assert.Equal(0, settingsStore.SaveCount);
@@ -1097,7 +1097,7 @@ public class MainWindowViewModelTests
         var failure = await vm.TryApplySettingsAsync(Languages.System, "Menlo", hiddenAndSystem: true, ThemePreference.Dark);
 
         Assert.Contains("Settings could not be saved", English.Of(failure));
-        Assert.Equal(AppSettings.DefaultUiFontFamily, settings.UiFontFamily);
+        Assert.Equal(string.Empty, settings.UiFontFamily);
         Assert.Equal(WindowsHideMode.HiddenOnly, settings.WindowsHideMode);
         Assert.Equal(ThemePreference.System, settings.Theme);
         Assert.Empty(vm.OperationalResults);
