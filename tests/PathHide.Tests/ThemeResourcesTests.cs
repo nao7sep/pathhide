@@ -32,6 +32,13 @@ public sealed class ThemeResourcesTests
     public void ANewSettingsFileStartsOnSystem() =>
         Assert.Equal(ThemePreference.System, new AppSettings().Theme);
 
+    // NSRequiresAquaSystemAppearance pins every macOS window to the light appearance, so System
+    // would show light chrome on a dark Mac and the title bar would ignore RequestedThemeVariant.
+    [Fact]
+    public void TheMacBundleDoesNotPinTheLightAppearance() =>
+        Assert.DoesNotContain("NSRequiresAquaSystemAppearance",
+            File.ReadAllText(Path.Combine(RepoRoot(), "macOS", "Info.plist")));
+
     [Fact]
     public void LightAndDarkDefineTheSameThemedBrushes()
     {
