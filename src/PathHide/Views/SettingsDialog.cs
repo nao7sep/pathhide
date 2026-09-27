@@ -111,28 +111,21 @@ public sealed class SettingsDialog : DialogBase
         // Language and appearance (theme, then UI font) lead; the Windows-only hide mode follows and
         // shows only where it applies, so the dialog is never cluttered with a setting that does
         // nothing here.
+        // Each setting is a section - its heading, its control and its note 8px apart - and the
+        // sections sit a wider 20px apart, so the grouping is carried by space.
         var panel = new StackPanel
         {
-            Spacing = 12,
+            Spacing = 20,
             Children =
             {
-                SectionHeader("settings.language"),
-                _languageBox,
-                SectionHeader("settings.theme"),
-                themeRow,
-                themeHint,
-                SectionHeader("settings.uiFont"),
-                _uiFontBox,
-                fontHint,
+                Section("settings.language", _languageBox),
+                Section("settings.theme", themeRow, themeHint),
+                Section("settings.uiFont", _uiFontBox, fontHint),
             },
         };
 
         if (showWindowsHideMode)
-        {
-            panel.Children.Add(SectionHeader("settings.windowsHideMode"));
-            panel.Children.Add(_hiddenAndSystemCheckBox);
-            panel.Children.Add(hideModeHint);
-        }
+            panel.Children.Add(Section("settings.windowsHideMode", _hiddenAndSystemCheckBox, hideModeHint));
 
         _saveError = new TextBlock
         {
@@ -190,6 +183,14 @@ public sealed class SettingsDialog : DialogBase
     }
 
     private void UpdateSaveState() => _saveButton.IsEnabled = HasUnsavedChanges;
+
+    private static StackPanel Section(string headerKey, params Control[] children)
+    {
+        var section = new StackPanel { Spacing = 8 };
+        section.Children.Add(SectionHeader(headerKey));
+        section.Children.AddRange(children);
+        return section;
+    }
 
     private static TextBlock SectionHeader(string key)
     {

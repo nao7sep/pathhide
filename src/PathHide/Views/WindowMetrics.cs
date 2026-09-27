@@ -74,9 +74,9 @@ public static class WindowMetrics
             ? workingAreaHeight / scale * DialogHeightFraction
             : double.PositiveInfinity;
 
-    // The path-list Border has Margin="12" on all sides, so the grid loses 12px of horizontal
-    // room on each edge.
-    private const double GridHorizontalMargin = 12 + 12;
+    // The path-list Border has Margin="12" on all sides and insets the grid a further 6px inside
+    // it, so the grid loses 18px of horizontal room on each edge.
+    private const double GridHorizontalMargin = (12 + 6) * 2;
 
     // A real content minimum, tall enough to show a few data rows plus the column header — a
     // declared pane minimum, not an arbitrary number. The chrome heights are NOT declared here:

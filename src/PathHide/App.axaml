@@ -24,6 +24,21 @@
                     <SolidColorBrush x:Key="StatusBorderBrush" Color="#D8DEE8"/>
                     <SolidColorBrush x:Key="StatusAccentBrush" Color="#1D4ED8"/>
                     <SolidColorBrush x:Key="DangerTextBrush" Color="#DC2626"/>
+                    <!-- Control surfaces: the secondary button and the fields rest on ControlBrush and
+                         FieldBrush inside a ControlEdgeBrush edge; hover and press deepen the same
+                         surface one step at a time. Rows and menu items fill with RowHoverBrush, and
+                         the selected row with a tint of the app's blue. -->
+                    <SolidColorBrush x:Key="ControlBrush" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="ControlHoverBrush" Color="#EEF2F7"/>
+                    <SolidColorBrush x:Key="ControlPressedBrush" Color="#E1E7EF"/>
+                    <SolidColorBrush x:Key="ControlEdgeBrush" Color="#C8D0DB"/>
+                    <SolidColorBrush x:Key="ControlEdgeHoverBrush" Color="#A9B4C3"/>
+                    <SolidColorBrush x:Key="FieldBrush" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="RowHoverBrush" Color="#F1F4F9"/>
+                    <SolidColorBrush x:Key="RowPressedBrush" Color="#E6EBF2"/>
+                    <SolidColorBrush x:Key="RowSelectedBrush" Color="#DDE7FD"/>
+                    <SolidColorBrush x:Key="RowSelectedHoverBrush" Color="#D1DEFC"/>
+                    <SolidColorBrush x:Key="FocusRingBrush" Color="#1D4ED8"/>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="AppBackgroundBrush" Color="#121519"/>
@@ -38,6 +53,17 @@
                     <SolidColorBrush x:Key="StatusBorderBrush" Color="#323A46"/>
                     <SolidColorBrush x:Key="StatusAccentBrush" Color="#8AB4FF"/>
                     <SolidColorBrush x:Key="DangerTextBrush" Color="#F87171"/>
+                    <SolidColorBrush x:Key="ControlBrush" Color="#232932"/>
+                    <SolidColorBrush x:Key="ControlHoverBrush" Color="#2B323D"/>
+                    <SolidColorBrush x:Key="ControlPressedBrush" Color="#343C48"/>
+                    <SolidColorBrush x:Key="ControlEdgeBrush" Color="#3B4452"/>
+                    <SolidColorBrush x:Key="ControlEdgeHoverBrush" Color="#566172"/>
+                    <SolidColorBrush x:Key="FieldBrush" Color="#1A1E24"/>
+                    <SolidColorBrush x:Key="RowHoverBrush" Color="#232932"/>
+                    <SolidColorBrush x:Key="RowPressedBrush" Color="#2B323D"/>
+                    <SolidColorBrush x:Key="RowSelectedBrush" Color="#1D3157"/>
+                    <SolidColorBrush x:Key="RowSelectedHoverBrush" Color="#233A66"/>
+                    <SolidColorBrush x:Key="FocusRingBrush" Color="#8AB4FF"/>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
@@ -101,6 +127,17 @@
             <SolidColorBrush x:Key="UtilityPressedBrush" Color="{StaticResource UtilityPressed}"/>
             <SolidColorBrush x:Key="InactiveActionBrush" Color="{StaticResource InactiveAction}"/>
 
+            <!-- The app's sizes. One height for every standard control - each action button, each
+                 dialog button, each one-line field - so a toolbar row and a footer line up. The
+                 radius grows with the surface: rows and menu items, then controls, then the list's
+                 frame. The focus ring sits 1px clear of a control and follows its corner. -->
+            <x:Double x:Key="AppControlHeight">32</x:Double>
+            <CornerRadius x:Key="AppRowRadius">6</CornerRadius>
+            <CornerRadius x:Key="AppControlRadius">8</CornerRadius>
+            <CornerRadius x:Key="AppSurfaceRadius">10</CornerRadius>
+            <CornerRadius x:Key="AppControlFocusRadius">11</CornerRadius>
+            <Thickness x:Key="AppFocusRingMargin">-3</Thickness>
+
             <!-- The app-wide UI (chrome) font. The default is the bundled Inter; the view model overrides
                  this resource at runtime from the configured UI font, and the Window style below binds it
                  via DynamicResource so the change applies live across every window. -->
@@ -110,7 +147,15 @@
     </Application.Resources>
 
     <Application.Styles>
-        <FluentTheme />
+        <FluentTheme>
+            <!-- The toolkit's own accent - the checked box and radio, the text caret's selection -
+                 is the app's blue rather than the operating system's, so nothing on screen wears a
+                 colour the app did not choose. -->
+            <FluentTheme.Palettes>
+                <ColorPaletteResources x:Key="Light" Accent="#1D4ED8"/>
+                <ColorPaletteResources x:Key="Dark" Accent="#1D4ED8"/>
+            </FluentTheme.Palettes>
+        </FluentTheme>
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
 
         <!-- Every window (main + dialogs) takes the configured UI font; FontFamily inherits to child
@@ -126,36 +171,84 @@
             <Setter Property="FontSize" Value="13"/>
         </Style>
 
+        <!-- One button anatomy, whatever its colour: the standard height, symmetric padding with the
+             label centred, the control radius, and no edge of its own unless its role draws one.
+             Avalonia's stock button padding is lopsided (8,5,8,6), so leaving any of this unstated
+             is the app failing to say what it wants rather than the toolkit getting it wrong.
+             Anything still off after it is declared is the toolkit's, and is not to be chased with
+             compensating values that would be wrong at the next font or size. -->
+        <Style Selector="Button">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="MinHeight" Value="{StaticResource AppControlHeight}"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="CornerRadius" Value="{StaticResource AppControlRadius}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
 
+        <!-- One focus treatment for the whole app: a ring in the app's blue, 1px clear of the control
+             and following its corner. Fluent's own is a square double outline 3px out, which hid the
+             rounded corner and made the focused button look larger than its neighbour. The ring
+             lies wholly outside the control, so it opts out of the adorner layer's clip to the
+             control's bounds, which would otherwise leave only a sliver of its corner. -->
+        <Style Selector="Button, CheckBox, RadioButton">
+            <Setter Property="FocusAdorner">
+                <FocusAdornerTemplate>
+                    <Border BorderThickness="2"
+                            AdornerLayer.IsClipEnabled="False"
+                            BorderBrush="{DynamicResource FocusRingBrush}"
+                            CornerRadius="{StaticResource AppControlFocusRadius}"
+                            Margin="{StaticResource AppFocusRingMargin}"/>
+                </FocusAdornerTemplate>
+            </Setter>
+        </Style>
+
+        <!-- A square, icon-only button (the menu): as tall as every other control and as wide. -->
+        <Style Selector="Button.icon">
+            <Setter Property="Width" Value="{StaticResource AppControlHeight}"/>
+            <Setter Property="Height" Value="{StaticResource AppControlHeight}"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- The quiet close mark on a result: compact, and exempt from the standard height, because
+             it sits inside the result's own line rather than in a row of controls. -->
         <Style Selector="Button.resultClose">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="MinHeight" Value="0"/>
             <Setter Property="Padding" Value="6"/>
             <!-- The result's own vertical padding contains the larger pointer target. Removing
                  half of that target's excess from layout keeps a one-line message as the row's
                  height while the clickable area remains comfortably larger than the mark. -->
             <Setter Property="Margin" Value="0,-3"/>
-            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="CornerRadius" Value="{StaticResource AppRowRadius}"/>
+            <Setter Property="FocusAdorner">
+                <FocusAdornerTemplate>
+                    <Border BorderThickness="2"
+                            AdornerLayer.IsClipEnabled="False"
+                            BorderBrush="{DynamicResource FocusRingBrush}"
+                            CornerRadius="9"
+                            Margin="{StaticResource AppFocusRingMargin}"/>
+                </FocusAdornerTemplate>
+            </Setter>
         </Style>
         <Style Selector="Button.resultClose:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
-        </Style>
-        <Style Selector="Button.resultClose:focus /template/ ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource ControlHoverBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
         <Style Selector="Button.resultClose:pressed /template/ ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource ControlPressedBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
 
-        <!-- Add buttons -->
+        <!-- The colour-coded action buttons are the app's own language and a recorded exception to
+             the fleet's outlined destructive trigger: every action is a filled colour (add green,
+             hide pink, show violet, reload blue, reapply teal, remove red, cancel amber), so
+             outlining only the red one would break it. Each class states its fill, then a hover and
+             a pressed step further down its own ladder. -->
         <Style Selector="Button.add">
             <Setter Property="Background" Value="{StaticResource AddBrush}"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.add:pointerover /template/ ContentPresenter">
@@ -166,12 +259,14 @@
             <Setter Property="Background" Value="{StaticResource AddPressedBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
+        <Style Selector="Button.add:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource AddBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
 
-        <!-- Hide buttons -->
         <Style Selector="Button.hide">
             <Setter Property="Background" Value="{StaticResource HideBrush}"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.hide:pointerover /template/ ContentPresenter">
@@ -187,11 +282,9 @@
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
-        <!-- Show buttons -->
         <Style Selector="Button.show">
             <Setter Property="Background" Value="{StaticResource ShowBrush}"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.show:pointerover /template/ ContentPresenter">
@@ -207,11 +300,9 @@
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
-        <!-- Reload button -->
         <Style Selector="Button.reload">
             <Setter Property="Background" Value="{StaticResource ReloadBrush}"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.reload:pointerover /template/ ContentPresenter">
@@ -227,11 +318,9 @@
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
-        <!-- Reapply button -->
         <Style Selector="Button.reapply">
             <Setter Property="Background" Value="{StaticResource ReapplyBrush}"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.reapply:pointerover /template/ ContentPresenter">
@@ -247,11 +336,9 @@
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
-        <!-- Destructive buttons -->
         <Style Selector="Button.destructive">
             <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.destructive:pointerover /template/ ContentPresenter">
@@ -262,16 +349,14 @@
             <Setter Property="Background" Value="{StaticResource DangerPressedBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
-        <Style Selector="Button.destructive:focus /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource DangerHoverBrush}"/>
+        <Style Selector="Button.destructive:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
-        <!-- Cancellation button -->
         <Style Selector="Button.cancel">
             <Setter Property="Background" Value="{StaticResource CancelBrush}"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.cancel:pointerover /template/ ContentPresenter">
@@ -282,12 +367,15 @@
             <Setter Property="Background" Value="{StaticResource CancelPressedBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
+        <Style Selector="Button.cancel:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource CancelBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
 
         <!-- About button -->
         <Style Selector="Button.about">
             <Setter Property="Background" Value="{StaticResource AboutBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource AboutForegroundBrush}"/>
-            <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.about:pointerover /template/ ContentPresenter">
@@ -297,38 +385,9 @@
 
         <!-- Utility buttons: a dark-gray neutral (clearly not black) with a white icon/label — a
              deliberate dark control, without the near-black weight the hamburger originally had -->
-        <!-- A button states everything it requires of its label: that the content is
-             centred, and that the padding around it is symmetric. Avalonia's stock button
-             padding is lopsided (8,5,8,6), so leaving either unstated is the app failing
-             to say what it wants rather than the toolkit getting it wrong. Anything still
-             off after both are declared is the toolkit's, and is not to be chased with
-             compensating values that would be wrong at the next font or size. -->
-        <!-- A checkbox states the same as a button: its label is centred against the box.
-             Left unstated it inherits the theme's own idea, which is not reliably centred. -->
-        <Style Selector="CheckBox">
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
-
-        <Style Selector="Button">
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Padding" Value="12,6"/>
-            <!-- One radius for every button; a class that omits it must not fall back to
-                 the theme's smaller default, which reads as square beside these. -->
-            <Setter Property="CornerRadius" Value="6"/>
-        </Style>
-        <Style Selector="TextBox">
-            <!-- A single-line field states that its text centres and that its padding is
-                 symmetric. That is the whole of the intent; if Avalonia's text layout
-                 still lands the line slightly off, that is the toolkit's, not something
-                 to chase with lopsided values. -->
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Padding" Value="8,6"/>
-        </Style>
-
         <Style Selector="Button.utility">
             <Setter Property="Background" Value="{StaticResource UtilityBrush}"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <Style Selector="Button.utility:pointerover /template/ ContentPresenter">
@@ -339,16 +398,41 @@
             <Setter Property="Background" Value="{StaticResource UtilityPressedBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
-        <Style Selector="Button.utility:focus /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource UtilityHoverBrush}"/>
+        <Style Selector="Button.utility:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource UtilityBrush}"/>
             <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- The dialog's secondary action (Cancel, Close beside a commit): the app's own neutral
+             control, a light surface inside a visible edge, stepping deeper on hover and press. Left
+             to Fluent it was the toolkit's grey slab, and in the dark theme it lightened when
+             pressed. -->
+        <Style Selector="Button.secondary">
+            <Setter Property="Background" Value="{DynamicResource ControlBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlEdgeBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style Selector="Button.secondary:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource ControlHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlEdgeHoverBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="Button.secondary:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource ControlPressedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlEdgeHoverBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="Button.secondary:disabled /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource ControlBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlEdgeBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
 
         <!-- Dialog accent button -->
         <Style Selector="Button.accent">
             <Setter Property="Background" Value="{StaticResource ReloadBrush}"/>
             <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Padding" Value="12,6"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
         <!-- Fluent ships its own Button.accent, and its presenter setters outrank a
@@ -363,10 +447,6 @@
             <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
-        <Style Selector="Button.accent:focus /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource ReloadHoverBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
-        </Style>
         <Style Selector="Button.accent:pressed /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource ReloadPressedBrush}"/>
             <Setter Property="Foreground" Value="White"/>
@@ -376,15 +456,10 @@
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
-        <!-- A focused primary action must not become brighter when its dialog loses activation.
-             Deactivation clears Avalonia's :focus match even though keyboard focus is retained, so
-             the base accent would otherwise replace the darker focused fill. DialogBase owns the
-             windowInactive class; this neutral treatment makes inactive emphasis visibly recede. -->
+        <!-- A dialog's primary action recedes while its dialog is not the active window, so the
+             emphasis says which window the keyboard is in. DialogBase owns the windowInactive class;
+             the neutral fill still reads as the primary beside the secondary's light surface. -->
         <Style Selector="Window.windowInactive Button.accent /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource InactiveActionBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
-        </Style>
-        <Style Selector="Window.windowInactive Button.accent:focus /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource InactiveActionBrush}"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
@@ -393,12 +468,138 @@
              footprint, so it stays recognisably the control that will come back and the colour
              codes stay told apart while they are off. Left to Fluent, every class here — green,
              pink, violet, blue, teal, red, amber — resolved to the same grey slab, so a disabled
-             Hide and a disabled Reload were one control. The fade is on the button, and the
-             classes that can be switched off restate their own fill above; a class that is never
-             disabled says nothing. -->
+             Hide and a disabled Reload were one control. The fade is on the button, and every
+             filled class restates its own fill above, so a red button stays red while it is off. -->
         <Style Selector="Button:disabled">
             <Setter Property="Opacity" Value="0.45"/>
         </Style>
+
+        <!-- A checkbox states the same as a button: its label is centred against the box.
+             Left unstated it inherits the theme's own idea, which is not reliably centred. -->
+        <Style Selector="CheckBox">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <!-- One-line fields share the controls' height, radius and edge, and rest on the field
+             surface. A field states that its text centres and that its padding is symmetric; if
+             Avalonia's text layout still lands the line slightly off, that is the toolkit's, not
+             something to chase with lopsided values. :is() so the IME-aware subclass takes it too. -->
+        <Style Selector=":is(TextBox)">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="MinHeight" Value="{StaticResource AppControlHeight}"/>
+            <Setter Property="CornerRadius" Value="{StaticResource AppControlRadius}"/>
+            <Setter Property="Background" Value="{DynamicResource FieldBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlEdgeBrush}"/>
+        </Style>
+        <Style Selector=":is(TextBox):pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="{DynamicResource FieldBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlEdgeHoverBrush}"/>
+        </Style>
+        <Style Selector=":is(TextBox):focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="{DynamicResource FieldBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource FocusRingBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <!-- The closed select matches the fields; the list it opens stays the toolkit's. -->
+        <Style Selector="ComboBox">
+            <Setter Property="MinHeight" Value="{StaticResource AppControlHeight}"/>
+            <Setter Property="Padding" Value="10,0,0,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="CornerRadius" Value="{StaticResource AppControlRadius}"/>
+            <Setter Property="Background" Value="{DynamicResource FieldBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlEdgeBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="ComboBox:pointerover /template/ Border#Background">
+            <Setter Property="Background" Value="{DynamicResource FieldBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlEdgeHoverBrush}"/>
+        </Style>
+        <Style Selector="ComboBox:pressed /template/ Border#Background">
+            <Setter Property="Background" Value="{DynamicResource ControlHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlEdgeHoverBrush}"/>
+        </Style>
+        <!-- Fluent marks a keyboard-focused select by filling it with the accent; here it takes the
+             fields' focus edge instead, so a focused select still reads as a field. -->
+        <Style Selector="ComboBox:focus-visible /template/ Border#HighlightBackground">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource FocusRingBrush}"/>
+        </Style>
+        <Style Selector="ComboBox:focus-visible /template/ ContentControl#ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="ComboBox /template/ PathIcon#DropDownGlyph">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+
+        <!-- The menu: the app's surface with its own edge, and inset, rounded item highlights
+             rather than full-width bars. -->
+        <Style Selector="MenuFlyoutPresenter">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="{StaticResource AppSurfaceRadius}"/>
+            <Setter Property="Padding" Value="4"/>
+        </Style>
+        <Style Selector="MenuFlyoutPresenter MenuItem">
+            <Setter Property="MinHeight" Value="{StaticResource AppControlHeight}"/>
+            <Setter Property="Padding" Value="12,0"/>
+        </Style>
+        <Style Selector="MenuFlyoutPresenter MenuItem /template/ Border#PART_LayoutRoot">
+            <Setter Property="CornerRadius" Value="{StaticResource AppRowRadius}"/>
+        </Style>
+        <Style Selector="MenuFlyoutPresenter MenuItem:pointerover /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource RowHoverBrush}"/>
+        </Style>
+        <Style Selector="MenuFlyoutPresenter MenuItem:selected /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource RowHoverBrush}"/>
+        </Style>
+        <Style Selector="MenuFlyoutPresenter MenuItem:pressed /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource RowPressedBrush}"/>
+        </Style>
+
+        <!-- The path list reads as items: no rules between rows or cells, a quiet header of
+             secondary labels over one line, and rows whose hover and selection are rounded fills
+             in the app's own colours rather than the toolkit's full-width system-accent bar. -->
+        <Style Selector="DataGridColumnHeader">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <!-- The header keeps its dividers, which mark where a column can be resized, drawn in
+                 the app's hairline rather than the toolkit's translucent black. -->
+            <Setter Property="SeparatorBrush" Value="{DynamicResource BorderBrush}"/>
+        </Style>
+        <Style Selector="DataGridColumnHeader /template/ Border#HeaderBorder">
+            <Setter Property="CornerRadius" Value="{StaticResource AppRowRadius}"/>
+        </Style>
+        <Style Selector="DataGridColumnHeader:pointerover /template/ Border#HeaderBorder">
+            <Setter Property="Background" Value="{DynamicResource RowHoverBrush}"/>
+        </Style>
+        <Style Selector="DataGridColumnHeader:pressed /template/ Border#HeaderBorder">
+            <Setter Property="Background" Value="{DynamicResource RowPressedBrush}"/>
+        </Style>
+        <Style Selector="DataGrid /template/ Rectangle#PART_ColumnHeadersAndRowsSeparator">
+            <Setter Property="Fill" Value="{DynamicResource BorderBrush}"/>
+        </Style>
+        <Style Selector="DataGridRow /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="RadiusX" Value="6"/>
+            <Setter Property="RadiusY" Value="6"/>
+        </Style>
+        <Style Selector="DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Fill" Value="{DynamicResource RowHoverBrush}"/>
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Fill" Value="{DynamicResource RowSelectedBrush}"/>
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="DataGridRow:selected:pointerover /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Fill" Value="{DynamicResource RowSelectedHoverBrush}"/>
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+
         <!-- Keep DataGrid cell navigation active without drawing a harsh current-cell box. Fluent
              outlines the focused cell in white, which reads as a second selection inside the row
              the user actually selected (composite-control conventions). -->

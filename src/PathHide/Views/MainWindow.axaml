@@ -21,7 +21,7 @@
             <Setter Property="Background" Value="{DynamicResource StatusBackgroundBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="CornerRadius" Value="{StaticResource AppControlRadius}"/>
             <Setter Property="Padding" Value="10,7"/>
             <Setter Property="Margin" Value="8"/>
         </Style>
@@ -41,13 +41,11 @@
                 Background="{DynamicResource SurfaceBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1"
-                Padding="12,8">
+                Padding="12,10">
             <DockPanel>
                 <!-- Hamburger menu (right-aligned) -->
                 <Button DockPanel.Dock="Right"
-                        Classes="utility"
-                        Padding="8,2"
-                        VerticalAlignment="Stretch"
+                        Classes="utility icon"
                         x:Name="MenuButton"
                         i18n:Localized.AutomationName="menu.button"
                         i18n:Localized.ToolTip="menu.button">
@@ -79,27 +77,31 @@
 
                 <!-- Action buttons (left, single row — never wrap. Wrapping made the rows
                      touch and doubled the hamburger's height; instead the window minimum
-                     reserves the toolbar's full width so a second line never happens. -->
+                     reserves the toolbar's full width so a second line never happens.
+                     Buttons in a group sit the app's one 8px gap apart; the groups are told
+                     apart by a wider 16px gap rather than by lines. -->
                 <StackPanel Orientation="Horizontal"
                             x:Name="ActionButtons"
                             i18n:Localized.AutomationName="toolbar.actions"
                             KeyboardNavigation.TabNavigation="Once">
-                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,16,0">
                         <Button i18n:Localized.Content="toolbar.addFiles" Classes="add" x:Name="AddFilesButton"/>
                         <Button i18n:Localized.Content="toolbar.addDirectories" Classes="add" x:Name="AddFoldersButton"/>
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,16,0">
                         <Button i18n:Localized.Content="toolbar.hideAll" Classes="hide" Command="{Binding HideAllCommand}"/>
                         <Button i18n:Localized.Content="toolbar.hideSelected" Classes="hide" Command="{Binding HideSelectedCommand}"/>
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,16,0">
                         <Button i18n:Localized.Content="toolbar.showAll" Classes="show" Command="{Binding ShowAllCommand}"/>
                         <Button i18n:Localized.Content="toolbar.showSelected" Classes="show" Command="{Binding ShowSelectedCommand}"/>
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,0,12,0">
+                    <!-- The last group keeps only the sibling gap before the menu button, which is
+                         all that separates them at the window's minimum width. -->
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,8,0">
                         <Button i18n:Localized.Content="toolbar.reload" Classes="reload" Command="{Binding ReloadCommand}"/>
                         <Button i18n:Localized.Content="toolbar.reapplyAll" Classes="reapply" Command="{Binding ReapplyAllCommand}"/>
                         <!-- Remove is wired in code-behind (not Command-bound) so it shares the
@@ -159,7 +161,7 @@
         </ItemsControl>
 
         <!-- Path list -->
-        <Border x:Name="PathListReceiver" Classes="pathReceiver" Margin="12" CornerRadius="8"
+        <Border x:Name="PathListReceiver" Classes="pathReceiver" Margin="12" CornerRadius="{StaticResource AppSurfaceRadius}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"
                 Background="{DynamicResource SurfaceBrush}"
                 ClipToBounds="True" DragDrop.AllowDrop="True">
@@ -183,7 +185,9 @@
                     </Grid>
                 </Border>
                 <Grid>
+                <!-- Inset from the frame so each row's rounded fill reads as an item inside it. -->
                 <DataGrid x:Name="PathGrid"
+                          Margin="6,0,6,6"
                           i18n:Localized.AutomationName="grid.name"
                           ItemsSource="{Binding Rows}"
                           AutoGenerateColumns="False"
@@ -192,7 +196,7 @@
                           CanUserSortColumns="True"
                           SelectionMode="Extended"
                           IsReadOnly="True"
-                          GridLinesVisibility="Horizontal"
+                          GridLinesVisibility="None"
                           BorderThickness="0"
                           Background="Transparent"
                           RowBackground="{DynamicResource SurfaceBrush}">

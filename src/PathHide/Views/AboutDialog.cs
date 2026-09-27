@@ -71,8 +71,7 @@ public sealed class AboutDialog : DialogBase
         _launchResult = new Border
         {
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5),
-            Padding = new Thickness(9, 7),
+            Padding = new Thickness(10, 7),
             Margin = new Thickness(0, 0, 0, 16),
             IsVisible = false,
             Child = new Grid
@@ -86,6 +85,7 @@ public sealed class AboutDialog : DialogBase
                 },
             },
         }
+            .Themed(Border.CornerRadiusProperty, "AppControlRadius")
             .Themed(Border.BackgroundProperty, "StatusBackgroundBrush")
             .Themed(Border.BorderBrushProperty, "DangerBrush");
         dismissResult.Click += (_, _) => _launchResult.IsVisible = false;
@@ -122,7 +122,7 @@ public sealed class AboutDialog : DialogBase
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Spacing = 12,
+                    Spacing = 8,
                     Margin = new Avalonia.Thickness(0, 0, 0, 16),
                     Children = { githubButton, issuesButton },
                 },

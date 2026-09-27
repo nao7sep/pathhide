@@ -108,11 +108,11 @@ public sealed class ThemeResourcesTests
             AppTheme.Apply(ThemePreference.Light);
             dialog.Show();
             Dispatcher.UIThread.RunJobs();
-            var light = CardBackgrounds(dialog);
+            var light = KeycapBackgrounds(dialog);
 
             AppTheme.Apply(ThemePreference.Dark);
             Dispatcher.UIThread.RunJobs();
-            var dark = CardBackgrounds(dialog);
+            var dark = KeycapBackgrounds(dialog);
 
             Assert.Equal(ThemeBrushes("Light")["SurfaceBrush"], Assert.Single(light.Distinct()));
             Assert.Equal(ThemeBrushes("Dark")["SurfaceBrush"], Assert.Single(dark.Distinct()));
@@ -125,9 +125,9 @@ public sealed class ThemeResourcesTests
         }
     }
 
-    private static List<Color> CardBackgrounds(Window dialog) =>
+    private static List<Color> KeycapBackgrounds(Window dialog) =>
         dialog.GetLogicalDescendants().OfType<Border>()
-            .Where(border => border.CornerRadius == new CornerRadius(8))
+            .Where(border => border.CornerRadius == new CornerRadius(6))
             .Select(border => ((ISolidColorBrush)border.Background!).Color)
             .ToList();
 

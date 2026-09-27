@@ -30,6 +30,7 @@ public sealed class AppStylesTests
     [InlineData("cancel", "CancelPressedBrush")]
     [InlineData("utility", "UtilityPressedBrush")]
     [InlineData("accent", "ReloadPressedBrush")]
+    [InlineData("secondary", "ControlPressedBrush")]
     public void A_pressed_button_is_a_step_of_its_own_fill(string variant, string pressedBrush)
     {
         var resting = Classed(variant);
@@ -77,9 +78,13 @@ public sealed class AppStylesTests
     }
 
     // Off, a button is its resting self faded, so the colour codes stay told apart while they are
-    // off. Only the classes a command or a binding can switch off restate their fill; the rest say
-    // nothing, because nothing disables them.
+    // off, and the red stays red.
     [AvaloniaTheory]
+    [InlineData("add")]
+    [InlineData("destructive")]
+    [InlineData("cancel")]
+    [InlineData("utility")]
+    [InlineData("secondary")]
     [InlineData("hide")]
     [InlineData("show")]
     [InlineData("reload")]
@@ -101,6 +106,40 @@ public sealed class AppStylesTests
             Assert.Equal(Ink(resting), Ink(off));
             Assert.Equal(1d, resting.Opacity);
             Assert.True(off.Opacity < 1d, "a disabled button recedes");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // One height for every standard control, so the toolbar, a dialog's footer and a form's
+    // fields line up: every button role, the text field (its IME-aware subclass included) and the
+    // closed select.
+    [AvaloniaFact]
+    public void Every_standard_control_is_the_app_s_one_height()
+    {
+        var height = (double)Application.Current!.FindResource("AppControlHeight")!;
+        var controls = new Control[]
+        {
+            Classed("reload"), Classed("secondary"), Classed("accent"), Classed("utility"),
+            new TextBox { Text = "Inter" }, new PathHide.Controls.ImeTextBox { Text = "Inter" },
+            new ComboBox { ItemsSource = new[] { "System" }, SelectedIndex = 0 },
+        };
+        var panel = new StackPanel();
+        foreach (var control in controls)
+        {
+            control.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
+            panel.Children.Add(new Border { Child = control });
+        }
+        var window = new Window { Content = panel };
+
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            foreach (var control in controls)
+                Assert.True(control.Bounds.Height == height, $"{control.GetType().Name} {string.Join(" ", control.Classes)} is {control.Bounds.Height} px, not {height}");
         }
         finally
         {

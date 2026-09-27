@@ -93,9 +93,10 @@ public sealed class WindowMetricsTests
     // is what catches drift between this list and the actual XAML.
     private static readonly double[] ColumnMinWidths = [240, 100, 110, 155, 160];
 
-    // The list Border's 12px left+right margin is the only fixed chrome in WindowMetrics.
-    // The scrollbar gutter comes from the live Fluent theme and is passed in by the view.
-    private const double GridHorizontalMargin = 12 + 12;
+    // The list Border's 12px margin plus the grid's 6px inset inside it, on each side, is the only
+    // fixed chrome in WindowMetrics. The scrollbar gutter comes from the live Fluent theme and is
+    // passed in by the view.
+    private const double GridHorizontalMargin = (12 + 6) * 2;
     private const double ScrollBarGutter = 16;
 
     [Fact]

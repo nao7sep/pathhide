@@ -12,7 +12,7 @@ namespace PathHide.Views;
 /// <summary>How a footer button looks and whether closing through it commits the dialog.</summary>
 public enum DialogButtonKind
 {
-    /// <summary>Neutral secondary action (Cancel, No, Close). Dismisses — runs the discard guard.</summary>
+    /// <summary>Secondary action (Cancel, No, Close). Dismisses — runs the discard guard.</summary>
     Normal,
 
     /// <summary>Accent-styled primary action (Save, OK). Commits — bypasses the discard guard.</summary>
@@ -106,6 +106,9 @@ public partial class DialogBase : Window
 
             switch (descriptor.Kind)
             {
+                case DialogButtonKind.Normal:
+                    button.Classes.Add("secondary");
+                    break;
                 case DialogButtonKind.Primary:
                     button.Classes.Add("accent");
                     _commitButtons.Add(button);
