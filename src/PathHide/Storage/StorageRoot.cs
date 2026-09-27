@@ -60,12 +60,19 @@ public static class StorageRoot
     public static void EnsureExists()
     {
         var root = Directory;
-        System.IO.Directory.CreateDirectory(root);
 
-        // Windows uses its own permission model; the storage-path conventions skip this step there.
-        // Only the root directory itself is chmod'd here — never its contents or subdirectories.
-        if (!OperatingSystem.IsWindows())
+        // Windows uses its own permission model; the storage-path conventions skip the owner-only step
+        // there. On POSIX, the root is created with the owner-only mode directly — the UnixFileMode
+        // overload only applies it to a directory it actually creates, so an existing root is left
+        // untouched here and instead tightened below — rather than created under the default umask and
+        // chmod'd afterward, which would leave a brief window where a fresh root is broader than 0700.
+        if (OperatingSystem.IsWindows())
         {
+            System.IO.Directory.CreateDirectory(root);
+        }
+        else
+        {
+            System.IO.Directory.CreateDirectory(root, OwnerOnlyMode);
             TightenToOwnerOnly(root);
         }
     }
