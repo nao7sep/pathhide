@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:PathHide.ViewModels"
         xmlns:i18n="using:PathHide.I18n"
+        xmlns:views="using:PathHide.Views"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="720"
@@ -145,8 +146,9 @@
                             AutomationProperties.Name="{Binding Text}"
                             AutomationProperties.LiveSetting="{Binding LiveSetting}">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                            <TextBlock Text="{Binding Text}" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="OperationalResultText" Text="{Binding Text}" TextWrapping="Wrap"/>
                             <Button Grid.Column="1" Classes="resultClose" VerticalAlignment="Top"
+                                    views:FirstLineAlignment.To="{Binding #OperationalResultText}"
                                     Command="{Binding $parent[ItemsControl].DataContext.DismissOperationalResultCommand}"
                                     CommandParameter="{Binding}" i18n:Localized.AutomationName="common.closeResult"
                                     i18n:Localized.ToolTip="common.close">
@@ -174,8 +176,9 @@
                         AutomationProperties.Name="{Binding PathAddResult.Text}"
                         AutomationProperties.LiveSetting="{Binding PathAddResult.LiveSetting}">
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                        <TextBlock Text="{Binding PathAddResult.Text}" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="PathAddResultText" Text="{Binding PathAddResult.Text}" TextWrapping="Wrap"/>
                         <Button Grid.Column="1" Classes="resultClose" VerticalAlignment="Top"
+                                views:FirstLineAlignment.To="{Binding #PathAddResultText}"
                                 Command="{Binding DismissPathAddResultCommand}"
                                 i18n:Localized.AutomationName="common.closeResult" i18n:Localized.ToolTip="common.close">
                             <Path Width="10" Height="10" Stroke="{Binding $parent[Button].Foreground}"

@@ -54,6 +54,7 @@ public sealed class AboutDialog : DialogBase
             Classes = { "resultClose" },
             VerticalAlignment = VerticalAlignment.Top,
         };
+        FirstLineAlignment.SetTo(dismissResult, _launchResultMessage);
         Localized.SetAutomationName(dismissResult, "common.closeResult");
         Localized.SetToolTip(dismissResult, "common.close");
         var dismissMark = new Shapes.Path
