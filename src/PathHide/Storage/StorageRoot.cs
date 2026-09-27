@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
+using PathHide.Services;
 
 namespace PathHide.Storage;
 
@@ -51,9 +53,45 @@ public static class StorageRoot
 
     public static string LogsDirectory => Path.Combine(Directory, "logs");
 
+    /// <summary>The permission mode the root must have on POSIX: owner read/write/execute, nothing else.</summary>
+    private const UnixFileMode OwnerOnlyMode =
+        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
     public static void EnsureExists()
     {
-        System.IO.Directory.CreateDirectory(Directory);
+        var root = Directory;
+        System.IO.Directory.CreateDirectory(root);
+
+        // Windows uses its own permission model; the storage-path conventions skip this step there.
+        // Only the root directory itself is chmod'd here — never its contents or subdirectories.
+        if (!OperatingSystem.IsWindows())
+        {
+            TightenToOwnerOnly(root);
+        }
+    }
+
+    /// <summary>
+    /// Tightens <paramref name="root"/> to owner-only (0700) when it currently grants anything broader,
+    /// created that way on a fresh root and re-tightened at each launch otherwise (storage-path
+    /// conventions: "tightened to 0700 at each launch when an existing root is broader"). A failure to
+    /// tighten is logged and swallowed — it must never stop the app from starting.
+    /// </summary>
+    [UnsupportedOSPlatform("windows")]
+    private static void TightenToOwnerOnly(string root)
+    {
+        try
+        {
+            var current = File.GetUnixFileMode(root);
+            if ((current & ~OwnerOnlyMode) != 0)
+            {
+                File.SetUnixFileMode(root, OwnerOnlyMode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("storage root: could not tighten permissions to owner-only (0700)", ex,
+                new { root });
+        }
     }
 
     private static string Resolve(string? rawOverride, bool hasOverride)
