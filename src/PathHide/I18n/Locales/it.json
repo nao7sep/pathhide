@@ -24,6 +24,11 @@
     "many": "{count} annullati",
     "other": "{count} annullati"
   },
+  "apply.elevationBusy": {
+    "one": "{count} non modificato: è ancora in corso una modifica precedente come amministratore",
+    "many": "{count} non modificati: è ancora in corso una modifica precedente come amministratore",
+    "other": "{count} non modificati: è ancora in corso una modifica precedente come amministratore"
+  },
   "apply.errors": {
     "one": "{count} errore",
     "many": "{count} di errori",
@@ -132,6 +137,11 @@
     "one": "{count} percorso è già nell’elenco",
     "many": "{count} di percorsi sono già nell’elenco",
     "other": "{count} percorsi sono già nell’elenco"
+  },
+  "result.elevationBusy": {
+    "one": "{count} percorso non è stato nascosto: è ancora in corso una modifica precedente come amministratore",
+    "many": "{count} di percorsi non sono stati nascosti: è ancora in corso una modifica precedente come amministratore",
+    "other": "{count} percorsi non sono stati nascosti: è ancora in corso una modifica precedente come amministratore"
   },
   "result.errors": {
     "one": "{count} percorso non si è potuto nascondere",

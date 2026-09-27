@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using PathHide.Models;
 using PathHide.Services;
 using Xunit;
@@ -54,72 +55,95 @@ public sealed class ElevatedApplyCommandTests
     }
 
     [Fact]
-    public void BuildArguments_PutsTheSubcommandFirstAndTheFixedOptionsLast()
+    public void BuildArguments_CarriesOnlyTheFilesAndTheRoot()
     {
-        var args = ElevatedApplyCommand.BuildArguments(
-            new[] { "/a" }, new[] { "/b" }, new[] { "/c" }, "/tmp/results.jsonl", StorageRootArg);
+        var args = ElevatedApplyCommand.BuildArguments(@"C:\T\req.json", @"C:\T\res.jsonl", StorageRootArg);
 
-        Assert.Equal(ElevatedApplyCommand.Subcommand, args[0]);
-        Assert.Equal(ElevatedApplyCommand.ResultsOption, args[^4]);
-        Assert.Equal("/tmp/results.jsonl", args[^3]);
         // The root travels as an argument because the runas verb forbids setting the child's
         // environment, so a relocated PATHHIDE_HOME would not reach it.
-        Assert.Equal(ElevatedApplyCommand.HomeOption, args[^2]);
-        Assert.Equal(StorageRootArg, args[^1]);
-    }
-
-    [Fact]
-    public void BuildArguments_GroupsEachPathListUnderItsOption()
-    {
-        var args = ElevatedApplyCommand.BuildArguments(
-            new[] { "/h1", "/h2" }, new[] { "/s1" }, new[] { "/w1" }, "/r", StorageRootArg);
-
         Assert.Equal(
             new[]
             {
                 ElevatedApplyCommand.Subcommand,
-                ElevatedApplyCommand.HideOption, "/h1", "/h2",
-                ElevatedApplyCommand.SystemOption, "/s1",
-                ElevatedApplyCommand.ShowOption, "/w1",
-                ElevatedApplyCommand.ResultsOption, "/r",
+                ElevatedApplyCommand.RequestOption, @"C:\T\req.json",
+                ElevatedApplyCommand.ResultsOption, @"C:\T\res.jsonl",
                 ElevatedApplyCommand.HomeOption, StorageRootArg,
             },
             args);
     }
 
     [Fact]
-    public void BuildArguments_OmitsEmptyLists_MatchingTheChildsZeroOrMoreArity()
+    public void ParseArguments_ReadsBackWhatBuildArgumentsWrote()
     {
-        // Only Hide carries paths: the System and Show options must not appear at all.
-        var args = ElevatedApplyCommand.BuildArguments(
-            new[] { "/h" }, Array.Empty<string>(), Array.Empty<string>(), "/r", StorageRootArg);
+        var request = @"C:\Users\山田 太郎\AppData\Local\Temp\pathhide-apply-PC.1.a.request.json";
+        var results = @"C:\Users\山田 太郎\AppData\Local\Temp\pathhide-apply-PC.1.a.results.jsonl";
+        var root = @"D:\Data Root\";
 
-        Assert.DoesNotContain(ElevatedApplyCommand.SystemOption, args);
-        Assert.DoesNotContain(ElevatedApplyCommand.ShowOption, args);
-        Assert.Equal(
-            new[]
-            {
-                ElevatedApplyCommand.Subcommand,
-                ElevatedApplyCommand.HideOption, "/h",
-                ElevatedApplyCommand.ResultsOption, "/r",
-                ElevatedApplyCommand.HomeOption, StorageRootArg,
-            },
-            args);
+        var invocation = ElevatedApplyCommand.ParseArguments(
+            ElevatedApplyCommand.BuildArguments(request, results, root));
+
+        Assert.Equal(new ElevatedApplyCommand.Invocation(request, results, root), invocation);
     }
 
     [Fact]
-    public void BuildArguments_WithNoPaths_IsJustTheSubcommandAndTheFixedOptions()
+    public void ParseArguments_WithoutResultsOrRoot_StillRuns()
     {
-        var args = ElevatedApplyCommand.BuildArguments(
-            Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), "/r", StorageRootArg);
+        var invocation = ElevatedApplyCommand.ParseArguments(
+            [ElevatedApplyCommand.Subcommand, ElevatedApplyCommand.RequestOption, "/r.json"]);
 
-        Assert.Equal(
-            new[]
-            {
-                ElevatedApplyCommand.Subcommand,
-                ElevatedApplyCommand.ResultsOption, "/r",
-                ElevatedApplyCommand.HomeOption, StorageRootArg,
-            },
-            args);
+        Assert.Equal(new ElevatedApplyCommand.Invocation("/r.json", null, null), invocation);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("apply")]
+    [InlineData("apply|--results|/r.jsonl")]
+    [InlineData("apply|--request|/r.json|--hide|C:\\x")]
+    [InlineData("other|--request|/r.json")]
+    public void ParseArguments_RejectsAnythingButAnApplyWithARequest(string joined) =>
+        Assert.Null(ElevatedApplyCommand.ParseArguments(joined.Split('|', StringSplitOptions.RemoveEmptyEntries)));
+
+    [Fact]
+    public void Request_RoundTripsPathsWithSpacesNonAsciiAndADriveRoot()
+    {
+        var buckets = new ElevatedApplyCommand.Buckets(
+            [@"C:\Program Files\a b", @"C:\"],
+            [@"\\server\share\日本語 フォルダ"],
+            [@"C:\quote""d\trailing\"]);
+
+        var parsed = ElevatedApplyCommand.ParseRequest(ElevatedApplyCommand.SerializeRequest(buckets));
+
+        Assert.Equal(buckets.ToHide, parsed.ToHide);
+        Assert.Equal(buckets.ToHideWithSystem, parsed.ToHideWithSystem);
+        Assert.Equal(buckets.ToShow, parsed.ToShow);
+    }
+
+    [Fact]
+    public void Request_WithAMissingList_ReadsItAsEmpty()
+    {
+        var parsed = ElevatedApplyCommand.ParseRequest("{\"toHide\":[\"C:\\\\a\"]}");
+
+        Assert.Equal([@"C:\a"], parsed.ToHide);
+        Assert.Empty(parsed.ToHideWithSystem);
+        Assert.Empty(parsed.ToShow);
+    }
+
+    /// <summary>
+    /// Windows caps a command line at 32,767 characters. The paths travel in the request file, so a
+    /// batch far past that cap still launches with a short command line and arrives whole.
+    /// </summary>
+    [Fact]
+    public void ALargeBatch_KeepsTheCommandLineShortAndTheRequestWhole()
+    {
+        var paths = Enumerable.Range(0, 1000)
+            .Select(i => $@"C:\Users\u\{new string('x', 200)}\{i}")
+            .ToList();
+        var buckets = new ElevatedApplyCommand.Buckets(paths, [], []);
+
+        var args = ElevatedApplyCommand.BuildArguments(@"C:\T\req.json", @"C:\T\res.jsonl", StorageRootArg);
+        Assert.True(args.Sum(arg => arg.Length + 3) < 1_000);
+        Assert.True(paths.Sum(path => path.Length) > 32_767);
+
+        Assert.Equal(paths, ElevatedApplyCommand.ParseRequest(ElevatedApplyCommand.SerializeRequest(buckets)).ToHide);
     }
 }

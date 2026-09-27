@@ -9,7 +9,6 @@ using PathHide.I18n;
 using PathHide.Services;
 using PathHide.Storage;
 using PathHide.Views;
-using System.CommandLine;
 
 namespace PathHide;
 
@@ -98,14 +97,15 @@ sealed class Program
 
     private static int RunApplyMode(string[] args)
     {
-        // Adopt the parent's storage root BEFORE opening the log, so this session's log lands
-        // in the same tree as the GUI's. It arrives as an argument rather than an environment
-        // variable because the runas verb forces UseShellExecute, which forbids setting the
-        // child's environment block — without it a root relocated by PATHHIDE_HOME would be
-        // re-resolved to the default here, splitting the log trail for exactly the
-        // access-denied failures this pass exists to diagnose. Parsed by hand because the
-        // System.CommandLine parser below runs after the logger is already open.
-        AdoptParentStorageRoot(args);
+        // Parsing writes nothing, so it runs before the logger opens: the parent's storage root has to
+        // be adopted first, so this session's log lands in the same tree as the GUI's. It arrives as an
+        // argument because the runas verb forces UseShellExecute, which forbids setting the child's
+        // environment block — without it a root relocated by PATHHIDE_HOME would be re-resolved to the
+        // default here, splitting the log trail for exactly the access-denied failures this pass
+        // exists to diagnose.
+        var invocation = ElevatedApplyCommand.ParseArguments(args);
+        if (!string.IsNullOrWhiteSpace(invocation?.StorageRoot))
+            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, invocation.StorageRoot);
 
         // The elevated apply pass is a genuinely separate OS process, so it gets its
         // own per-session log file (co-located with the GUI process's logs).
@@ -127,56 +127,34 @@ sealed class Program
                 debugLogging = Log.DebugEnabled,
             });
 
-            var hideOpt = new Option<string[]>(ElevatedApplyCommand.HideOption)
-                { AllowMultipleArgumentsPerToken = true, Arity = ArgumentArity.ZeroOrMore };
-            var systemOpt = new Option<string[]>(ElevatedApplyCommand.SystemOption)
-                { AllowMultipleArgumentsPerToken = true, Arity = ArgumentArity.ZeroOrMore };
-            var showOpt = new Option<string[]>(ElevatedApplyCommand.ShowOption)
-                { AllowMultipleArgumentsPerToken = true, Arity = ArgumentArity.ZeroOrMore };
-            // Optional sink for per-path results: stdout cannot be redirected across the
-            // runas boundary, so the launcher passes a temp file path here and reads it back.
-            // Absent (e.g. a standalone CLI invocation) means write nothing.
-            var resultsOpt = new Option<string?>(ElevatedApplyCommand.ResultsOption);
-            // Consumed before the parser runs (see AdoptParentStorageRoot); declared so the
-            // parser accepts it rather than rejecting the command line as unknown.
-            var homeOpt = new Option<string?>(ElevatedApplyCommand.HomeOption);
-
-            var applyCmd = new Command(ElevatedApplyCommand.Subcommand, "Apply file attributes in batch");
-            applyCmd.Add(hideOpt);
-            applyCmd.Add(systemOpt);
-            applyCmd.Add(showOpt);
-            applyCmd.Add(resultsOpt);
-            applyCmd.Add(homeOpt);
-
-            applyCmd.SetAction((ParseResult result) =>
+            if (invocation is null)
             {
-                var toHide   = result.GetValue(hideOpt)   ?? [];
-                var toSystem = result.GetValue(systemOpt) ?? [];
-                var toShow   = result.GetValue(showOpt)   ?? [];
+                Log.Error("apply mode: invalid arguments");
+                clean = false;
+                return 2;
+            }
 
-                // Each result is appended the moment its path is done, so the file is a true
-                // running record. Accumulating in memory and writing once at the end meant that
-                // in the exact scenario the parent's timeout exists for — a stall inside
-                // SetAttributes on a share that stopped answering — the file did not exist yet,
-                // so every path the child HAD already changed was reported to the user as an
-                // error. The parent's reader tolerates a truncated final line, which is what a
-                // killed child leaves behind.
-                var resultsPath = result.GetValue(resultsOpt);
-                var results = new List<PathApplyResult>(toHide.Length + toSystem.Length + toShow.Length);
-                results.AddRange(ApplyFileAttributes(toHide,   hide: true,  system: false, resultsPath));
-                results.AddRange(ApplyFileAttributes(toSystem, hide: true,  system: true,  resultsPath));
-                results.AddRange(ApplyFileAttributes(toShow,   hide: false, system: false, resultsPath));
+            var request = ElevatedApplyCommand.ParseRequest(File.ReadAllText(invocation.RequestPath));
 
-                // The per-path file is the authoritative channel; the exit code stays a coarse
-                // 0 = all ok / 1 = some failed signal for callers and logs.
-                return results.Any(r => !r.Ok) ? 1 : 0;
-            });
+            // Each result is written and flushed the moment its path is done, so the file is a true
+            // running record: when the parent stops waiting on a child stalled inside SetAttributes on
+            // a share that stopped answering, every path already changed is still reported. The file
+            // is created here, never reused (a pre-existing file at this name is refused rather than
+            // written through), and held open without delete sharing for the whole run, which is
+            // what tells the parent's cleanup that this child is still running.
+            using var results = invocation.ResultsPath is { Length: > 0 } resultsPath
+                ? new StreamWriter(
+                    new FileStream(resultsPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read),
+                    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
+                : null;
 
-            var root = new RootCommand("PathHide apply mode");
-            root.Add(applyCmd);
+            var failed = ApplyFileAttributes(request.ToHide, hide: true, system: false, results)
+                | ApplyFileAttributes(request.ToHideWithSystem, hide: true, system: true, results)
+                | ApplyFileAttributes(request.ToShow, hide: false, system: false, results);
 
-            var parseResult = root.Parse(args);
-            return parseResult.Invoke(parseResult.InvocationConfiguration);
+            // The per-path file is the authoritative channel; the exit code stays a coarse
+            // 0 = all ok / 1 = some failed signal for callers and logs.
+            return failed ? 1 : 0;
         }
         catch (Exception ex)
         {
@@ -191,7 +169,7 @@ sealed class Program
         }
     }
 
-    /// <returns>One <see cref="PathApplyResult"/> per input path, in input order.</returns>
+    /// <returns>Whether any path failed.</returns>
     /// <remarks>
     /// <c>File.GetAttributes</c>/<c>File.SetAttributes</c> operate on the reparse point
     /// itself, not its target (verified on Windows for symlinks and junctions, elevated and
@@ -200,16 +178,15 @@ sealed class Program
     /// onto the link's target. Keep both calls path-based for that reason; do not switch to a
     /// follow-based API or add reparse-handle machinery to "harden" a hazard that cannot occur.
     /// </remarks>
-    private static List<PathApplyResult> ApplyFileAttributes(
-        string[] paths, bool hide, bool system, string? resultsPath)
+    private static bool ApplyFileAttributes(
+        IReadOnlyList<string> paths, bool hide, bool system, StreamWriter? results)
     {
-        var results = new List<PathApplyResult>(paths.Length);
-        if (paths.Length == 0)
-            return results;
+        if (paths.Count == 0)
+            return false;
 
         // Loop coverage per the conventions: one info line for the intent, one for the
         // outcome, and one error per failure — never one line per successful item.
-        Log.Info("apply: start", new { count = paths.Length, hide, system });
+        Log.Info("apply: start", new { count = paths.Count, hide, system });
 
         var failed = 0;
         foreach (var path in paths)
@@ -221,9 +198,7 @@ sealed class Program
                 // not recorded: this changes only external filesystem metadata; paths.json
                 // records the user's desired visibility and tracked-path identity.
                 File.SetAttributes(path, attrs);
-                var ok = new PathApplyResult(path, Ok: true);
-                results.Add(ok);
-                AppendResult(resultsPath, ok);
+                WriteResult(results, new PathApplyResult(path, Ok: true));
             }
             catch (Exception ex)
             {
@@ -231,43 +206,30 @@ sealed class Program
                 // unelevated attempt hit access-denied, so a failure here is
                 // unexpected and gets a full error — not a silent swallow.
                 Log.Error("apply: failed to set attributes", ex, new { path, hide, system });
-                var bad = new PathApplyResult(path, Ok: false);
-                results.Add(bad);
-                AppendResult(resultsPath, bad);
+                WriteResult(results, new PathApplyResult(path, Ok: false));
                 failed++;
             }
         }
 
-        Log.Info("apply: done", new { ok = paths.Length - failed, failed });
-        return results;
+        Log.Info("apply: done", new { ok = paths.Count - failed, failed });
+        return failed > 0;
     }
 
-    /// <summary>Points this process's storage root at whatever the parent resolved.</summary>
-    private static void AdoptParentStorageRoot(string[] args)
+    private static void WriteResult(StreamWriter? results, PathApplyResult result)
     {
-        var index = Array.IndexOf(args, ElevatedApplyCommand.HomeOption);
-        if (index < 0 || index + 1 >= args.Length)
-            return;
-
-        var root = args[index + 1];
-        if (!string.IsNullOrWhiteSpace(root))
-            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, root);
-    }
-
-    private static void AppendResult(string? resultsPath, PathApplyResult result)
-    {
-        if (string.IsNullOrEmpty(resultsPath))
+        if (results is null)
             return;
 
         try
         {
-            // not recorded: this is a transient elevated-IPC result in the OS temp
-            // directory, never reloaded as managed state.
-            File.AppendAllText(resultsPath, ElevatedApplyResults.SerializeLine(result));
+            // not recorded: a transient elevated-IPC result in the OS temp directory, never
+            // reloaded as managed state.
+            results.Write(ElevatedApplyResults.SerializeLine(result));
+            results.Flush();
         }
         catch (Exception ex)
         {
-            Log.Error("apply: failed to append to the results file", ex, new { resultsPath });
+            Log.Error("apply: failed to write to the results file", ex);
         }
     }
 }

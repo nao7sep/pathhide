@@ -14,7 +14,7 @@ namespace PathHide.Services;
 /// This is the one place shelling out to a browser lives, so View click handlers stay
 /// free of <see cref="Process"/> and its error handling. It mirrors the guarded,
 /// logged shell-out pattern used by <see cref="LogReveal"/> and
-/// <see cref="WindowsElevatedApplicator"/>.
+/// <see cref="WindowsElevatedChild"/>.
 /// </remarks>
 public static class ExternalLauncher
 {

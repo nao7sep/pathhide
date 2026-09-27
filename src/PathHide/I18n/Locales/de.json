@@ -22,6 +22,10 @@
     "one": "{count} abgebrochen",
     "other": "{count} abgebrochen"
   },
+  "apply.elevationBusy": {
+    "one": "{count} nicht geändert: eine frühere Administratoränderung läuft noch",
+    "other": "{count} nicht geändert: eine frühere Administratoränderung läuft noch"
+  },
   "apply.errors": {
     "one": "{count} Fehler",
     "other": "{count} Fehler"
@@ -122,6 +126,10 @@
   "result.duplicates": {
     "one": "{count} Pfad ist bereits in der Liste",
     "other": "{count} Pfade sind bereits in der Liste"
+  },
+  "result.elevationBusy": {
+    "one": "{count} Pfad wurde nicht versteckt: eine frühere Administratoränderung läuft noch",
+    "other": "{count} Pfade wurden nicht versteckt: eine frühere Administratoränderung läuft noch"
   },
   "result.errors": {
     "one": "{count} Pfad konnte nicht versteckt werden",

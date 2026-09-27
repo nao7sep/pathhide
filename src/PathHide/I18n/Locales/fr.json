@@ -24,6 +24,11 @@
     "many": "{count} annulés",
     "other": "{count} annulés"
   },
+  "apply.elevationBusy": {
+    "one": "{count} non modifié\u00a0: une modification précédente en tant qu’administrateur est toujours en cours",
+    "many": "{count} non modifiés\u00a0: une modification précédente en tant qu’administrateur est toujours en cours",
+    "other": "{count} non modifiés\u00a0: une modification précédente en tant qu’administrateur est toujours en cours"
+  },
   "apply.errors": {
     "one": "{count} erreur",
     "many": "{count} d’erreurs",
@@ -132,6 +137,11 @@
     "one": "{count} chemin est déjà dans la liste",
     "many": "{count} de chemins sont déjà dans la liste",
     "other": "{count} chemins sont déjà dans la liste"
+  },
+  "result.elevationBusy": {
+    "one": "{count} chemin n’a pas été masqué\u00a0: une modification précédente en tant qu’administrateur est toujours en cours",
+    "many": "{count} de chemins n’ont pas été masqués\u00a0: une modification précédente en tant qu’administrateur est toujours en cours",
+    "other": "{count} chemins n’ont pas été masqués\u00a0: une modification précédente en tant qu’administrateur est toujours en cours"
   },
   "result.errors": {
     "one": "{count} chemin n’a pas pu être masqué",

@@ -24,6 +24,11 @@
     "many": "{count} de cancelados",
     "other": "{count} cancelados"
   },
+  "apply.elevationBusy": {
+    "one": "{count} sin cambios: todavía se está ejecutando un cambio anterior como administrador",
+    "many": "{count} de entradas sin cambios: todavía se está ejecutando un cambio anterior como administrador",
+    "other": "{count} sin cambios: todavía se está ejecutando un cambio anterior como administrador"
+  },
   "apply.errors": {
     "one": "{count} error",
     "many": "{count} de errores",
@@ -132,6 +137,11 @@
     "one": "{count} ruta ya está en la lista",
     "many": "{count} de rutas ya están en la lista",
     "other": "{count} rutas ya están en la lista"
+  },
+  "result.elevationBusy": {
+    "one": "{count} ruta no se ocultó: todavía se está ejecutando un cambio anterior como administrador",
+    "many": "{count} de rutas no se ocultaron: todavía se está ejecutando un cambio anterior como administrador",
+    "other": "{count} rutas no se ocultaron: todavía se está ejecutando un cambio anterior como administrador"
   },
   "result.errors": {
     "one": "{count} ruta no se pudo ocultar",

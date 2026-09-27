@@ -20,6 +20,9 @@
   "apply.cancelled": {
     "other": "취소됨 {count}개"
   },
+  "apply.elevationBusy": {
+    "other": "변경 안 됨 {count}개(이전 관리자 권한 변경이 아직 실행 중입니다)"
+  },
   "apply.errors": {
     "other": "오류 {count}개"
   },
@@ -112,6 +115,9 @@
   },
   "result.duplicates": {
     "other": "경로 {count}개는 이미 목록에 있습니다"
+  },
+  "result.elevationBusy": {
+    "other": "경로 {count}개를 숨기지 않았습니다(이전 관리자 권한 변경이 아직 실행 중입니다)"
   },
   "result.errors": {
     "other": "경로 {count}개를 숨기지 못했습니다"

@@ -1188,13 +1188,10 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public async Task ApplyDesiredState_AccessDeniedOffWindows_IsErrorNotElevatedRetry()
+    public async Task ApplyDesiredState_AccessDeniedWithoutAnElevationStep_IsErrorNotElevatedRetry()
     {
-        // The Windows branch launches a real elevated process, so only assert the
-        // non-Windows routing here; on Windows this scenario is the elevation path.
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return;
-
+        // No elevated applicator is wired (as off Windows), so a denied write is a plain error. The
+        // elevated path is covered on every platform by ElevatedRetryTests.
         var visibility = new FakeVisibilityService();
         visibility.OnHide = _ => new UnauthorizedAccessException("denied (test)");
         var paths = new FakeJsonStore<List<PathEntry>>();
@@ -1209,17 +1206,11 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public async Task ApplyDesiredState_AccessDeniedAtInspectOffWindows_IsErrorNoWriteAttempt()
+    public async Task ApplyDesiredState_AccessDeniedAtInspectWithoutAnElevationStep_IsErrorNoWriteAttempt()
     {
-        // A path that is access-denied at INSPECT time surfaces as AccessDenied. On
-        // Windows this routes into the elevated retry bucket (a UAC retry, per the
-        // README's access-denied promise), but that branch launches a real elevated
-        // process, so only the non-Windows routing is asserted here: off Windows there
-        // is no elevation step, so AccessDenied stays a terminal error and the Hide write
-        // is never attempted.
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            return;
-
+        // A path that is access-denied at INSPECT time surfaces as AccessDenied. With an elevated
+        // applicator wired it joins the elevated retry (ElevatedRetryTests); without one, as off
+        // Windows, AccessDenied stays a terminal error and the Hide write is never attempted.
         var visibility = new FakeVisibilityService();
         visibility.Set("/x", ActualState.AccessDenied);
         var paths = new FakeJsonStore<List<PathEntry>>();

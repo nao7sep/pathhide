@@ -123,6 +123,15 @@ public partial class MainWindowViewModel : ObservableObject
     /// language at launch and another after a Save.
     /// </summary>
     internal IReadOnlyList<string> ComputerLanguages { get; init; } = [];
+
+    /// <summary>
+    /// The elevated retry for access-denied paths, or null where the platform has no elevation step
+    /// (everywhere but Windows), in which case access-denied is a terminal error.
+    /// </summary>
+    internal IElevatedApplicator? ElevatedApplicator { get; init; }
+
+    /// <summary>How long closing waits for a running command, and then for an elevated child, to finish.</summary>
+    internal TimeSpan ShutdownBound { get; init; } = TimeSpan.FromSeconds(5);
     public int? WindowPositionX => _state.WindowPositionX;
     public int? WindowPositionY => _state.WindowPositionY;
     public double? WindowWidth => _state.WindowWidth;
@@ -465,13 +474,15 @@ public partial class MainWindowViewModel : ObservableObject
             parts.Add(Message.Of("result.unresponsive", ("count", outcome.Unresponsive)));
         if (outcome.Cancelled > 0)
             parts.Add(Message.Of("result.cancelled", ("count", outcome.Cancelled)));
+        if (outcome.ElevationBusy > 0)
+            parts.Add(Message.Of("result.elevationBusy", ("count", outcome.ElevationBusy)));
 
         if (parts.Count == 0)
             return;
 
         var severity = outcome.HasFailures
             ? PathAddResultSeverity.Error
-            : invalid > 0 || outcome.Unchanged > 0 || outcome.Missing > 0 || outcome.Cancelled > 0
+            : invalid > 0 || outcome.HasProblems
                 ? PathAddResultSeverity.Warning
                 : PathAddResultSeverity.Information;
 
@@ -819,6 +830,33 @@ public partial class MainWindowViewModel : ObservableObject
         _applyCts?.Cancel();
     }
 
+    private Task? _shutdown;
+
+    /// <summary>Whether closing has work to finish first: a scan or apply, or an elevated child still running.</summary>
+    public bool HasWorkToFinish => IsBusy || ElevatedApplicator?.HasRunningChild == true;
+
+    /// <summary>
+    /// Finishes in-flight work for closing, within <see cref="ShutdownBound"/> per wait: cancels the
+    /// scan and the apply, takes the mutation gate so no command starts after it, and gives a still-
+    /// running elevated child the chance to exit so its temp files are removed now rather than by the
+    /// next launch. Idempotent: a second close joins the first.
+    /// </summary>
+    public Task ShutdownAsync() => _shutdown ??= ShutdownCoreAsync();
+
+    private async Task ShutdownCoreAsync()
+    {
+        Log.Info("shutdown: finishing work in flight", new { busy = IsBusy });
+        Cancel();
+
+        // Held, never released: the window is closing, and nothing may start behind it.
+        if (!await _mutationGate.WaitAsync(ShutdownBound))
+            Log.Warn("shutdown: a command did not finish within the bound");
+        _scanCts?.Cancel();
+
+        if (ElevatedApplicator is { } elevated)
+            await elevated.ReleaseAsync(ShutdownBound);
+    }
+
     // --- Internals ---
 
     /// <summary>
@@ -1088,15 +1126,13 @@ public partial class MainWindowViewModel : ObservableObject
                 }
 
                 // Access-denied at inspect time is the same recoverable condition as a
-                // denied Hide/Show write: on Windows a single elevated retry (drained below)
-                // may have the rights to read and change it, so it joins that bucket rather
-                // than the write attempt, which would only re-hit the same denial. The
-                // platform gate matches the bucket-drain guard below — off Windows there is
-                // no elevation step, so AccessDenied stays a terminal error alongside Error,
-                // which no elevation can fix. A genuinely absent path is Missing (handled
-                // above), never AccessDenied, so this never forces a futile elevation prompt.
-                if (inspection.ActualState == ActualState.AccessDenied
-                    && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                // denied Hide/Show write: a single elevated retry (drained below) may have
+                // the rights to read and change it, so it joins that bucket rather than the
+                // write attempt, which would only re-hit the same denial. Without an
+                // elevation step AccessDenied stays a terminal error alongside Error, which
+                // no elevation can fix. A genuinely absent path is Missing (handled above),
+                // never AccessDenied, so this never forces a futile elevation prompt.
+                if (inspection.ActualState == ActualState.AccessDenied && ElevatedApplicator is not null)
                 {
                     retryBucket.Add(row);
                     continue;
@@ -1164,11 +1200,10 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 MarkUnresponsive(row);
             }
-            catch (UnauthorizedAccessException) when (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            catch (UnauthorizedAccessException) when (ElevatedApplicator is not null)
             {
-                // Access-denied on Windows is recoverable via a single elevated retry
-                // (below). The filter keeps this Windows-only; on other platforms the
-                // general handler counts it as a plain error — no elevation path exists.
+                // Access-denied is recoverable via a single elevated retry (below). Without an
+                // elevation step the general handler counts it as a plain error.
                 retryBucket.Add(row);
             }
             catch (Exception ex)
@@ -1183,6 +1218,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         int? elevationExitCode = null;
+        var elevationBusy = 0;
 
         // A cancelled apply does not go on to raise an elevation prompt: the retry rows are
         // counted as cancelled, untouched.
@@ -1191,28 +1227,30 @@ public partial class MainWindowViewModel : ObservableObject
             cancelled += retryBucket.Count;
             problemPaths.AddRange(retryBucket.Select(r => r.Path));
         }
-        // retryBucket is only ever populated on Windows (the catch above is filtered to
-        // Windows), so this platform check is logically redundant — but it is REQUIRED, not
-        // documentary: it is the guard the CA1416 analyzer needs to permit the
-        // [SupportedOSPlatform("windows")] call to ApplyAsync below. Do not remove it.
-        else if (retryBucket.Count > 0 && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        else if (retryBucket.Count > 0 && ElevatedApplicator is { } elevated)
         {
             var buckets = Services.ElevatedApplyCommand.Partition(
                 retryBucket.Select(r => (r.Path, r.Entry.DesiredVisibility)),
                 _settings.WindowsHideMode);
 
-            var outcome = await Services.WindowsElevatedApplicator.ApplyAsync(
-                buckets.ToHide, buckets.ToHideWithSystem, buckets.ToShow, token);
+            // The outcome is final once this returns: a child still running after a cancel or a
+            // timeout never reports again, so its late writes cannot reach these rows.
+            var outcome = await elevated.ApplyAsync(buckets, token);
             elevationExitCode = outcome.ExitCode;
 
             foreach (var row in retryBucket)
             {
-                // A cancel stopped the wait, not the child: a path it had not reported on may
-                // still change, so its row no longer claims a state.
-                if (token.IsCancellationRequested && !outcome.Results.ContainsKey(row.Path))
+                var reported = outcome.Results.TryGetValue(row.Path, out var ok);
+
+                // The wait ended, not the child: a path it had not reported on may still change,
+                // so its row no longer claims a state.
+                if (!reported && outcome.Status is ElevatedApplyStatus.Cancelled or ElevatedApplyStatus.TimedOut)
                 {
                     row.ActualState = ActualState.Unknown;
-                    cancelled++;
+                    if (outcome.Status == ElevatedApplyStatus.Cancelled)
+                        cancelled++;
+                    else
+                        unresponsive++;
                     problemPaths.Add(row.Path);
                     continue;
                 }
@@ -1220,9 +1258,19 @@ public partial class MainWindowViewModel : ObservableObject
                 // Re-inspect only to refresh what the row shows; the success/error verdict
                 // comes from the elevated child's own per-path report (see DecideElevatedRow).
                 var recheck = await _visibility.InspectAsync(row.Path, CancellationToken.None);
-                bool? childOk = outcome.Results.TryGetValue(row.Path, out var ok) ? ok : null;
 
-                var (display, wasApplied) = DecideElevatedRow(row.Entry.DesiredVisibility, childOk, recheck);
+                // Refused while an earlier child still runs: nothing was attempted, so the row shows
+                // what is on disk and the summary says why.
+                if (outcome.Status == ElevatedApplyStatus.Busy)
+                {
+                    row.ApplyScanResult(recheck, row.PathFamily);
+                    elevationBusy++;
+                    problemPaths.Add(row.Path);
+                    continue;
+                }
+
+                var (display, wasApplied) = DecideElevatedRow(
+                    row.Entry.DesiredVisibility, reported ? ok : null, recheck);
                 row.ApplyScanResult(recheck with { ActualState = display }, row.PathFamily);
 
                 if (wasApplied) applied++;
@@ -1236,10 +1284,10 @@ public partial class MainWindowViewModel : ObservableObject
 
         // elevationExitCode is a coarse diagnostic kept in the structured log; the user-facing
         // tally below is built per-path, so the raw child exit code is not surfaced to the UI.
-        Log.Info("apply: done", new { applied, unchanged, missing, errors, unresponsive, cancelled, elevationExitCode });
+        Log.Info("apply: done", new { applied, unchanged, missing, errors, unresponsive, cancelled, elevationBusy, elevationExitCode });
         OnPropertyChanged(nameof(StatusBarText));
 
-        return new ApplyOutcome(applied, unchanged, missing, errors, unresponsive, cancelled, problemPaths);
+        return new ApplyOutcome(applied, unchanged, missing, errors, unresponsive, cancelled, elevationBusy, problemPaths);
     }
 
     private readonly record struct ApplyOutcome(
@@ -1249,11 +1297,13 @@ public partial class MainWindowViewModel : ObservableObject
         int Errors,
         int Unresponsive,
         int Cancelled,
+        int ElevationBusy,
         IReadOnlyList<string> ProblemPaths)
     {
-        public static ApplyOutcome Empty { get; } = new(0, 0, 0, 0, 0, 0, []);
+        public static ApplyOutcome Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, []);
 
-        public bool HasProblems => Unchanged > 0 || Missing > 0 || Errors > 0 || Unresponsive > 0 || Cancelled > 0;
+        public bool HasProblems =>
+            Unchanged > 0 || Missing > 0 || Errors > 0 || Unresponsive > 0 || Cancelled > 0 || ElevationBusy > 0;
 
         /// <summary>A path that failed or never answered; either is shown as an error.</summary>
         public bool HasFailures => Errors > 0 || Unresponsive > 0;
@@ -1273,6 +1323,7 @@ public partial class MainWindowViewModel : ObservableObject
                 if (Errors > 0) parts.Add(Message.Of("apply.errors", ("count", Errors)));
                 if (Unresponsive > 0) parts.Add(Message.Of("apply.unresponsive", ("count", Unresponsive)));
                 if (Cancelled > 0) parts.Add(Message.Of("apply.cancelled", ("count", Cancelled)));
+                if (ElevationBusy > 0) parts.Add(Message.Of("apply.elevationBusy", ("count", ElevationBusy)));
                 return Message.Join("apply.join", parts);
             }
         }

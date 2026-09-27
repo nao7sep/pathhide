@@ -166,8 +166,22 @@ public partial class MainWindow : Window
         }
     }
 
+    // Set once in-flight work has been finished for closing, so the close that follows goes through.
+    private bool _workFinishedForClose;
+
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        // Closing is itself a command: it cancels the running scan or apply and waits for it, bounded,
+        // before the window goes, so no apply is dropped mid-way and an elevated child's temp files are
+        // removed rather than stranded. A second close while that runs joins the same wait.
+        if (!_workFinishedForClose && DataContext is MainWindowViewModel busy && busy.HasWorkToFinish)
+        {
+            e.Cancel = true;
+            _ = FinishWorkThenCloseAsync(busy);
+            base.OnClosing(e);
+            return;
+        }
+
         RememberNormalGeometry();
         if (WindowState is WindowState.Normal or WindowState.Maximized
             && DataContext is MainWindowViewModel vm
@@ -187,6 +201,23 @@ public partial class MainWindow : Window
         }
 
         base.OnClosing(e);
+    }
+
+    private async Task FinishWorkThenCloseAsync(MainWindowViewModel vm)
+    {
+        try
+        {
+            await vm.ShutdownAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("shutdown: finishing work failed", ex);
+        }
+
+        if (_workFinishedForClose)
+            return;
+        _workFinishedForClose = true;
+        Close();
     }
 
     private void RememberNormalGeometry()

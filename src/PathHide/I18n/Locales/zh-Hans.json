@@ -20,6 +20,9 @@
   "apply.cancelled": {
     "other": "{count} 个已取消"
   },
+  "apply.elevationBusy": {
+    "other": "{count} 个未更改：之前的管理员更改仍在运行"
+  },
   "apply.errors": {
     "other": "{count} 个错误"
   },
@@ -112,6 +115,9 @@
   },
   "result.duplicates": {
     "other": "{count} 个路径已在列表中"
+  },
+  "result.elevationBusy": {
+    "other": "{count} 个路径未隐藏：之前的管理员更改仍在运行"
   },
   "result.errors": {
     "other": "{count} 个路径无法隐藏"

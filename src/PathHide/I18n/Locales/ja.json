@@ -20,6 +20,9 @@
   "apply.cancelled": {
     "other": "キャンセル {count} 件"
   },
+  "apply.elevationBusy": {
+    "other": "変更なし {count} 件（以前の管理者としての変更がまだ実行中です）"
+  },
   "apply.errors": {
     "other": "エラー {count} 件"
   },
@@ -112,6 +115,9 @@
   },
   "result.duplicates": {
     "other": "パス {count} 件はすでに一覧にあります"
+  },
+  "result.elevationBusy": {
+    "other": "パス {count} 件を非表示にしませんでした（以前の管理者としての変更がまだ実行中です）"
   },
   "result.errors": {
     "other": "パス {count} 件を非表示にできませんでした"

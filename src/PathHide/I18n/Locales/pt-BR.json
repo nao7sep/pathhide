@@ -24,6 +24,11 @@
     "many": "{count} de entradas canceladas",
     "other": "{count} canceladas"
   },
+  "apply.elevationBusy": {
+    "one": "{count} não alterada: uma alteração anterior como administrador ainda está em andamento",
+    "many": "{count} de entradas não alteradas: uma alteração anterior como administrador ainda está em andamento",
+    "other": "{count} não alteradas: uma alteração anterior como administrador ainda está em andamento"
+  },
   "apply.errors": {
     "one": "{count} erro",
     "many": "{count} de erros",
@@ -132,6 +137,11 @@
     "one": "{count} caminho já está na lista",
     "many": "{count} de caminhos já estão na lista",
     "other": "{count} caminhos já estão na lista"
+  },
+  "result.elevationBusy": {
+    "one": "{count} caminho não foi ocultado: uma alteração anterior como administrador ainda está em andamento",
+    "many": "{count} de caminhos não foram ocultados: uma alteração anterior como administrador ainda está em andamento",
+    "other": "{count} caminhos não foram ocultados: uma alteração anterior como administrador ainda está em andamento"
   },
   "result.errors": {
     "one": "{count} caminho não pôde ser ocultado",

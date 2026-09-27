@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -217,9 +218,22 @@ public partial class App : Application
             ? new WindowsVisibilityService(() => settings.WindowsHideMode)
             : new MacVisibilityService();
 
+        // Only Windows has an elevation step for access-denied paths. The sweep removes temp files an
+        // earlier session had to leave behind a still-running elevated child; off the UI thread, and
+        // only files whose owning process has exited.
+        IElevatedApplicator? elevatedApplicator = null;
+        if (OperatingSystem.IsWindows())
+        {
+            var tempDirectory = System.IO.Path.GetTempPath();
+            elevatedApplicator = new ElevatedApplicator(
+                WindowsElevatedChild.LaunchAsync, tempDirectory, StorageRoot.Directory);
+            _ = Task.Run(() => ElevatedApplyFiles.SweepLeftovers(tempDirectory));
+        }
+
         return new MainWindowViewModel(new BoundedVisibility(visibilityService), pathListStore, settingsStore, settings, stateStore, state)
         {
             ComputerLanguages = ComputerLanguages,
+            ElevatedApplicator = elevatedApplicator,
         };
     }
 }
