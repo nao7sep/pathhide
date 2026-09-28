@@ -31,8 +31,8 @@
                     <SolidColorBrush x:Key="ControlBrush" Color="#FFFFFF"/>
                     <SolidColorBrush x:Key="ControlHoverBrush" Color="#EEF2F7"/>
                     <SolidColorBrush x:Key="ControlPressedBrush" Color="#E1E7EF"/>
-                    <SolidColorBrush x:Key="ControlEdgeBrush" Color="#C8D0DB"/>
-                    <SolidColorBrush x:Key="ControlEdgeHoverBrush" Color="#A9B4C3"/>
+                    <SolidColorBrush x:Key="ControlEdgeBrush" Color="#B0B8C3"/>
+                    <SolidColorBrush x:Key="ControlEdgeHoverBrush" Color="#959FAE"/>
                     <SolidColorBrush x:Key="FieldBrush" Color="#FFFFFF"/>
                     <SolidColorBrush x:Key="RowHoverBrush" Color="#F1F4F9"/>
                     <SolidColorBrush x:Key="RowPressedBrush" Color="#E6EBF2"/>
@@ -59,10 +59,10 @@
                     <SolidColorBrush x:Key="ControlBrush" Color="#232932"/>
                     <SolidColorBrush x:Key="ControlHoverBrush" Color="#2B323D"/>
                     <SolidColorBrush x:Key="ControlPressedBrush" Color="#343C48"/>
-                    <SolidColorBrush x:Key="ControlEdgeBrush" Color="#3B4452"/>
-                    <SolidColorBrush x:Key="ControlEdgeHoverBrush" Color="#566172"/>
+                    <SolidColorBrush x:Key="ControlEdgeBrush" Color="#5A6473"/>
+                    <SolidColorBrush x:Key="ControlEdgeHoverBrush" Color="#788496"/>
                     <SolidColorBrush x:Key="FieldBrush" Color="#1A1E24"/>
-                    <SolidColorBrush x:Key="RowHoverBrush" Color="#232932"/>
+                    <SolidColorBrush x:Key="RowHoverBrush" Color="#262C35"/>
                     <SolidColorBrush x:Key="RowPressedBrush" Color="#2B323D"/>
                     <SolidColorBrush x:Key="RowSelectedBrush" Color="#1D3157"/>
                     <SolidColorBrush x:Key="RowSelectedHoverBrush" Color="#233A66"/>
