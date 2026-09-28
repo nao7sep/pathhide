@@ -64,6 +64,27 @@ public sealed class ThemeResourcesTests
         }
     }
 
+    // The dialog shell's header/footer line (DialogBase's FooterSeparator) must read at least as
+    // clearly against the surface as the app's own control borders — its buttons and fields both use
+    // ControlEdgeBrush (modal-dialog conventions).
+    [Theory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public void TheDialogSeparatorIsAtLeastAsVisibleAsAControlBorder(string theme)
+    {
+        var b = ThemeBrushes(theme);
+        var separatorKey = DialogBaseXaml().Descendants()
+            .Single(element => element.Name.LocalName == "Border" && (string?)element.Attribute(X + "Name") == "FooterSeparator")
+            .Attribute("Background")!.Value
+            .Trim('{', '}').Replace("DynamicResource ", "").Replace("StaticResource ", "");
+
+        var controlContrast = Contrast(b["ControlEdgeBrush"], b["AppBackgroundBrush"]);
+        var separatorContrast = Contrast(b[separatorKey], b["AppBackgroundBrush"]);
+        Assert.True(
+            separatorContrast >= controlContrast - 0.01,
+            $"{theme}: dialog separator ({separatorKey}) contrast {separatorContrast:F2} is fainter than the control border's {controlContrast:F2}");
+    }
+
     [Fact]
     public void WhiteLabelsKeepHighContrastOnEveryActionFill()
     {
@@ -133,6 +154,9 @@ public sealed class ThemeResourcesTests
 
     private static XDocument AppXaml() =>
         XDocument.Load(Path.Combine(RepoRoot(), "src", "PathHide", "App.axaml"));
+
+    private static XDocument DialogBaseXaml() =>
+        XDocument.Load(Path.Combine(RepoRoot(), "src", "PathHide", "Views", "DialogBase.axaml"));
 
     private static Dictionary<string, Color> ThemeBrushes(string theme) =>
         AppXaml().Descendants()

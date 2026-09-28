@@ -19,11 +19,13 @@
                     HorizontalAlignment="Right"
                     Margin="24,20,24,20"/>
 
-        <!-- The line that opens the footer band, and the bottom edge of the scrolling body. -->
+        <!-- The line that opens the footer band, and the bottom edge of the scrolling body. No
+             fainter than the app's own control borders (ControlEdgeBrush, which its buttons and
+             fields use) in either theme, per the modal-dialog conventions. -->
         <Border DockPanel.Dock="Bottom"
                 x:Name="FooterSeparator"
                 Height="1"
-                Background="{DynamicResource BorderBrush}"/>
+                Background="{DynamicResource ControlEdgeBrush}"/>
 
         <!-- The sole scroll region. The footer is docked outside it, so it stays reachable at any
              height the dialog is bounded to. -->
