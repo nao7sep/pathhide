@@ -79,7 +79,7 @@
   "menu.shortcuts": "キーボードショートカット",
   "menu.showLogExplorer": "ログファイルをエクスプローラーで表示",
   "menu.showLogFinder": "ログファイルを Finder で表示",
-  "nativeMenu.about": "{app}について",
+  "nativeMenu.about": "{app} について",
   "nativeMenu.bringAllToFront": "すべてを手前に移動",
   "nativeMenu.copy": "コピー",
   "nativeMenu.cut": "カット",
