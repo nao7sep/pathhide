@@ -1,5 +1,5 @@
 {
-  "about.description": "Una utilidad de escritorio para macOS y Windows que oculta o muestra archivos y carpetas específicos y recuerda el estado de visibilidad deseado de cada elemento.",
+  "about.description": "Oculta los archivos y carpetas que elijas en un solo paso, muéstralos de nuevo cuando los necesites y vuelve a aplicar la visibilidad que definiste.",
   "about.github": "GitHub",
   "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 o posterior",
   "about.openGitHubFailed": "No se pudo abrir GitHub. Revisa el registro e inténtalo de nuevo.",

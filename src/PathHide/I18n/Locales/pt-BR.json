@@ -1,5 +1,5 @@
 {
-  "about.description": "Um utilitário de desktop para macOS e Windows que oculta ou mostra arquivos e pastas específicos e memoriza o estado de visibilidade desejado de cada entrada.",
+  "about.description": "Oculte os arquivos e pastas escolhidos em uma única etapa, mostre-os novamente quando precisar e reaplique a visibilidade que você definiu.",
   "about.github": "GitHub",
   "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 ou posterior",
   "about.openGitHubFailed": "Não foi possível abrir o GitHub. Consulte o log e tente novamente.",

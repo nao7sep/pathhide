@@ -13,7 +13,7 @@
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyTitle>PathHide</AssemblyTitle>
-    <Description>A desktop utility that hides or shows specific files and directories and remembers the desired visibility state.</Description>
+    <Description>Hide chosen files and folders in one step, show them again when you need them, and reapply the visibility you set.</Description>
     <!-- No osx-x64. The fleet ships Apple Silicon only (app-release-conventions),
          and nothing published it: package.sh publishes osx-arm64 and package.ps1
          win-x64. Listing it made restore fetch three osx-x64 runtime packs nobody

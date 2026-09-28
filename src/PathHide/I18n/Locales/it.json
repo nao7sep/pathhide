@@ -1,5 +1,5 @@
 {
-  "about.description": "Un’utilità desktop per macOS e Windows che nasconde o mostra file e cartelle specifici e ricorda lo stato di visibilità desiderato di ogni elemento.",
+  "about.description": "Nascondi i file e le cartelle scelti in un solo passaggio, mostrali di nuovo quando ti servono e riapplica la visibilità che hai impostato.",
   "about.github": "GitHub",
   "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 o versioni successive",
   "about.openGitHubFailed": "Impossibile aprire GitHub. Controlla il log e riprova.",

@@ -1,5 +1,5 @@
 {
-  "about.description": "A desktop utility for macOS and Windows that hides or shows specific files and directories and remembers the desired visibility state of each entry.",
+  "about.description": "Hide chosen files and folders in one step, show them again when you need them, and reapply the visibility you set.",
   "about.github": "GitHub",
   "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 or later",
   "about.openGitHubFailed": "Couldn’t open GitHub. Check the log and try again.",

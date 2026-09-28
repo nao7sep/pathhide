@@ -1,5 +1,5 @@
 {
-  "about.description": "一款适用于 macOS 和 Windows 的桌面实用工具，可隐藏或显示指定的文件和文件夹，并记住每个条目期望的可见状态。",
+  "about.description": "一步隐藏选中的文件和文件夹，需要时再次显示它们，并重新应用你设置的可见性。",
   "about.github": "GitHub",
   "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 或更高版本",
   "about.openGitHubFailed": "无法打开 GitHub。请查看日志后重试。",

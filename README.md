@@ -1,6 +1,6 @@
 # PathHide
 
-PathHide is a desktop utility for macOS and Windows that hides or shows specific files and directories and remembers the desired visibility of each one, so it can reapply it after files reappear. It's for managing visual clutter — **not** a security tool; hidden files stay fully accessible to anyone who looks. Built on .NET, it uses each platform's native mechanism: the Finder hidden flag on macOS, the HIDDEN attribute on Windows.
+Hide chosen files and folders in one step, show them again when you need them, and reapply the visibility you set. PathHide is a desktop utility for macOS and Windows; it's for managing visual clutter — **not** a security tool, since hidden files stay fully accessible to anyone who looks. Built on .NET, it uses each platform's native mechanism: the Finder hidden flag on macOS, the HIDDEN attribute on Windows.
 
 ## What adding a path does
 

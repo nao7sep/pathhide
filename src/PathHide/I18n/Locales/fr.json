@@ -1,5 +1,5 @@
 {
-  "about.description": "Un utilitaire de bureau pour macOS et Windows qui masque ou affiche des fichiers et des dossiers précis, et qui mémorise l’état de visibilité souhaité de chaque entrée.",
+  "about.description": "Masquez les fichiers et dossiers choisis en une seule étape, affichez-les à nouveau quand vous en avez besoin, et réappliquez la visibilité que vous avez définie.",
   "about.github": "GitHub",
   "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 ou version ultérieure",
   "about.openGitHubFailed": "Impossible d’ouvrir GitHub. Consultez le journal et réessayez.",

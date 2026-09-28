@@ -1,5 +1,5 @@
 {
-  "about.description": "특정 파일과 폴더를 숨기거나 표시하고, 항목마다 원하는 표시 상태를 기억하는 macOS 및 Windows용 데스크톱 유틸리티입니다.",
+  "about.description": "선택한 파일과 폴더를 한 번에 숨기고, 필요할 때 다시 표시하고, 설정한 표시 상태를 다시 적용하세요.",
   "about.github": "GitHub",
   "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 이상",
   "about.openGitHubFailed": "GitHub을 열지 못했습니다. 로그를 확인한 뒤 다시 시도하십시오.",

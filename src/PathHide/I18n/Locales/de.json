@@ -1,5 +1,5 @@
 {
-  "about.description": "Ein Desktop-Dienstprogramm für macOS und Windows, das bestimmte Dateien und Ordner versteckt oder sichtbar macht und sich für jeden Eintrag den gewünschten Sichtbarkeitszustand merkt.",
+  "about.description": "Verstecken Sie ausgewählte Dateien und Ordner in einem Schritt, zeigen Sie sie bei Bedarf wieder an, und wenden Sie die von Ihnen festgelegte Sichtbarkeit erneut an.",
   "about.github": "GitHub",
   "about.licence": "© 2026 Yoshinao Inoguchi – GNU GPL v3 oder später",
   "about.openGitHubFailed": "GitHub konnte nicht geöffnet werden. Prüfen Sie das Protokoll und versuchen Sie es erneut.",
