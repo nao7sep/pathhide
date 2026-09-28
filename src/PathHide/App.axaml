@@ -39,6 +39,9 @@
                     <SolidColorBrush x:Key="RowSelectedBrush" Color="#DDE7FD"/>
                     <SolidColorBrush x:Key="RowSelectedHoverBrush" Color="#D1DEFC"/>
                     <SolidColorBrush x:Key="FocusRingBrush" Color="#1D4ED8"/>
+                    <!-- The same ring, desaturated and lightened toward the surface, for while the
+                         window is inactive (interface-styling conventions). -->
+                    <SolidColorBrush x:Key="FocusRingInactiveBrush" Color="#A7B4D6"/>
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="AppBackgroundBrush" Color="#121519"/>
@@ -64,6 +67,9 @@
                     <SolidColorBrush x:Key="RowSelectedBrush" Color="#1D3157"/>
                     <SolidColorBrush x:Key="RowSelectedHoverBrush" Color="#233A66"/>
                     <SolidColorBrush x:Key="FocusRingBrush" Color="#8AB4FF"/>
+                    <!-- The same ring, desaturated and darkened toward the surface, for while the
+                         window is inactive (interface-styling conventions). -->
+                    <SolidColorBrush x:Key="FocusRingInactiveBrush" Color="#4A5872"/>
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
@@ -186,20 +192,29 @@
         </Style>
 
         <!-- One focus treatment for the whole app: a ring in the app's blue, 1px clear of the control
-             and following its corner. Fluent's own is a square double outline 3px out, which hid the
-             rounded corner and made the focused button look larger than its neighbour. The ring
-             lies wholly outside the control, so it opts out of the adorner layer's clip to the
-             control's bounds, which would otherwise leave only a sliver of its corner. -->
+             and following its corner, that softens while the window is inactive (interface-styling
+             conventions). Fluent's own is a square double outline 3px out, which hid the rounded
+             corner and made the focused button look larger than its neighbour. The ring lies wholly
+             outside the control, so it opts out of the adorner layer's clip to the control's bounds,
+             which would otherwise leave only a sliver of its corner. The adorner is not a descendant
+             the Window.windowInactive selector reliably reaches, so the inactive state is read
+             directly off the owning window rather than through that class. -->
         <Style Selector="Button, CheckBox, RadioButton">
             <Setter Property="FocusAdorner">
                 <FocusAdornerTemplate>
-                    <Border BorderThickness="2"
+                    <Border Classes="focusRing" Classes.inactive="{Binding !$parent[Window].IsActive}"
+                            BorderThickness="2"
                             AdornerLayer.IsClipEnabled="False"
-                            BorderBrush="{DynamicResource FocusRingBrush}"
                             CornerRadius="{StaticResource AppControlFocusRadius}"
                             Margin="{StaticResource AppFocusRingMargin}"/>
                 </FocusAdornerTemplate>
             </Setter>
+        </Style>
+        <Style Selector="Border.focusRing">
+            <Setter Property="BorderBrush" Value="{DynamicResource FocusRingBrush}"/>
+        </Style>
+        <Style Selector="Border.focusRing.inactive">
+            <Setter Property="BorderBrush" Value="{DynamicResource FocusRingInactiveBrush}"/>
         </Style>
 
         <!-- A square, icon-only button (the menu): as tall as every other control and as wide. -->
@@ -224,9 +239,9 @@
             <Setter Property="CornerRadius" Value="{StaticResource AppRowRadius}"/>
             <Setter Property="FocusAdorner">
                 <FocusAdornerTemplate>
-                    <Border BorderThickness="2"
+                    <Border Classes="focusRing" Classes.inactive="{Binding !$parent[Window].IsActive}"
+                            BorderThickness="2"
                             AdornerLayer.IsClipEnabled="False"
-                            BorderBrush="{DynamicResource FocusRingBrush}"
                             CornerRadius="9"
                             Margin="{StaticResource AppFocusRingMargin}"/>
                 </FocusAdornerTemplate>
@@ -501,6 +516,11 @@
             <Setter Property="BorderBrush" Value="{DynamicResource FocusRingBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
+        <!-- The field's own focus edge softens while the window is inactive too (interface-styling
+             conventions); DialogBase and MainWindow both own the windowInactive class. -->
+        <Style Selector="Window.windowInactive :is(TextBox):focus /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="{DynamicResource FocusRingInactiveBrush}"/>
+        </Style>
 
         <!-- The closed select matches the fields; the list it opens stays the toolkit's. -->
         <Style Selector="ComboBox">
@@ -528,6 +548,11 @@
         </Style>
         <Style Selector="ComboBox:focus-visible /template/ ContentControl#ContentPresenter">
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <!-- The select's own focus edge softens while the window is inactive too (interface-styling
+             conventions). -->
+        <Style Selector="Window.windowInactive ComboBox:focus-visible /template/ Border#HighlightBackground">
+            <Setter Property="BorderBrush" Value="{DynamicResource FocusRingInactiveBrush}"/>
         </Style>
         <Style Selector="ComboBox /template/ PathIcon#DropDownGlyph">
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>

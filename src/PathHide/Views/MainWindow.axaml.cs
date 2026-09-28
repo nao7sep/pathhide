@@ -60,6 +60,11 @@ public partial class MainWindow : Window
         AboutMenuItem.Click += OnAboutClick;
         ShortcutsMenuItem.Click += OnShortcutsClick;
 
+        // The app's inactive-window treatments (the quieter focus ring) key on this class, as in
+        // DialogBase.
+        Activated += (_, _) => Classes.Set("windowInactive", false);
+        Deactivated += (_, _) => Classes.Set("windowInactive", true);
+
         PathListReceiver.AddHandler(DragDrop.DropEvent, OnDrop);
         PathListReceiver.AddHandler(DragDrop.DragOverEvent, OnDragOver);
         PathListReceiver.AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
