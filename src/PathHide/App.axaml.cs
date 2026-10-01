@@ -61,7 +61,7 @@ public partial class App : Application
                 return;
             }
 
-            // Builds the view model, which materializes config.json (CreateIfMissing) before the window.
+            // Loads effective settings before the window without creating or rewriting config.json.
             // The data backup is now write-through — recorded the instant each managed save's atomic rename
             // lands (see JsonStore/BackupStore) — so there is no startup backup pass to kick off here.
             //
@@ -147,60 +147,17 @@ public partial class App : Application
     /// window is placed before it is shown; path entries are loaded later, when the window
     /// calls <see cref="MainWindowViewModel.Initialize"/>.
     /// </summary>
-    private static MainWindowViewModel CreateMainViewModel()
+    internal static MainWindowViewModel CreateMainViewModel()
     {
         var pathListStore = new JsonStore<List<PathEntry>>("paths.json", QuarantineJournal.PathListLabel);
-        var settingsStore = new JsonStore<AppSettings>(AppSettings.FileName, QuarantineJournal.SettingsLabel);
+        var settingsStore = new SettingsStore();
         // Settings are re-derivable, so an unreadable config.json correctly falls back to
         // defaults; the recovery notice tells the user it happened. The path list does NOT —
         // see LoadPersistedState.
         var settings = settingsStore.Load().Value;
 
-        // Earlier versions stored the default UI font instead of leaving the setting empty; clear
-        // it so the user who never chose a font follows the default. A failed save only repeats
-        // the clear next launch.
-        if (settings.ClearFormerDefaultUiFont())
-        {
-            try
-            {
-                settingsStore.Save(settings);
-                Log.Info("config: cleared a stored default UI font");
-            }
-            catch (Exception ex)
-            {
-                Log.Warn("config: clearing the stored default UI font failed", ex, new { file = AppSettings.FileName });
-            }
-        }
-
-        // Create config.json on first run so the settings file exists on disk immediately, not only
-        // after the first save (storage-path conventions, "Materializing settings on first run"). This
-        // runs here — right after the load populates `settings`, before the visibility service and the
-        // view model read it — and only creates the file when absent, so an existing file is never
-        // overwritten. paths.json is user content (empty by default), not a defaults-
-        // bearing settings file, so it is left to be created when the user first adds a path. A first-run
-        // write failure is logged and tolerated rather than crashing startup.
-        try
-        {
-            settingsStore.CreateIfMissing(settings);
-        }
-        catch (Exception ex)
-        {
-            Log.Warn("config: first-run create failed", ex, new { file = AppSettings.FileName });
-        }
-
-        // Window state has its own store. Earlier versions kept the window geometry in config.json;
-        // move it across before the state is read. State is disposable, so a failed move is logged
-        // and the window opens at its designed default.
+        // Window geometry remains independent, disposable, and outside backup history.
         var stateStore = new JsonStore<AppState>(AppState.FileName, QuarantineJournal.StateLabel, recordBackup: false);
-        try
-        {
-            WindowStateMigration.Run(
-                System.IO.Path.Combine(StorageRoot.Directory, AppSettings.FileName), stateStore, settingsStore, settings);
-        }
-        catch (Exception ex)
-        {
-            Log.Warn("state: moving the window geometry out of config.json failed", ex);
-        }
         var state = stateStore.Load().Value;
 
         // Key effective configuration at startup (the conventions' baseline): every user-tunable

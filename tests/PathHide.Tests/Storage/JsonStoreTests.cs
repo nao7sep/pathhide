@@ -148,8 +148,7 @@ public sealed class JsonStoreTests : IDisposable
 
         store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
 
-        // The next save recreates the live file (the first-run materialization path's counterpart for an
-        // in-flight store) without ever touching the quarantined file sitting beside it.
+        // A user change recreates the live file without touching the quarantined bytes.
         Assert.True(File.Exists(PathOf("paths.json")));
         Assert.Single(store.Load().Value);
         Assert.Equal(corrupt, File.ReadAllText(quarantinedPath));
@@ -182,6 +181,19 @@ public sealed class JsonStoreTests : IDisposable
         var quarantined = Directory.EnumerateFiles(_root, "paths-*.invalid").ToList();
         Assert.Single(quarantined);
         Assert.Equal("null", File.ReadAllText(quarantined[0]));
+    }
+
+    [Fact]
+    public void Load_UnreadableStateQuarantinesWithoutANotice()
+    {
+        QuarantineJournal.Drain();
+        File.WriteAllText(PathOf(AppState.FileName), "{ not json");
+
+        var loaded = new JsonStore<AppState>(AppState.FileName, QuarantineJournal.StateLabel, recordBackup: false).Load();
+
+        Assert.True(loaded.WasUnreadable);
+        Assert.Null(loaded.Value.WindowPositionX);
+        Assert.Empty(QuarantineJournal.Drain());
     }
 
     [Fact]
@@ -246,36 +258,6 @@ public sealed class JsonStoreTests : IDisposable
         // orphan existing user files.
         Assert.Contains("\"windowsHideMode\"", json);
         Assert.Contains("\"hidden_and_system\"", json);
-    }
-
-    [Fact]
-    public void CreateIfMissing_WritesDefaultsOnFirstRun()
-    {
-        var store = new JsonStore<AppSettings>("config.json", "settings");
-
-        var created = store.CreateIfMissing(new AppSettings());
-
-        Assert.True(created);
-        Assert.True(File.Exists(PathOf("config.json")));
-        // Produced through Save (the real serializer), so it round-trips and carries the on-disk shape.
-        Assert.Contains("\"windowsHideMode\"", File.ReadAllText(PathOf("config.json")));
-        Assert.Equal(WindowsHideMode.HiddenOnly, store.Load().Value.WindowsHideMode);
-    }
-
-    [Fact]
-    public void CreateIfMissing_NeverTouchesAnExistingFile()
-    {
-        var store = new JsonStore<AppSettings>("config.json", "settings");
-        store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
-        var before = File.ReadAllText(PathOf("config.json"));
-
-        // A different value must not overwrite: absence is the single trigger, so a good (possibly
-        // hand-edited) file is left byte-for-byte as it was.
-        var created = store.CreateIfMissing(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenOnly });
-
-        Assert.False(created);
-        Assert.Equal(before, File.ReadAllText(PathOf("config.json")));
-        Assert.Equal(WindowsHideMode.HiddenAndSystem, store.Load().Value.WindowsHideMode);
     }
 
     [Fact]

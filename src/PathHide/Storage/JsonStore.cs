@@ -84,19 +84,6 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         }
     }
 
-    public bool CreateIfMissing(T value)
-    {
-        // Absence is the single trigger. An existing file — including one that is present but
-        // unparseable — is never overwritten, so a good (possibly hand-edited) file can never be lost to
-        // a bug here. The file is produced through Save (the same serializer the normal save path uses),
-        // not a hand-built literal.
-        if (File.Exists(_filePath))
-            return false;
-
-        Save(value);
-        return true;
-    }
-
     private bool TryLoadFile(out T value, out bool wasUnreadable)
     {
         value = new T();
@@ -118,7 +105,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         catch (Exception ex)
         {
             // Present but unparseable: quarantine aside (bytes preserved) before the caller
-            // decides what to do; the next Save or CreateIfMissing recreates the file.
+            // decides what to do; only a later user change recreates the file through Save.
             Quarantine(ex);
             wasUnreadable = true;
             return false;
@@ -138,7 +125,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         try
         {
             // not recorded: a move-aside of an already-unreadable file, not a managed-text write.
-            // The subsequent fresh save through WriteAtomically records the recovered content.
+            // A later user change through WriteAtomically records its saved content.
             File.Move(_filePath, quarantinePath);
         }
         catch (Exception moveEx)

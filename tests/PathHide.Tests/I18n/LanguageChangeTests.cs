@@ -177,7 +177,7 @@ public class LanguageChangeTests : WindowTest
     [AvaloniaFact]
     public async Task a_saved_language_is_spoken_at_once_and_stored()
     {
-        var settings = new FakeJsonStore<AppSettings>();
+        var settings = new FakeSettingsStore();
         var viewModel = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<System.Collections.Generic.List<PathEntry>>(),
             settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());

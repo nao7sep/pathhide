@@ -17,7 +17,7 @@ public sealed class ViewActionBoundaryTests
     [AvaloniaFact]
     public async Task Shortcut_window_action_failure_is_owned_and_safe()
     {
-        var settings = new FakeJsonStore<AppSettings>();
+        var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()),
             new FakeJsonStore<List<PathEntry>>(),

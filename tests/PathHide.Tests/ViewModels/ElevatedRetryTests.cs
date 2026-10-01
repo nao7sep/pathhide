@@ -51,7 +51,7 @@ public sealed class ElevatedRetryTests : IDisposable
         ElevatedApplicator applicator, TimeSpan? shutdownBound = null, params string[] paths)
     {
         _paths.Value = paths.Select(path => new PathEntry { Path = path, DesiredVisibility = DesiredVisibility.Hidden }).ToList();
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(_visibility), _paths, settingsStore, settingsStore.Load().Value,
             new FakeJsonStore<AppState>(), new AppState())

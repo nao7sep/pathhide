@@ -18,7 +18,7 @@ namespace PathHide.ViewModels;
 public partial class MainWindowViewModel : ObservableObject
 {
     private readonly IJsonStore<List<PathEntry>> _pathListStore;
-    private readonly IJsonStore<AppSettings> _settingsStore;
+    private readonly ISettingsStore _settingsStore;
     private readonly IJsonStore<AppState> _stateStore;
     private readonly BoundedVisibility _visibility;
     private readonly PathScanner _scanner;
@@ -199,7 +199,7 @@ public partial class MainWindowViewModel : ObservableObject
     public MainWindowViewModel(
         BoundedVisibility visibility,
         IJsonStore<List<PathEntry>> pathListStore,
-        IJsonStore<AppSettings> settingsStore,
+        ISettingsStore settingsStore,
         AppSettings settings,
         IJsonStore<AppState> stateStore,
         AppState state)
@@ -644,10 +644,8 @@ public partial class MainWindowViewModel : ObservableObject
         await PauseScanningAsync();
 
         // Reload reconciles the path list and re-scans. It deliberately does NOT reload
-        // settings: the settings dialog saves before publishing its complete draft, so the
-        // in-memory value never diverges from disk. Copying
-        // a freshly loaded settings object back into the shared instance field-by-field would
-        // be both brittle (it silently couples to AppSettings having one field) and pointless.
+        // settings: only the Settings dialog publishes configuration changes to the live instance;
+        // reloading the path list does not change the app's configuration.
         Log.Info("reload");
         // Off the UI thread: the data folder may sit on a slow or redirected profile share.
         var reloaded = await Task.Run(_pathListStore.Load);
@@ -694,7 +692,7 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Saves the complete Settings draft atomically, off the UI thread, and publishes it only after
+    /// Saves the changed Settings sets atomically, off the UI thread, and publishes the draft only after
     /// disk agrees. Returns what to tell the reader when the save failed, or null when it landed.
     /// </summary>
     public async Task<Message?> TryApplySettingsAsync(
@@ -709,8 +707,10 @@ public partial class MainWindowViewModel : ObservableObject
         {
             previous = await Task.Run(() => CommitSettings(candidate =>
             {
-                candidate.Language = language;
-                candidate.UiFontFamily = family;
+                if (Languages.NormalizePreference(candidate.Language) != language)
+                    candidate.Language = language;
+                if (UiFontFamilyValue.Normalize(candidate.UiFontFamily) != family)
+                    candidate.UiFontFamily = family;
                 candidate.WindowsHideMode = newMode;
                 candidate.Theme = theme;
             }));
@@ -738,6 +738,8 @@ public partial class MainWindowViewModel : ObservableObject
 
         // Last, once disk agrees: a language change redraws everything already on screen.
         Localizer.Use(language, ComputerLanguages);
+        // The set patch re-reads config, so it can quarantine a file changed since the dialog opened.
+        await ReportQuarantinesAsync();
         return null;
     }
 
@@ -771,7 +773,7 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Applies <paramref name="change"/> to a copy of the live settings, saves the copy, and only then
+    /// Applies <paramref name="change"/> to a copy of the live settings, saves its changed sets, and only then
     /// copies it into the live instance (which the Windows visibility service reads). Returns the
     /// settings as they were before, or null when the change left them as they were, in which case
     /// nothing is written. A failed save throws and leaves the live settings untouched.
@@ -784,10 +786,10 @@ public partial class MainWindowViewModel : ObservableObject
         var previous = CopySettings();
         var candidate = CopySettings();
         change(candidate);
-        if (SameSettings(previous, candidate))
+        if (SettingsSets.Changes(previous, candidate).Count == 0)
             return null;
 
-        _settingsStore.Save(candidate);
+        _settingsStore.SaveChanges(previous, candidate);
 
         _settings.Language = candidate.Language;
         _settings.UiFontFamily = candidate.UiFontFamily;
@@ -795,12 +797,6 @@ public partial class MainWindowViewModel : ObservableObject
         _settings.Theme = candidate.Theme;
         return previous;
     }
-
-    private static bool SameSettings(AppSettings a, AppSettings b) =>
-        Languages.NormalizePreference(a.Language) == Languages.NormalizePreference(b.Language)
-        && a.UiFontFamily == b.UiFontFamily
-        && a.WindowsHideMode == b.WindowsHideMode
-        && a.Theme == b.Theme;
 
     private AppSettings CopySettings() => new()
     {

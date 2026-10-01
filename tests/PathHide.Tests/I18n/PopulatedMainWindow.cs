@@ -39,7 +39,7 @@ internal static class PopulatedMainWindow
                 new PathEntry { Path = @"\\server\share", DesiredVisibility = DesiredVisibility.Hidden },
             ],
         };
-        var settings = new FakeJsonStore<AppSettings>();
+        var settings = new FakeSettingsStore();
         var viewModel = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
         return (new MainWindow { DataContext = viewModel }, viewModel);
     }
@@ -47,7 +47,7 @@ internal static class PopulatedMainWindow
     /// <summary>A main window with an empty list, and the view model the app always gives it.</summary>
     internal static MainWindow Empty()
     {
-        var settings = new FakeJsonStore<AppSettings>();
+        var settings = new FakeSettingsStore();
         var viewModel = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
         return new MainWindow { DataContext = viewModel };

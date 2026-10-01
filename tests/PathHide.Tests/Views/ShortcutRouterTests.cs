@@ -13,7 +13,7 @@ public sealed class ShortcutRouterTests
 {
     private static MainWindowViewModel NewViewModel()
     {
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         return new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()),
             new FakeJsonStore<List<PathEntry>>(),

@@ -46,10 +46,10 @@ public class MainWindowViewModelTests
     private static MainWindowViewModel CreateViewModel(
         FakeVisibilityService visibility,
         FakeJsonStore<List<PathEntry>> paths,
-        FakeJsonStore<AppSettings>? settings = null,
+        FakeSettingsStore? settings = null,
         TimeSpan? responseTimeout = null)
     {
-        var settingsStore = settings ?? new FakeJsonStore<AppSettings>();
+        var settingsStore = settings ?? new FakeSettingsStore();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(visibility, responseTimeout), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
         vm.Initialize();
@@ -484,7 +484,7 @@ public class MainWindowViewModelTests
     public async Task TryApplySettings_SavesOffTheCallingThread()
     {
         using var gate = ReleasedLater(out var release);
-        var settingsStore = new FakeJsonStore<AppSettings> { SaveGate = gate };
+        var settingsStore = new FakeSettingsStore { SaveGate = gate };
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
@@ -557,7 +557,7 @@ public class MainWindowViewModelTests
     {
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>();
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(visibility),
             paths,
@@ -628,7 +628,7 @@ public class MainWindowViewModelTests
     {
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>();
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(visibility),
             paths,
@@ -696,7 +696,7 @@ public class MainWindowViewModelTests
         // only that entry — the user working on top of an apparent loss.
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>> { LoadIsUnreadable = true };
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
 
         Assert.Throws<PathHide.Storage.PathListUnreadableException>(() => vm.LoadPersistedState());
@@ -946,7 +946,7 @@ public class MainWindowViewModelTests
         {
             Value = new List<PathEntry> { Entry("/a"), Entry("/b") },
         };
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
 
         // Construction is side-effect-free: the persisted entries are not read yet.
@@ -964,7 +964,7 @@ public class MainWindowViewModelTests
         {
             Value = new List<PathEntry> { Entry("/a") },
         };
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
 
         vm.Initialize();
@@ -982,7 +982,7 @@ public class MainWindowViewModelTests
     [Fact]
     public async Task TryApplySettings_SavesBothFieldsAsOneCandidateBeforePublishingThem()
     {
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         var settings = settingsStore.Load().Value;
         var stateStore = new FakeJsonStore<AppState>();
         var vm = new MainWindowViewModel(
@@ -1011,7 +1011,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void SaveWindowPlacement_PersistsAllFivePrimitivesToTheStateStoreOnly()
     {
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         var stateStore = new FakeJsonStore<AppState>();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value,
@@ -1037,7 +1037,7 @@ public class MainWindowViewModelTests
     [Fact]
     public void SaveWindowPlacement_FailureLeavesLivePlacementUntouched()
     {
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value,
             new FakeJsonStore<AppState> { ThrowOnSave = true }, new AppState());
@@ -1054,7 +1054,7 @@ public class MainWindowViewModelTests
     [Fact]
     public async Task TryApplySettings_SavesATheme_ChangeAndPublishesIt()
     {
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         var settings = settingsStore.Load().Value;
         Assert.Equal(ThemePreference.System, settings.Theme);
         var vm = new MainWindowViewModel(
@@ -1075,7 +1075,7 @@ public class MainWindowViewModelTests
     [Fact]
     public async Task TryApplySettings_WhenUnchanged_DoesNotSave()
     {
-        var settingsStore = new FakeJsonStore<AppSettings>();
+        var settingsStore = new FakeSettingsStore();
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
@@ -1089,7 +1089,7 @@ public class MainWindowViewModelTests
     [Fact]
     public async Task TryApplySettings_FailureLeavesBothLiveFieldsUntouchedForDialogRetry()
     {
-        var settingsStore = new FakeJsonStore<AppSettings> { ThrowOnSave = true };
+        var settingsStore = new FakeSettingsStore { ThrowOnSave = true };
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
@@ -1107,7 +1107,7 @@ public class MainWindowViewModelTests
     public async Task IndependentOperationalFailuresStackUntilTheirOwnerRecoversOrTheyAreDismissed()
     {
         var visibility = new FakeVisibilityService();
-        var settings = new FakeJsonStore<AppSettings>();
+        var settings = new FakeSettingsStore();
         visibility.OnInspect = _ => new IOException("scan failed");
         var scanPaths = new FakeJsonStore<List<PathEntry>>
         {
