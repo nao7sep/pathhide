@@ -191,7 +191,7 @@ public partial class App : Application
         // Window state has its own store. Earlier versions kept the window geometry in config.json;
         // move it across before the state is read. State is disposable, so a failed move is logged
         // and the window opens at its designed default.
-        var stateStore = new JsonStore<AppState>(AppState.FileName, QuarantineJournal.StateLabel);
+        var stateStore = new JsonStore<AppState>(AppState.FileName, QuarantineJournal.StateLabel, recordBackup: false);
         try
         {
             WindowStateMigration.Run(

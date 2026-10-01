@@ -28,16 +28,20 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 {
     private readonly string _filePath;
     private readonly string _label;
+    private readonly bool _recordBackup;
 
     /// <summary>
     /// Creates a store rooted at <see cref="StorageRoot.Directory"/>.
     /// </summary>
     /// <param name="fileName">File name (no directory component), e.g. <c>"paths.json"</c>.</param>
     /// <param name="label">Human-readable noun used in log messages, e.g. <c>"paths"</c>.</param>
-    public JsonStore(string fileName, string label)
+    /// <param name="recordBackup">False for a store that is volatile state and nothing else (window
+    /// placement): its saves are written atomically but not recorded into the backup history.</param>
+    public JsonStore(string fileName, string label, bool recordBackup = true)
     {
         _filePath = Path.Combine(StorageRoot.Directory, fileName);
         _label = label;
+        _recordBackup = recordBackup;
     }
 
     public LoadedStore<T> Load()
@@ -186,11 +190,12 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         // BackupStore.Record catches, logs once, and swallows every failure, so a backup problem can never
         // break the save that already succeeded above (data-backup conventions).
         //
-        // record: config.json (durable user settings), state.json (window state, recorded like every
-        // other managed store) and paths.json (the user's tracked path list — the externally-linked
-        // locations whose loss would strand their work) all flow through here, so each is captured on
-        // every real save. This is the ONLY managed-text write site in the app.
-        BackupStore.Record(_filePath, bytes);
+        // record: config.json (durable user settings) and paths.json (the user's tracked path list — the
+        // externally-linked locations whose loss would strand their work) are captured on every real
+        // save. state.json (window geometry) is volatile state and opts out via recordBackup: false.
+        // This is the ONLY managed-text write site in the app.
+        if (_recordBackup)
+            BackupStore.Record(_filePath, bytes);
     }
 
     /// <summary>

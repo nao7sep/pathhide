@@ -385,6 +385,19 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
+    public void Save_WithRecordBackupFalse_WritesTheFile_ButRecordsNothing()
+    {
+        // Volatile state (window geometry) is written atomically like any store but never recorded.
+        var stateStore = new JsonStore<AppState>("state.json", "state", recordBackup: false);
+        stateStore.Save(new AppState());
+        new JsonStore<AppSettings>("config.json", "settings").Save(new AppSettings());
+
+        Assert.True(File.Exists(PathOf("state.json")));
+        Assert.Empty(RecordedContentsFor(PathOf("state.json")));
+        Assert.Equal(new[] { PathOf("config.json") }, RecordedPaths());
+    }
+
+    [Fact]
     public void Save_UnchangedResave_RecordsNoSecondVersion_ButAChangedSaveDoes()
     {
         var store = new JsonStore<AppSettings>("config.json", "settings");
