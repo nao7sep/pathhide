@@ -9,7 +9,7 @@ namespace PathHide.Tests.Storage;
 
 /// <summary>
 /// The one-time move of the window geometry from <c>config.json</c> to <c>state.json</c>, against
-/// real files under a throwaway <c>PATHHIDE_HOME</c> (see <see cref="JsonStoreTests"/>).
+/// real files under a throwaway <c>PATHHIDE_DATA_DIR</c> (see <see cref="JsonStoreTests"/>).
 /// </summary>
 [Collection(StorageRootEnvironment.CollectionName)]
 public sealed class WindowStateMigrationTests : IDisposable

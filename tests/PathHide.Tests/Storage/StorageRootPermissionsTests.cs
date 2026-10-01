@@ -9,7 +9,7 @@ namespace PathHide.Tests.Storage;
 /// <summary>
 /// Owner-only (0700) permissions on the storage root (storage-path conventions: "On POSIX the root is
 /// owner-only (0700): created that way, and tightened to 0700 at each launch when an existing root is
-/// broader"). Each test relocates the root to a throwaway directory via <c>PATHHIDE_HOME</c>, the same
+/// broader"). Each test relocates the root to a throwaway directory via <c>PATHHIDE_DATA_DIR</c>, the same
 /// seam <see cref="StorageRootTests"/> uses, so nothing here touches the real <c>~/.pathhide</c>.
 /// </summary>
 [Collection(StorageRootEnvironment.CollectionName)]

@@ -15,7 +15,7 @@ namespace PathHide.Tests.Backup;
 
 /// <summary>
 /// The write-through data-backup store (data-backup conventions). These exercise the real SQLite file
-/// against a throwaway root redirected via <c>PATHHIDE_HOME</c> — the one relocation seam — because BLOB
+/// against a throwaway root redirected via <c>PATHHIDE_DATA_DIR</c> — the one relocation seam — because BLOB
 /// fidelity and the dedup/insert behaviour are exactly what a fake would not exercise. The store is a
 /// process-wide singleton, so each test opens against its own fresh root and closes it in teardown (which
 /// releases the <c>backups.sqlite3</c> handle so the throwaway root can be deleted).
@@ -308,7 +308,7 @@ public sealed class BackupStoreTests : IDisposable
     [Fact]
     public void Record_BestEffort_OpenFailureDisablesRecordingWithoutThrowing()
     {
-        // Point PATHHIDE_HOME at a location the store cannot open a DB in: a *file* standing where the root
+        // Point PATHHIDE_DATA_DIR at a location the store cannot open a DB in: a *file* standing where the root
         // directory would be. EnsureOpen's mkdir/-open fails, so recording is disabled for the session —
         // one warn is logged and every Record is a silent no-op that never throws.
         var blocker = Path.Combine(Path.GetTempPath(), "pathhide-blocked-" + NanoId.New());

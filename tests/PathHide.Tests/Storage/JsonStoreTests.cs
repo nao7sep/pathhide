@@ -11,7 +11,7 @@ namespace PathHide.Tests.Storage;
 
 /// <summary>
 /// Exercises the real file I/O of <see cref="JsonStore{T}"/> against a temp
-/// directory redirected via the <c>PATHHIDE_HOME</c> environment variable — the one
+/// directory redirected via the <c>PATHHIDE_DATA_DIR</c> environment variable — the one
 /// relocation seam, used the same way in tests and production. These touch the
 /// disk on purpose: the atomic write is the behaviour that protects the user's
 /// saved data, and a fake filesystem would not exercise it. There is no longer a
@@ -24,7 +24,7 @@ namespace PathHide.Tests.Storage;
 /// store is a process-wide singleton, so <see cref="Dispose"/> closes it before
 /// deleting the throwaway root — that releases its <c>backups.sqlite3</c> handle
 /// (so the delete succeeds) and forces the next test to re-open against its own
-/// fresh <c>PATHHIDE_HOME</c>, rather than keep writing into this test's root.
+/// fresh <c>PATHHIDE_DATA_DIR</c>, rather than keep writing into this test's root.
 /// </remarks>
 [Collection(StorageRootEnvironment.CollectionName)]
 public sealed class JsonStoreTests : IDisposable

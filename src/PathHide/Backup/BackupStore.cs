@@ -10,7 +10,7 @@ namespace PathHide.Backup;
 
 /// <summary>
 /// The write-through data-backup store (data-backup conventions). It owns one add-only SQLite file,
-/// <c>backups.sqlite3</c>, directly under PathHide's storage root (<c>PATHHIDE_HOME</c> or
+/// <c>backups.sqlite3</c>, directly under PathHide's storage root (<c>PATHHIDE_DATA_DIR</c> or
 /// <c>~/.pathhide</c>, resolved in one place by <see cref="StorageRoot"/> — never a hardcoded path).
 /// Every managed <em>text</em> save records the exact bytes it just wrote here, strictly AFTER its atomic
 /// rename lands (see <see cref="JsonStore{T}"/>), so the history is always as current as the last save.
@@ -61,7 +61,7 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
     private static bool _initialized;
 
     /// <summary>The store file under the resolved storage root. Computed lazily (not frozen into a static
-    /// field at type-load) so <c>PATHHIDE_HOME</c> is read after the environment is set, per the
+    /// field at type-load) so <c>PATHHIDE_DATA_DIR</c> is read after the environment is set, per the
     /// storage-path conventions' caution against import-time resolution — and so a test that relocates the
     /// root sees the new location.</summary>
     private static string StoreFile() => Path.Combine(StorageRoot.Directory, "backups.sqlite3");
@@ -122,7 +122,7 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
         {
             // `file` is the path captured before the attempt, never a fresh StoreFile() call:
             // re-resolving inside the catch could throw again (an unresolvable home, an empty
-            // PATHHIDE_HOME) and that second throw would escape EnsureOpen entirely.
+            // PATHHIDE_DATA_DIR) and that second throw would escape EnsureOpen entirely.
             Log.Warn("backup store: could not open; recording disabled for this session", ex,
                 new { file = storeFile });
             _connection = null;
@@ -213,7 +213,7 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
 
     /// <summary>Close the store (best-effort). For tests that need to release the file handle between
     /// throwaway roots; the app itself lets the process exit close it. Resets the singleton so the next
-    /// <see cref="Record"/> re-opens against the current <c>PATHHIDE_HOME</c>.</summary>
+    /// <see cref="Record"/> re-opens against the current <c>PATHHIDE_DATA_DIR</c>.</summary>
     public static void Close()
     {
         lock (Gate)

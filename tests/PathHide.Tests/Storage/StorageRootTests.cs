@@ -6,7 +6,7 @@ using Xunit;
 namespace PathHide.Tests.Storage;
 
 /// <summary>
-/// Storage-root resolution: <c>PATHHIDE_HOME</c> relocates the whole tree when set, the default
+/// Storage-root resolution: <c>PATHHIDE_DATA_DIR</c> relocates the whole tree when set, the default
 /// <c>~/.pathhide</c> is used when it is not, and a relative override resolves against the home
 /// directory (never the working directory) so no path can depend on how the app was launched.
 /// </summary>

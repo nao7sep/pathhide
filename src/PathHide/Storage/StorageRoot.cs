@@ -8,22 +8,22 @@ namespace PathHide.Storage;
 
 /// <summary>
 /// The single storage root for the app's own files, under <c>~/.pathhide/</c>. The root is
-/// <c>PATHHIDE_HOME</c> when that environment variable is set and non-empty (its value is expanded for a
+/// <c>PATHHIDE_DATA_DIR</c> when that environment variable is set and non-empty (its value is expanded for a
 /// leading <c>~</c> and for environment references, then made absolute against the home directory),
 /// otherwise the default <c>~/.pathhide/</c>. Every subpath is derived from whichever root won, so the
 /// one variable relocates the whole tree. The working directory is never a base for any path, per the
-/// storage-path conventions. <c>PATHHIDE_HOME</c> is the one relocation seam, used the same way by tests
+/// storage-path conventions. <c>PATHHIDE_DATA_DIR</c> is the one relocation seam, used the same way by tests
 /// and in production.
 /// </summary>
 public static class StorageRoot
 {
     /// <summary>Environment variable that relocates the entire storage root.</summary>
-    public const string HomeEnvironmentVariable = "PATHHIDE_HOME";
+    public const string HomeEnvironmentVariable = "PATHHIDE_DATA_DIR";
 
     private static readonly object Gate = new();
 
     // The resolved root is cached alongside the raw override value it was computed from, so production
-    // resolves once while a test that changes PATHHIDE_HOME (to a throwaway directory) re-resolves.
+    // resolves once while a test that changes PATHHIDE_DATA_DIR (to a throwaway directory) re-resolves.
     private static string? _cachedOverride;
     private static string? _cachedRoot;
 

@@ -29,7 +29,7 @@ public static class ElevatedApplyCommand
     /// </summary>
     /// <remarks>
     /// It has to travel as an argument. The runas verb forces UseShellExecute, which forbids
-    /// setting the child's environment block, so a root relocated by PATHHIDE_HOME would not
+    /// setting the child's environment block, so a root relocated by PATHHIDE_DATA_DIR would not
     /// reach it — the child would re-resolve to the default and split the log trail for exactly
     /// the access-denied failures this pass exists to diagnose.
     /// </remarks>

@@ -27,7 +27,7 @@ sealed class Program
         App.ComputerLanguages = LanguageBootstrap.Start();
 
         // Resolve and create the storage root before anything else reads or writes it.
-        // An unusable PATHHIDE_HOME (or an unwritable home) is a startup error we report
+        // An unusable PATHHIDE_DATA_DIR (or an unwritable home) is a startup error we report
         // and STOP on — never a silent fallback that lets the app run unable to persist.
         // This runs before Log.Start because the log directory itself lives under the
         // root, and outside the try below so a bad root can never reach the UI.
@@ -100,7 +100,7 @@ sealed class Program
         // Parsing writes nothing, so it runs before the logger opens: the parent's storage root has to
         // be adopted first, so this session's log lands in the same tree as the GUI's. It arrives as an
         // argument because the runas verb forces UseShellExecute, which forbids setting the child's
-        // environment block — without it a root relocated by PATHHIDE_HOME would be re-resolved to the
+        // environment block — without it a root relocated by PATHHIDE_DATA_DIR would be re-resolved to the
         // default here, splitting the log trail for exactly the access-denied failures this pass
         // exists to diagnose.
         var invocation = ElevatedApplyCommand.ParseArguments(args);

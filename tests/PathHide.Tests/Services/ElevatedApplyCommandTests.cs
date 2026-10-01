@@ -60,7 +60,7 @@ public sealed class ElevatedApplyCommandTests
         var args = ElevatedApplyCommand.BuildArguments(@"C:\T\req.json", @"C:\T\res.jsonl", StorageRootArg);
 
         // The root travels as an argument because the runas verb forbids setting the child's
-        // environment, so a relocated PATHHIDE_HOME would not reach it.
+        // environment, so a relocated PATHHIDE_DATA_DIR would not reach it.
         Assert.Equal(
             new[]
             {
