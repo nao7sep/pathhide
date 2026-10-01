@@ -18,7 +18,7 @@ namespace PathHide.Storage;
 public static class StorageRoot
 {
     /// <summary>Environment variable that relocates the entire storage root.</summary>
-    public const string HomeEnvironmentVariable = "PATHHIDE_DATA_DIR";
+    public const string DataDirEnvironmentVariable = "PATHHIDE_DATA_DIR";
 
     private static readonly object Gate = new();
 
@@ -33,7 +33,7 @@ public static class StorageRoot
         {
             lock (Gate)
             {
-                var rawOverride = Environment.GetEnvironmentVariable(HomeEnvironmentVariable);
+                var rawOverride = Environment.GetEnvironmentVariable(DataDirEnvironmentVariable);
                 var hasOverride = !string.IsNullOrEmpty(rawOverride?.Trim());
 
                 // One clause, because the raw value determines everything else: hasOverride is a
@@ -145,7 +145,7 @@ public static class StorageRoot
         if (value.Length == 0)
         {
             throw new InvalidOperationException(
-                HomeEnvironmentVariable + " is set but expands to an empty path (an unset $VAR/%VAR%?). " +
+                DataDirEnvironmentVariable + " is set but expands to an empty path (an unset $VAR/%VAR%?). " +
                 "Set it to a usable directory, or unset it to use the default.");
         }
 
@@ -179,7 +179,7 @@ public static class StorageRoot
             // no usable storage root, so fail loudly rather than silently writing under the cwd.
             throw new InvalidOperationException(
                 "Cannot resolve a storage root: the user's home directory is unknown. " +
-                "Set the home directory or " + HomeEnvironmentVariable + " to an absolute path.");
+                "Set the home directory or " + DataDirEnvironmentVariable + " to an absolute path.");
         }
 
         return home;

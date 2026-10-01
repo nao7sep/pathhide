@@ -17,18 +17,18 @@ public sealed class StorageRootTests : IDisposable
 
     public StorageRootTests()
     {
-        _previousHome = Environment.GetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable);
+        _previousHome = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _previousHome);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _previousHome);
     }
 
     [Fact]
     public void Root_Defaults_To_DotPathhide_When_Override_Unset()
     {
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, null);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, null);
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         Assert.Equal(Path.Combine(home, ".pathhide"), StorageRoot.Directory);
@@ -38,7 +38,7 @@ public sealed class StorageRootTests : IDisposable
     public void Override_Relocates_The_Whole_Root()
     {
         var target = Path.Combine(Path.GetTempPath(), "pathhide-home-tests-" + NanoId.New());
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, target);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, target);
 
         Assert.Equal(Path.GetFullPath(target), Path.GetFullPath(StorageRoot.Directory));
         // The logs subpath is derived from the relocated root.
@@ -48,7 +48,7 @@ public sealed class StorageRootTests : IDisposable
     [Fact]
     public void Empty_Override_Falls_Back_To_The_Default()
     {
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "   ");
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, "   ");
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         Assert.Equal(Path.Combine(home, ".pathhide"), StorageRoot.Directory);
@@ -58,7 +58,7 @@ public sealed class StorageRootTests : IDisposable
     public void Relative_Override_Resolves_Against_Home_Not_Working_Directory()
     {
         var relative = "pathhide-relative-" + NanoId.New();
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, relative);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, relative);
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         Assert.Equal(Path.GetFullPath(Path.Combine(home, relative)), StorageRoot.Directory);
@@ -70,7 +70,7 @@ public sealed class StorageRootTests : IDisposable
     [Fact]
     public void Tilde_Alone_Override_Expands_To_Home()
     {
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "~");
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, "~");
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         Assert.Equal(Path.GetFullPath(home), Path.GetFullPath(StorageRoot.Directory));
@@ -80,7 +80,7 @@ public sealed class StorageRootTests : IDisposable
     public void Tilde_Slash_Override_Expands_Against_Home()
     {
         var leaf = "pathhide-tilde-" + NanoId.New();
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "~/" + leaf);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, "~/" + leaf);
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         Assert.Equal(Path.GetFullPath(Path.Combine(home, leaf)), StorageRoot.Directory);
@@ -101,7 +101,7 @@ public sealed class StorageRootTests : IDisposable
             Environment.SetEnvironmentVariable(probeVariable, target);
             // The resolver expands both the Windows %VAR% form (here) and the POSIX $VAR / ${VAR}
             // forms (covered by the test below); an unset reference expands to empty.
-            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "%" + probeVariable + "%");
+            Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, "%" + probeVariable + "%");
 
             Assert.Equal(Path.GetFullPath(target), Path.GetFullPath(StorageRoot.Directory));
         }
@@ -121,10 +121,10 @@ public sealed class StorageRootTests : IDisposable
         {
             Environment.SetEnvironmentVariable(probeVariable, target);
 
-            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "$" + probeVariable);
+            Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, "$" + probeVariable);
             Assert.Equal(Path.GetFullPath(target), Path.GetFullPath(StorageRoot.Directory));
 
-            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "${" + probeVariable + "}");
+            Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, "${" + probeVariable + "}");
             Assert.Equal(Path.GetFullPath(target), Path.GetFullPath(StorageRoot.Directory));
         }
         finally
@@ -140,7 +140,7 @@ public sealed class StorageRootTests : IDisposable
         // misconfiguration, reported rather than silently collapsing onto the home directory.
         var unsetVariable = "PATHHIDE_UNSET_PROBE_" + NanoId.New().Replace('-', '_');
         Environment.SetEnvironmentVariable(unsetVariable, null);
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, "$" + unsetVariable);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, "$" + unsetVariable);
 
         Assert.Throws<InvalidOperationException>(() => _ = StorageRoot.Directory);
     }

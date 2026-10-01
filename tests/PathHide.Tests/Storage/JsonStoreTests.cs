@@ -37,8 +37,8 @@ public sealed class JsonStoreTests : IDisposable
         _root = Path.Combine(Path.GetTempPath(), "pathhide-tests", NanoId.New());
         Directory.CreateDirectory(_root);
 
-        _previousHome = Environment.GetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable);
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _root);
+        _previousHome = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _root);
         // Close any store left open by a prior test so this test's first Save opens the store fresh
         // against this test's root, not a stale handle to an already-deleted directory.
         BackupStore.Close();
@@ -49,7 +49,7 @@ public sealed class JsonStoreTests : IDisposable
         // Release the backups.sqlite3 handle before deleting the root, and reset the singleton so the next
         // throwaway root re-opens its own store.
         BackupStore.Close();
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _previousHome);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _previousHome);
         try { Directory.Delete(_root, recursive: true); }
         catch { /* best-effort cleanup */ }
     }

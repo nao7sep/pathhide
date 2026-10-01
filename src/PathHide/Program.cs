@@ -105,7 +105,7 @@ sealed class Program
         // exists to diagnose.
         var invocation = ElevatedApplyCommand.ParseArguments(args);
         if (!string.IsNullOrWhiteSpace(invocation?.StorageRoot))
-            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, invocation.StorageRoot);
+            Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, invocation.StorageRoot);
 
         // The elevated apply pass is a genuinely separate OS process, so it gets its
         // own per-session log file (co-located with the GUI process's logs).

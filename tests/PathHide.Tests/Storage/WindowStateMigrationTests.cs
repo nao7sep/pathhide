@@ -35,15 +35,15 @@ public sealed class WindowStateMigrationTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "pathhide-tests", NanoId.New());
         Directory.CreateDirectory(_root);
-        _previousHome = Environment.GetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable);
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _root);
+        _previousHome = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _root);
         BackupStore.Close();
     }
 
     public void Dispose()
     {
         BackupStore.Close();
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _previousHome);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _previousHome);
         try { Directory.Delete(_root, recursive: true); }
         catch { /* best-effort cleanup */ }
     }

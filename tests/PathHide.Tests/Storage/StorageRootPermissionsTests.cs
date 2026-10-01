@@ -23,14 +23,14 @@ public sealed class StorageRootPermissionsTests : IDisposable
 
     public StorageRootPermissionsTests()
     {
-        _previousHome = Environment.GetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable);
+        _previousHome = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
         _target = Path.Combine(Path.GetTempPath(), "pathhide-perm-tests-" + NanoId.New());
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _target);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _target);
     }
 
     public void Dispose()
     {
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _previousHome);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _previousHome);
         try
         {
             if (Directory.Exists(_target))

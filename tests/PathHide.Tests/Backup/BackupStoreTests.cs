@@ -31,15 +31,15 @@ public sealed class BackupStoreTests : IDisposable
         _root = Path.Combine(Path.GetTempPath(), "pathhide-backupstore-tests", NanoId.New());
         Directory.CreateDirectory(_root);
 
-        _previousHome = Environment.GetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable);
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _root);
+        _previousHome = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _root);
         BackupStore.Close(); // fresh open against this test's root
     }
 
     public void Dispose()
     {
         BackupStore.Close();
-        Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, _previousHome);
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _previousHome);
         try { Directory.Delete(_root, recursive: true); }
         catch { /* best-effort cleanup */ }
     }
@@ -284,13 +284,13 @@ public sealed class BackupStoreTests : IDisposable
         // escaped EnsureOpen, escaped Record, and surfaced in JsonStore's atomic write. The save
         // was already on disk by then, so the user saw "Failed to save" for a save that succeeded
         // and the in-memory list rolled back, leaving memory disagreeing with disk.
-        var previousHome = Environment.GetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable);
+        var previousHome = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
         try
         {
             BackupStore.Close();
             // Expands to nothing, which the resolver rejects rather than falling back.
             Environment.SetEnvironmentVariable(
-                StorageRoot.HomeEnvironmentVariable, "$PATHHIDE_DEFINITELY_UNSET_FOR_TEST");
+                StorageRoot.DataDirEnvironmentVariable, "$PATHHIDE_DEFINITELY_UNSET_FOR_TEST");
 
             Assert.Throws<InvalidOperationException>(() => _ = StorageRoot.Directory);
 
@@ -301,7 +301,7 @@ public sealed class BackupStoreTests : IDisposable
         finally
         {
             BackupStore.Close();
-            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, previousHome);
+            Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, previousHome);
         }
     }
 
@@ -313,11 +313,11 @@ public sealed class BackupStoreTests : IDisposable
         // one warn is logged and every Record is a silent no-op that never throws.
         var blocker = Path.Combine(Path.GetTempPath(), "pathhide-blocked-" + NanoId.New());
         File.WriteAllText(blocker, "not a directory"); // a file where the store expects a directory
-        var previousHome = Environment.GetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable);
+        var previousHome = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
         try
         {
             BackupStore.Close();
-            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, blocker);
+            Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, blocker);
 
             // The record must not throw even though the store cannot be opened (best-effort contract).
             var exception = Record.Exception(() =>
@@ -327,7 +327,7 @@ public sealed class BackupStoreTests : IDisposable
         finally
         {
             BackupStore.Close();
-            Environment.SetEnvironmentVariable(StorageRoot.HomeEnvironmentVariable, previousHome);
+            Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, previousHome);
             try { File.Delete(blocker); } catch { /* best-effort */ }
         }
     }
