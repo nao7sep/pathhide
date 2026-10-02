@@ -12,7 +12,7 @@ using Xunit;
 namespace PathHide.Tests.Views;
 
 /// <summary>
-/// The window's minimum size is derived, not guessed (per the window-chrome conventions):
+/// The window's minimum size derivation (window conventions, Content-based minimum size):
 /// <see cref="WindowMetrics"/> sums the live DataGrid column minimums plus fixed chrome so the
 /// window can never shrink small enough to hide the toolbar, list, or status bar. These tests
 /// pin the derivation math directly (no Avalonia headless harness, matching the suite's

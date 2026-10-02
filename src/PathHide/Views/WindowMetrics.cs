@@ -4,11 +4,10 @@ using System.Linq;
 namespace PathHide.Views;
 
 /// <summary>
-/// Derives the main window's minimum size from the layout itself, per the window-chrome
-/// conventions: the minimum is the sum of the content panes' real minimums plus the fixed
-/// chrome — never a hand-typed magic constant. The path-list DataGrid is the single content
-/// pane, so its column minimums drive the window's minimum width; the toolbar, status bar,
-/// and a few visible data rows drive the minimum height.
+/// Derives the main window's minimum size from the layout itself (window conventions,
+/// Content-based minimum size). The path-list DataGrid is the single content pane, so its
+/// column minimums drive the window's minimum width; the toolbar, status bar, and a few
+/// visible data rows drive the minimum height.
 /// </summary>
 /// <remarks>
 /// Kept as a pure function over the column minimums (read from the live grid by the caller)
