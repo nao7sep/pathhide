@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
 using PathHide.Models;
 using PathHide.Services;
 using Xunit;
@@ -13,7 +16,8 @@ public sealed class SessionLoggerTests
     private static readonly DateTimeOffset SessionStart = new(2026, 10, 2, 9, 30, 15, 123, TimeSpan.Zero);
 
     private static SessionLogger NewLogger(StringWriter sw, bool debug = true) =>
-        new(SessionStart, new TextWriterLogSink(sw, leaveOpen: true), fallbackDirectory: null, debug);
+        new(SessionStart, new TextWriterLogSink(sw, leaveOpen: true), fallbackDirectory: null, debug,
+            writeInBackground: false);
 
     private static List<JsonNode> Lines(StringWriter sw)
     {
@@ -244,7 +248,7 @@ public sealed class SessionLoggerTests
     public void Without_a_sink_entries_go_to_the_sessions_fallback_file()
     {
         using var temp = new TempDirectory();
-        var log = new SessionLogger(SessionStart, sink: null, temp.Path, debugEnabled: true);
+        var log = new SessionLogger(SessionStart, sink: null, temp.Path, debugEnabled: true, writeInBackground: false);
 
         log.Info("one");
         log.Info("two");
@@ -257,7 +261,7 @@ public sealed class SessionLoggerTests
     public void An_entry_the_sink_refuses_goes_to_the_fallback_file_with_the_reason()
     {
         using var temp = new TempDirectory();
-        var log = new SessionLogger(SessionStart, new ThrowingSink(), temp.Path, debugEnabled: true);
+        var log = new SessionLogger(SessionStart, new ThrowingSink(), temp.Path, debugEnabled: true, writeInBackground: false);
 
         var thrown = Record.Exception(() => log.Info("kept"));
 
@@ -276,7 +280,7 @@ public sealed class SessionLoggerTests
         using var temp = new TempDirectory();
         var blocked = Path.Combine(temp.Path, "not-a-folder");
         File.WriteAllText(blocked, "");
-        var log = new SessionLogger(SessionStart, new ThrowingSink(), blocked, debugEnabled: true);
+        var log = new SessionLogger(SessionStart, new ThrowingSink(), blocked, debugEnabled: true, writeInBackground: false);
         var originalErr = Console.Error;
         var console = new StringWriter();
         Console.SetError(console);
@@ -293,6 +297,105 @@ public sealed class SessionLoggerTests
 
         Assert.Contains("last resort", console.ToString());
         Assert.Contains("[logger] sink write failed: IOException: database is locked", console.ToString());
+    }
+
+    [Fact]
+    public async Task A_background_logger_returns_while_its_sink_is_still_writing()
+    {
+        var sink = new BlockingSink();
+        var log = new SessionLogger(SessionStart, sink, fallbackDirectory: null, debugEnabled: true, writeInBackground: true);
+
+        log.Info("first");
+        Assert.True(sink.Entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        var second = Task.Run(() => log.Info("second"), TestContext.Current.CancellationToken);
+        var returned = await Task.WhenAny(second, Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)) == second;
+        sink.Release.Set();
+        log.Dispose();
+
+        Assert.True(returned);
+        Assert.Equal(["first", "second"], sink.Messages);
+        Assert.True(sink.Disposed);
+    }
+
+    [Fact]
+    public void Closing_a_background_logger_writes_every_queued_entry_in_order()
+    {
+        var sink = new BlockingSink();
+        sink.Release.Set();
+        var log = new SessionLogger(SessionStart, sink, fallbackDirectory: null, debugEnabled: true, writeInBackground: true);
+
+        for (var i = 0; i < 50; i++)
+            log.Info("entry " + i);
+        log.Dispose();
+
+        Assert.Equal(Enumerable.Range(0, 50).Select(i => "entry " + i), sink.Messages);
+        Assert.True(sink.Disposed);
+    }
+
+    [Fact]
+    public void Closing_past_the_bound_sends_the_queued_entries_to_the_fallback_file()
+    {
+        using var temp = new TempDirectory();
+        var sink = new BlockingSink();
+        var log = new SessionLogger(SessionStart, sink, temp.Path, debugEnabled: true, writeInBackground: true);
+
+        log.Info("stuck");
+        Assert.True(sink.Entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        log.Info("queued");
+        log.Close(TimeSpan.FromMilliseconds(50));
+        var lines = File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-123-utc.log"));
+        sink.Release.Set();
+
+        Assert.Equal(2, lines.Length);
+        Assert.Equal("queued", JsonNode.Parse(lines[0])!["message"]!.GetValue<string>());
+        var note = JsonNode.Parse(lines[1])!;
+        Assert.Equal("error", note["level"]!.GetValue<string>());
+        Assert.Equal(1, note["fields"]!["left"]!.GetValue<int>());
+        Assert.False(sink.Disposed);
+    }
+
+    [Fact]
+    public void An_entry_after_a_background_logger_closes_goes_to_the_fallback_file()
+    {
+        using var temp = new TempDirectory();
+        var sink = new BlockingSink();
+        sink.Release.Set();
+        var log = new SessionLogger(SessionStart, sink, temp.Path, debugEnabled: true, writeInBackground: true);
+        log.Dispose();
+
+        log.Info("late");
+
+        Assert.Empty(sink.Messages);
+        var line = Assert.Single(File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-123-utc.log")));
+        Assert.Equal("late", JsonNode.Parse(line)!["message"]!.GetValue<string>());
+    }
+
+    private sealed class BlockingSink : ILogSink
+    {
+        private readonly List<string> _messages = [];
+
+        public ManualResetEventSlim Entered { get; } = new();
+        public ManualResetEventSlim Release { get; } = new();
+        public bool Disposed { get; private set; }
+
+        public IReadOnlyList<string> Messages
+        {
+            get
+            {
+                lock (_messages)
+                    return [.. _messages];
+            }
+        }
+
+        public void Write(LogEntry entry)
+        {
+            Entered.Set();
+            Release.Wait();
+            lock (_messages)
+                _messages.Add(entry.Message);
+        }
+
+        public void Dispose() => Disposed = true;
     }
 
     private sealed class ThrowingSink : ILogSink

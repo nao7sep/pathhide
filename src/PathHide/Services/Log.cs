@@ -32,9 +32,10 @@ public static class Log
 
     /// <summary>
     /// Begins logging this session to <paramref name="sink"/>, which the log then owns: the records
-    /// database in the app, the results file in the elevated child. An entry the sink cannot take, or
-    /// every entry when <paramref name="sink"/> is null, goes to the session's fallback file under
-    /// <paramref name="logsDirectory"/>. A second call is ignored and closes the sink it was given.
+    /// database in the app, the results file in the elevated child. Entries are written off the
+    /// caller's thread, so a slow or locked sink never holds the interface. An entry the sink cannot
+    /// take, or every entry when <paramref name="sink"/> is null, goes to the session's fallback file
+    /// under <paramref name="logsDirectory"/>. A second call is ignored and closes the sink it was given.
     /// </summary>
     public static void Start(ILogSink? sink, string logsDirectory)
     {
@@ -50,14 +51,14 @@ public static class Log
             InstallCrashHooks();
 
             var previous = _logger;
-            _logger = new SessionLogger(SessionStart, sink, logsDirectory, IsDebugEnabled());
+            _logger = new SessionLogger(SessionStart, sink, logsDirectory, IsDebugEnabled(), writeInBackground: true);
             previous.Dispose(); // console logger: leaveOpen, so this closes nothing
         }
     }
 
     /// <summary>
-    /// Closes the session's sink. Idempotent. Late events that arrive after shutdown fall back to the
-    /// console rather than being lost.
+    /// Writes the queued entries, within a bound, and closes the session's sink. Idempotent. Late events
+    /// that arrive after shutdown fall back to the console rather than being lost.
     /// </summary>
     public static void Shutdown()
     {
@@ -86,7 +87,8 @@ public static class Log
     public static void Error(string message, Exception exception, object? fields = null) => _logger.Error(message, exception, fields);
 
     private static SessionLogger CreateConsoleLogger() =>
-        new(SessionStart, new TextWriterLogSink(Console.Error, leaveOpen: true), fallbackDirectory: null, IsDebugEnabled());
+        new(SessionStart, new TextWriterLogSink(Console.Error, leaveOpen: true), fallbackDirectory: null, IsDebugEnabled(),
+            writeInBackground: false);
 
     // Debug is developer-only: on in a development (DEBUG) build, otherwise only when
     // PATHHIDE_DEBUG=1 is set. In a release build with no such variable it is off, so
@@ -108,8 +110,12 @@ public static class Log
 
         // Last-resort nets so the final lines before a crash are written.
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
             Error("unhandled exception; process terminating", e.ExceptionObject as Exception ?? new Exception("non-Exception throw"),
                 new { terminating = e.IsTerminating });
+            if (e.IsTerminating)
+                Shutdown();
+        };
 
         TaskScheduler.UnobservedTaskException += (_, e) =>
         {

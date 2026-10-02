@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Threading;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
@@ -10,7 +12,9 @@ namespace PathHide.Services;
 /// A small hand-rolled structured logger (logging conventions). Each call builds one
 /// <see cref="LogEntry"/>: the session, the time, level and message, the caller's free fields, and for
 /// errors the full exception (type, message, stack, and cause chain). The entry goes to the sink; one
-/// the sink could not take goes to the session's fallback file, and then to the console.
+/// the sink could not take goes to the session's fallback file, and then to the console. A logger that
+/// writes in the background stamps each entry on the caller's thread and writes it from its own, so a
+/// slow or locked sink never holds the caller.
 /// </summary>
 /// <remarks>
 /// It gates <c>debug</c> to developers, and by contract it never throws and never takes the app down
@@ -26,31 +30,49 @@ public sealed class SessionLogger : IDisposable
         Converters = { new JsonStringEnumConverter() },
     };
 
+    // PLAYBOOK, Own the work in flight: how long closing waits for the queued entries.
+    private static readonly TimeSpan DrainBound = TimeSpan.FromSeconds(5);
+
     private readonly DateTimeOffset _sessionStart;
     private readonly string _session;
     private readonly ILogSink? _sink;
     private readonly string? _fallbackDirectory;
-    private readonly object _gate = new();
-    private bool _disposed;
+    private readonly BlockingCollection<LogEntry>? _queue;
+    private readonly Thread? _writer;
+    private readonly object _sinkGate = new();
+    private readonly object _fallbackGate = new();
+    private readonly object _closeGate = new();
+    private bool _sinkClosed;
+    private bool _closed;
 
     /// <summary>
     /// Creates a logger for the session that started at <paramref name="sessionStart"/>, writing to
     /// <paramref name="sink"/>, which it owns. An entry the sink cannot take, or every entry when there is
     /// no sink, is appended to the session's file under <paramref name="fallbackDirectory"/>, and goes to
     /// the console when that fails too or there is none. When <paramref name="debugEnabled"/> is false,
-    /// <c>debug</c> calls are dropped.
+    /// <c>debug</c> calls are dropped. When <paramref name="writeInBackground"/> is true, entries are
+    /// written in order by the logger's own thread, and closing waits a bounded time for them.
     /// </summary>
     public SessionLogger(
         DateTimeOffset sessionStart,
         ILogSink? sink,
         string? fallbackDirectory,
-        bool debugEnabled)
+        bool debugEnabled,
+        bool writeInBackground)
     {
         _sessionStart = sessionStart;
         _session = Storage.FileTimestamp.SerializedStamp(sessionStart);
         _sink = sink;
         _fallbackDirectory = fallbackDirectory;
         DebugEnabled = debugEnabled;
+
+        if (writeInBackground)
+        {
+            _queue = new BlockingCollection<LogEntry>();
+            // A background thread, so a sink that never returns cannot keep the process alive.
+            _writer = new Thread(WriteQueued) { IsBackground = true, Name = "PathHide log writer" };
+            _writer.Start();
+        }
     }
 
     /// <summary>Whether developer-only <c>debug</c> events are written.</summary>
@@ -59,48 +81,78 @@ public sealed class SessionLogger : IDisposable
     public void Debug(string message, object? fields = null)
     {
         if (DebugEnabled)
-            Write(Build(LogLevel.Debug, message, null, fields));
+            Submit(Build(LogLevel.Debug, message, null, fields));
     }
 
     public void Debug(string message, Exception exception, object? fields = null)
     {
         if (DebugEnabled)
-            Write(Build(LogLevel.Debug, message, exception, fields));
+            Submit(Build(LogLevel.Debug, message, exception, fields));
     }
 
     public void Info(string message, object? fields = null) =>
-        Write(Build(LogLevel.Info, message, null, fields));
+        Submit(Build(LogLevel.Info, message, null, fields));
 
     public void Info(string message, Exception exception, object? fields = null) =>
-        Write(Build(LogLevel.Info, message, exception, fields));
+        Submit(Build(LogLevel.Info, message, exception, fields));
 
     public void Warn(string message, object? fields = null) =>
-        Write(Build(LogLevel.Warn, message, null, fields));
+        Submit(Build(LogLevel.Warn, message, null, fields));
 
     public void Warn(string message, Exception exception, object? fields = null) =>
-        Write(Build(LogLevel.Warn, message, exception, fields));
+        Submit(Build(LogLevel.Warn, message, exception, fields));
 
     public void Error(string message, object? fields = null) =>
-        Write(Build(LogLevel.Error, message, null, fields));
+        Submit(Build(LogLevel.Error, message, null, fields));
 
     public void Error(string message, Exception exception, object? fields = null) =>
-        Write(Build(LogLevel.Error, message, exception, fields));
+        Submit(Build(LogLevel.Error, message, exception, fields));
 
     /// <summary>Writes entries another process logged, as it logged them.</summary>
     public void Import(IEnumerable<LogEntry> entries)
     {
         foreach (var entry in entries)
-            Write(entry);
+            Submit(entry);
     }
 
-    public void Dispose()
-    {
-        lock (_gate)
-        {
-            if (_disposed)
-                return;
-            _disposed = true;
+    /// <summary>Writes what is queued, within the bound, and closes the sink.</summary>
+    public void Dispose() => Close(DrainBound);
 
+    /// <summary>
+    /// Closes the logger, waiting at most <paramref name="drainBound"/> for the queued entries. When the
+    /// sink is still busy after that, the entries left in the queue go to the fallback file, and the sink
+    /// is left to the writer thread rather than closed under it.
+    /// </summary>
+    internal void Close(TimeSpan drainBound)
+    {
+        lock (_closeGate)
+        {
+            if (_closed)
+                return;
+            _closed = true;
+        }
+
+        if (_queue is not null)
+        {
+            _queue.CompleteAdding();
+            if (!_writer!.Join(drainBound))
+            {
+                var left = 0;
+                while (_queue.TryTake(out var entry))
+                {
+                    WriteFallback(entry, sinkError: null);
+                    left++;
+                }
+                WriteFallback(Build(LogLevel.Error, "logger: the sink did not finish before closing",
+                    null, new { waitedMs = (long)drainBound.TotalMilliseconds, left }), sinkError: null);
+                return;
+            }
+            _queue.Dispose();
+        }
+
+        lock (_sinkGate)
+        {
+            _sinkClosed = true;
             try { _sink?.Dispose(); }
             catch (Exception ex)
             {
@@ -109,13 +161,37 @@ public sealed class SessionLogger : IDisposable
         }
     }
 
+    private void Submit(LogEntry entry)
+    {
+        if (_queue is null)
+        {
+            Write(entry);
+            return;
+        }
+
+        try
+        {
+            _queue.Add(entry);
+        }
+        catch (InvalidOperationException)
+        {
+            // Closed: the sink is closing or closed, so the entry goes straight to the fallback.
+            WriteFallback(entry, sinkError: null);
+        }
+    }
+
+    private void WriteQueued()
+    {
+        foreach (var entry in _queue!.GetConsumingEnumerable())
+            Write(entry);
+    }
+
     private void Write(LogEntry entry)
     {
-        // Under the lock, so entries reach the sink in the order they were stamped.
-        lock (_gate)
+        Exception? sinkError = null;
+        lock (_sinkGate)
         {
-            Exception? sinkError = null;
-            if (_sink is not null && !_disposed)
+            if (_sink is not null && !_sinkClosed)
             {
                 try
                 {
@@ -127,7 +203,15 @@ public sealed class SessionLogger : IDisposable
                     sinkError = ex;
                 }
             }
+        }
 
+        WriteFallback(entry, sinkError);
+    }
+
+    private void WriteFallback(LogEntry entry, Exception? sinkError)
+    {
+        lock (_fallbackGate)
+        {
             if (_fallbackDirectory is not null)
             {
                 try
