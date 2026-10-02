@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace PathHide.Services;
@@ -13,21 +12,12 @@ namespace PathHide.Services;
 /// </summary>
 /// <remarks>
 /// The facade is a thin pass-through; the testable behavior lives in
-/// <see cref="SessionLogger"/> and <see cref="LogRedactor"/>. The free-field overloads
+/// <see cref="SessionLogger"/>. The free-field overloads
 /// mirror the logger: <c>Level(message, fields)</c> for a plain event and
 /// <c>Level(message, exception, fields)</c> when an exception is in play.
 /// </remarks>
 public static class Log
 {
-    // The obvious secrets, per the conventions' seed set. PathHide logs none of these
-    // today — it deals in file paths, not credentials — but the redactor is a
-    // mandatory backstop, and each app extends its own set as needed.
-    private static readonly IReadOnlySet<string> DeniedKeys =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "apiKey", "authorization", "token", "password", "secret",
-        };
-
     private static readonly object Gate = new();
 
     // Always non-null: a console-backed logger until Start swaps in the file-backed
@@ -57,7 +47,7 @@ public static class Log
             SessionLogger fileLogger;
             try
             {
-                fileLogger = new SessionLogger(SessionLog.OpenWriter(logsDirectory), IsDebugEnabled(), DeniedKeys);
+                fileLogger = new SessionLogger(SessionLog.OpenWriter(logsDirectory), IsDebugEnabled());
             }
             catch (Exception ex)
             {
@@ -104,7 +94,7 @@ public static class Log
     public static void Error(string message, Exception exception, object? fields = null) => _logger.Error(message, exception, fields);
 
     private static SessionLogger CreateConsoleLogger() =>
-        new(Console.Error, IsDebugEnabled(), DeniedKeys, leaveOpen: true);
+        new(Console.Error, IsDebugEnabled(), leaveOpen: true);
 
     // Debug is developer-only: on in a development (DEBUG) build, otherwise only when
     // PATHHIDE_DEBUG=1 is set. In a release build with no such variable it is off, so

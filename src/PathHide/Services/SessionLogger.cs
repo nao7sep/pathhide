@@ -19,15 +19,14 @@ namespace PathHide.Services;
 /// </summary>
 /// <remarks>
 /// The logger owns a <see cref="TextWriter"/> and writes under a lock. It gates
-/// <c>debug</c> to developers, runs the mandatory <see cref="LogRedactor"/> over the
-/// free fields, flushes <c>warn</c> / <c>error</c> / <c>debug</c> immediately (while
+/// <c>debug</c> to developers, flushes <c>warn</c> / <c>error</c> / <c>debug</c> immediately (while
 /// <c>info</c> may stay buffered), and degrades to the console if the writer ever
 /// fails. By contract it never throws and never takes the app down because logging
 /// failed.
 /// </remarks>
 public sealed class SessionLogger : IDisposable
 {
-    // Free fields are serialized to a node tree so the redactor can walk them.
+    // Free fields are serialized to a node tree so they can be merged into the envelope.
     // Enums are written by name (readable logs); named float literals (NaN, ±∞) are
     // intentionally NOT allowed here — if a caller passes one, serialization fails
     // and Write falls back to a minimal hand-built line rather than emitting
@@ -51,26 +50,22 @@ public sealed class SessionLogger : IDisposable
 
     private readonly TextWriter _writer;
     private readonly bool _leaveOpen;
-    private readonly IReadOnlySet<string> _deniedKeys;
     private readonly object _gate = new();
     private bool _disposed;
 
     /// <summary>
     /// Creates a logger over <paramref name="writer"/>. When
     /// <paramref name="debugEnabled"/> is false, <see cref="Debug(string, object?)"/>
-    /// calls are dropped. <paramref name="deniedKeys"/> must use a case-insensitive
-    /// comparer. Set <paramref name="leaveOpen"/> for shared writers (the console)
+    /// calls are dropped. Set <paramref name="leaveOpen"/> for shared writers (the console)
     /// that this logger must not close on <see cref="Dispose"/>.
     /// </summary>
     public SessionLogger(
         TextWriter writer,
         bool debugEnabled,
-        IReadOnlySet<string> deniedKeys,
         bool leaveOpen = false)
     {
         _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         DebugEnabled = debugEnabled;
-        _deniedKeys = deniedKeys ?? throw new ArgumentNullException(nameof(deniedKeys));
         _leaveOpen = leaveOpen;
     }
 
@@ -208,10 +203,7 @@ public sealed class SessionLogger : IDisposable
             // Free fields are named values by contract: a non-object (someone passed a
             // bare string or number) has no field names and is ignored.
             if (node is JsonObject fieldObj)
-            {
-                LogRedactor.Redact(fieldObj, _deniedKeys);
                 MergeFields(root, fieldObj);
-            }
         }
 
         if (exception is not null)
