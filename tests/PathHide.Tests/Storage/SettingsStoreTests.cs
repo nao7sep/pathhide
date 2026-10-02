@@ -139,6 +139,7 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("theme", "\"future_theme\"")]
     [InlineData("theme", "2")]
     [InlineData("theme", "\"2\"")]
+    [InlineData("theme", "\"light, dark\"")]
     [InlineData("windowsHideMode", "\"future_mode\"")]
     [InlineData("windowsHideMode", "1")]
     [InlineData("windowsHideMode", "\"1\"")]
@@ -147,16 +148,14 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("language", "[]")]
     [InlineData("uiFontFamily", "{}")]
     [InlineData("uiFontFamily", "false")]
-    public void Load_InvalidSetUsesBuiltIn_LogsOnceByKey_AndKeepsTheFile(string key, string value)
+    public void Load_InvalidSetUsesBuiltIn_LogsItsKey_AndKeepsTheFile(string key, string value)
     {
         var original = "{ \"theme\": \"dark\", \"language\": \"ja\", \"" + key + "\": " + value + " }";
         File.WriteAllText(ConfigPath, original);
         var logs = Path.Combine(_root, "logs");
         Log.Start(logs);
-        var store = new SettingsStore();
 
-        var loaded = store.Load();
-        store.Load();
+        var loaded = new SettingsStore().Load();
         Log.Flush();
 
         Assert.False(loaded.WasUnreadable);

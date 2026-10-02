@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using PathHide.I18n;
 using PathHide.Models;
 
@@ -14,6 +15,12 @@ internal static class SettingsSets
     internal const string UiFontFamily = "uiFontFamily";
     internal const string Theme = "theme";
     internal const string WindowsHideMode = "windowsHideMode";
+
+    // Settings only: the shared options also read paths.json, whose enums keep their own reading.
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false) },
+    };
 
     internal static AppSettings Read(IReadOnlyDictionary<string, JsonElement> sets, out List<string> invalidKeys)
     {
@@ -43,25 +50,16 @@ internal static class SettingsSets
         {
             if (!sets.TryGetValue(key, out var copy))
                 return builtIn;
-
-            // Both enum sets are strings on disk, in snake_case.
-            if (copy.ValueKind == JsonValueKind.String)
+            try
             {
-                try
-                {
-                    var value = copy.Deserialize<T>(JsonOptions.Default);
-                    if (Enum.IsDefined(value)
-                        && string.Equals(copy.GetString(),
-                            JsonSerializer.SerializeToElement(value, JsonOptions.Default).GetString(),
-                            StringComparison.OrdinalIgnoreCase))
-                        return value;
-                }
-                catch (JsonException)
-                {
-                    // A malformed copy affects this set only; the surrounding map is still usable.
-                }
+                // The converter combines a comma-separated list into a value no member names.
+                var value = copy.Deserialize<T>(Options);
+                if (Enum.IsDefined(value))
+                    return value;
             }
-
+            catch (JsonException)
+            {
+            }
             invalid.Add(key);
             return builtIn;
         }
@@ -82,7 +80,7 @@ internal static class SettingsSets
         void Add<T>(string key, T value, T builtInValue)
         {
             if (!EqualityComparer<T>.Default.Equals(value, builtInValue))
-                sets[key] = JsonSerializer.SerializeToElement(value, JsonOptions.Default);
+                sets[key] = JsonSerializer.SerializeToElement(value, Options);
         }
     }
 
