@@ -93,9 +93,12 @@ public class TranslatorTests
     public void a_language_missing_a_key_falls_back_to_english()
     {
         // Every catalogue has every key today, and the gate keeps it that way; this is what a reader
-        // would get if one ever slipped through.
-        var japanese = new Translator("ja", CultureInfo.GetCultureInfo("ja"));
-        Assert.Equal(InEnglish.T("nothing.here"), japanese.T("nothing.here"));
+        // would get if one ever slipped through. The English sentence also takes English's plural
+        // form: Japanese has only "other", which would read "1 entries".
+        var withoutTheKey = Catalogue.Parse("ja", "{}");
+        var japanese = new Translator(
+            "ja", CultureInfo.GetCultureInfo("ja"), withoutTheKey, Catalogue.For(Languages.English));
+        Assert.Equal("1 entry", japanese.T("status.entries", ("count", 1)));
     }
 
     [Fact]

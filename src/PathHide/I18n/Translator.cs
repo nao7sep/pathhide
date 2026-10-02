@@ -22,11 +22,17 @@ internal sealed class Translator
     internal CultureInfo Culture { get; }
 
     internal Translator(string tag, CultureInfo culture)
+        : this(tag, culture, Catalogue.For(tag), Catalogue.For(Languages.English))
+    {
+    }
+
+    /// <summary>A translator over the given catalogues, so a test can hand it one missing a key.</summary>
+    internal Translator(string tag, CultureInfo culture, Catalogue catalogue, Catalogue english)
     {
         Tag = tag;
         Culture = culture;
-        _catalogue = Catalogue.For(tag);
-        _english = tag == Languages.English ? _catalogue : Catalogue.For(Languages.English);
+        _catalogue = catalogue;
+        _english = english;
     }
 
     /// <summary>The words for <paramref name="key"/>, with its values filled in.</summary>
