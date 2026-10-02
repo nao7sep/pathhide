@@ -1104,6 +1104,29 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task TryApplySettings_FailureStillReportsAConfigSetAsideDuringTheSave()
+    {
+        var settingsStore = new FakeSettingsStore { ThrowOnSave = true };
+        var vm = new MainWindowViewModel(
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore,
+            settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+        (Message Title, Message Body)? shown = null;
+        vm.ShowNoticeAsync = (title, body) =>
+        {
+            shown = (title, body);
+            return Task.CompletedTask;
+        };
+        // The save's load finds config unreadable and sets it aside before the write fails.
+        PathHide.Storage.QuarantineJournal.Record("settings", "/home/u/.pathhide/config-20261002-000000-000-utc.invalid");
+
+        var failure = await vm.TryApplySettingsAsync(Languages.System, string.Empty, hiddenAndSystem: false, ThemePreference.Dark);
+
+        Assert.Contains("Settings could not be saved", English.Of(failure));
+        Assert.Equal("quarantine.settingsTitle", shown!.Value.Title.Key);
+        Assert.Empty(PathHide.Storage.QuarantineJournal.Drain());
+    }
+
+    [Fact]
     public async Task IndependentOperationalFailuresStackUntilTheirOwnerRecoversOrTheyAreDismissed()
     {
         var visibility = new FakeVisibilityService();

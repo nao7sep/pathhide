@@ -694,6 +694,8 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// Saves the Settings draft atomically, off the UI thread, and publishes the draft only after
     /// disk agrees. Returns what to tell the reader when the save failed, or null when it landed.
+    /// The save loads config first, so it can set aside a file changed since the dialog opened; that
+    /// is reported whether the save then lands or fails.
     /// </summary>
     public async Task<Message?> TryApplySettingsAsync(
         string language, string family, bool hiddenAndSystem, ThemePreference theme)
@@ -716,6 +718,7 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             Log.Error("settings: save failed", ex);
+            await ReportQuarantinesAsync();
             return FailurePresentation.SettingsSave(ex);
         }
 
@@ -736,7 +739,6 @@ public partial class MainWindowViewModel : ObservableObject
 
         // Last, once disk agrees: a language change redraws everything already on screen.
         Localizer.Use(language, ComputerLanguages);
-        // The set patch re-reads config, so it can quarantine a file changed since the dialog opened.
         await ReportQuarantinesAsync();
         return null;
     }
