@@ -1,12 +1,6 @@
 namespace PathHide.Storage;
 
 /// <summary>
-/// Load/save contract for a JSON-backed document. Exists so callers (notably
-/// <see cref="PathHide.ViewModels.MainWindowViewModel"/>) can depend on the
-/// persistence behaviour without binding to <see cref="JsonStore{T}"/>'s file
-/// I/O, which keeps that orchestration unit-testable with in-memory fakes.
-/// </summary>
-/// <summary>
 /// The outcome of a load: the value, and whether the live file was present but
 /// unreadable (and so has been set aside).
 /// </summary>
@@ -19,9 +13,14 @@ namespace PathHide.Storage;
 /// </remarks>
 public readonly record struct LoadedStore<T>(T Value, bool WasUnreadable);
 
+/// <summary>
+/// Load/save contract for a JSON-backed document. Exists so callers (notably
+/// <see cref="PathHide.ViewModels.MainWindowViewModel"/>) can depend on the
+/// persistence behaviour without binding to <see cref="JsonStore{T}"/>'s file
+/// I/O, which keeps that orchestration unit-testable with in-memory fakes.
+/// </summary>
 public interface IJsonStore<T> where T : class, new()
 {
     LoadedStore<T> Load();
     void Save(T value);
-
 }

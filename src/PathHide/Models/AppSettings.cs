@@ -57,5 +57,4 @@ public sealed class AppSettings
     public ThemePreference Theme { get; set; } = ThemePreference.System;
 
     public WindowsHideMode WindowsHideMode { get; set; } = WindowsHideMode.HiddenOnly;
-
 }

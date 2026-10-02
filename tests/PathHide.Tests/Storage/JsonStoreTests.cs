@@ -56,11 +56,17 @@ public sealed class JsonStoreTests : IDisposable
 
     private string PathOf(string fileName) => Path.Combine(_root, fileName);
 
+    public sealed class TestDocument
+    {
+        public WindowsHideMode WindowsHideMode { get; set; }
+        public ThemePreference Theme { get; set; }
+    }
+
     [Fact]
     public void SaveThenLoad_RoundTripsValue()
     {
-        var store = new JsonStore<AppSettings>("config.json", "settings");
-        store.Save(new AppSettings
+        var store = new JsonStore<TestDocument>("config.json", "settings");
+        store.Save(new TestDocument
         {
             WindowsHideMode = WindowsHideMode.HiddenAndSystem,
             Theme = ThemePreference.Dark,
@@ -97,11 +103,10 @@ public sealed class JsonStoreTests : IDisposable
     [Fact]
     public void Load_MissingFile_ReturnsDefault()
     {
-        var store = new JsonStore<AppSettings>("config.json", "settings");
+        var store = new JsonStore<TestDocument>("config.json", "settings");
 
         var loaded = store.Load().Value;
 
-        // Default-constructed AppSettings.
         Assert.Equal(WindowsHideMode.HiddenOnly, loaded.WindowsHideMode);
         Assert.False(File.Exists(PathOf("config.json")));
     }
@@ -162,7 +167,7 @@ public sealed class JsonStoreTests : IDisposable
         var targetPath = PathOf("config.json");
         var timestamp = new DateTimeOffset(2026, 7, 1, 2, 22, 20, 7, TimeSpan.Zero);
 
-        var quarantinePath = JsonStore<AppSettings>.QuarantinePath(targetPath, timestamp);
+        var quarantinePath = JsonStore<TestDocument>.QuarantinePath(targetPath, timestamp);
 
         Assert.Equal(PathOf("config-20260701-022220-007-utc.invalid"), quarantinePath);
     }
@@ -199,9 +204,9 @@ public sealed class JsonStoreTests : IDisposable
     [Fact]
     public void Save_FirstTime_CreatesLiveFileAndNoBak()
     {
-        var store = new JsonStore<AppSettings>("config.json", "settings");
+        var store = new JsonStore<TestDocument>("config.json", "settings");
 
-        store.Save(new AppSettings());
+        store.Save(new TestDocument());
 
         Assert.True(File.Exists(PathOf("config.json")));
         // The .bak sidecar is retired: a first save writes exactly the live file.
@@ -211,9 +216,9 @@ public sealed class JsonStoreTests : IDisposable
     [Fact]
     public void Save_SecondTime_ReplacesLiveFileAndWritesNoBak()
     {
-        var store = new JsonStore<AppSettings>("config.json", "settings");
-        store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenOnly });
-        store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
+        var store = new JsonStore<TestDocument>("config.json", "settings");
+        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenOnly });
+        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
 
         var liveJson = File.ReadAllText(PathOf("config.json"));
 
@@ -225,9 +230,9 @@ public sealed class JsonStoreTests : IDisposable
     [Fact]
     public void Save_LeavesNoTempFiles()
     {
-        var store = new JsonStore<AppSettings>("config.json", "settings");
-        store.Save(new AppSettings());
-        store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
+        var store = new JsonStore<TestDocument>("config.json", "settings");
+        store.Save(new TestDocument());
+        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
 
         var temps = Directory.EnumerateFiles(_root, "*.tmp").ToList();
 
@@ -241,7 +246,7 @@ public sealed class JsonStoreTests : IDisposable
         // dot-appended suffix like "config.json.<x>.tmp".
         var targetPath = PathOf("config.json");
 
-        var tempPath = JsonStore<AppSettings>.TempPath(targetPath, "abc123");
+        var tempPath = JsonStore<TestDocument>.TempPath(targetPath, "abc123");
 
         Assert.Equal(PathOf("config-abc123.tmp"), tempPath);
     }
@@ -249,8 +254,8 @@ public sealed class JsonStoreTests : IDisposable
     [Fact]
     public void Save_WritesCamelCasePropertiesAndSnakeCaseEnums()
     {
-        var store = new JsonStore<AppSettings>("config.json", "settings");
-        store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
+        var store = new JsonStore<TestDocument>("config.json", "settings");
+        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
 
         var json = File.ReadAllText(PathOf("config.json"));
 
@@ -266,10 +271,10 @@ public sealed class JsonStoreTests : IDisposable
         // The durable settings live in config.json; the user's path list lives in
         // paths.json. They are separate roles and must never collapse onto one file.
         // This guards the settings-file rename.
-        var settingsStore = new JsonStore<AppSettings>("config.json", "settings");
+        var settingsStore = new JsonStore<TestDocument>("config.json", "settings");
         var pathListStore = new JsonStore<List<PathEntry>>("paths.json", "paths");
 
-        settingsStore.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
+        settingsStore.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
         pathListStore.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
 
         Assert.True(File.Exists(PathOf("config.json")));
@@ -339,8 +344,8 @@ public sealed class JsonStoreTests : IDisposable
     [Fact]
     public void Save_RecordsTheExactBytesOnDisk_KeyedByTheFinalPath_NeverTheTemp()
     {
-        var store = new JsonStore<AppSettings>("config.json", "settings");
-        store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
+        var store = new JsonStore<TestDocument>("config.json", "settings");
+        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
 
         var onDisk = File.ReadAllBytes(PathOf("config.json"));
         var recorded = RecordedContentsFor(PathOf("config.json"));
@@ -358,7 +363,7 @@ public sealed class JsonStoreTests : IDisposable
     {
         // Both managed text files are recorded on save: config.json (durable settings) and paths.json (the
         // user's tracked path list). Neither is excluded; the store's default is to capture managed text.
-        new JsonStore<AppSettings>("config.json", "settings").Save(new AppSettings());
+        new JsonStore<TestDocument>("config.json", "settings").Save(new TestDocument());
         new JsonStore<List<PathEntry>>("paths.json", "paths")
             .Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
 
@@ -372,7 +377,7 @@ public sealed class JsonStoreTests : IDisposable
         // Volatile state (window geometry) is written atomically like any store but never recorded.
         var stateStore = new JsonStore<AppState>("state.json", "state", recordBackup: false);
         stateStore.Save(new AppState());
-        new JsonStore<AppSettings>("config.json", "settings").Save(new AppSettings());
+        new JsonStore<TestDocument>("config.json", "settings").Save(new TestDocument());
 
         Assert.True(File.Exists(PathOf("state.json")));
         Assert.Empty(RecordedContentsFor(PathOf("state.json")));
@@ -382,12 +387,12 @@ public sealed class JsonStoreTests : IDisposable
     [Fact]
     public void Save_UnchangedResave_RecordsNoSecondVersion_ButAChangedSaveDoes()
     {
-        var store = new JsonStore<AppSettings>("config.json", "settings");
-        store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenOnly });
-        store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenOnly });  // identical -> deduped
+        var store = new JsonStore<TestDocument>("config.json", "settings");
+        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenOnly });
+        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenOnly });  // identical -> deduped
         Assert.Single(RecordedContentsFor(PathOf("config.json")));
 
-        store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem }); // changed -> row
+        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem }); // changed -> row
         Assert.Equal(2, RecordedContentsFor(PathOf("config.json")).Count);
     }
 
@@ -400,9 +405,9 @@ public sealed class JsonStoreTests : IDisposable
         BackupStore.Close();
         File.WriteAllText(PathOf("backups.sqlite3"), "not a database");
 
-        var store = new JsonStore<AppSettings>("config.json", "settings");
+        var store = new JsonStore<TestDocument>("config.json", "settings");
         var exception = Xunit.Record.Exception(() =>
-            store.Save(new AppSettings { WindowsHideMode = WindowsHideMode.HiddenAndSystem }));
+            store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem }));
 
         Assert.Null(exception);
         Assert.True(File.Exists(PathOf("config.json")));

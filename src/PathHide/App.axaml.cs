@@ -102,6 +102,11 @@ public partial class App : Application
                 return;
             }
 
+            // Removes temp files an earlier session had to leave behind a still-running elevated child;
+            // off the UI thread, and only files whose owning process has exited.
+            if (OperatingSystem.IsWindows())
+                _ = Task.Run(() => ElevatedApplyFiles.SweepLeftovers(System.IO.Path.GetTempPath()));
+
             // Before the main window exists, so its first frame and title bar take the saved theme.
             AppTheme.Apply(viewModel.Theme);
             var mainWindow = new MainWindow
@@ -176,17 +181,10 @@ public partial class App : Application
             ? new WindowsVisibilityService(() => settings.WindowsHideMode)
             : new MacVisibilityService();
 
-        // Only Windows has an elevation step for access-denied paths. The sweep removes temp files an
-        // earlier session had to leave behind a still-running elevated child; off the UI thread, and
-        // only files whose owning process has exited.
-        IElevatedApplicator? elevatedApplicator = null;
-        if (OperatingSystem.IsWindows())
-        {
-            var tempDirectory = System.IO.Path.GetTempPath();
-            elevatedApplicator = new ElevatedApplicator(
-                WindowsElevatedChild.LaunchAsync, tempDirectory, StorageRoot.Directory);
-            _ = Task.Run(() => ElevatedApplyFiles.SweepLeftovers(tempDirectory));
-        }
+        // Only Windows has an elevation step for access-denied paths.
+        IElevatedApplicator? elevatedApplicator = OperatingSystem.IsWindows()
+            ? new ElevatedApplicator(WindowsElevatedChild.LaunchAsync, System.IO.Path.GetTempPath(), StorageRoot.Directory)
+            : null;
 
         return new MainWindowViewModel(new BoundedVisibility(visibilityService), pathListStore, settingsStore, settings, stateStore, state)
         {

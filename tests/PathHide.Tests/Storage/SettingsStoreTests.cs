@@ -75,7 +75,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Dark));
 
         Assert.Equal("dark", Assert.Single(StoredSets()).Value.GetString());
-        Assert.Equal(SettingsSets.Theme, Assert.Single(StoredSets()).Key);
+        Assert.Equal("theme", Assert.Single(StoredSets()).Key);
 
         File.Delete(ConfigPath);
         var relaunched = App.CreateMainViewModel();
@@ -159,8 +159,8 @@ public sealed class SettingsStoreTests : IDisposable
         Log.Flush();
 
         Assert.False(loaded.WasUnreadable);
-        Assert.Equal(key == SettingsSets.Theme ? ThemePreference.System : ThemePreference.Dark, loaded.Value.Theme);
-        Assert.Equal(key == SettingsSets.Language ? Languages.System : "ja", loaded.Value.Language);
+        Assert.Equal(key == "theme" ? ThemePreference.System : ThemePreference.Dark, loaded.Value.Theme);
+        Assert.Equal(key == "language" ? Languages.System : "ja", loaded.Value.Language);
         Assert.Equal(string.Empty, loaded.Value.UiFontFamily);
         Assert.Equal(WindowsHideMode.HiddenOnly, loaded.Value.WindowsHideMode);
         Assert.Equal(original, File.ReadAllText(ConfigPath));
@@ -262,7 +262,7 @@ public sealed class SettingsStoreTests : IDisposable
 
         Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Dark));
 
-        Assert.Equal(SettingsSets.Theme, Assert.Single(StoredSets()).Key);
+        Assert.Equal("theme", Assert.Single(StoredSets()).Key);
         Assert.Equal(corrupt, File.ReadAllText(Assert.Single(Directory.GetFiles(_root, "config-*.invalid"))));
         Assert.Equal(Message.Of("quarantine.settingsTitle"), Assert.Single(notices).Title);
         Assert.Equal(Message.Of("quarantine.settingsBody"), Assert.Single(notices).Body);

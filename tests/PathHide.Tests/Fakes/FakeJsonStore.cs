@@ -47,5 +47,4 @@ public class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
         LastSaved = value;
         Value = value;
     }
-
 }
