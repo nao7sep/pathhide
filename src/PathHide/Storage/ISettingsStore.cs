@@ -2,9 +2,13 @@ using PathHide.Models;
 
 namespace PathHide.Storage;
 
-/// <summary>Settings are read as effective values and saved only for the sets the user changed.</summary>
+/// <summary>Settings are read and written by set (config-sets-conventions).</summary>
 public interface ISettingsStore
 {
     LoadedStore<AppSettings> Load();
-    void SaveChanges(AppSettings previous, AppSettings current);
+    /// <summary>
+    /// Writes the file from <paramref name="current"/> when any set differs from <paramref name="previous"/>,
+    /// and returns whether it wrote.
+    /// </summary>
+    bool SaveChanges(AppSettings previous, AppSettings current);
 }

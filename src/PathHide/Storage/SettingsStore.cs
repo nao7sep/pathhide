@@ -1,12 +1,11 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
 using PathHide.Models;
 using PathHide.Services;
 
 namespace PathHide.Storage;
 
-/// <summary>Owns config's set-level reads and read-modify-write through the managed atomic JSON store.</summary>
+/// <summary>Owns config's set-level reads and writes through the managed atomic JSON store.</summary>
 public sealed class SettingsStore : ISettingsStore
 {
     private readonly JsonStore<Dictionary<string, JsonElement>> _store =
@@ -29,22 +28,21 @@ public sealed class SettingsStore : ISettingsStore
         }
     }
 
-    public void SaveChanges(AppSettings previous, AppSettings current)
+    public bool SaveChanges(AppSettings previous, AppSettings current)
     {
-        var changes = SettingsSets.Changes(previous, current);
-        if (changes.Count == 0)
-            return;
+        var sets = SettingsSets.Differing(current);
+        if (SettingsSets.SameSets(SettingsSets.Differing(previous), sets))
+            return false;
 
-        // The process holds SingleInstanceLease. This owner also locks the whole patch so its
-        // re-read and atomic write cannot overlap another settings operation within the process.
+        // The process holds SingleInstanceLease. This owner also locks the whole save so its
+        // load and atomic write cannot overlap another settings operation within the process.
         lock (_gate)
         {
-            var sets = _store.Load().Value;
-            foreach (var key in sets.Keys.Where(key => !SettingsSets.Keys.Contains(key)).ToArray())
-                sets.Remove(key);
-            foreach (var (key, value) in changes)
-                sets[key] = value;
+            // Loading first sets aside a file that cannot be read instead of writing over it
+            // (store-recovery-conventions); what it held is not carried into the new file.
+            _store.Load();
             _store.Save(sets);
         }
+        return true;
     }
 }

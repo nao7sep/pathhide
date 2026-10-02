@@ -50,15 +50,17 @@ internal static class Languages
     /// missing, blank or unrecognized value, so a hand-edited file can never leave the app without a
     /// language.
     /// </summary>
-    internal static string NormalizePreference(string? saved)
+    internal static string NormalizePreference(string? saved) => ParsePreference(saved) ?? System;
+
+    /// <summary>A saved preference as a tag in the set or <see cref="System"/>, or null when it is neither.</summary>
+    internal static string? ParsePreference(string? saved)
     {
         if (string.IsNullOrWhiteSpace(saved))
-            return System;
+            return null;
         var trimmed = saved.Trim();
         if (string.Equals(trimmed, System, StringComparison.OrdinalIgnoreCase))
             return System;
-        return Tags.FirstOrDefault(tag => string.Equals(tag, trimmed, StringComparison.OrdinalIgnoreCase))
-            ?? System;
+        return Tags.FirstOrDefault(tag => string.Equals(tag, trimmed, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

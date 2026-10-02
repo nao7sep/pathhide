@@ -692,7 +692,7 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Saves the changed Settings sets atomically, off the UI thread, and publishes the draft only after
+    /// Saves the Settings draft atomically, off the UI thread, and publishes the draft only after
     /// disk agrees. Returns what to tell the reader when the save failed, or null when it landed.
     /// </summary>
     public async Task<Message?> TryApplySettingsAsync(
@@ -707,10 +707,8 @@ public partial class MainWindowViewModel : ObservableObject
         {
             previous = await Task.Run(() => CommitSettings(candidate =>
             {
-                if (Languages.NormalizePreference(candidate.Language) != language)
-                    candidate.Language = language;
-                if (UiFontFamilyValue.Normalize(candidate.UiFontFamily) != family)
-                    candidate.UiFontFamily = family;
+                candidate.Language = language;
+                candidate.UiFontFamily = family;
                 candidate.WindowsHideMode = newMode;
                 candidate.Theme = theme;
             }));
@@ -773,10 +771,10 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Applies <paramref name="change"/> to a copy of the live settings, saves its changed sets, and only then
-    /// copies it into the live instance (which the Windows visibility service reads). Returns the
-    /// settings as they were before, or null when the change left them as they were, in which case
-    /// nothing is written. A failed save throws and leaves the live settings untouched.
+    /// Applies <paramref name="change"/> to a copy of the live settings, saves it, and only then copies it
+    /// into the live instance (which the Windows visibility service reads). Returns the settings as they
+    /// were before, or null when the store wrote nothing because no set changed. A failed save throws and
+    /// leaves the live settings untouched.
     /// </summary>
     /// <remarks>
     /// The Settings dialog is the one writer, and it holds while its save runs, so saves never overlap.
@@ -786,10 +784,8 @@ public partial class MainWindowViewModel : ObservableObject
         var previous = CopySettings();
         var candidate = CopySettings();
         change(candidate);
-        if (SettingsSets.Changes(previous, candidate).Count == 0)
+        if (!_settingsStore.SaveChanges(previous, candidate))
             return null;
-
-        _settingsStore.SaveChanges(previous, candidate);
 
         _settings.Language = candidate.Language;
         _settings.UiFontFamily = candidate.UiFontFamily;

@@ -112,7 +112,7 @@ public sealed class SettingsStoreTests : IDisposable
         }, out var invalid);
         Assert.Empty(invalid);
 
-        store.SaveChanges(previous, current);
+        Assert.True(store.SaveChanges(previous, current));
 
         var saved = Assert.Single(StoredSets());
         Assert.Equal(key, saved.Key);
@@ -143,6 +143,7 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("windowsHideMode", "1")]
     [InlineData("windowsHideMode", "\"1\"")]
     [InlineData("language", "null")]
+    [InlineData("language", "\"future-language\"")]
     [InlineData("language", "[]")]
     [InlineData("uiFontFamily", "{}")]
     [InlineData("uiFontFamily", "false")]
@@ -173,55 +174,59 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task DialogSave_PreservesUnknownLanguageAndExplicitFontWithoutRewritingThem()
+    public async Task DialogSave_DropsAnInvalidSet_AndStoresTheFontCleaned()
     {
         using var restoreLanguage = Localizer.Speaking(Localizer.Language);
         const string original = """{ "language": "future-language", "uiFontFamily": "  Inter  " }""";
         File.WriteAllText(ConfigPath, original);
         var vm = App.CreateMainViewModel();
         Assert.Equal(Languages.System, vm.Language);
-        Assert.Equal("  Inter  ", vm.UiFontFamily);
+        Assert.Equal("Inter", vm.UiFontFamily);
         Assert.Equal(Languages.System, LanguageBootstrap.SavedPreference());
         Assert.Equal(original, File.ReadAllText(ConfigPath));
 
         Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Dark));
 
         var sets = StoredSets();
-        Assert.Equal("future-language", sets[SettingsSets.Language].GetString());
-        Assert.Equal("  Inter  ", sets[SettingsSets.UiFontFamily].GetString());
-        Assert.Equal("dark", sets[SettingsSets.Theme].GetString());
-        Assert.False(sets.ContainsKey(SettingsSets.WindowsHideMode));
+        Assert.Equal(new[] { "theme", "uiFontFamily" }, sets.Keys.Order().ToArray());
+        Assert.Equal("Inter", sets["uiFontFamily"].GetString());
+        Assert.Equal("dark", sets["theme"].GetString());
     }
 
     [Fact]
-    public void SaveChanges_ReReadsCurrentMap_PreservesUntouchedCopies_AndDropsUnknownKeys()
+    public void SaveChanges_WritesTheFileFromTheDraft_DroppingBuiltInCopiesAndUnknownKeys()
     {
-        File.WriteAllText(ConfigPath, """{ "version": 7, "schemaVersion": 9, "theme": "system", "old": true }""");
+        File.WriteAllText(ConfigPath, """{ "version": 7, "theme": "system", "language": "ja", "windowsHideMode": "future_mode", "old": true }""");
         var store = new SettingsStore();
         var previous = store.Load().Value;
-        // Another settings writer's changes since the dialog opened must survive its unrelated Save.
-        File.WriteAllText(ConfigPath, """{ "version": 7, "schemaVersion": 9, "language": "ja", "uiFontFamily": "Inter", "theme": "system", "old": true }""");
 
-        store.SaveChanges(previous, new AppSettings { Theme = ThemePreference.Dark });
+        Assert.True(store.SaveChanges(previous, new AppSettings { Language = "ja", Theme = ThemePreference.Dark }));
 
         var sets = StoredSets();
-        Assert.Equal(new[] { SettingsSets.Language, SettingsSets.Theme, SettingsSets.UiFontFamily }, sets.Keys.Order().ToArray());
-        Assert.Equal("ja", sets[SettingsSets.Language].GetString());
-        Assert.Equal("Inter", sets[SettingsSets.UiFontFamily].GetString());
-        Assert.Equal("dark", sets[SettingsSets.Theme].GetString());
+        Assert.Equal(new[] { "language", "theme" }, sets.Keys.Order().ToArray());
+        Assert.Equal("ja", sets["language"].GetString());
+        Assert.Equal("dark", sets["theme"].GetString());
     }
 
     [Fact]
-    public void SaveChanges_SelectingTheBuiltInWritesTheChangedSetExplicitly()
+    public void SaveChanges_SelectingTheBuiltInRemovesTheSet_AndKeepsTheFile()
     {
         File.WriteAllText(ConfigPath, """{ "theme": "dark" }""");
         var store = new SettingsStore();
 
-        store.SaveChanges(store.Load().Value, new AppSettings());
+        Assert.True(store.SaveChanges(store.Load().Value, new AppSettings()));
 
-        var saved = Assert.Single(StoredSets());
-        Assert.Equal(SettingsSets.Theme, saved.Key);
-        Assert.Equal("system", saved.Value.GetString());
+        Assert.Empty(StoredSets());
+    }
+
+    [Fact]
+    public void SaveChanges_UnchangedAfterCleanupWritesNothing()
+    {
+        var store = new SettingsStore();
+
+        Assert.False(store.SaveChanges(new AppSettings(), new AppSettings { UiFontFamily = "  ", Language = " system " }));
+
+        Assert.False(File.Exists(ConfigPath));
     }
 
     [AvaloniaTheory]
