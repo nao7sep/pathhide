@@ -7,7 +7,7 @@ namespace PathHide.Storage;
 /// The machine-paced UTC filename stamp — <c>yyyyMMdd-HHmmss-fff-utc</c> — for names the app assigns at
 /// runtime as part of its own operation. The one current use is <see cref="JsonStore{T}.QuarantinePath"/>'s
 /// <c>&lt;stem&gt;-&lt;stamp&gt;.invalid</c> quarantine name; the same form is what <see cref="Services.SessionLog"/>
-/// uses for its per-launch log file, so the fleet has one machine-paced filename formatter rather than
+/// uses for a session's fallback log file, so the fleet has one machine-paced filename formatter rather than
 /// several (see the timestamp conventions).
 /// </summary>
 /// <remarks>

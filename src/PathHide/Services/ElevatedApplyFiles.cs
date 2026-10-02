@@ -8,8 +8,9 @@ namespace PathHide.Services;
 
 /// <summary>
 /// The two temp files one elevated apply uses: the request (the path lists the parent writes) and the
-/// results (one line per path the child writes back). Both are plain-text inventories of the paths the
-/// user is hiding, so every outcome removes them, and a launch removes any an earlier run had to leave.
+/// results (one line per path, and per log entry, the child writes back). Both are plain-text
+/// inventories of the paths the user is hiding, so every outcome removes them, and a launch removes any
+/// an earlier run had to leave.
 /// </summary>
 /// <remarks>
 /// Each name carries this host and this process id, so a later sweep can prove a file's owner is
@@ -36,34 +37,24 @@ public sealed record ElevatedApplyFiles(string RequestPath, string ResultsPath)
 
     /// <summary>
     /// The per-path outcomes the child has written so far, keyed by the exact path it was handed.
-    /// Read with write sharing, because a child that is still running holds the file open for writing.
     /// </summary>
     public IReadOnlyDictionary<string, bool> ReadResults()
     {
-        try
-        {
-            if (!File.Exists(ResultsPath))
-                return EmptyResults;
-
-            string text;
-            using (var stream = new FileStream(ResultsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            using (var reader = new StreamReader(stream, Encoding.UTF8))
-                text = reader.ReadToEnd();
-
-            var byPath = new Dictionary<string, bool>(StringComparer.Ordinal);
-            foreach (var result in ElevatedApplyResults.Parse(text))
-                byPath[result.Path] = result.Ok;
-            return byPath;
-        }
-        catch (Exception ex)
-        {
-            Log.Error("elevated apply: failed to read results file", ex, new { path = ResultsPath });
+        var text = ReadText(ResultsPath);
+        if (text is null)
             return EmptyResults;
-        }
+
+        var byPath = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var result in ElevatedApplyResults.Parse(text).Results)
+            byPath[result.Path] = result.Ok;
+        return byPath;
     }
 
-    /// <summary>Deletes both files. Returns whether neither is left.</summary>
-    public bool TryDelete() => TryDelete(RequestPath) & TryDelete(ResultsPath);
+    /// <summary>
+    /// Deletes both files, importing the child's log entries once its results file is gone, so each
+    /// entry is imported exactly once. Returns whether neither is left.
+    /// </summary>
+    public bool TryDelete() => TryDelete(RequestPath) & TryRemoveResults(ResultsPath);
 
     /// <summary>
     /// Deletes the files earlier runs left in <paramref name="directory"/>, but only those this host
@@ -96,7 +87,7 @@ public sealed record ElevatedApplyFiles(string RequestPath, string ResultsPath)
                 continue;
             }
 
-            if (TryDelete(path))
+            if (path.EndsWith(ResultsSuffix, StringComparison.Ordinal) ? TryRemoveResults(path) : TryDelete(path))
                 deleted++;
         }
 
@@ -158,6 +149,43 @@ public sealed record ElevatedApplyFiles(string RequestPath, string ResultsPath)
             // Unable to tell (e.g. access to another session's process): treat it as live and keep the file.
             return true;
         }
+    }
+
+    /// <summary>
+    /// The file's text, or null when it is absent or unreadable. Read with write sharing, because a child
+    /// that is still running holds the file open for writing.
+    /// </summary>
+    private static string? ReadText(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+                return null;
+
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            return reader.ReadToEnd();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("elevated apply: failed to read results file", ex, new { path });
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Deletes a results file and then imports the log entries it held. A file the child still holds open
+    /// fails to delete, so its entries wait with it for a later removal.
+    /// </summary>
+    private static bool TryRemoveResults(string path)
+    {
+        var text = ReadText(path);
+        if (!TryDelete(path))
+            return false;
+
+        if (text is not null)
+            Log.Import(ElevatedApplyResults.Parse(text).Entries);
+        return true;
     }
 
     private static bool TryDelete(string path)

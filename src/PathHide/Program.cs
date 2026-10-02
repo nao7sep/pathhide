@@ -29,7 +29,7 @@ sealed class Program
         // Resolve and create the storage root before anything else reads or writes it.
         // An unusable PATHHIDE_DATA_DIR (or an unwritable home) is a startup error we report
         // and STOP on — never a silent fallback that lets the app run unable to persist.
-        // This runs before Log.Start because the log directory itself lives under the
+        // This runs before Log.Start because the records database itself lives under the
         // root, and outside the try below so a bad root can never reach the UI.
         try
         {
@@ -53,9 +53,11 @@ sealed class Program
         }
         using var ownedInstance = instanceLease;
 
-        // One JSON-Lines file per launch under the app's logs directory; the logger
-        // installs its own crash hooks and console fallback.
-        Log.Start(StorageRoot.LogsDirectory);
+        // This process alone owns the records database; the logger installs its own crash hooks and
+        // falls back to the session's file under logs/.
+        Log.Start(RecordsStore.TryOpen(StorageRoot.RecordsFile, out var recordsFailure), StorageRoot.LogsDirectory);
+        if (recordsFailure is not null)
+            Log.Error("logger: could not open the records database", recordsFailure, new { file = StorageRoot.RecordsFile });
         var clean = true;
         try
         {
@@ -97,23 +99,36 @@ sealed class Program
 
     private static int RunApplyMode(string[] args)
     {
-        // Parsing writes nothing, so it runs before the logger opens: the parent's storage root has to
-        // be adopted first, so this session's log lands in the same tree as the GUI's. It arrives as an
+        // Parsing writes nothing, so it runs before the logger starts: the parent's storage root has to
+        // be adopted first, so a fallback log file lands in the same tree as the GUI's. It arrives as an
         // argument because the runas verb forces UseShellExecute, which forbids setting the child's
-        // environment block — without it a root relocated by PATHHIDE_DATA_DIR would be re-resolved to the
-        // default here, splitting the log trail for exactly the access-denied failures this pass
-        // exists to diagnose.
+        // environment block (see ElevatedApplyCommand.HomeOption).
         var invocation = ElevatedApplyCommand.ParseArguments(args);
         if (!string.IsNullOrWhiteSpace(invocation?.StorageRoot))
             Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, invocation.StorageRoot);
 
-        // The elevated apply pass is a genuinely separate OS process, so it gets its
-        // own per-session log file (co-located with the GUI process's logs).
-        Log.Start(StorageRoot.LogsDirectory);
+        // This process never opens the records database: its entries go into the results file it hands
+        // back, and the app imports them (logging conventions, multi-process apps). With no results file
+        // they go to this session's fallback file.
+        ElevatedResultsWriter? results = null;
+        Exception? resultsFailure = null;
+        if (invocation?.ResultsPath is { Length: > 0 } resultsPath)
+        {
+            try
+            {
+                results = ElevatedResultsWriter.Create(resultsPath);
+            }
+            catch (Exception ex)
+            {
+                resultsFailure = ex;
+            }
+        }
+
+        Log.Start(results, StorageRoot.LogsDirectory);
         var clean = true;
         try
         {
-            // The same baseline the GUI writes. This log sits beside the GUI's, and it is the
+            // The same baseline the GUI writes. These entries land beside the GUI's, and this is the
             // one session where "which binary ran elevated, and did it finish?" is the question
             // you need answered — so it carries the build and the outcome too, rather than three
             // apply lines with no version and no ending.
@@ -134,20 +149,18 @@ sealed class Program
                 return 2;
             }
 
+            if (resultsFailure is not null)
+            {
+                Log.Error("apply mode: could not create the results file", resultsFailure);
+                clean = false;
+                return 3;
+            }
+
             var request = ElevatedApplyCommand.ParseRequest(File.ReadAllText(invocation.RequestPath));
 
-            // Each result is written and flushed the moment its path is done, so the file is a true
-            // running record: when the parent stops waiting on a child stalled inside SetAttributes on
-            // a share that stopped answering, every path already changed is still reported. The file
-            // is created here, never reused (a pre-existing file at this name is refused rather than
-            // written through), and held open without delete sharing for the whole run, which is
-            // what tells the parent's cleanup that this child is still running.
-            using var results = invocation.ResultsPath is { Length: > 0 } resultsPath
-                ? new StreamWriter(
-                    new FileStream(resultsPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read),
-                    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false))
-                : null;
-
+            // Each result is written and flushed the moment its path is done, so when the parent stops
+            // waiting on a child stalled inside SetAttributes on a share that stopped answering, every
+            // path already changed is still reported.
             var failed = ApplyFileAttributes(request.ToHide, hide: true, system: false, results)
                 | ApplyFileAttributes(request.ToHideWithSystem, hide: true, system: true, results)
                 | ApplyFileAttributes(request.ToShow, hide: false, system: false, results);
@@ -165,7 +178,7 @@ sealed class Program
         finally
         {
             Log.Info("shutdown", new { clean });
-            Log.Shutdown();
+            Log.Shutdown(); // closes the results file
         }
     }
 
@@ -179,7 +192,7 @@ sealed class Program
     /// follow-based API or add reparse-handle machinery to "harden" a hazard that cannot occur.
     /// </remarks>
     private static bool ApplyFileAttributes(
-        IReadOnlyList<string> paths, bool hide, bool system, StreamWriter? results)
+        IReadOnlyList<string> paths, bool hide, bool system, ElevatedResultsWriter? results)
     {
         if (paths.Count == 0)
             return false;
@@ -215,17 +228,14 @@ sealed class Program
         return failed > 0;
     }
 
-    private static void WriteResult(StreamWriter? results, PathApplyResult result)
+    private static void WriteResult(ElevatedResultsWriter? results, PathApplyResult result)
     {
         if (results is null)
             return;
 
         try
         {
-            // not recorded: a transient elevated-IPC result in the OS temp directory, never
-            // reloaded as managed state.
-            results.Write(ElevatedApplyResults.SerializeLine(result));
-            results.Flush();
+            results.Report(result);
         }
         catch (Exception ex)
         {

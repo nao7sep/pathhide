@@ -1,14 +1,18 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using PathHide.Services;
+using PathHide.Tests.Storage;
 using Xunit;
 
 namespace PathHide.Tests.Services;
 
 /// <summary>
 /// The elevated apply's temp files: their names record their owner, and the launch sweep deletes only
-/// files this host wrote from a process that has exited.
+/// files this host wrote from a process that has exited. In the storage-root collection because the
+/// import test starts the process-wide log.
 /// </summary>
+[Collection(StorageRootEnvironment.CollectionName)]
 public sealed class ElevatedApplyFilesTests : IDisposable
 {
     private readonly string _temp = Directory.CreateTempSubdirectory("pathhide-tests-").FullName;
@@ -81,6 +85,55 @@ public sealed class ElevatedApplyFilesTests : IDisposable
 
         Assert.True(files.TryDelete());
         Assert.False(File.Exists(files.ResultsPath));
+    }
+
+    [Fact]
+    public void RemovingTheResultsFile_ImportsTheChildsLogEntries()
+    {
+        var files = ElevatedApplyFiles.Create(_temp);
+        var entry = new LogEntry("2026-10-02T09:31:00.000Z", "2026-10-02T09:31:00.500Z", "info",
+            "apply: done " + NanoId.New(), null, null);
+        File.WriteAllText(files.ResultsPath,
+            ElevatedApplyResults.SerializeLine(new PathApplyResult(@"C:\a", Ok: true))
+            + ElevatedApplyResults.SerializeLine(entry));
+        var sink = new CapturingSink();
+
+        Log.Start(sink, Path.Combine(_temp, "logs"));
+        try
+        {
+            Assert.True(files.TryDelete());
+        }
+        finally
+        {
+            Log.Shutdown();
+        }
+
+        Assert.False(File.Exists(files.ResultsPath));
+        Assert.Contains(sink.Entries, e => e.Message == entry.Message && e.Session == entry.Session);
+    }
+
+    private sealed class CapturingSink : ILogSink
+    {
+        private readonly List<LogEntry> _entries = [];
+
+        public IReadOnlyList<LogEntry> Entries
+        {
+            get
+            {
+                lock (_entries)
+                    return [.. _entries];
+            }
+        }
+
+        public void Write(LogEntry entry)
+        {
+            lock (_entries)
+                _entries.Add(entry);
+        }
+
+        public void Dispose()
+        {
+        }
     }
 
     private static int ReadOwner(string path)

@@ -11,7 +11,7 @@ namespace PathHide.Services;
 /// options, and the request file that carries the path lists. Both sides go through this type — the
 /// parent (<see cref="ElevatedApplicator"/>) when it writes the request and builds the arguments, and
 /// the child (<c>Program</c> apply-mode) when it parses them — so the two halves cannot drift. The
-/// per-path outcomes travel back via <see cref="ElevatedApplyResults"/>.
+/// per-path outcomes and the child's log entries travel back via <see cref="ElevatedApplyResults"/>.
 /// </summary>
 /// <remarks>
 /// The paths travel in a file, not on the command line: Windows caps a command line at 32,767
@@ -25,7 +25,8 @@ public static class ElevatedApplyCommand
     public const string ResultsOption = "--results";
 
     /// <summary>
-    /// The storage root the parent resolved, so the child logs into the same tree.
+    /// The storage root the parent resolved, so a fallback log file the child writes lands in the
+    /// same tree.
     /// </summary>
     /// <remarks>
     /// It has to travel as an argument. The runas verb forces UseShellExecute, which forbids

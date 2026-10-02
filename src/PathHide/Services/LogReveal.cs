@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 using PathHide.Storage;
 
@@ -16,10 +15,9 @@ internal enum LogRevealTargetKind
 internal readonly record struct LogRevealTarget(string Path, LogRevealTargetKind Kind);
 
 /// <summary>
-/// Best-effort "show me the log" helper. Locates the most recently written
-/// per-launch log file under <see cref="StorageRoot.LogsDirectory"/> and reveals it
-/// in the host platform's file manager (Finder on macOS, Explorer on Windows).
-/// Falls back to opening the logs directory if no log file is present.
+/// Best-effort "show me the log" helper. Reveals the records database, which holds the log, in the host
+/// platform's file manager (Finder on macOS, Explorer on Windows), or opens the folder that would hold it
+/// when there is none yet.
 /// </summary>
 public static class LogReveal
 {
@@ -27,7 +25,7 @@ public static class LogReveal
     {
         try
         {
-            var target = SelectTarget(StorageRoot.LogsDirectory, Log.Flush);
+            var target = SelectTarget(StorageRoot.RecordsFile);
             if (target.Kind == LogRevealTargetKind.File)
                 RevealInFileManager(target.Path);
             else
@@ -41,33 +39,10 @@ public static class LogReveal
         }
     }
 
-    internal static LogRevealTarget SelectTarget(string logsDirectory, Action flush)
-    {
-        flush();
-        Directory.CreateDirectory(logsDirectory);
-
-        var current = TryFindMostRecentLog(logsDirectory);
-        return current is not null
-            ? new LogRevealTarget(current, LogRevealTargetKind.File)
-            : new LogRevealTarget(logsDirectory, LogRevealTargetKind.Directory);
-    }
-
-    private static string? TryFindMostRecentLog(string dir)
-    {
-        try
-        {
-            return new DirectoryInfo(dir)
-                .EnumerateFiles("*.log")
-                .OrderByDescending(f => f.LastWriteTimeUtc)
-                .FirstOrDefault()
-                ?.FullName;
-        }
-        catch (Exception ex)
-        {
-            Log.Debug("reveal log: enumerate failed", ex, new { dir });
-            return null;
-        }
-    }
+    internal static LogRevealTarget SelectTarget(string recordsFile) =>
+        File.Exists(recordsFile)
+            ? new LogRevealTarget(recordsFile, LogRevealTargetKind.File)
+            : new LogRevealTarget(Path.GetDirectoryName(recordsFile)!, LogRevealTargetKind.Directory);
 
     private static void RevealInFileManager(string path)
     {

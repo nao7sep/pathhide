@@ -203,8 +203,9 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     /// stem plus a millisecond UTC stamp, one role extension (<c>.invalid</c>), in the same directory as
     /// the target — the derived-filename grammar's quarantine name (see the storage-path conventions). The
     /// stamp is <see cref="FileTimestamp.FileStamp"/>, the <c>yyyyMMdd-HHmmss-fff-utc</c> machine-paced
-    /// filename form the session log also uses, so the fleet has one timestamp formatter for machine-paced
-    /// names rather than several; internal so the shape is directly unit-testable without touching disk.
+    /// filename form a session's fallback log file also uses, so the fleet has one timestamp formatter for
+    /// machine-paced names rather than several; internal so the shape is directly unit-testable without
+    /// touching disk.
     /// </summary>
     internal static string QuarantinePath(string targetPath, DateTimeOffset timestamp) =>
         Path.Combine(

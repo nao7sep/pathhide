@@ -1,6 +1,4 @@
 using System;
-using System.Reflection;
-using System.Text.Json;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json.Nodes;
@@ -12,8 +10,10 @@ namespace PathHide.Tests.Services;
 
 public sealed class SessionLoggerTests
 {
+    private static readonly DateTimeOffset SessionStart = new(2026, 10, 2, 9, 30, 15, 123, TimeSpan.Zero);
+
     private static SessionLogger NewLogger(StringWriter sw, bool debug = true) =>
-        new(sw, debug, leaveOpen: true);
+        new(SessionStart, new TextWriterLogSink(sw, leaveOpen: true), fallbackDirectory: null, debug);
 
     private static List<JsonNode> Lines(StringWriter sw)
     {
@@ -28,12 +28,13 @@ public sealed class SessionLoggerTests
     }
 
     [Fact]
-    public void Info_writes_the_time_level_message_envelope()
+    public void Info_writes_the_session_time_level_message_envelope()
     {
         var sw = new StringWriter();
         NewLogger(sw).Info("hello");
 
         var line = Assert.Single(Lines(sw));
+        Assert.Equal("2026-10-02T09:30:15.123Z", line["session"]!.GetValue<string>());
         Assert.Equal("info", line["level"]!.GetValue<string>());
         Assert.Equal("hello", line["message"]!.GetValue<string>());
         Assert.Matches(
@@ -57,14 +58,14 @@ public sealed class SessionLoggerTests
     }
 
     [Fact]
-    public void Free_fields_are_merged_at_the_top_level()
+    public void Free_fields_are_kept_as_given()
     {
         var sw = new StringWriter();
         NewLogger(sw).Info("op", new { path = "/tmp/x", count = 3 });
 
-        var line = Assert.Single(Lines(sw));
-        Assert.Equal("/tmp/x", line["path"]!.GetValue<string>());
-        Assert.Equal(3, line["count"]!.GetValue<int>());
+        var fields = Assert.Single(Lines(sw))["fields"]!;
+        Assert.Equal("/tmp/x", fields["path"]!.GetValue<string>());
+        Assert.Equal(3, fields["count"]!.GetValue<int>());
     }
 
     [Fact]
@@ -131,11 +132,11 @@ public sealed class SessionLoggerTests
         NewLogger(sw).Info("scanned", new { state = ActualState.Hidden });
 
         var line = Assert.Single(Lines(sw));
-        Assert.Equal("Hidden", line["state"]!.GetValue<string>());
+        Assert.Equal("Hidden", line["fields"]!["state"]!.GetValue<string>());
     }
 
     [Fact]
-    public void A_free_field_cannot_shadow_a_reserved_envelope_key()
+    public void A_free_field_named_like_the_envelope_is_kept_beside_it()
     {
         var sw = new StringWriter();
         NewLogger(sw).Info("real", new { message = "fake", level = "fake" });
@@ -143,6 +144,7 @@ public sealed class SessionLoggerTests
         var line = Assert.Single(Lines(sw));
         Assert.Equal("real", line["message"]!.GetValue<string>());
         Assert.Equal("info", line["level"]!.GetValue<string>());
+        Assert.Equal("fake", line["fields"]!["message"]!.GetValue<string>());
     }
 
     [Fact]
@@ -152,7 +154,7 @@ public sealed class SessionLoggerTests
         NewLogger(sw).Info("note", new { body = "line1\nline2" });
 
         var line = Assert.Single(Lines(sw)); // would be 2+ if the newline were literal
-        Assert.Equal("line1\nline2", line["body"]!.GetValue<string>());
+        Assert.Equal("line1\nline2", line["fields"]!["body"]!.GetValue<string>());
     }
 
     [Fact]
@@ -167,7 +169,7 @@ public sealed class SessionLoggerTests
         Assert.Null(thrown);
         var line = Assert.Single(Lines(sw));
         Assert.Equal("bad", line["message"]!.GetValue<string>());
-        Assert.NotNull(line["logError"]);
+        Assert.Equal("ArgumentException", line["fields"]!["logError"]!.GetValue<string>());
     }
 
     [Fact]
@@ -178,6 +180,7 @@ public sealed class SessionLoggerTests
 
         var line = Assert.Single(Lines(sw));
         Assert.Equal("m", line["message"]!.GetValue<string>());
+        Assert.Null(line["fields"]);
     }
 
     [Fact]
@@ -191,50 +194,6 @@ public sealed class SessionLoggerTests
         // The shared writer survives the logger, as the console must at shutdown.
         var afterDispose = Record.Exception(() => sw.Write("still open"));
         Assert.Null(afterDispose);
-    }
-
-    [Fact]
-    public void Flush_failure_is_reported_to_console_without_throwing()
-    {
-        var writer = new ThrowingFlushWriter();
-        var log = new SessionLogger(writer, debugEnabled: true, leaveOpen: true);
-        var originalErr = Console.Error;
-        var console = new StringWriter();
-        Console.SetError(console);
-
-        try
-        {
-            var thrown = Record.Exception(() => log.Flush());
-
-            Assert.Null(thrown);
-            Assert.Contains("[logger] flush failed: IOException: disk full", console.ToString());
-        }
-        finally
-        {
-            Console.SetError(originalErr);
-        }
-    }
-
-    [Fact]
-    public void Dispose_final_flush_failure_is_reported_to_console_without_throwing()
-    {
-        var writer = new ThrowingFlushWriter();
-        var log = new SessionLogger(writer, debugEnabled: true, leaveOpen: true);
-        var originalErr = Console.Error;
-        var console = new StringWriter();
-        Console.SetError(console);
-
-        try
-        {
-            var thrown = Record.Exception(log.Dispose);
-
-            Assert.Null(thrown);
-            Assert.Contains("[logger] final flush failed: IOException: disk full", console.ToString());
-        }
-        finally
-        {
-            Console.SetError(originalErr);
-        }
     }
 
     [Fact]
@@ -266,37 +225,93 @@ public sealed class SessionLoggerTests
         Assert.Contains("/x", console.ToString());
     }
 
-    private sealed class ThrowingFlushWriter : StringWriter
+    [Fact]
+    public void Import_writes_another_sessions_entries_as_given()
     {
-        public override void Flush() =>
-            throw new IOException("disk full");
+        var sw = new StringWriter();
+        var child = new LogEntry("2026-10-02T09:31:00.000Z", "2026-10-02T09:31:00.500Z", "error", "apply: failed",
+            new JsonObject { ["path"] = @"C:\x" }, null);
+
+        NewLogger(sw).Import([child]);
+
+        var line = Assert.Single(Lines(sw));
+        Assert.Equal("2026-10-02T09:31:00.000Z", line["session"]!.GetValue<string>());
+        Assert.Equal("2026-10-02T09:31:00.500Z", line["time"]!.GetValue<string>());
+        Assert.Equal(@"C:\x", line["fields"]!["path"]!.GetValue<string>());
     }
 
     [Fact]
-    public void The_serialization_fallback_line_is_still_valid_json()
+    public void Without_a_sink_entries_go_to_the_sessions_fallback_file()
     {
-        // This is the line written AFTER serialization already failed - the one
-        // most worth reading. Hand-escaping four characters left every other C0
-        // control character raw inside a JSON string, which JSON forbids, so a
-        // JSONL reader would reject exactly that line.
-        var withControls = "tab\there, bell\u0001, quote\", slash\\ and\nnewline";
+        using var temp = new TempDirectory();
+        var log = new SessionLogger(SessionStart, sink: null, temp.Path, debugEnabled: true);
 
-        var line = InvokeFallbackLine(LogLevel.Error, withControls);
+        log.Info("one");
+        log.Info("two");
 
-        var parsed = JsonDocument.Parse(line);
-        Assert.Equal(withControls, parsed.RootElement.GetProperty("message").GetString());
-        Assert.Equal("error", parsed.RootElement.GetProperty("level").GetString());
-        Assert.False(string.IsNullOrEmpty(parsed.RootElement.GetProperty("time").GetString()));
-        Assert.Equal("InvalidOperationException", parsed.RootElement.GetProperty("logError").GetString());
+        var lines = File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-123-utc.log"));
+        Assert.Equal(["one", "two"], Array.ConvertAll(lines, l => JsonNode.Parse(l)!["message"]!.GetValue<string>()));
     }
 
-    private static string InvokeFallbackLine(LogLevel level, string message)
+    [Fact]
+    public void An_entry_the_sink_refuses_goes_to_the_fallback_file_with_the_reason()
     {
-        var method = typeof(SessionLogger).GetMethod(
-            "FallbackLine",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-        return (string)method.Invoke(
-            null,
-            [level, message, new InvalidOperationException("boom")])!;
+        using var temp = new TempDirectory();
+        var log = new SessionLogger(SessionStart, new ThrowingSink(), temp.Path, debugEnabled: true);
+
+        var thrown = Record.Exception(() => log.Info("kept"));
+
+        Assert.Null(thrown);
+        var lines = File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-123-utc.log"));
+        Assert.Equal(2, lines.Length);
+        Assert.Equal("kept", JsonNode.Parse(lines[0])!["message"]!.GetValue<string>());
+        var reason = JsonNode.Parse(lines[1])!;
+        Assert.Equal("error", reason["level"]!.GetValue<string>());
+        Assert.Equal("database is locked", reason["error"]!["message"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void When_the_fallback_file_fails_too_the_entry_reaches_the_console()
+    {
+        using var temp = new TempDirectory();
+        var blocked = Path.Combine(temp.Path, "not-a-folder");
+        File.WriteAllText(blocked, "");
+        var log = new SessionLogger(SessionStart, new ThrowingSink(), blocked, debugEnabled: true);
+        var originalErr = Console.Error;
+        var console = new StringWriter();
+        Console.SetError(console);
+
+        try
+        {
+            var thrown = Record.Exception(() => log.Warn("last resort"));
+            Assert.Null(thrown);
+        }
+        finally
+        {
+            Console.SetError(originalErr);
+        }
+
+        Assert.Contains("last resort", console.ToString());
+        Assert.Contains("[logger] sink write failed: IOException: database is locked", console.ToString());
+    }
+
+    private sealed class ThrowingSink : ILogSink
+    {
+        public void Write(LogEntry entry) => throw new IOException("database is locked");
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class TempDirectory : IDisposable
+    {
+        public string Path { get; } = Directory.CreateTempSubdirectory("pathhide-tests-").FullName;
+
+        public void Dispose()
+        {
+            try { Directory.Delete(Path, recursive: true); }
+            catch { /* best-effort cleanup */ }
+        }
     }
 }

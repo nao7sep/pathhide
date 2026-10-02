@@ -27,25 +27,18 @@ public sealed class SessionLogTests
     }
 
     [Fact]
-    public void OpenWriter_creates_a_fresh_file_and_never_appends_to_an_existing_session()
+    public void Append_adds_each_line_to_the_sessions_one_file()
     {
         using var temp = new TempDirectory();
-        var timestamp = new DateTimeOffset(2026, 6, 10, 9, 30, 15, 123, TimeSpan.Zero);
-        var path = System.IO.Path.Combine(temp.Path, SessionLog.FileName(timestamp));
+        var sessionStart = new DateTimeOffset(2026, 6, 10, 9, 30, 15, 123, TimeSpan.Zero);
+        var logs = System.IO.Path.Combine(temp.Path, "logs");
 
-        using (var writer = SessionLog.OpenWriter(temp.Path, timestamp))
-        {
-            writer.WriteLine("first");
-        }
+        SessionLog.Append(logs, sessionStart, "first");
+        SessionLog.Append(logs, sessionStart, "second");
 
-        // A second launch resolving to the same UTC millisecond collides on the name;
-        // the exclusive create throws rather than appending into the first session.
-        // (Log.Start catches this and degrades to console logging.)
-        var ex = Assert.Throws<System.IO.IOException>(() => SessionLog.OpenWriter(temp.Path, timestamp));
-
-        Assert.True(System.IO.File.Exists(path));
-        Assert.Contains("first", System.IO.File.ReadAllText(path));
-        Assert.Contains(SessionLog.FileName(timestamp), ex.Message);
+        var file = Assert.Single(System.IO.Directory.GetFiles(logs));
+        Assert.Equal(SessionLog.FileName(sessionStart), System.IO.Path.GetFileName(file));
+        Assert.Equal(["first", "second"], System.IO.File.ReadAllLines(file));
     }
 
     private sealed class TempDirectory : IDisposable

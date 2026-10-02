@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
+using Microsoft.Data.Sqlite;
 using PathHide.Backup;
 using PathHide.I18n;
 using PathHide.Models;
@@ -39,6 +40,24 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     private string ConfigPath => Path.Combine(_root, AppSettings.FileName);
+
+    private List<string> WarningFields()
+    {
+        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = StorageRoot.RecordsFile,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false,
+        }.ToString());
+        connection.Open();
+        using var query = connection.CreateCommand();
+        query.CommandText = "SELECT fields FROM log_entries WHERE level = 'warn' ORDER BY id";
+        using var reader = query.ExecuteReader();
+        var fields = new List<string>();
+        while (reader.Read())
+            fields.Add(reader.GetString(0));
+        return fields;
+    }
 
     private Dictionary<string, JsonElement> StoredSets() =>
         JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(ConfigPath))!;
@@ -152,11 +171,10 @@ public sealed class SettingsStoreTests : IDisposable
     {
         var original = "{ \"theme\": \"dark\", \"language\": \"ja\", \"" + key + "\": " + value + " }";
         File.WriteAllText(ConfigPath, original);
-        var logs = Path.Combine(_root, "logs");
-        Log.Start(logs);
+        Log.Start(RecordsStore.TryOpen(StorageRoot.RecordsFile, out _), StorageRoot.LogsDirectory);
 
         var loaded = new SettingsStore().Load();
-        Log.Flush();
+        Log.Shutdown();
 
         Assert.False(loaded.WasUnreadable);
         Assert.Equal(key == "theme" ? ThemePreference.System : ThemePreference.Dark, loaded.Value.Theme);
@@ -166,10 +184,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(original, File.ReadAllText(ConfigPath));
         Assert.Empty(Directory.GetFiles(_root, "config-*.invalid"));
         Assert.Empty(QuarantineJournal.Drain());
-        var warnings = File.ReadLines(Assert.Single(Directory.GetFiles(logs, "*.log")))
-            .Select(line => JsonSerializer.Deserialize<JsonElement>(line))
-            .Where(line => line.GetProperty("level").GetString() == "warn").ToArray();
-        Assert.Equal(key, Assert.Single(warnings).GetProperty("key").GetString());
+        Assert.Equal(key, JsonSerializer.Deserialize<JsonElement>(Assert.Single(WarningFields())).GetProperty("key").GetString());
     }
 
     [AvaloniaFact]

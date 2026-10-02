@@ -1,27 +1,28 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace PathHide.Services;
 
 /// <summary>
-/// Process-wide logging facade. <see cref="Start"/> opens the one per-launch log
-/// file under the app's logs directory, installs last-resort crash hooks, and routes
-/// every subsequent call to a <see cref="SessionLogger"/>. Before <see cref="Start"/>
-/// — or if the file cannot be opened — calls degrade to the console rather than being
-/// lost.
+/// Process-wide logging facade. <see cref="Start"/> hands it this session's sink, installs last-resort
+/// crash hooks, and routes every subsequent call to a <see cref="SessionLogger"/>. Before
+/// <see cref="Start"/> calls go to the console rather than being lost.
 /// </summary>
 /// <remarks>
-/// The facade is a thin pass-through; the testable behavior lives in
-/// <see cref="SessionLogger"/>. The free-field overloads
-/// mirror the logger: <c>Level(message, fields)</c> for a plain event and
+/// The facade is a thin pass-through; the testable behavior lives in <see cref="SessionLogger"/>. The
+/// free-field overloads mirror the logger: <c>Level(message, fields)</c> for a plain event and
 /// <c>Level(message, exception, fields)</c> when an exception is in play.
 /// </remarks>
 public static class Log
 {
     private static readonly object Gate = new();
 
-    // Always non-null: a console-backed logger until Start swaps in the file-backed
-    // one, and again after Shutdown, so an event is never silently dropped.
+    // One process launch is one session, named by when it began.
+    private static readonly DateTimeOffset SessionStart = DateTimeOffset.UtcNow;
+
+    // Always non-null: a console-backed logger until Start swaps in the session's, and again after
+    // Shutdown, so an event is never silently dropped.
     private static volatile SessionLogger _logger = CreateConsoleLogger();
     private static bool _started;
     private static bool _hooksInstalled;
@@ -30,42 +31,33 @@ public static class Log
     public static bool DebugEnabled => _logger.DebugEnabled;
 
     /// <summary>
-    /// Opens the per-session log file for this process launch and begins logging. A
-    /// second call is ignored — one session is one file. If the file cannot be opened
-    /// the app still runs, logging to the console.
+    /// Begins logging this session to <paramref name="sink"/>, which the log then owns: the records
+    /// database in the app, the results file in the elevated child. An entry the sink cannot take, or
+    /// every entry when <paramref name="sink"/> is null, goes to the session's fallback file under
+    /// <paramref name="logsDirectory"/>. A second call is ignored and closes the sink it was given.
     /// </summary>
-    public static void Start(string logsDirectory)
+    public static void Start(ILogSink? sink, string logsDirectory)
     {
         lock (Gate)
         {
             if (_started)
+            {
+                sink?.Dispose();
                 return;
+            }
             _started = true;
 
             InstallCrashHooks();
 
-            SessionLogger fileLogger;
-            try
-            {
-                fileLogger = new SessionLogger(SessionLog.OpenWriter(logsDirectory), IsDebugEnabled());
-            }
-            catch (Exception ex)
-            {
-                // Best-effort: keep the console logger and report why. Launching must
-                // never fail because logging could not open its file.
-                _logger.Error("logger: could not open session file; logging to console", ex, new { logsDirectory });
-                return;
-            }
-
             var previous = _logger;
-            _logger = fileLogger;
-            previous.Dispose(); // console logger: leaveOpen, so this only flushes
+            _logger = new SessionLogger(SessionStart, sink, logsDirectory, IsDebugEnabled());
+            previous.Dispose(); // console logger: leaveOpen, so this closes nothing
         }
     }
 
     /// <summary>
-    /// Flushes and closes the session file. Idempotent. Late events that arrive after
-    /// shutdown fall back to the console rather than being lost.
+    /// Closes the session's sink. Idempotent. Late events that arrive after shutdown fall back to the
+    /// console rather than being lost.
     /// </summary>
     public static void Shutdown()
     {
@@ -81,8 +73,8 @@ public static class Log
         }
     }
 
-    /// <summary>Flushes buffered lines without closing the file.</summary>
-    public static void Flush() => _logger.Flush();
+    /// <summary>Writes entries another process logged and handed back, as it logged them.</summary>
+    public static void Import(IEnumerable<LogEntry> entries) => _logger.Import(entries);
 
     public static void Debug(string message, object? fields = null) => _logger.Debug(message, fields);
     public static void Debug(string message, Exception exception, object? fields = null) => _logger.Debug(message, exception, fields);
@@ -94,7 +86,7 @@ public static class Log
     public static void Error(string message, Exception exception, object? fields = null) => _logger.Error(message, exception, fields);
 
     private static SessionLogger CreateConsoleLogger() =>
-        new(Console.Error, IsDebugEnabled(), leaveOpen: true);
+        new(SessionStart, new TextWriterLogSink(Console.Error, leaveOpen: true), fallbackDirectory: null, IsDebugEnabled());
 
     // Debug is developer-only: on in a development (DEBUG) build, otherwise only when
     // PATHHIDE_DEBUG=1 is set. In a release build with no such variable it is off, so
@@ -114,20 +106,16 @@ public static class Log
             return;
         _hooksInstalled = true;
 
-        // Last-resort nets so the final lines before a crash reach disk.
+        // Last-resort nets so the final lines before a crash are written.
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
-        {
             Error("unhandled exception; process terminating", e.ExceptionObject as Exception ?? new Exception("non-Exception throw"),
                 new { terminating = e.IsTerminating });
-            Flush();
-        };
 
         TaskScheduler.UnobservedTaskException += (_, e) =>
         {
             // Logged, not observed: in modern .NET an unobserved task exception is
             // already non-fatal, and changing that policy is not logging's job.
             Error("unobserved task exception", e.Exception);
-            Flush();
         };
 
         AppDomain.CurrentDomain.ProcessExit += (_, _) => Shutdown();

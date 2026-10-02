@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Text.Json.Nodes;
 using PathHide.Services;
 using Xunit;
 
@@ -37,7 +38,7 @@ public sealed class ElevatedApplyResultsTests
             new PathApplyResult(@"C:\日本語\メモ.txt", Ok: true),
         };
 
-        var parsed = ElevatedApplyResults.Parse(ElevatedApplyResults.Serialize(original));
+        var parsed = ElevatedApplyResults.Parse(ElevatedApplyResults.Serialize(original)).Results;
 
         Assert.Equal(original, parsed);
         // The failed path must be preserved as a failure — it is how the parent counts an
@@ -62,7 +63,7 @@ public sealed class ElevatedApplyResultsTests
                  + "not json at all\n"
                  + "{\"path\":\"C:\\\\also-good.txt\",\"ok\":false}\n";
 
-        var parsed = ElevatedApplyResults.Parse(text);
+        var parsed = ElevatedApplyResults.Parse(text).Results;
 
         // The two well-formed lines survive; the blank and garbage lines are skipped rather
         // than discarding the whole (possibly truncated) file.
@@ -76,13 +77,13 @@ public sealed class ElevatedApplyResultsTests
     [Fact]
     public void Parse_SkipsLineWithNoPath()
     {
-        Assert.Empty(ElevatedApplyResults.Parse("{\"ok\":true}\n"));
+        Assert.Empty(ElevatedApplyResults.Parse("{\"ok\":true}\n").Results);
     }
 
     [Fact]
     public void Parse_EmptyText_ReturnsEmpty()
     {
-        Assert.Empty(ElevatedApplyResults.Parse(string.Empty));
+        Assert.Empty(ElevatedApplyResults.Parse(string.Empty).Results);
     }
 
     [Fact]
@@ -98,7 +99,7 @@ public sealed class ElevatedApplyResultsTests
         Assert.EndsWith("\n", line);
         Assert.Single(line.TrimEnd('\n').Split('\n'));
 
-        var parsed = Assert.Single(ElevatedApplyResults.Parse(line));
+        var parsed = Assert.Single(ElevatedApplyResults.Parse(line).Results);
         Assert.Equal(@"C:\a b\x.txt", parsed.Path);
         Assert.True(parsed.Ok);
     }
@@ -112,12 +113,29 @@ public sealed class ElevatedApplyResultsTests
                   + ElevatedApplyResults.SerializeLine(new PathApplyResult("/b", Ok: false));
         var truncated = whole + "{\"path\":\"/c\",\"ok\":tr";
 
-        var parsed = ElevatedApplyResults.Parse(truncated);
+        var parsed = ElevatedApplyResults.Parse(truncated).Results;
 
         Assert.Equal(2, parsed.Count);
         Assert.Equal("/a", parsed[0].Path);
         Assert.True(parsed[0].Ok);
         Assert.Equal("/b", parsed[1].Path);
         Assert.False(parsed[1].Ok);
+    }
+
+    [Fact]
+    public void LogEntries_TravelBesideTheResults_AndAreReadBackApart()
+    {
+        var entry = new LogEntry("2026-10-02T09:31:00.000Z", "2026-10-02T09:31:00.500Z", "error",
+            "apply: failed to set attributes", new JsonObject { ["path"] = @"C:\日本語\x.txt" },
+            new JsonObject { ["type"] = "System.UnauthorizedAccessException", ["message"] = "denied" });
+        var text = ElevatedApplyResults.SerializeLine(new PathApplyResult(@"C:\a", Ok: true))
+                 + ElevatedApplyResults.SerializeLine(entry)
+                 + ElevatedApplyResults.SerializeLine(new PathApplyResult(@"C:\b", Ok: false));
+
+        var report = ElevatedApplyResults.Parse(text);
+
+        Assert.Equal([@"C:\a", @"C:\b"], report.Results.Select(r => r.Path));
+        var parsed = Assert.Single(report.Entries);
+        Assert.Equal(entry.ToLine(), parsed.ToLine());
     }
 }

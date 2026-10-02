@@ -53,6 +53,8 @@ public static class StorageRoot
 
     public static string LogsDirectory => Path.Combine(Directory, "logs");
 
+    public static string RecordsFile => Path.Combine(Directory, RecordsStore.FileName);
+
     /// <summary>The permission mode the root must have on POSIX: owner read/write/execute, nothing else.</summary>
     private const UnixFileMode OwnerOnlyMode =
         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;

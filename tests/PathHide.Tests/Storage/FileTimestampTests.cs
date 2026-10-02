@@ -6,7 +6,7 @@ namespace PathHide.Tests.Storage;
 
 /// <summary>
 /// The machine-paced UTC filename stamp (<c>yyyyMMdd-HHmmss-fff-utc</c>) used for the quarantine name and
-/// the session log. Migrated from the retired backup engine's <c>BackupTime.FileStamp</c> coverage — the
+/// a session's fallback log file. Migrated from the retired backup engine's <c>BackupTime.FileStamp</c> coverage — the
 /// only piece of that formatter still in use — after the ZIP engine was removed.
 /// </summary>
 public sealed class FileTimestampTests
