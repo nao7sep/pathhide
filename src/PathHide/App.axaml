@@ -24,6 +24,8 @@
                     <SolidColorBrush x:Key="StatusBorderBrush" Color="#D8DEE8"/>
                     <SolidColorBrush x:Key="StatusAccentBrush" Color="#1D4ED8"/>
                     <SolidColorBrush x:Key="DangerTextBrush" Color="#DC2626"/>
+                    <!-- A warning read as letters, as the records window's level marks are. -->
+                    <SolidColorBrush x:Key="WarningTextBrush" Color="#B45309"/>
                     <!-- Control surfaces: the secondary button and the fields rest on ControlBrush and
                          FieldBrush inside a ControlEdgeBrush edge; hover and press deepen the same
                          surface one step at a time. Rows and menu items fill with RowHoverBrush, and
@@ -56,6 +58,7 @@
                     <SolidColorBrush x:Key="StatusBorderBrush" Color="#323A46"/>
                     <SolidColorBrush x:Key="StatusAccentBrush" Color="#8AB4FF"/>
                     <SolidColorBrush x:Key="DangerTextBrush" Color="#F87171"/>
+                    <SolidColorBrush x:Key="WarningTextBrush" Color="#FBBF24"/>
                     <SolidColorBrush x:Key="ControlBrush" Color="#232932"/>
                     <SolidColorBrush x:Key="ControlHoverBrush" Color="#2B323D"/>
                     <SolidColorBrush x:Key="ControlPressedBrush" Color="#343C48"/>

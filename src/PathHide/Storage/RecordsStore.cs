@@ -8,14 +8,16 @@ namespace PathHide.Storage;
 /// <summary>
 /// The records database, <c>records.sqlite3</c> under the storage root (data-lifecycle conventions,
 /// <em>Records</em>). PathHide's only records are log entries, each a row with its session; the app
-/// process alone opens it, and the elevated child's entries reach it through the app.
+/// process alone opens it, and the elevated child's entries reach it through the app. The records
+/// window reads it through <see cref="RecordsReader"/>.
 /// </summary>
 public sealed class RecordsStore : ILogSink
 {
     public const string FileName = "records.sqlite3";
 
     // No retention: logging conventions, Never deleted. The session index serves reading one launch's
-    // entries in order.
+    // entries in order and listing the launches; the time index serves the records window's pages,
+    // newest first (RecordsReader).
     private const string Schema = @"
 CREATE TABLE IF NOT EXISTS log_entries (
   id      INTEGER PRIMARY KEY,
@@ -27,6 +29,7 @@ CREATE TABLE IF NOT EXISTS log_entries (
   error   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_log_entries_session_id ON log_entries (session, id);
+CREATE INDEX IF NOT EXISTS idx_log_entries_time_id ON log_entries (time, id);
 ";
 
     // Used only under the owning SessionLogger's lock.

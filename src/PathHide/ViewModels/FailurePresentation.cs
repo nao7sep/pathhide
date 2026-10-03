@@ -29,8 +29,6 @@ public static class FailurePresentation
 
     public static Message WindowAction(Exception error) => Message.Of("failure.windowAction");
 
-    public static Message LogReveal() => Message.Of("failure.logReveal");
-
     public static Message Startup() => Message.Of("failure.startupData");
 
     public static Message PathListStartup() => Message.Of("failure.pathListStartup");

@@ -30,6 +30,15 @@ public static class Log
     /// <summary>Whether developer-only <c>debug</c> events are being written.</summary>
     public static bool DebugEnabled => _logger.DebugEnabled;
 
+    /// <summary>This launch's session, as every entry it logs carries.</summary>
+    public static string Session => _logger.Session;
+
+    /// <summary>
+    /// Raised after each entry this session's sink stored, on the logger's writer thread, so the records
+    /// window can read it. An entry that went to the fallback file or the console raises nothing.
+    /// </summary>
+    public static event Action? RecordStored;
+
     /// <summary>
     /// Begins logging this session to <paramref name="sink"/>, which the log then owns: the records
     /// database in the app, the results file in the elevated child. Entries are written off the
@@ -51,7 +60,8 @@ public static class Log
             InstallCrashHooks();
 
             var previous = _logger;
-            _logger = new SessionLogger(SessionStart, sink, logsDirectory, IsDebugEnabled(), writeInBackground: true);
+            _logger = new SessionLogger(SessionStart, sink, logsDirectory, IsDebugEnabled(), writeInBackground: true,
+                stored: () => RecordStored?.Invoke());
             previous.Dispose(); // console logger: leaveOpen, so this closes nothing
         }
     }

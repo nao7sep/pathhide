@@ -57,7 +57,7 @@ internal static class PopulatedMainWindow
     internal static async Task SettleAsync(MainWindowViewModel viewModel)
     {
         await viewModel.ScanTask;
-        viewModel.ReportLogRevealFailure();
+        viewModel.ReportWindowActionFailure(new System.InvalidOperationException("test"));
         await viewModel.AddDroppedPathsAsync(["/hidden-file"], unavailable: 1);
     }
 }

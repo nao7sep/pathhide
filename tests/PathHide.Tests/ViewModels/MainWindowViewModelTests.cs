@@ -1077,23 +1077,6 @@ public class MainWindowViewModelTests
         Assert.Equal(OperationalResultOwner.Scan, remaining.Owner);
     }
 
-    [Fact]
-    public async Task Log_reveal_failure_has_an_independent_authored_owner_until_retry_succeeds()
-    {
-        var vm = CreateViewModel(new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>());
-        await vm.ScanTask;
-
-        vm.ReportLogRevealFailure();
-
-        var result = Assert.Single(vm.OperationalResults);
-        Assert.Equal(OperationalResultOwner.LogReveal, result.Owner);
-        Assert.Contains("could not open the folder that holds the log file", English.Of(result.Message), StringComparison.Ordinal);
-        Assert.DoesNotContain("EACCES", English.Of(result.Message), StringComparison.Ordinal);
-
-        vm.ResolveLogRevealFailure();
-        Assert.Empty(vm.OperationalResults);
-    }
-
     // --- Apply error handling ---
 
     [Fact]

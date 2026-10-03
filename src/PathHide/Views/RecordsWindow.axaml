@@ -1,0 +1,254 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PathHide.ViewModels"
+        xmlns:i18n="using:PathHide.I18n"
+        xmlns:controls="using:PathHide.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1180" d:DesignHeight="720"
+        x:Class="PathHide.Views.RecordsWindow"
+        x:DataType="vm:RecordsViewModel"
+        i18n:Localized.Title="records.title"
+        Icon="/Assets/icon.png"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <Window.Resources>
+        <!-- Stored JSON reads in a fixed-width face, the first of these the computer has. -->
+        <FontFamily x:Key="RecordsMonoFont">Menlo, Consolas, Courier New</FontFamily>
+    </Window.Resources>
+
+    <Window.Styles>
+        <!-- Both panes are the app's surface in its band edge, as the path list is. -->
+        <Style Selector="Border.recordsPane">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="{StaticResource AppSurfaceRadius}"/>
+            <Setter Property="ClipToBounds" Value="True"/>
+        </Style>
+
+        <!-- The list reads as items, as the path list does: inset rows whose hover and selection are
+             rounded fills in the app's own colours. The keyboard's ring is drawn inside the row, so the
+             next row's fill cannot cover it. -->
+        <Style Selector="ListBox.records">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="6"/>
+        </Style>
+        <Style Selector="ListBox.records ListBoxItem">
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Margin" Value="0,1"/>
+            <Setter Property="CornerRadius" Value="{StaticResource AppRowRadius}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="FocusAdorner">
+                <FocusAdornerTemplate>
+                    <Border Classes="focusRing" Classes.inactive="{Binding !$parent[Window].IsActive}"
+                            BorderThickness="2"
+                            CornerRadius="{StaticResource AppRowRadius}"/>
+                </FocusAdornerTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ListBox.records ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="CornerRadius" Value="{StaticResource AppRowRadius}"/>
+        </Style>
+        <Style Selector="ListBox.records ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowHoverBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="ListBox.records ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowPressedBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="ListBox.records ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="ListBox.records ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowSelectedHoverBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="ListBox.records ListBoxItem:selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowSelectedHoverBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+
+        <!-- A record's level as a quiet mark in its own colour: an error in the danger red, a warning
+             in amber, the rest in the secondary text colour. -->
+        <Style Selector="Border.levelMark">
+            <Setter Property="BorderBrush" Value="{DynamicResource TextSecondaryBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="6,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.levelMark TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+        <Style Selector="Border.levelMark.warning">
+            <Setter Property="BorderBrush" Value="{DynamicResource WarningTextBrush}"/>
+        </Style>
+        <Style Selector="Border.levelMark.warning TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource WarningTextBrush}"/>
+        </Style>
+        <Style Selector="Border.levelMark.error">
+            <Setter Property="BorderBrush" Value="{DynamicResource DangerTextBrush}"/>
+        </Style>
+        <Style Selector="Border.levelMark.error TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource DangerTextBrush}"/>
+        </Style>
+
+        <!-- What a pane says in place of its content. A failure is read in the danger red. -->
+        <Style Selector="TextBlock.recordsNote">
+            <Setter Property="Margin" Value="16"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.recordsNote.failed">
+            <Setter Property="Foreground" Value="{DynamicResource DangerTextBrush}"/>
+        </Style>
+
+        <Style Selector="TextBlock.fieldLabel">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+        </Style>
+        <Style Selector="SelectableTextBlock.json">
+            <Setter Property="FontFamily" Value="{StaticResource RecordsMonoFont}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </Window.Styles>
+
+    <!-- The list pane at its pixel width, the splitter's column, and the detail pane taking the rest.
+         RecordsLayout holds these sizes; the list's width is set in code from the saved intent. -->
+    <Grid x:Name="Shell" Margin="16">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="380" MinWidth="320" MaxWidth="640"/>
+            <ColumnDefinition Width="16"/>
+            <ColumnDefinition Width="*" MinWidth="420"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Classes="recordsPane">
+            <DockPanel>
+                <Border DockPanel.Dock="Top" x:Name="FiltersBand"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+                        Padding="12">
+                    <StackPanel Spacing="8">
+                        <controls:ImeTextBox x:Name="SearchBox" Text="{Binding SearchText}"
+                                             i18n:Localized.PlaceholderText="records.search"
+                                             i18n:Localized.AutomationName="records.search"/>
+                        <Grid ColumnDefinitions="*,8,*">
+                            <ComboBox Grid.Column="0" HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding LaunchOptions}"
+                                      SelectedItem="{Binding SelectedLaunch}"
+                                      i18n:Localized.AutomationName="records.launch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="vm:RecordFilterOption">
+                                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <ComboBox Grid.Column="2" HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding LevelOptions}"
+                                      SelectedItem="{Binding SelectedLevel}"
+                                      i18n:Localized.AutomationName="records.level">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="vm:RecordFilterOption">
+                                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- The end of the list: the next page loading, or the note that it failed. -->
+                <TextBlock DockPanel.Dock="Bottom" Classes="recordsNote"
+                           Classes.failed="{Binding MoreFailed}"
+                           Text="{Binding MoreNote}" IsVisible="{Binding HasMoreNote}"/>
+
+                <Grid>
+                    <ListBox x:Name="RecordList" Classes="records"
+                             ItemsSource="{Binding Rows}"
+                             SelectedItem="{Binding SelectedRow}"
+                             SelectionMode="Single"
+                             i18n:Localized.AutomationName="records.title">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="vm:RecordRowViewModel">
+                                <StackPanel Spacing="2">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding TimeText}" FontSize="12"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextSecondaryBrush}"/>
+                                        <Border Classes="levelMark"
+                                                Classes.error="{Binding IsError}"
+                                                Classes.warning="{Binding IsWarning}">
+                                            <TextBlock Text="{Binding LevelText}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Message}" FontWeight="SemiBold"
+                                               TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <!-- The list stays in place, and reachable by Tab, under what it says instead. -->
+                    <TextBlock Classes="recordsNote" Classes.failed="{Binding IsListFailed}"
+                               Text="{Binding ListNote}" IsVisible="{Binding HasListNote}"
+                               IsHitTestVisible="False" VerticalAlignment="Top"/>
+                </Grid>
+            </DockPanel>
+        </Border>
+
+        <GridSplitter Grid.Column="1" x:Name="Splitter"
+                      Background="Transparent" ResizeDirection="Columns"
+                      i18n:Localized.AutomationName="records.resizeList"/>
+
+        <Border Grid.Column="2" Classes="recordsPane">
+            <Panel>
+                <TextBlock Classes="recordsNote" Classes.failed="{Binding IsDetailFailed}"
+                           Text="{Binding DetailNote}" IsVisible="{Binding HasDetailNote}"/>
+                <DockPanel IsVisible="{Binding HasDetail}">
+                    <Border DockPanel.Dock="Top" Padding="16,12"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <SelectableTextBlock Text="{Binding Detail.Message, FallbackValue={x:Null}}"
+                                                 FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <Border Grid.Column="1" Classes="levelMark" VerticalAlignment="Top"
+                                    Classes.error="{Binding Detail.IsError, FallbackValue=False}"
+                                    Classes.warning="{Binding Detail.IsWarning, FallbackValue=False}">
+                                <TextBlock Text="{Binding Detail.LevelText, FallbackValue={x:Null}}"/>
+                            </Border>
+                        </Grid>
+                    </Border>
+                    <ScrollViewer x:Name="DetailBody" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="16" Spacing="16">
+                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto"
+                                  ColumnSpacing="16" RowSpacing="8">
+                                <TextBlock Grid.Row="0" Grid.Column="0" Classes="fieldLabel"
+                                           i18n:Localized.Text="records.time"/>
+                                <SelectableTextBlock Grid.Row="0" Grid.Column="1" TextWrapping="Wrap"
+                                                     Text="{Binding Detail.TimeText, FallbackValue={x:Null}}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Classes="fieldLabel"
+                                           i18n:Localized.Text="records.launch"/>
+                                <SelectableTextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap"
+                                                     Text="{Binding Detail.LaunchText, FallbackValue={x:Null}}"/>
+                            </Grid>
+                            <StackPanel Spacing="6" IsVisible="{Binding Detail.HasFields, FallbackValue=False}">
+                                <TextBlock Classes="fieldLabel" i18n:Localized.Text="records.details"/>
+                                <SelectableTextBlock Classes="json" Text="{Binding Detail.FieldsText, FallbackValue={x:Null}}"/>
+                            </StackPanel>
+                            <StackPanel Spacing="6" IsVisible="{Binding Detail.HasError, FallbackValue=False}">
+                                <TextBlock Classes="fieldLabel" i18n:Localized.Text="records.error"/>
+                                <SelectableTextBlock Classes="json" Text="{Binding Detail.ErrorText, FallbackValue={x:Null}}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Panel>
+        </Border>
+    </Grid>
+</Window>

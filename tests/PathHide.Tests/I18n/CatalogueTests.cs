@@ -26,18 +26,21 @@ public class CatalogueTests
     /// </summary>
     private static readonly Dictionary<string, string[]> SameAsEnglish = new()
     {
-        // "Version", "Format" and "Navigation" are the German words.
-        ["de"] = ["about.version", "grid.family", "shortcuts.groupNavigation"],
+        // "Version", "Format", "Navigation" and "Details" are the German words, and German logs say
+        // "Debug" and "Info" as English does.
+        ["de"] = ["about.version", "grid.family", "records.details", "records.levelDebug", "records.levelInfo", "shortcuts.groupNavigation"],
         // "Error" and "Visible" are the Spanish words, and so their singular counts; "Actual" means
         // "current", which is exactly that column; Apple's Spanish Window menu says "Zoom".
-        ["es"] = ["actual.error", "actual.visible", "apply.errors", "grid.actual", "nativeMenu.zoom", "status.visible"],
+        ["es"] = [
+            "actual.error", "actual.visible", "apply.errors", "grid.actual", "nativeMenu.zoom", "records.error",
+            "records.levelError", "status.visible"],
         // French writes Version, Visible, Format, Menu, Navigation and Actions the same way, and
         // Apple's French app menu says "Services".
         ["fr"] = [
             "about.version", "actual.visible", "grid.family", "menu.button", "nativeMenu.services",
             "shortcuts.groupNavigation", "status.visible", "toolbar.actions"],
-        // "File" and "Menu" are Italian words.
-        ["it"] = ["kind.file", "menu.button"],
+        // "File" and "Menu" are Italian words, and Italian logs say "Debug" and "Info" as English does.
+        ["it"] = ["kind.file", "menu.button", "records.levelDebug", "records.levelInfo"],
         // "Menu" is the Portuguese word, and Apple's Brazilian Window menu says "Zoom".
         ["pt-BR"] = ["menu.button", "nativeMenu.zoom"],
         ["ru"] = [],

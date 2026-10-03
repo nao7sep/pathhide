@@ -42,6 +42,7 @@ public sealed class SessionLogger : IDisposable
     private readonly object _sinkGate = new();
     private readonly object _fallbackGate = new();
     private readonly object _closeGate = new();
+    private readonly Action? _stored;
     private bool _sinkClosed;
     private bool _closed;
 
@@ -52,18 +53,22 @@ public sealed class SessionLogger : IDisposable
     /// the console when that fails too or there is none. When <paramref name="debugEnabled"/> is false,
     /// <c>debug</c> calls are dropped. When <paramref name="writeInBackground"/> is true, entries are
     /// written in order by the logger's own thread, and closing waits a bounded time for them.
+    /// <paramref name="stored"/> is called, on the thread that wrote it, after each entry the sink took;
+    /// an entry that went to the fallback file calls nothing.
     /// </summary>
     public SessionLogger(
         DateTimeOffset sessionStart,
         ILogSink? sink,
         string? fallbackDirectory,
         bool debugEnabled,
-        bool writeInBackground)
+        bool writeInBackground,
+        Action? stored = null)
     {
         _sessionStart = sessionStart;
         _session = Storage.FileTimestamp.SerializedStamp(sessionStart);
         _sink = sink;
         _fallbackDirectory = fallbackDirectory;
+        _stored = stored;
         DebugEnabled = debugEnabled;
 
         if (writeInBackground)
@@ -77,6 +82,9 @@ public sealed class SessionLogger : IDisposable
 
     /// <summary>Whether developer-only <c>debug</c> events are written.</summary>
     public bool DebugEnabled { get; }
+
+    /// <summary>This launch's session, as every entry it builds carries.</summary>
+    public string Session => _session;
 
     public void Debug(string message, object? fields = null)
     {
@@ -189,6 +197,7 @@ public sealed class SessionLogger : IDisposable
     private void Write(LogEntry entry)
     {
         Exception? sinkError = null;
+        var written = false;
         lock (_sinkGate)
         {
             if (_sink is not null && !_sinkClosed)
@@ -196,7 +205,7 @@ public sealed class SessionLogger : IDisposable
                 try
                 {
                     _sink.Write(entry);
-                    return;
+                    written = true;
                 }
                 catch (Exception ex)
                 {
@@ -205,7 +214,31 @@ public sealed class SessionLogger : IDisposable
             }
         }
 
+        if (written)
+        {
+            NotifyStored();
+            return;
+        }
+
         WriteFallback(entry, sinkError);
+    }
+
+    // Outside the sink's lock, so a listener that logs cannot deadlock the writer.
+    private void NotifyStored()
+    {
+        if (_stored is null)
+            return;
+
+        try
+        {
+            _stored();
+        }
+        catch (Exception ex)
+        {
+            // A listener's failure is reported, never let through to the writer thread, which would end
+            // the process.
+            EmitToConsole($"[logger] a stored-entry listener failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private void WriteFallback(LogEntry entry, Exception? sinkError)

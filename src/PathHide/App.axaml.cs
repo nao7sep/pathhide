@@ -40,6 +40,21 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // The app quits with its main window. The records window is a window of its own, which
+            // must neither keep a closed main window's app running nor be what is left of it.
+            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+
+            // A Dock click brings the main window back, as a second launch does, even while the
+            // records window is open and so macOS sees a visible window and restores nothing itself.
+            if (TryGetFeature(typeof(IActivatableLifetime)) is IActivatableLifetime activatable)
+            {
+                activatable.Activated += (_, e) =>
+                {
+                    if (e.Kind == ActivationKind.Reopen && desktop.MainWindow is { } main)
+                        WindowActivation.BringBack(main);
+                };
+            }
+
             // The one macOS menu bar, set before any window so every window, a startup failure notice
             // included, shows the same bar. About and Settings are enabled while the main window is in
             // front, so never over one of its dialogs.
@@ -136,13 +151,7 @@ public partial class App : Application
     private static void RegisterOwnerActivation(Window window)
     {
         SingleInstanceLease.RegisterOwnerActivationHandler(() => Dispatcher.UIThread.Post(() =>
-        {
-            if (window.WindowState == WindowState.Minimized)
-                window.WindowState = WindowState.Normal;
-            if (!window.IsVisible)
-                window.Show();
-            window.Activate();
-        }));
+            WindowActivation.BringBack(window)));
     }
 
     /// <summary>

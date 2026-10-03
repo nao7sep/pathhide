@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.ComponentModel;
 using System.Threading.Tasks;
-using System.Runtime.InteropServices;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
@@ -15,6 +14,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using PathHide.I18n;
 using PathHide.Services;
+using PathHide.Storage;
 using PathHide.ViewModels;
 
 namespace PathHide.Views;
@@ -29,18 +29,26 @@ public partial class MainWindow : Window
     // app lists its bindings, and a flyout that names two of them invites reading it as the whole
     // set.
     private IReadOnlyList<ShortcutItem> _shortcuts = [];
-    private (int X, int Y, double Width, double Height)? _normalGeometry;
+    private readonly WindowPlacement _placement;
 
-    // Moving, resizing and a language change each post work for after the native events settle. Once
-    // the window has closed, its platform window is gone and asking it for a screen throws, so late
-    // work for a closed window is dropped.
+    // A language change posts work for after the layout settles. Once the window has closed, its
+    // platform window is gone and asking it for a screen throws, so late work for a closed window is
+    // dropped.
     private bool _closed;
+
+    // The one records window, while it is open.
+    private RecordsWindow? _recordsWindow;
+
+    /// <summary>Where the records window reads; tests replace it.</summary>
+    internal Func<IRecordsReader> RecordsReader { get; set; } =
+        () => new RecordsReader(StorageRoot.RecordsFile);
 
     private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
 
     public MainWindow()
     {
         InitializeComponent();
+        _placement = new WindowPlacement(this, "main");
 
         if (OperatingSystem.IsWindows())
         {
@@ -52,10 +60,7 @@ public partial class MainWindow : Window
         AddFoldersButton.Click += OnAddFoldersClick;
         RemoveButton.Click += OnRemoveClick;
 
-        Localized.SetHeader(OpenLogMenuItem, RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? "menu.showLogExplorer"
-            : "menu.showLogFinder");
-        OpenLogMenuItem.Click += OnOpenLogClick;
+        RecordsMenuItem.Click += OnRecordsClick;
         SettingsMenuItem.Click += OnSettingsClick;
         AboutMenuItem.Click += OnAboutClick;
         ShortcutsMenuItem.Click += OnShortcutsClick;
@@ -91,13 +96,7 @@ public partial class MainWindow : Window
             _closed = true;
             Localizer.Changed -= OnLanguageChanged;
         };
-        PositionChanged += (_, _) =>
-        {
-            RememberNormalGeometryAfterNativeEvents();
-            ApplyNativeMinimum();
-        };
-        Resized += (_, _) => RememberNormalGeometryAfterNativeEvents();
-        Opened += (_, _) => RememberNormalGeometry();
+        PositionChanged += (_, _) => ApplyNativeMinimum();
         ScalingChanged += (_, _) => ApplyNativeMinimum();
         Screens.Changed += OnScreensChanged;
         Closed += (_, _) => Screens.Changed -= OnScreensChanged;
@@ -141,33 +140,10 @@ public partial class MainWindow : Window
 
     public void RestoreWindowGeometry()
     {
-        if (DataContext is not MainWindowViewModel vm)
-            return;
-
-        try
+        if (DataContext is MainWindowViewModel vm)
         {
-            var target = Screens.All.FirstOrDefault(screen => WindowMetrics.CanRestoreWindowGeometry(
-                vm.WindowPositionX, vm.WindowPositionY, vm.WindowWidth, vm.WindowHeight,
-                [screen.WorkingArea]));
-            if (target is null)
-                return;
-
-            ApplyNativeMinimum(target);
-            WindowStartupLocation = WindowStartupLocation.Manual;
-            Position = new PixelPoint(vm.WindowPositionX!.Value, vm.WindowPositionY!.Value);
-            Width = vm.WindowWidth!.Value;
-            Height = vm.WindowHeight!.Value;
-            _normalGeometry = (
-                vm.WindowPositionX!.Value, vm.WindowPositionY!.Value,
-                vm.WindowWidth!.Value, vm.WindowHeight!.Value);
-            WindowState = WindowMetrics.RestoredWindowState(
-                vm.WindowMaximized, OperatingSystem.IsWindows());
-        }
-        catch (Exception ex)
-        {
-            // Placement is disposable. Keep the designed defaults if the display
-            // backend or a saved value cannot be used.
-            Log.Warn("window geometry restore failed", ex);
+            _placement.Restore(vm.WindowPositionX, vm.WindowPositionY, vm.WindowWidth, vm.WindowHeight,
+                vm.WindowMaximized, prepare: target => ApplyNativeMinimum(target));
         }
     }
 
@@ -192,16 +168,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        RememberNormalGeometry();
-        if (WindowState is WindowState.Normal or WindowState.Maximized
-            && DataContext is MainWindowViewModel vm
-            && _normalGeometry is { } normal)
+        if (_placement.ForClose() is { } placement && DataContext is MainWindowViewModel vm)
         {
             try
             {
-                vm.SaveWindowPlacement(
-                    normal.X, normal.Y, normal.Width, normal.Height,
-                    OperatingSystem.IsWindows() && WindowState == WindowState.Maximized);
+                vm.SaveWindowPlacement(placement.X, placement.Y, placement.Width, placement.Height, placement.Maximized);
             }
             catch (Exception ex)
             {
@@ -227,27 +198,6 @@ public partial class MainWindow : Window
         _workFinishedForClose = true;
         Close();
     }
-
-    private void RememberNormalGeometry()
-    {
-        if (_closed || WindowState != WindowState.Normal)
-            return;
-
-        // Avalonia reports macOS title-bar zoom as Normal. Judge the settled native frame too,
-        // otherwise the zoomed rectangle replaces the actual normal rectangle.
-        var screen = Screens.ScreenFromWindow(this);
-        if (screen is not null
-            && WindowMetrics.IsMaximizedGeometry(
-                FrameSize ?? new Size(Width, Height), screen.WorkingArea, screen.Scaling))
-        {
-            return;
-        }
-
-        _normalGeometry = (Position.X, Position.Y, Width, Height);
-    }
-
-    private void RememberNormalGeometryAfterNativeEvents() =>
-        Dispatcher.UIThread.Post(RememberNormalGeometry);
 
     private void ApplyNativeMinimum(Screen? target = null)
     {
@@ -350,12 +300,35 @@ public partial class MainWindow : Window
 
     private Task ShowShortcutsAsync() => new ShortcutsDialog(_shortcuts).ShowBoundedAsync(this);
 
-    private void OnOpenLogClick(object? sender, RoutedEventArgs e)
+    private async void OnRecordsClick(object? sender, RoutedEventArgs e) =>
+        await OwnViewActionAsync(() =>
+        {
+            OpenRecords();
+            return Task.CompletedTask;
+        });
+
+    /// <summary>
+    /// Opens the records window, or brings the open one forward: there is only ever one. It has no
+    /// owner, so it is a window of its own beside this one, and the app quits with this window
+    /// (App, ShutdownMode).
+    /// </summary>
+    internal RecordsWindow OpenRecords()
     {
-        if (LogReveal.Reveal())
-            ViewModel.ResolveLogRevealFailure();
-        else
-            ViewModel.ReportLogRevealFailure();
+        if (_recordsWindow is { } open)
+        {
+            WindowActivation.BringBack(open);
+            return open;
+        }
+
+        var window = new RecordsWindow(new RecordsViewModel(RecordsReader(), Log.Session), ViewModel);
+        _recordsWindow = window;
+        window.Closed += (_, _) =>
+        {
+            if (_recordsWindow == window)
+                _recordsWindow = null;
+        };
+        window.Show();
+        return window;
     }
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e) =>

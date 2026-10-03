@@ -370,6 +370,49 @@ public sealed class SessionLoggerTests
         Assert.Equal("late", JsonNode.Parse(line)!["message"]!.GetValue<string>());
     }
 
+    [Fact]
+    public void Each_entry_the_sink_stores_signals_once_it_is_stored()
+    {
+        var sw = new StringWriter();
+        var stored = new List<int>();
+        var log = new SessionLogger(SessionStart, new TextWriterLogSink(sw, leaveOpen: true), fallbackDirectory: null,
+            debugEnabled: true, writeInBackground: false, stored: () => stored.Add(Lines(sw).Count));
+
+        log.Info("a");
+        log.Warn("b");
+
+        // Each signal came after its own line was written, never before it.
+        Assert.Equal([1, 2], stored);
+    }
+
+    [Fact]
+    public void An_entry_that_went_to_the_fallback_file_signals_nothing()
+    {
+        using var temp = new TempDirectory();
+        var signals = 0;
+        var log = new SessionLogger(SessionStart, new ThrowingSink(), temp.Path, debugEnabled: true,
+            writeInBackground: false, stored: () => signals++);
+
+        log.Info("not stored");
+
+        Assert.Equal(0, signals);
+        Assert.NotEmpty(File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-123-utc.log")));
+    }
+
+    [Fact]
+    public void A_listener_that_throws_loses_no_entry_and_stops_nothing()
+    {
+        var sw = new StringWriter();
+        var log = new SessionLogger(SessionStart, new TextWriterLogSink(sw, leaveOpen: true), fallbackDirectory: null,
+            debugEnabled: true, writeInBackground: true, stored: () => throw new InvalidOperationException("listener"));
+
+        log.Info("a");
+        log.Info("b");
+        log.Dispose();
+
+        Assert.Equal(["a", "b"], Lines(sw).ConvertAll(line => line["message"]!.GetValue<string>()));
+    }
+
     private sealed class BlockingSink : ILogSink
     {
         private readonly List<string> _messages = [];

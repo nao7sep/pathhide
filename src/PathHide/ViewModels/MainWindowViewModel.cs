@@ -331,15 +331,6 @@ public partial class MainWindowViewModel : ObservableObject
             FailurePresentation.WindowAction(error),
             error: true);
 
-    public void ReportLogRevealFailure() =>
-        ShowOperationalResult(
-            OperationalResultOwner.LogReveal,
-            FailurePresentation.LogReveal(),
-            error: true);
-
-    public void ResolveLogRevealFailure() =>
-        ResolveOperationalResult(OperationalResultOwner.LogReveal);
-
     /// <remarks>
     /// Adding is the act of hiding, so the whole add — deciding each path's identity, saving, hiding —
     /// runs as one cancellable operation, with Cancel shown throughout.
@@ -749,27 +740,62 @@ public partial class MainWindowViewModel : ObservableObject
     /// thread it would be cut off, and the placement lost, when the app quits. An unchanged placement
     /// writes nothing; a failed save throws and leaves the live placement untouched.
     /// </summary>
-    public void SaveWindowPlacement(int x, int y, double width, double height, bool maximized)
-    {
-        var candidate = new AppState
+    public void SaveWindowPlacement(int x, int y, double width, double height, bool maximized) =>
+        SaveState(state => state with
         {
             WindowPositionX = x,
             WindowPositionY = y,
             WindowWidth = width,
             WindowHeight = height,
             WindowMaximized = maximized,
-        };
-        if (_state.WindowPositionX == x
-            && _state.WindowPositionY == y
-            && _state.WindowWidth == width
-            && _state.WindowHeight == height
-            && _state.WindowMaximized == maximized)
-        {
-            return;
-        }
+        });
 
-        _stateStore.Save(candidate);
-        _state = candidate;
+    public int? RecordsWindowPositionX => _state.RecordsWindowPositionX;
+    public int? RecordsWindowPositionY => _state.RecordsWindowPositionY;
+    public double? RecordsWindowWidth => _state.RecordsWindowWidth;
+    public double? RecordsWindowHeight => _state.RecordsWindowHeight;
+    public bool RecordsWindowMaximized => _state.RecordsWindowMaximized;
+
+    /// <summary>The records window's list width as last dragged, or null before the first drag.</summary>
+    public double? RecordsListWidth => _state.RecordsListWidth;
+
+    /// <summary>
+    /// Saves the records window's placement as it closes, synchronously for the reason
+    /// <see cref="SaveWindowPlacement"/> gives.
+    /// </summary>
+    public void SaveRecordsWindowPlacement(int x, int y, double width, double height, bool maximized) =>
+        SaveState(state => state with
+        {
+            RecordsWindowPositionX = x,
+            RecordsWindowPositionY = y,
+            RecordsWindowWidth = width,
+            RecordsWindowHeight = height,
+            RecordsWindowMaximized = maximized,
+        });
+
+    /// <summary>
+    /// Saves the width the records window's list was dragged to, off the UI thread: a drag ends while
+    /// the window is in use, not as it closes. A failed save faults the task and changes nothing.
+    /// </summary>
+    public Task SaveRecordsListWidthAsync(double width) =>
+        Task.Run(() => SaveState(state => state with { RecordsListWidth = width }));
+
+    // Every window-state save goes through here, so each one starts from the last state saved and a
+    // save of one window's state keeps the other's. The gate orders a list-width save on a worker
+    // against a placement save as a window closes. An unchanged state writes nothing.
+    private readonly object _stateGate = new();
+
+    private void SaveState(Func<AppState, AppState> change)
+    {
+        lock (_stateGate)
+        {
+            var candidate = change(_state);
+            if (candidate == _state)
+                return;
+
+            _stateStore.Save(candidate);
+            _state = candidate;
+        }
     }
 
     /// <summary>

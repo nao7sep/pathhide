@@ -10,7 +10,6 @@ public enum OperationalResultOwner
     Visibility,
     Scan,
     Window,
-    LogReveal,
 }
 
 /// <summary>

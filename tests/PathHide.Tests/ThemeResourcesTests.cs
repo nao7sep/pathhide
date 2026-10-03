@@ -54,7 +54,7 @@ public sealed class ThemeResourcesTests
     public void TextKeepsHighContrastInEachTheme(string theme)
     {
         var brushes = ThemeBrushes(theme);
-        foreach (var text in new[] { "TextPrimaryBrush", "TextSecondaryBrush", "StatusAccentBrush", "DangerTextBrush" })
+        foreach (var text in new[] { "TextPrimaryBrush", "TextSecondaryBrush", "StatusAccentBrush", "DangerTextBrush", "WarningTextBrush" })
         {
             foreach (var surface in new[] { "AppBackgroundBrush", "SurfaceBrush", "StatusBackgroundBrush" })
             {

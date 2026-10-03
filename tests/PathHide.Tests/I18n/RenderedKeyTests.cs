@@ -11,6 +11,9 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using PathHide.I18n;
 using PathHide.Models;
+using PathHide.Services;
+using PathHide.Tests.Fakes;
+using PathHide.ViewModels;
 using PathHide.Views;
 using Xunit;
 
@@ -41,7 +44,7 @@ public class RenderedKeyTests : WindowTest
 
         // The menu's items are not on screen until it opens, so the walk above cannot see them.
         var keys = Keys();
-        foreach (var name in new[] { "OpenLogMenuItem", "SettingsMenuItem", "ShortcutsMenuItem", "AboutMenuItem" })
+        foreach (var name in new[] { "RecordsMenuItem", "SettingsMenuItem", "ShortcutsMenuItem", "AboutMenuItem" })
         {
             var header = Assert.IsType<string>(window.FindControl<MenuItem>(name)!.Header);
             Assert.DoesNotContain(header, keys);
@@ -53,6 +56,59 @@ public class RenderedKeyTests : WindowTest
     {
         var window = Show(PopulatedMainWindow.Empty());
 
+        AssertNoKeys(window);
+    }
+
+    [AvaloniaFact]
+    public void the_records_window_shows_no_key()
+    {
+        // Rows at every level, a launch named as this one, a selected record with fields and an error,
+        // and the note a failed next page leaves at the end of the list.
+        var reader = new FakeRecordsReader { Sessions = ["2026-10-04T08:00:00.000Z"] };
+        reader.Details[3] = new global::PathHide.Storage.RecordDetail(
+            3, "2026-10-04T08:00:00.000Z", "2026-10-04T09:00:03.000Z", "error", "save failed", "{\"a\":1}", "{\"type\":\"IOException\"}");
+        var records = new RecordsViewModel(reader, "2026-10-04T08:00:00.000Z", _ => Task.CompletedTask);
+        var settings = new FakeSettingsStore();
+        var owner = new MainWindowViewModel(
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+        var window = Show(new RecordsWindow(records, owner));
+        reader.LastPage.Answer(false);
+        Dispatcher.UIThread.RunJobs();
+        records.SelectedLaunch = records.LaunchOptions[1];
+        Dispatcher.UIThread.RunJobs();
+        reader.LastPage.Answer(true,
+            new(3, "2026-10-04T08:00:00.000Z", "2026-10-04T09:00:03.000Z", "error", "save failed"),
+            new(2, "2026-10-04T08:00:00.000Z", "2026-10-04T09:00:02.000Z", "warn", "slow"),
+            new(1, "2026-10-04T08:00:00.000Z", "2026-10-04T09:00:01.000Z", "debug", "probe"));
+        Dispatcher.UIThread.RunJobs();
+        records.SelectedRow = records.Rows[0];
+        records.LoadMore();
+        Dispatcher.UIThread.RunJobs();
+        reader.LastPage.Fail();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(records.HasDetail);
+        Assert.True(records.Detail!.HasFields && records.Detail.HasError);
+        Assert.True(records.HasMoreNote);
+        AssertNoKeys(window);
+    }
+
+    [AvaloniaFact]
+    public void the_records_windows_notes_show_no_key()
+    {
+        var reader = new FakeRecordsReader();
+        var records = new RecordsViewModel(reader, "s", _ => Task.CompletedTask);
+        var settings = new FakeSettingsStore();
+        var owner = new MainWindowViewModel(
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+        var window = Show(new RecordsWindow(records, owner));
+
+        AssertNoKeys(window);
+        reader.LastPage.Fail();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(records.HasListNote);
         AssertNoKeys(window);
     }
 
