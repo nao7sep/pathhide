@@ -171,18 +171,23 @@ public partial class MainWindow : Window
         }
     }
 
-    // Set once in-flight work has been finished for closing, so the close that follows goes through.
+    // The finishing of in-flight work for closing, once a close has started it; set to done when it
+    // has finished, so the close that follows goes through.
+    private Task? _finishingWork;
     private bool _workFinishedForClose;
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
         // Closing is itself a command: it cancels the running scan or apply and waits for it, bounded,
         // before the window goes, so no apply is dropped mid-way and an elevated child's temp files are
-        // removed rather than stranded. A second close while that runs joins the same wait.
-        if (!_workFinishedForClose && DataContext is MainWindowViewModel busy && busy.HasWorkToFinish)
+        // removed rather than stranded. A second close or quit while that runs joins the same wait,
+        // even once the work it waits for no longer counts as busy: the wait is not over until it
+        // returns, and the window going earlier would end the process under it.
+        if (!_workFinishedForClose && DataContext is MainWindowViewModel busy
+            && (_finishingWork is not null || busy.HasWorkToFinish))
         {
             e.Cancel = true;
-            _ = FinishWorkThenCloseAsync(busy);
+            _finishingWork ??= FinishWorkThenCloseAsync(busy);
             base.OnClosing(e);
             return;
         }
@@ -219,8 +224,6 @@ public partial class MainWindow : Window
             Log.Error("shutdown: finishing work failed", ex);
         }
 
-        if (_workFinishedForClose)
-            return;
         _workFinishedForClose = true;
         Close();
     }
