@@ -75,7 +75,7 @@ public sealed class QuarantineNoticeTests : IDisposable
 
         Assert.NotNull(shown);
         Assert.Equal("quarantine.pathListTitle", shown!.Value.Title.Key);
-        Assert.Contains("session log", English.Of(shown.Value.Body));
+        Assert.Contains("Open Records from the menu", English.Of(shown.Value.Body));
         Assert.DoesNotContain("/home/u/.pathhide", English.Of(shown.Value.Body), StringComparison.Ordinal);
         // Drained, so a second reload does not repeat it.
         Assert.Empty(QuarantineJournal.Drain());

@@ -719,7 +719,7 @@ public class MainWindowViewModelTests
         var pathList = PathHide.Storage.QuarantineJournal.Describe(
             [new PathHide.Storage.QuarantinedStore("paths", "/r/paths-x.invalid")]);
         Assert.Contains("path list", English.Of(pathList.Title));
-        Assert.Contains("session log", English.Of(pathList.Body));
+        Assert.Contains("Open Records from the menu", English.Of(pathList.Body));
         Assert.DoesNotContain("/r/paths-x.invalid", English.Of(pathList.Body), StringComparison.Ordinal);
 
         // Reload keeps the entries already on screen, so the path list's notice must not claim the
