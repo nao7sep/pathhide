@@ -132,6 +132,17 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>How long closing waits for a running command, and then for an elevated child, to finish.</summary>
     internal TimeSpan ShutdownBound { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>The clock the activation rescan's quiet period is measured on; tests replace it.</summary>
+    internal TimeProvider Clock { get; init; } = TimeProvider.System;
+
+    /// <summary>
+    /// How long after an activation rescan starts a further activation starts none, so a burst of
+    /// activations (window switching, a dialog closing as the app comes forward) costs one rescan.
+    /// </summary>
+    internal static readonly TimeSpan ActivationRescanQuietPeriod = TimeSpan.FromSeconds(1);
+
+    private long? _lastActivationRescan;
     public int? WindowPositionX => _state.WindowPositionX;
     public int? WindowPositionY => _state.WindowPositionY;
     public double? WindowWidth => _state.WindowWidth;
@@ -665,6 +676,43 @@ public partial class MainWindowViewModel : ObservableObject
     });
 
     /// <summary>
+    /// Rescans the path list because the window came back to the front, so a path unhidden, moved
+    /// or deleted outside the app since the last scan shows its state without a Reload. Rows are
+    /// updated in place, so the selection and every result on screen stay. Starts nothing before the
+    /// first scan, while a scan or any command runs, once closing has begun, or within
+    /// <see cref="ActivationRescanQuietPeriod"/> of the last activation rescan. Returns whether a
+    /// rescan started.
+    /// </summary>
+    public bool RescanOnActivation()
+    {
+        if (!_initialized || IsScanning)
+            return false;
+
+        var now = Clock.GetTimestamp();
+        if (_lastActivationRescan is { } last && Clock.GetElapsedTime(last, now) < ActivationRescanQuietPeriod)
+            return false;
+
+        // Taken without waiting: a command holding the gate (closing included, which never releases
+        // it) means this is no moment to scan, and the command starts its own scan when it is done.
+        if (!_mutationGate.Wait(0))
+            return false;
+        try
+        {
+            if (Rows.Count == 0)
+                return false;
+
+            _lastActivationRescan = now;
+            Log.Info("scan: rescanning on activation", new { entries = Rows.Count });
+            StartBackgroundScan();
+            return true;
+        }
+        finally
+        {
+            _mutationGate.Release();
+        }
+    }
+
+    /// <summary>
     /// Tells the user about any store a load just set aside, if there is a
     /// window to tell them through. Startup has its own drain, because at that
     /// point no window exists yet to own the dialog.
@@ -1013,7 +1061,8 @@ public partial class MainWindowViewModel : ObservableObject
     /// At most one scan is ever live, and that is structural rather than checked: every start is
     /// either <see cref="Initialize"/> — once, before any command can run — or a mutating command
     /// holding <c>_mutationGate</c>, and every one of those cancels the running scan and AWAITS it
-    /// before starting another. This method used to open by cancelling and disposing a "previous"
+    /// before starting another; <see cref="RescanOnActivation"/> holds the gate too, and starts only
+    /// when no scan is running. This method used to open by cancelling and disposing a "previous"
     /// source that cannot exist, and to gate each of its shared-state writes on
     /// <c>ReferenceEquals(_scanCts, scanCts)</c> — four re-checks of one invariant, in the type
     /// least able to enforce it.

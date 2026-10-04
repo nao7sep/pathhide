@@ -39,6 +39,10 @@ public partial class MainWindow : Window
     // The one records window, while it is open.
     private RecordsWindow? _recordsWindow;
 
+    // Whether a file or folder picker is open. App dialogs are owned windows, so OwnedWindows shows
+    // them; the platform's pickers are not.
+    private bool _pickerOpen;
+
     /// <summary>Where the records window reads; tests replace it.</summary>
     internal Func<IRecordsReader> RecordsReader { get; set; } =
         () => new RecordsReader(StorageRoot.RecordsFile);
@@ -69,6 +73,14 @@ public partial class MainWindow : Window
         // DialogBase.
         Activated += (_, _) => Classes.Set("windowInactive", false);
         Deactivated += (_, _) => Classes.Set("windowInactive", true);
+
+        // Coming back to the front rescans the list, so what changed on disk meanwhile shows without
+        // a Reload. Not under a modal dialog or a picker: its outcome decides what runs next.
+        Activated += (_, _) =>
+        {
+            if (DataContext is MainWindowViewModel vm && OwnedWindows.Count == 0 && !_pickerOpen)
+                vm.RescanOnActivation();
+        };
 
         PathListReceiver.AddHandler(DragDrop.DropEvent, OnDrop);
         PathListReceiver.AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -360,6 +372,7 @@ public partial class MainWindow : Window
     private async Task AddFilesAsync()
     {
         IReadOnlyList<IStorageFile> files;
+        _pickerOpen = true;
         try
         {
             files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
@@ -374,6 +387,10 @@ public partial class MainWindow : Window
             Log.Error("ui: add files picker failed", ex);
             ViewModel.ReportPathPickerFailure(ex);
             return;
+        }
+        finally
+        {
+            _pickerOpen = false;
         }
 
         try
@@ -393,6 +410,7 @@ public partial class MainWindow : Window
     private async Task AddFoldersAsync()
     {
         IReadOnlyList<IStorageFolder> folders;
+        _pickerOpen = true;
         try
         {
             folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
@@ -407,6 +425,10 @@ public partial class MainWindow : Window
             Log.Error("ui: add directories picker failed", ex);
             ViewModel.ReportPathPickerFailure(ex);
             return;
+        }
+        finally
+        {
+            _pickerOpen = false;
         }
 
         try

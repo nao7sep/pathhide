@@ -47,11 +47,15 @@ public class MainWindowViewModelTests
         FakeVisibilityService visibility,
         FakeJsonStore<List<PathEntry>> paths,
         FakeSettingsStore? settings = null,
-        TimeSpan? responseTimeout = null)
+        TimeSpan? responseTimeout = null,
+        TimeProvider? clock = null)
     {
         var settingsStore = settings ?? new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(visibility, responseTimeout), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+            new BoundedVisibility(visibility, responseTimeout), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState())
+        {
+            Clock = clock ?? TimeProvider.System,
+        };
         vm.Initialize();
         return vm;
     }
