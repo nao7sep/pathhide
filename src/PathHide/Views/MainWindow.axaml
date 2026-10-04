@@ -63,9 +63,9 @@
                           Data="M1,1 H17 M1,8 H17 M1,15 H17"/>
                     <Button.Flyout>
                         <MenuFlyout Placement="BottomEdgeAlignedRight">
-                            <MenuItem i18n:Localized.Header="menu.records" x:Name="RecordsMenuItem"/>
                             <MenuItem i18n:Localized.Header="menu.settings"
                                       x:Name="SettingsMenuItem"/>
+                            <MenuItem i18n:Localized.Header="menu.records" x:Name="RecordsMenuItem"/>
                             <MenuItem i18n:Localized.Header="menu.shortcuts" x:Name="ShortcutsMenuItem"/>
                             <MenuItem i18n:Localized.Header="menu.about" x:Name="AboutMenuItem"/>
                         </MenuFlyout>
