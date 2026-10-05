@@ -184,12 +184,8 @@ sealed class Program
 
     /// <returns>Whether any path failed.</returns>
     /// <remarks>
-    /// <c>File.GetAttributes</c>/<c>File.SetAttributes</c> operate on the reparse point
-    /// itself, not its target (verified on Windows for symlinks and junctions, elevated and
-    /// not). So a path swapped for a junction between the unelevated inspect and this elevated
-    /// write can only have its own attributes changed — it cannot redirect this admin write
-    /// onto the link's target. Keep both calls path-based for that reason; do not switch to a
-    /// follow-based API or add reparse-handle machinery to "harden" a hazard that cannot occur.
+    /// <see cref="WindowsFileVisibility.Set"/> is path-based and never follows a reparse point; its
+    /// remarks say why that matters for this elevated write.
     /// </remarks>
     private static bool ApplyFileAttributes(
         IReadOnlyList<string> paths, bool hide, bool system, ElevatedResultsWriter? results)
@@ -206,11 +202,7 @@ sealed class Program
         {
             try
             {
-                var attrs = WindowsFileVisibility.ApplyVisibility(
-                    File.GetAttributes(path), hide, system);
-                // not recorded: this changes only external filesystem metadata; paths.json
-                // records the user's desired visibility and tracked-path identity.
-                File.SetAttributes(path, attrs);
+                WindowsFileVisibility.Set(path, hide, system);
                 WriteResult(results, new PathApplyResult(path, Ok: true));
             }
             catch (Exception ex)

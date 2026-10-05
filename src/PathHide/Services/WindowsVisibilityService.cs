@@ -49,30 +49,17 @@ public sealed class WindowsVisibilityService : IVisibilityService
     public void Hide(string path)
     {
         var mode = _getHideMode();
-        var attrs = WindowsFileVisibility.ApplyVisibility(
-            File.GetAttributes(path),
-            hide: true,
-            system: mode == WindowsHideMode.HiddenAndSystem);
 
         // Per-item boundary crossing: debug, not info. The command aggregate is
         // logged once by the caller (ApplyDesiredStateAsync).
         Log.Debug("hiding path", new { path, mode });
-        // not recorded: this changes only external filesystem metadata; paths.json
-        // records the user's desired visibility and tracked-path identity.
-        File.SetAttributes(path, attrs);
+        WindowsFileVisibility.Set(path, hide: true, system: mode == WindowsHideMode.HiddenAndSystem);
     }
 
     public void Show(string path)
     {
-        var attrs = WindowsFileVisibility.ApplyVisibility(
-            File.GetAttributes(path),
-            hide: false,
-            system: false);
-
         Log.Debug("showing path", new { path });
-        // not recorded: this changes only external filesystem metadata; paths.json
-        // records the user's desired visibility and tracked-path identity.
-        File.SetAttributes(path, attrs);
+        WindowsFileVisibility.Set(path, hide: false, system: false);
     }
 
     /// <summary>
