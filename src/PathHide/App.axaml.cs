@@ -106,6 +106,18 @@ public partial class App : Application
                 base.OnFrameworkInitializationCompleted();
                 return;
             }
+            catch (NewerFormatException newer)
+            {
+                // Intact data a newer PathHide wrote: opening without it would let this version write
+                // over it, so startup stops with the file left exactly as it is.
+                Log.Warn("startup: a file was written by a newer version; halting", new { path = newer.Path });
+                desktop.MainWindow = NoticeDialog.CreateStartupFailure(
+                    I18n.Message.Of("startup.failedTitle"),
+                    FailurePresentation.NewerStore(newer));
+                RegisterOwnerActivation(desktop.MainWindow);
+                base.OnFrameworkInitializationCompleted();
+                return;
+            }
             catch (Exception ex)
             {
                 Log.Error("startup: a settings file could not be read or set aside", ex);
@@ -163,7 +175,7 @@ public partial class App : Application
     /// </summary>
     internal static MainWindowViewModel CreateMainViewModel()
     {
-        var pathListStore = new JsonStore<List<PathEntry>>("paths.json", QuarantineJournal.PathListLabel);
+        var pathListStore = new PathListStore();
         var settingsStore = new SettingsStore();
         // Settings are re-derivable, so an unreadable config.json correctly falls back to
         // defaults; the recovery notice tells the user it happened. The path list does NOT —
@@ -171,7 +183,8 @@ public partial class App : Application
         var settings = settingsStore.Load().Value;
 
         // Window geometry remains independent, disposable, and outside backup history.
-        var stateStore = new JsonStore<AppState>(AppState.FileName, QuarantineJournal.StateLabel, recordBackup: false);
+        var stateStore = new JsonStore<AppState>(
+            AppState.FileName, QuarantineJournal.StateLabel, FormatVersions.State, recordBackup: false);
         var state = stateStore.Load().Value;
 
         // Key effective configuration at startup (the conventions' baseline): every user-tunable

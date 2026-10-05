@@ -18,8 +18,8 @@ namespace PathHide.I18n;
 ///
 /// The read is deliberately its own, and forgiving: the real store quarantines a file it cannot
 /// parse, and that decision belongs to the app's startup path, not to a language lookup. A file that
-/// cannot be read here simply means System, and the startup-failure surfaces then speak the
-/// computer's language, which is what the localization conventions ask of them.
+/// cannot be read here, or one a newer PathHide wrote, simply means System, and the startup-failure
+/// surfaces then speak the computer's language, which is what the localization conventions ask of them.
 /// </summary>
 internal static class LanguageBootstrap
 {
@@ -43,7 +43,7 @@ internal static class LanguageBootstrap
                 return Languages.System;
 
             using var document = JsonDocument.Parse(File.ReadAllText(path));
-            return document.RootElement.ValueKind == JsonValueKind.Object
+            return FormatVersions.Recorded(document.RootElement) <= FormatVersions.Settings
                 && document.RootElement.TryGetProperty(SettingsSets.Language, out var language)
                 && language.ValueKind == JsonValueKind.String
                 ? Languages.NormalizePreference(language.GetString())

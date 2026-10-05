@@ -46,6 +46,7 @@
   "dialog.discard": "放弃",
   "dialog.discardMessage": "你有未保存的更改。要放弃这些更改并关闭吗？",
   "dialog.discardTitle": "放弃更改",
+  "failure.newerStore": "文件 {path} 由较新版本的 PathHide 保存，此版本无法读取，因此 PathHide 未对其做任何改动。要使用该文件，请启动该较新版本的 PathHide。",
   "failure.pathListSave": "无法保存路径列表。现有列表保持不变，请重试。",
   "failure.pathListSavePermission": "无法保存路径列表。请检查 PathHide 数据文件夹是否可写，然后重试。",
   "failure.pathListStartup": "无法读取你的路径列表。PathHide 没有覆盖该文件，而是将其移到一旁；也没有以空列表打开，而是停止了运行。你的文件既未被隐藏，也未被取消隐藏。若要保留你的列表，请修复 PathHide 移到一旁的文件（会话日志中记录了该文件的名称），将其改名为 paths.json 并放回 PathHide 数据文件夹，然后再次启动 PathHide。如果不这样做就启动 PathHide，它将以空列表打开。",

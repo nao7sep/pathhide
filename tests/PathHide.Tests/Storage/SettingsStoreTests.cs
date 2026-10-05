@@ -59,8 +59,14 @@ public sealed class SettingsStoreTests : IDisposable
         return fields;
     }
 
-    private Dictionary<string, JsonElement> StoredSets() =>
-        JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(ConfigPath))!;
+    /// <summary>The sets config.json holds, after checking the format version recorded beside them.</summary>
+    private Dictionary<string, JsonElement> StoredSets()
+    {
+        var stored = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(ConfigPath))!;
+        Assert.True(stored.Remove(FormatVersions.JsonKey, out var version));
+        Assert.Equal(FormatVersions.Settings, version.GetInt32());
+        return stored;
+    }
 
     private static void AssertBuiltIns(AppSettings settings)
     {

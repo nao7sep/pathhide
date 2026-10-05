@@ -86,6 +86,7 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
                 pragma.CommandText = "PRAGMA busy_timeout = 5000;";
                 pragma.ExecuteNonQuery();
             }
+            FormatVersions.CheckDatabase(connection, databasePath, FormatVersions.Records);
             return read(connection);
         }).WaitAsync(ReadBound);
 

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using PathHide.Backup;
 using PathHide.Services;
 
@@ -13,6 +14,12 @@ namespace PathHide.Storage;
 /// unparseable file is quarantined aside, bytes preserved, before the default
 /// is returned (storage-path conventions).
 /// </summary>
+/// <remarks>
+/// The file is a JSON object: <typeparamref name="T"/>'s properties beside the format version this
+/// store owns (store-recovery-conventions). A file recording a newer version is neither read,
+/// quarantined nor written: <see cref="Load"/> and <see cref="Save"/> throw
+/// <see cref="NewerFormatException"/> and leave it as it is.
+/// </remarks>
 /// <remarks>
 /// The app's single managed-text atomic-write choke point, and so the one place
 /// the data-backup hook lives: <see cref="WriteAtomically"/> records the exact
@@ -28,6 +35,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 {
     private readonly string _filePath;
     private readonly string _label;
+    private readonly int _formatVersion;
     private readonly bool _recordBackup;
 
     /// <summary>
@@ -35,12 +43,14 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     /// </summary>
     /// <param name="fileName">File name (no directory component), e.g. <c>"paths.json"</c>.</param>
     /// <param name="label">Human-readable noun used in log messages, e.g. <c>"paths"</c>.</param>
+    /// <param name="formatVersion">The file's format version, from <see cref="FormatVersions"/>.</param>
     /// <param name="recordBackup">False for a store that is volatile state and nothing else (window
     /// placement): its saves are written atomically but not recorded into the backup history.</param>
-    public JsonStore(string fileName, string label, bool recordBackup = true)
+    public JsonStore(string fileName, string label, int formatVersion, bool recordBackup = true)
     {
         _filePath = Path.Combine(StorageRoot.Directory, fileName);
         _label = label;
+        _formatVersion = formatVersion;
         _recordBackup = recordBackup;
     }
 
@@ -69,7 +79,11 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         try
         {
             StorageRoot.EnsureExists();
-            var json = JsonSerializer.Serialize(value, JsonOptions.Default);
+            RefuseNewerFile();
+            var document = JsonSerializer.SerializeToNode(value, JsonOptions.Default) as JsonObject
+                ?? throw new InvalidOperationException($"The {_label} store holds a JSON object.");
+            document.Insert(0, FormatVersions.JsonKey, _formatVersion);
+            var json = document.ToJsonString(JsonOptions.Default);
             // Encode once, here, so the exact bytes written to disk are the exact bytes recorded to the
             // backup store after the rename (no re-encode, no re-read). No BOM: File.WriteAllText/Encoding
             // .UTF8 without a preamble matches what the app writes and reads back.
@@ -96,13 +110,18 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
         try
         {
-            var json = File.ReadAllText(_filePath);
-            value = JsonSerializer.Deserialize<T>(json, JsonOptions.Default)
-                ?? throw new JsonException($"The {_label} file contains null instead of an object or array.");
+            using var document = JsonDocument.Parse(File.ReadAllText(_filePath));
+            var version = FormatVersions.Recorded(document.RootElement)
+                ?? throw new JsonException($"The {_label} file is not an object with a valid {FormatVersions.JsonKey}.");
+            if (version > _formatVersion)
+                throw Newer(version);
+
+            value = document.RootElement.Deserialize<T>(JsonOptions.Default)
+                ?? throw new JsonException($"The {_label} file could not be read as its document.");
             Log.Info("store: loaded", new { label = _label, path = _filePath });
             return true;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not NewerFormatException)
         {
             // Present but unparseable: quarantine aside (bytes preserved) before the caller
             // decides what to do; only a later user change recreates the file through Save.
@@ -110,6 +129,37 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             wasUnreadable = true;
             return false;
         }
+    }
+
+    /// <summary>
+    /// Refuses to write over a file that records a newer version than this store's. A file that cannot be
+    /// parsed records none this build can see, and is written over as before.
+    /// </summary>
+    private void RefuseNewerFile()
+    {
+        if (!File.Exists(_filePath))
+            return;
+
+        int? recorded;
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(_filePath));
+            recorded = FormatVersions.Recorded(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return;
+        }
+
+        if (recorded > _formatVersion)
+            throw Newer(recorded.Value);
+    }
+
+    private NewerFormatException Newer(int version)
+    {
+        Log.Warn("store: written by a newer version, left as it is",
+            new { label = _label, path = _filePath, version, supported = _formatVersion });
+        return new NewerFormatException(_filePath, version, _formatVersion);
     }
 
     /// <summary>

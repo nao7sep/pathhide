@@ -58,9 +58,13 @@ CREATE INDEX IF NOT EXISTS idx_log_entries_time_id ON log_entries (time, id);
 
             using (var command = connection.CreateCommand())
             {
+                command.CommandText = "PRAGMA busy_timeout = 5000;";
+                command.ExecuteNonQuery();
+                // Before anything writes, the journal mode included: a newer database is left as it is.
+                FormatVersions.AdoptDatabase(connection, path, FormatVersions.Records);
                 // WAL with synchronous NORMAL keeps every committed entry through a process crash
                 // without a disk sync per line.
-                command.CommandText = "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;";
+                command.CommandText = "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;";
                 command.ExecuteNonQuery();
                 command.CommandText = Schema;
                 command.ExecuteNonQuery();

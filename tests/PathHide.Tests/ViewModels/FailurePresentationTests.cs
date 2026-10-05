@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using PathHide.Storage;
 using PathHide.Tests.I18n;
 using PathHide.ViewModels;
 using Xunit;
@@ -39,5 +40,15 @@ public sealed class FailurePresentationTests
         Assert.Contains("writable", English.Of(FailurePresentation.SettingsSave(error)), StringComparison.Ordinal);
         Assert.Contains("writable", English.Of(FailurePresentation.PathListSave(error)), StringComparison.Ordinal);
         Assert.Contains("permission", English.Of(FailurePresentation.Scan(error)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASaveRefusedOverANewerFileNamesTheFile()
+    {
+        var error = new NewerFormatException("/home/u/.pathhide/paths.json", 2, 1);
+
+        Assert.Equal("failure.newerStore", FailurePresentation.SettingsSave(error).Key);
+        Assert.Equal("failure.newerStore", FailurePresentation.PathListSave(error).Key);
+        Assert.Contains("/home/u/.pathhide/paths.json", English.Of(FailurePresentation.NewerStore(error)), StringComparison.Ordinal);
     }
 }

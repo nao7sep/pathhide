@@ -681,7 +681,22 @@ public partial class MainWindowViewModel : ObservableObject
         // reloading the path list does not change the app's configuration.
         Log.Info("reload");
         // Off the UI thread: the data folder may sit on a slow or redirected profile share.
-        var reloaded = await Task.Run(_pathListStore.Load);
+        LoadedStore<List<PathEntry>> reloaded;
+        try
+        {
+            reloaded = await Task.Run(_pathListStore.Load);
+        }
+        catch (NewerFormatException newer)
+        {
+            // A newer PathHide wrote the list: keep the rows on screen, as for an unreadable one, and
+            // let the store refuse every save over that file.
+            _entriesOnDisk = false;
+            if (ShowNoticeAsync is not null)
+                await ShowNoticeAsync(Message.Of("quarantine.pathListTitle"), FailurePresentation.NewerStore(newer));
+            StartBackgroundScan();
+            return;
+        }
+
         if (reloaded.WasUnreadable)
         {
             // Mid-session there is nothing to halt: the app is already running

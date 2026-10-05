@@ -60,6 +60,7 @@
   "dialog.discard": "Descartar",
   "dialog.discardMessage": "Tienes cambios sin guardar. ¿Descartarlos y cerrar?",
   "dialog.discardTitle": "Descartar cambios",
+  "failure.newerStore": "El archivo {path} se guardó con una versión más reciente de PathHide y esta versión no puede leerlo, así que PathHide lo dejó sin cambios. Para usarlo, inicia esa versión más reciente de PathHide.",
   "failure.pathListSave": "No se pudo guardar la lista de rutas. Tu lista actual sigue sin cambios; inténtalo de nuevo.",
   "failure.pathListSavePermission": "No se pudo guardar la lista de rutas. Comprueba que se pueda escribir en la carpeta de datos de PathHide y vuelve a intentarlo.",
   "failure.pathListStartup": "No se pudo leer tu lista de rutas. PathHide apartó el archivo en vez de sobrescribirlo y se detuvo en lugar de abrirse con una lista vacía. No se ocultó ni se volvió a mostrar ninguno de tus archivos. Para conservar tu lista, repara el archivo que PathHide apartó, cuyo nombre figura en el registro de sesión, vuelve a colocarlo en la carpeta de datos de PathHide con el nombre paths.json e inicia PathHide de nuevo. Si inicias PathHide sin hacerlo, se abrirá con una lista vacía.",

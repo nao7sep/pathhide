@@ -81,6 +81,7 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
         // Resolved once, before the try, so the catch below can name it without re-running a
         // resolution that may itself throw.
         var storeFile = "(unresolved)";
+        SqliteConnection? connection = null;
         try
         {
             var file = StoreFile();
@@ -92,7 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
             // the first thing written on a fresh root.
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
 
-            var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            connection = new SqliteConnection(new SqliteConnectionStringBuilder
             {
                 DataSource = file,
                 Mode = SqliteOpenMode.ReadWriteCreate,
@@ -101,12 +102,15 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
 
             using (var pragma = connection.CreateCommand())
             {
-                pragma.CommandText = "PRAGMA journal_mode = WAL;";
-                pragma.ExecuteNonQuery();
                 // busy_timeout: under the tolerated two-instance case, a contended write waits up to this
                 // long for SQLite's write lock instead of immediately failing with SQLITE_BUSY and dropping
                 // that record.
                 pragma.CommandText = "PRAGMA busy_timeout = 5000;";
+                pragma.ExecuteNonQuery();
+                // Before anything writes, the journal mode included: a newer store is left as it is, and
+                // recording stays off for the session like any other failed open.
+                FormatVersions.AdoptDatabase(connection, file, FormatVersions.Backups);
+                pragma.CommandText = "PRAGMA journal_mode = WAL;";
                 pragma.ExecuteNonQuery();
             }
 
@@ -125,6 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
             // PATHHIDE_DATA_DIR) and that second throw would escape EnsureOpen entirely.
             Log.Warn("backup store: could not open; recording disabled for this session", ex,
                 new { file = storeFile });
+            connection?.Dispose();
             _connection = null;
         }
 

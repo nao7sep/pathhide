@@ -1,5 +1,6 @@
 using System;
 using PathHide.I18n;
+using PathHide.Storage;
 
 namespace PathHide.ViewModels;
 
@@ -13,13 +14,23 @@ public static class FailurePresentation
 {
     public static Message StartupStorage() => Message.Of("failure.startupStorage");
 
-    public static Message SettingsSave(Exception error) => error is UnauthorizedAccessException
-        ? Message.Of("failure.settingsSavePermission")
-        : Message.Of("failure.settingsSave");
+    public static Message SettingsSave(Exception error) => error switch
+    {
+        NewerFormatException newer => NewerStore(newer),
+        UnauthorizedAccessException => Message.Of("failure.settingsSavePermission"),
+        _ => Message.Of("failure.settingsSave"),
+    };
 
-    public static Message PathListSave(Exception error) => error is UnauthorizedAccessException
-        ? Message.Of("failure.pathListSavePermission")
-        : Message.Of("failure.pathListSave");
+    public static Message PathListSave(Exception error) => error switch
+    {
+        NewerFormatException newer => NewerStore(newer),
+        UnauthorizedAccessException => Message.Of("failure.pathListSavePermission"),
+        _ => Message.Of("failure.pathListSave"),
+    };
+
+    /// <summary>A file a newer PathHide wrote, named by its path and left as it is.</summary>
+    public static Message NewerStore(NewerFormatException newer) =>
+        Message.Of("failure.newerStore", ("path", newer.Path));
 
     public static Message Scan(Exception error) => error is UnauthorizedAccessException
         ? Message.Of("failure.scanPermission")

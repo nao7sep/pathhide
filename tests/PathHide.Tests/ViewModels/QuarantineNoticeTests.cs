@@ -51,6 +51,28 @@ public sealed class QuarantineNoticeTests : IDisposable
     }
 
     [Fact]
+    public async Task Reload_WhenANewerVersionWroteThePathList_KeepsTheRowsAndNamesTheFile()
+    {
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = MainWindowViewModelTests.CreateViewModel(new FakeVisibilityService(), paths);
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/keep-me" });
+
+        (Message Title, Message Body)? shown = null;
+        vm.ShowNoticeAsync = (title, body) =>
+        {
+            shown = (title, body);
+            return Task.CompletedTask;
+        };
+        paths.LoadException = new NewerFormatException("/home/u/.pathhide/paths.json", 2, FormatVersions.PathList);
+
+        await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
+
+        Assert.Equal("/keep-me", Assert.Single(vm.Rows).Path);
+        Assert.Equal("quarantine.pathListTitle", shown!.Value.Title.Key);
+        Assert.Contains("/home/u/.pathhide/paths.json", English.Of(shown.Value.Body), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Reload_WhenTheStoreWasQuarantined_TellsTheUser()
     {
         // The startup drain runs once, in the window's Opened handler. A load

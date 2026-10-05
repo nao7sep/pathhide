@@ -46,6 +46,7 @@
   "dialog.discard": "폐기",
   "dialog.discardMessage": "저장하지 않은 변경 사항이 있습니다. 폐기하고 닫으시겠습니까?",
   "dialog.discardTitle": "변경 사항 폐기",
+  "failure.newerStore": "{path} 파일은 더 새로운 버전의 PathHide로 저장되어 이 버전에서는 읽을 수 없으므로, PathHide가 변경하지 않고 그대로 두었습니다. 이 파일을 사용하려면 그 새로운 버전의 PathHide를 시작하십시오.",
   "failure.pathListSave": "경로 목록을 저장하지 못했습니다. 기존 목록은 변경되지 않았습니다. 다시 시도하십시오.",
   "failure.pathListSavePermission": "경로 목록을 저장하지 못했습니다. PathHide 데이터 폴더에 쓸 수 있는지 확인한 뒤 다시 시도하십시오.",
   "failure.pathListStartup": "경로 목록을 읽지 못했습니다. PathHide가 파일을 덮어쓰지 않고 따로 옮겨 두었으며, 빈 목록으로 열지 않고 실행을 멈췄습니다. 어떤 파일도 숨기거나 숨김 해제하지 않았습니다. 따로 옮겨 둔 파일의 이름은 세션 로그에 기록되어 있습니다. 목록을 유지하려면 그 파일을 복구하여 PathHide 데이터 폴더에 paths.json이라는 이름으로 다시 넣은 뒤 PathHide를 다시 시작하십시오. 그렇게 하지 않고 PathHide를 시작하면 빈 목록으로 열립니다.",

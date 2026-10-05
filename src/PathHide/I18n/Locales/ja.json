@@ -46,6 +46,7 @@
   "dialog.discard": "破棄",
   "dialog.discardMessage": "保存していない変更があります。破棄して閉じますか？",
   "dialog.discardTitle": "変更を破棄",
+  "failure.newerStore": "ファイル {path} は新しいバージョンの PathHide で保存されており、このバージョンでは読み取れないため、PathHide は変更せずにそのまま残しました。このファイルを使うには、その新しいバージョンの PathHide を起動してください。",
   "failure.pathListSave": "パス一覧を保存できませんでした。既存の一覧は変更されていません。もう一度お試しください。",
   "failure.pathListSavePermission": "パス一覧を保存できませんでした。PathHide のデータフォルダに書き込めるか確認してから、もう一度お試しください。",
   "failure.pathListStartup": "パス一覧を読み取れませんでした。PathHide はそのファイルを上書きせずに退避し、空の一覧で開かずに停止しました。ファイルの非表示・再表示は行っていません。一覧を残すには、PathHide が退避したファイル（セッションログに名前が記録されています）を修復し、PathHide のデータフォルダに paths.json という名前で戻してから、PathHide をもう一度起動してください。そうせずに PathHide を起動すると、空の一覧で開きます。",

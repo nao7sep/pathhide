@@ -60,6 +60,7 @@
   "dialog.discard": "Descartar",
   "dialog.discardMessage": "Você tem alterações não salvas. Deseja descartá-las e fechar?",
   "dialog.discardTitle": "Descartar alterações",
+  "failure.newerStore": "O arquivo {path} foi salvo por uma versão mais recente do PathHide, e esta versão não consegue lê-lo, por isso o PathHide o deixou como estava. Para usá-lo, inicie essa versão mais recente do PathHide.",
   "failure.pathListSave": "Não foi possível salvar a lista de caminhos. Sua lista atual não foi alterada; tente novamente.",
   "failure.pathListSavePermission": "Não foi possível salvar a lista de caminhos. Verifique se a pasta de dados do PathHide permite gravação e tente novamente.",
   "failure.pathListStartup": "Não foi possível ler sua lista de caminhos. O PathHide guardou o arquivo à parte em vez de sobrescrevê-lo e interrompeu a inicialização em vez de abrir com uma lista vazia. Seus arquivos não foram ocultados nem mostrados. Para manter sua lista, corrija o arquivo que o PathHide guardou à parte, cujo nome consta no log da sessão, coloque-o de volta na pasta de dados do PathHide com o nome paths.json e, em seguida, inicie o PathHide novamente. Se você iniciar o PathHide sem fazer isso, ele abrirá com uma lista vazia.",

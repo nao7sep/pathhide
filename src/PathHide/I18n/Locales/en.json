@@ -53,6 +53,7 @@
   "dialog.discard": "Discard",
   "dialog.discardMessage": "You have unsaved changes. Discard them and close?",
   "dialog.discardTitle": "Discard Changes",
+  "failure.newerStore": "The file {path} was saved by a newer version of PathHide, and this version cannot read it, so PathHide left it unchanged. To use it, start that newer version of PathHide.",
   "failure.pathListSave": "The path list could not be saved. Your existing list is unchanged; try again.",
   "failure.pathListSavePermission": "The path list could not be saved. Check that the PathHide data folder is writable, then try again.",
   "failure.pathListStartup": "Your path list could not be read. PathHide set the file aside rather than overwriting it, and stopped rather than open with an empty list. Your files were not hidden or unhidden. To keep your list, repair the file PathHide set aside, which the session log names, and put it back as paths.json in the PathHide data folder, then start PathHide again. If you start PathHide without doing so, it opens with an empty list.",
