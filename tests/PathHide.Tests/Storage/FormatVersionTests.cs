@@ -14,8 +14,8 @@ using Xunit;
 namespace PathHide.Tests.Storage;
 
 /// <summary>
-/// Each store's format version (store-recovery-conventions): a store that records none reads as 1, the
-/// current version round-trips, and a newer one is refused and left byte-identical.
+/// Each store's format version (store-recovery-conventions): a store without its marker is unreadable,
+/// the current version round-trips, and a newer one is refused and left byte-identical.
 /// </summary>
 [Collection(StorageRootEnvironment.CollectionName)]
 public sealed class FormatVersionTests : IDisposable
@@ -68,14 +68,15 @@ public sealed class FormatVersionTests : IDisposable
     // --- paths.json ---
 
     [Fact]
-    public void PathList_WithoutAVersion_ReadsAsVersion1()
+    public void PathList_WithoutAVersion_IsUnreadable()
     {
-        File.WriteAllText(PathOf(PathListStore.FileName), """{ "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""");
+        const string contents = """{ "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""";
+        File.WriteAllText(PathOf(PathListStore.FileName), contents);
 
         var loaded = new PathListStore().Load();
 
-        Assert.False(loaded.WasUnreadable);
-        Assert.Equal("/a", Assert.Single(loaded.Value).Path);
+        Assert.True(loaded.WasUnreadable);
+        Assert.Equal(contents, File.ReadAllText(Assert.Single(Directory.GetFiles(_root, "paths-*.invalid"))));
     }
 
     [Fact]
@@ -109,7 +110,7 @@ public sealed class FormatVersionTests : IDisposable
     [InlineData("""{ "formatVersion": "1", "paths": [] }""")]
     [InlineData("""{ "formatVersion": 1.5, "paths": [] }""")]
     [InlineData("""{ "formatVersion": null, "paths": [] }""")]
-    [InlineData("""{ "paths": null }""")]
+    [InlineData("""{ "formatVersion": 1, "paths": null }""")]
     public void PathList_WithoutAReadableVersionOrShape_IsQuarantined(string contents)
     {
         File.WriteAllText(PathOf(PathListStore.FileName), contents);
@@ -123,15 +124,17 @@ public sealed class FormatVersionTests : IDisposable
     // --- config.json ---
 
     [Fact]
-    public void Settings_WithoutAVersion_ReadsAsVersion1()
+    public void Settings_WithoutAVersion_AreUnreadable()
     {
-        File.WriteAllText(PathOf(AppSettings.FileName), """{ "language": "ja", "theme": "dark" }""");
+        const string contents = """{ "language": "ja", "theme": "dark" }""";
+        File.WriteAllText(PathOf(AppSettings.FileName), contents);
 
+        Assert.Equal(Languages.System, LanguageBootstrap.SavedPreference());
         var loaded = new SettingsStore().Load();
 
-        Assert.False(loaded.WasUnreadable);
-        Assert.Equal(ThemePreference.Dark, loaded.Value.Theme);
-        Assert.Equal("ja", LanguageBootstrap.SavedPreference());
+        Assert.True(loaded.WasUnreadable);
+        Assert.Equal(ThemePreference.System, loaded.Value.Theme);
+        Assert.Equal(contents, File.ReadAllText(Assert.Single(Directory.GetFiles(_root, "config-*.invalid"))));
     }
 
     [Fact]
@@ -164,14 +167,15 @@ public sealed class FormatVersionTests : IDisposable
     // --- state.json ---
 
     [Fact]
-    public void State_WithoutAVersion_ReadsAsVersion1()
+    public void State_WithoutAVersion_IsUnreadable()
     {
         File.WriteAllText(PathOf(AppState.FileName), """{ "windowWidth": 900 }""");
 
         var loaded = StateStore().Load();
 
-        Assert.False(loaded.WasUnreadable);
-        Assert.Equal(900, loaded.Value.WindowWidth);
+        Assert.True(loaded.WasUnreadable);
+        Assert.Null(loaded.Value.WindowWidth);
+        Assert.Single(Directory.GetFiles(_root, "state-*.invalid"));
     }
 
     [Fact]
@@ -206,7 +210,7 @@ public sealed class FormatVersionTests : IDisposable
         Pooling = false,
     }.ToString();
 
-    /// <summary>A database holding one table and recording <paramref name="userVersion"/>; 0 records none.</summary>
+    /// <summary>A database holding one table and recording <paramref name="userVersion"/>; 0 is no marker.</summary>
     private static void CreateDatabase(string path, int userVersion)
     {
         using var connection = new SqliteConnection(ConnectionString(path, SqliteOpenMode.ReadWriteCreate));
@@ -228,15 +232,18 @@ public sealed class FormatVersionTests : IDisposable
     // --- records.sqlite3 ---
 
     [Fact]
-    public void Records_WithoutAVersion_ReadAsVersion1AndRecordIt()
+    public async Task Records_WithoutAVersion_AreUnreadableAndLeftByteIdentical()
     {
         var path = PathOf(RecordsStore.FileName);
         CreateDatabase(path, userVersion: 0);
+        var bytes = File.ReadAllBytes(path);
 
-        using (var store = RecordsStore.TryOpen(path, out var failure))
-            Assert.True(store is not null, failure?.ToString());
+        var store = RecordsStore.TryOpen(path, out var failure);
+        await Assert.ThrowsAsync<InvalidDataException>(() => new RecordsReader(path).ReadSessionsAsync());
 
-        Assert.Equal(1, UserVersion(path));
+        Assert.Null(store);
+        Assert.IsType<InvalidDataException>(failure);
+        Assert.Equal(bytes, File.ReadAllBytes(path));
     }
 
     [Fact]
@@ -279,15 +286,15 @@ public sealed class FormatVersionTests : IDisposable
     }
 
     [Fact]
-    public void Backups_WithoutAVersion_ReadAsVersion1AndRecordIt()
+    public void Backups_WithoutAVersion_AreUnreadableAndLeftByteIdentical()
     {
         CreateDatabase(BackupsPath, userVersion: 0);
+        var bytes = File.ReadAllBytes(BackupsPath);
 
         BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{}"));
         BackupStore.Close();
 
-        Assert.Equal(1, UserVersion(BackupsPath));
-        Assert.Equal(1, BackupRows());
+        Assert.Equal(bytes, File.ReadAllBytes(BackupsPath));
     }
 
     [Fact]

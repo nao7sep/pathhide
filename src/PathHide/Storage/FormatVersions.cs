@@ -25,58 +25,53 @@ public static class FormatVersions
     /// <summary><c>backups.sqlite3</c>.</summary>
     public const int Backups = 1;
 
-    /// <summary>The version a store that records none reads as.</summary>
-    private const int Unrecorded = 1;
-
     /// <summary>The top-level key a JSON store records its version under.</summary>
     internal const string JsonKey = "formatVersion";
 
     /// <summary>
-    /// The version a JSON store's root records: <see cref="Unrecorded"/> when it records none, and null
-    /// when the root is not an object or its marker is not a positive integer, a shape this build cannot read.
+    /// The version a JSON store's root records, or null when the root is not an object or does not record
+    /// a positive integer: a store without its marker is unreadable.
     /// </summary>
-    internal static int? Recorded(JsonElement root)
-    {
-        if (root.ValueKind != JsonValueKind.Object)
-            return null;
-        if (!root.TryGetProperty(JsonKey, out var marker))
-            return Unrecorded;
-        return marker.ValueKind == JsonValueKind.Number && marker.TryGetInt32(out var version) && version >= 1
+    internal static int? Recorded(JsonElement root) =>
+        root.ValueKind == JsonValueKind.Object
+        && root.TryGetProperty(JsonKey, out var marker)
+        && marker.ValueKind == JsonValueKind.Number
+        && marker.TryGetInt32(out var version)
+        && version >= 1
             ? version
             : null;
+
+    /// <summary>
+    /// Refuses a database whose <c>PRAGMA user_version</c> records no version (0) or one newer than
+    /// <paramref name="supported"/>.
+    /// </summary>
+    /// <exception cref="InvalidDataException">The database records no version.</exception>
+    /// <exception cref="NewerFormatException">The database is newer than <paramref name="supported"/>.</exception>
+    internal static void CheckDatabase(SqliteConnection connection, string path, int supported)
+    {
+        var recorded = UserVersion(connection);
+        if (recorded < 1)
+            throw new InvalidDataException($"{path} records no format version.");
+        if (recorded > supported)
+            throw new NewerFormatException(path, (int)recorded, supported);
     }
 
     /// <summary>
-    /// The version a database records in <c>PRAGMA user_version</c>, refused when newer than
-    /// <paramref name="supported"/>. A database that records none holds 0 there.
-    /// </summary>
-    /// <exception cref="NewerFormatException">The database is newer than <paramref name="supported"/>.</exception>
-    internal static void CheckDatabase(SqliteConnection connection, string path, int supported) =>
-        CheckDatabase(UserVersion(connection), path, supported);
-
-    /// <summary>
-    /// <see cref="CheckDatabase(SqliteConnection, string, int)"/> before anything writes to the database,
-    /// then records the version a database that records none reads as.
+    /// Stamps a brand-new database, one holding nothing yet, with <paramref name="supported"/>; any other
+    /// database goes through <see cref="CheckDatabase"/>. Runs before anything else writes to it.
     /// </summary>
     internal static void AdoptDatabase(SqliteConnection connection, string path, int supported)
     {
-        var recorded = UserVersion(connection);
-        CheckDatabase(recorded, path, supported);
-        if (recorded != 0)
-            return;
-
         using var command = connection.CreateCommand();
-        command.CommandText = $"PRAGMA user_version = {Unrecorded};";
-        command.ExecuteNonQuery();
-    }
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_master;";
+        if (UserVersion(connection) == 0 && (long)command.ExecuteScalar()! == 0)
+        {
+            command.CommandText = $"PRAGMA user_version = {supported};";
+            command.ExecuteNonQuery();
+            return;
+        }
 
-    private static void CheckDatabase(long recorded, string path, int supported)
-    {
-        if (recorded < 0)
-            throw new InvalidDataException($"{path} records format version {recorded}.");
-        var version = recorded == 0 ? Unrecorded : (int)recorded;
-        if (version > supported)
-            throw new NewerFormatException(path, version, supported);
+        CheckDatabase(connection, path, supported);
     }
 
     private static long UserVersion(SqliteConnection connection)

@@ -147,7 +147,7 @@ public sealed class SettingsStoreTests : IDisposable
     [Fact]
     public void Load_OneSetLeavesOtherSetsAtTheirBuiltIns_AndDoesNotRewrite()
     {
-        const string original = """{ "theme": "dark" }""";
+        const string original = """{ "formatVersion": 1, "theme": "dark" }""";
         File.WriteAllText(ConfigPath, original);
 
         var loaded = new SettingsStore().Load();
@@ -175,7 +175,7 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("uiFontFamily", "false")]
     public void Load_InvalidSetUsesBuiltIn_LogsItsKey_AndKeepsTheFile(string key, string value)
     {
-        var original = "{ \"theme\": \"dark\", \"language\": \"ja\", \"" + key + "\": " + value + " }";
+        var original = "{ \"formatVersion\": 1, \"theme\": \"dark\", \"language\": \"ja\", \"" + key + "\": " + value + " }";
         File.WriteAllText(ConfigPath, original);
         Log.Start(RecordsStore.TryOpen(StorageRoot.RecordsFile, out _), StorageRoot.LogsDirectory);
 
@@ -197,7 +197,7 @@ public sealed class SettingsStoreTests : IDisposable
     public async Task DialogSave_DropsAnInvalidSet_AndStoresTheFontCleaned()
     {
         using var restoreLanguage = Localizer.Speaking(Localizer.Language);
-        const string original = """{ "language": "future-language", "uiFontFamily": "  Inter  " }""";
+        const string original = """{ "formatVersion": 1, "language": "future-language", "uiFontFamily": "  Inter  " }""";
         File.WriteAllText(ConfigPath, original);
         var vm = App.CreateMainViewModel();
         Assert.Equal(Languages.System, vm.Language);
@@ -216,7 +216,7 @@ public sealed class SettingsStoreTests : IDisposable
     [Fact]
     public void SaveChanges_WritesTheFileFromTheDraft_DroppingBuiltInCopiesAndUnknownKeys()
     {
-        File.WriteAllText(ConfigPath, """{ "version": 7, "theme": "system", "language": "ja", "windowsHideMode": "future_mode", "old": true }""");
+        File.WriteAllText(ConfigPath, """{ "formatVersion": 1, "version": 7, "theme": "system", "language": "ja", "windowsHideMode": "future_mode", "old": true }""");
         var store = new SettingsStore();
         var previous = store.Load().Value;
 
@@ -231,7 +231,7 @@ public sealed class SettingsStoreTests : IDisposable
     [Fact]
     public void SaveChanges_SelectingTheBuiltInRemovesTheSet_AndKeepsTheFile()
     {
-        File.WriteAllText(ConfigPath, """{ "theme": "dark" }""");
+        File.WriteAllText(ConfigPath, """{ "formatVersion": 1, "theme": "dark" }""");
         var store = new SettingsStore();
 
         Assert.True(store.SaveChanges(store.Load().Value, new AppSettings()));
@@ -293,7 +293,7 @@ public sealed class SettingsStoreTests : IDisposable
     [AvaloniaFact]
     public void Startup_LegacyGeometryStaysIgnoredWithoutWritingStateOrConfig()
     {
-        const string original = """{ "theme": "dark", "windowWidth": 1100, "windowMaximized": true }""";
+        const string original = """{ "formatVersion": 1, "theme": "dark", "windowWidth": 1100, "windowMaximized": true }""";
         File.WriteAllText(ConfigPath, original);
 
         var vm = App.CreateMainViewModel();

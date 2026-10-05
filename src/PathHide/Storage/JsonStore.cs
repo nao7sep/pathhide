@@ -132,8 +132,8 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     }
 
     /// <summary>
-    /// Refuses to write over a file that records a newer version than this store's. A file that cannot be
-    /// parsed records none this build can see, and is written over as before.
+    /// Refuses to write over a file that records a newer version than this store's. Any other file present
+    /// is one this build cannot read or one it wrote, and is written over as before.
     /// </summary>
     private void RefuseNewerFile()
     {
