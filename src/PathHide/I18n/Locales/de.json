@@ -130,8 +130,8 @@
   "records.time": "Zeit",
   "records.title": "Protokoll",
   "remove.message": {
-    "one": "{count} ausgewählten Eintrag aus der Liste entfernen?",
-    "other": "{count} ausgewählte Einträge aus der Liste entfernen?"
+    "one": "{count} ausgewählten Eintrag anzeigen und dann aus der Liste entfernen? Lässt er sich nicht anzeigen, bleibt er in der Liste.",
+    "other": "{count} ausgewählte Einträge anzeigen und dann aus der Liste entfernen? Einträge, die sich nicht anzeigen lassen, bleiben in der Liste."
   },
   "remove.title": "Einträge aus der Liste entfernen",
   "result.added": {

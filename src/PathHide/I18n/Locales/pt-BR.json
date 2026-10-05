@@ -137,9 +137,9 @@
   "records.time": "Horário",
   "records.title": "Registros",
   "remove.message": {
-    "one": "Remover {count} entrada selecionada da lista?",
-    "many": "Remover {count} de entradas selecionadas da lista?",
-    "other": "Remover {count} entradas selecionadas da lista?"
+    "one": "Mostrar {count} entrada selecionada e depois removê-la da lista? Se não puder ser mostrada, ela continua na lista.",
+    "many": "Mostrar {count} de entradas selecionadas e depois removê-las da lista? As que não puderem ser mostradas continuam na lista.",
+    "other": "Mostrar {count} entradas selecionadas e depois removê-las da lista? As que não puderem ser mostradas continuam na lista."
   },
   "remove.title": "Remover entradas da lista",
   "result.added": {

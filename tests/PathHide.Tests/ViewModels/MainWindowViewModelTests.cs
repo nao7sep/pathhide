@@ -299,7 +299,7 @@ public class MainWindowViewModelTests
         Assert.Equal(1, paths.SaveCount);
         vm.Rows[0].IsSelected = true;
 
-        // Remove has nothing to await before it saves, so without the gate its whole body runs
+        // Remove has nothing to await before its first save, so without the gate it would save
         // right here, inside the add.
         var remove = ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
         Assert.Single(vm.Rows);
@@ -309,9 +309,10 @@ public class MainWindowViewModelTests
         await add;
         await remove;
 
-        // It is not refused, only made to wait its turn.
+        // It is not refused, only made to wait its turn: it saves the entry as Shown, shows it,
+        // and saves the list without it.
         Assert.Empty(vm.Rows);
-        Assert.Equal(2, paths.SaveCount);
+        Assert.Equal(3, paths.SaveCount);
     }
 
     [AvaloniaFact]
@@ -779,10 +780,88 @@ public class MainWindowViewModelTests
         vm.Rows.Single().IsSelected = true;
         await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
 
+        // The app hid it, so it shows it before letting go of it.
+        Assert.Equal(["/x"], visibility.Shown);
         Assert.Empty(vm.Rows);
+        Assert.Empty(paths.Value);
         Assert.True(vm.IsPathListEmpty);
         Assert.Equal("No entries — drop files or folders here to get started", vm.StatusBarText);
         Assert.Empty(vm.OperationalResults);
+    }
+
+    [Fact]
+    public async Task RemoveSelected_KeepsAnEntryItCouldNotShow_AndReportsWhy()
+    {
+        var visibility = new FakeVisibilityService
+        {
+            OnShow = path => path == "/locked" ? new IOException("denied (test)") : null,
+        };
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+        vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/fine", "/locked" });
+
+        foreach (var row in vm.Rows)
+            row.IsSelected = true;
+        await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
+
+        // Dropping /locked would leave it hidden with nothing left to show it. It stays, desired
+        // Shown, so the next Show or Remove tries again.
+        var kept = Assert.Single(vm.Rows);
+        Assert.Equal("/locked", kept.Path);
+        Assert.Equal(DesiredVisibility.Shown, kept.DesiredVisibility);
+        Assert.Equal(ActualState.Hidden, kept.ActualState);
+        var stored = Assert.Single(paths.Value);
+        Assert.Equal(("/locked", DesiredVisibility.Shown), (stored.Path, stored.DesiredVisibility));
+        var result = Assert.Single(vm.OperationalResults);
+        Assert.True(result.IsError);
+        Assert.Equal("1 applied, 1 error", English.Of(result.Message));
+    }
+
+    [Fact]
+    public async Task RemoveSelected_DropsAMissingEntryWithoutReportingIt()
+    {
+        var visibility = new FakeVisibilityService();
+        visibility.Set("/gone", ActualState.Missing);
+        var paths = new FakeJsonStore<List<PathEntry>> { Value = [Entry("/gone")] };
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+        vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
+
+        vm.Rows.Single().IsSelected = true;
+        await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
+
+        // Nothing is left on disk to hide, so its entry goes and that is the whole story.
+        Assert.Empty(visibility.Shown);
+        Assert.Empty(vm.Rows);
+        Assert.Empty(paths.Value);
+        Assert.Empty(vm.OperationalResults);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task RemoveSelected_Cancelled_KeepsTheEntriesItDidNotShow()
+    {
+        using var stalled = new ManualResetEventSlim(false);
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>> { Value = [Entry("/a"), Entry("/b")] };
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+        vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
+        foreach (var row in vm.Rows)
+            row.IsSelected = true;
+        visibility.WriteGate = stalled;
+
+        var remove = ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
+        await visibility.WriteEntered.Task;
+        vm.CancelCommand.Execute(null);
+        await remove;
+
+        // /a's show was abandoned mid-write and /b's never started: neither is known to be visible.
+        Assert.Equal(["/a", "/b"], vm.Rows.Select(r => r.Path).Order());
+        Assert.Equal(2, paths.Value.Count);
+        Assert.Equal("2 cancelled", English.Of(Assert.Single(vm.OperationalResults).Message));
+
+        stalled.Set();
     }
 
     [Fact]
@@ -841,10 +920,10 @@ public class MainWindowViewModelTests
     }
 
     [Theory]
-    [InlineData(1, "1 selected entry from the list?")]
-    [InlineData(3, "3 selected entries from the list?")]
+    [InlineData(1, "Show 1 selected entry, then remove it from the list? If it cannot be shown, it stays in the list.")]
+    [InlineData(3, "Show 3 selected entries, then remove them from the list? Any that cannot be shown stay in the list.")]
     public async Task RemoveSelected_RaisesDestructiveConfirm_WithSpecificLabelAndCountAwareCopy(
-        int count, string expectedMessageTail)
+        int count, string expectedMessage)
     {
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>();
@@ -869,7 +948,7 @@ public class MainWindowViewModelTests
         // "Yes"/"OK" — and count-aware singular/plural copy (the modal-conventions fix).
         Assert.Equal("common.remove", captured!.ConfirmLabelKey);
         Assert.Equal("Remove entries", English.Of(captured.Title));
-        Assert.EndsWith(expectedMessageTail, English.Of(captured.Message));
+        Assert.Equal(expectedMessage, English.Of(captured.Message));
         // Declined: every row is still present.
         Assert.Equal(count, vm.Rows.Count);
     }

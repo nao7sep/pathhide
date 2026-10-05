@@ -123,7 +123,7 @@
   "records.time": "시각",
   "records.title": "로그",
   "remove.message": {
-    "other": "선택한 항목 {count}개를 목록에서 제거하시겠습니까?"
+    "other": "선택한 항목 {count}개를 표시한 다음 목록에서 제거하시겠습니까? 표시할 수 없는 항목은 목록에 남습니다."
   },
   "remove.title": "목록에서 항목 제거",
   "result.added": {

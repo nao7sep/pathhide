@@ -30,6 +30,9 @@ public sealed class FakeVisibilityService : IVisibilityService
     /// <summary>When set and it returns non-null, <see cref="Hide"/> throws instead of recording.</summary>
     public Func<string, Exception?>? OnHide { get; set; }
 
+    /// <summary>When set and it returns non-null, <see cref="Show"/> throws instead of recording.</summary>
+    public Func<string, Exception?>? OnShow { get; set; }
+
     /// <summary>
     /// When set, <see cref="Inspect"/> blocks on this gate before returning, letting a test hold a
     /// scan or apply pass mid-flight (the call runs on a thread-pool thread via the scanner/apply's
@@ -106,6 +109,10 @@ public sealed class FakeVisibilityService : IVisibilityService
     {
         WriteEntered.TrySetResult();
         WriteGate?.Wait();
+
+        var thrown = OnShow?.Invoke(path);
+        if (thrown is not null)
+            throw thrown;
 
         Shown.Enqueue(path);
         _byPath[path] = new PathInspection(

@@ -534,10 +534,15 @@ public partial class MainWindowViewModel : ObservableObject
         PathAddResult = null;
     }
 
+    /// <summary>
+    /// Shows the selected items, then drops from the list each one the app is done with, so nothing
+    /// stays hidden that the app can no longer show. An item whose show failed, did not answer or was
+    /// cancelled stays in the list, desired Shown, for another try; the apply outcome says why.
+    /// </summary>
     [RelayCommand]
     private Task RemoveSelectedAsync() => MutateAsync(async () =>
     {
-        var selected = Rows.Where(r => r.IsSelected).ToList();
+        var selected = SelectedRows();
         if (selected.Count == 0)
             return;
 
@@ -552,12 +557,23 @@ public partial class MainWindowViewModel : ObservableObject
                 return;
         }
 
-        var removing = new HashSet<PathEntry>(selected.Select(row => row.Entry));
-        var updated = _entries.Where(entry => !removing.Contains(entry)).ToList();
+        if (await PersistAndApplyAsync(selected, DesiredVisibility.Shown) is not { } outcome)
+            return;
 
-        Log.Info("remove paths", new { removed = selected.Count });
+        // A missing item has nothing left to hide, so dropping its entry is the expected end of a
+        // Remove, not a problem to report.
+        ShowApplyOutcome(outcome with { Missing = 0 });
 
-        var saveFailure = await TrySaveEntriesAsync(updated);
+        // The save above rebound each row to its committed entry, so row.Entry is the live one.
+        var removing = new HashSet<PathEntry>(selected
+            .Where(row => outcome.Settled.Contains(row.Path))
+            .Select(row => row.Entry));
+        if (removing.Count == 0)
+            return;
+
+        Log.Info("remove paths", new { removed = removing.Count, kept = selected.Count - removing.Count });
+
+        var saveFailure = await TrySaveEntriesAsync(_entries.Where(entry => !removing.Contains(entry)).ToList());
         if (saveFailure is not null)
         {
             ShowOperationalResult(OperationalResultOwner.PathStore, saveFailure, error: true);
@@ -586,7 +602,20 @@ public partial class MainWindowViewModel : ObservableObject
         DesiredVisibility desired) => MutateAsync(async () =>
     {
         var targets = selectTargets();
+        if (await PersistAndApplyAsync(targets, desired) is not { } outcome)
+            return;
 
+        ShowApplyOutcome(outcome);
+        if (!outcome.HasProblems)
+            ClearPathAddResultIfResolvedBy(targets.Select(row => row.Path));
+    });
+
+    /// <summary>
+    /// Saves <paramref name="desired"/> as the targets' desired visibility, then applies it. Returns
+    /// null, with the save failure shown and nothing applied, when the save failed.
+    /// </summary>
+    private async Task<ApplyOutcome?> PersistAndApplyAsync(List<PathRowViewModel> targets, DesiredVisibility desired)
+    {
         // An empty target set has nothing to persist. Like a full successful
         // visibility change, it is quiet and leaves the standing summary intact.
         if (targets.Count > 0)
@@ -604,16 +633,13 @@ public partial class MainWindowViewModel : ObservableObject
             if (saveFailure is not null)
             {
                 ShowOperationalResult(OperationalResultOwner.PathStore, saveFailure, error: true);
-                return;
+                return null;
             }
             ResolveOperationalResult(OperationalResultOwner.PathStore);
         }
 
-        var outcome = await ApplyDesiredStateAsync(targets);
-        ShowApplyOutcome(outcome);
-        if (!outcome.HasProblems)
-            ClearPathAddResultIfResolvedBy(targets.Select(row => row.Path));
-    });
+        return await ApplyDesiredStateAsync(targets);
+    }
 
     private List<PathRowViewModel> SelectedRows() => Rows.Where(r => r.IsSelected).ToList();
 
@@ -1189,6 +1215,7 @@ public partial class MainWindowViewModel : ObservableObject
         var unresponsive = 0;
         var cancelled = 0;
         var problemPaths = new List<string>();
+        var settled = new HashSet<string>(StringComparer.Ordinal);
         var retryBucket = new List<PathRowViewModel>();
 
         void MarkUnresponsive(PathRowViewModel row)
@@ -1216,6 +1243,7 @@ public partial class MainWindowViewModel : ObservableObject
                 {
                     missing++;
                     problemPaths.Add(row.Path);
+                    settled.Add(row.Path);
                     row.ActualState = ActualState.Missing;
                     continue;
                 }
@@ -1251,6 +1279,9 @@ public partial class MainWindowViewModel : ObservableObject
                     continue;
                 }
                 row.ApplyScanResult(updated, row.PathFamily);
+
+                // The write landed; whatever state followed is all this app can make of the item.
+                settled.Add(row.Path);
 
                 // Count what actually moved, not what was attempted. A write can
                 // run without changing the state the user asked for — on macOS a
@@ -1368,7 +1399,11 @@ public partial class MainWindowViewModel : ObservableObject
                     row.Entry.DesiredVisibility, reported ? ok : null, recheck);
                 row.ApplyScanResult(recheck with { ActualState = display }, row.PathFamily);
 
-                if (wasApplied) applied++;
+                if (wasApplied)
+                {
+                    applied++;
+                    settled.Add(row.Path);
+                }
                 else
                 {
                     errors++;
@@ -1382,9 +1417,14 @@ public partial class MainWindowViewModel : ObservableObject
         Log.Info("apply: done", new { applied, unchanged, missing, errors, unresponsive, cancelled, elevationBusy, elevationExitCode });
         OnPropertyChanged(nameof(StatusBarText));
 
-        return new ApplyOutcome(applied, unchanged, missing, errors, unresponsive, cancelled, elevationBusy, problemPaths);
+        return new ApplyOutcome(applied, unchanged, missing, errors, unresponsive, cancelled, elevationBusy, problemPaths, settled);
     }
 
+    /// <summary>
+    /// What an apply did. <see cref="Settled"/> holds the paths it is done with: written, whatever
+    /// state followed, or missing. Every other target failed, did not answer or was cancelled, and
+    /// may still be as it was.
+    /// </summary>
     private readonly record struct ApplyOutcome(
         int Applied,
         int Unchanged,
@@ -1393,9 +1433,10 @@ public partial class MainWindowViewModel : ObservableObject
         int Unresponsive,
         int Cancelled,
         int ElevationBusy,
-        IReadOnlyList<string> ProblemPaths)
+        IReadOnlyList<string> ProblemPaths,
+        IReadOnlySet<string> Settled)
     {
-        public static ApplyOutcome Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, []);
+        public static ApplyOutcome Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, [], new HashSet<string>());
 
         public bool HasProblems =>
             Unchanged > 0 || Missing > 0 || Errors > 0 || Unresponsive > 0 || Cancelled > 0 || ElevationBusy > 0;

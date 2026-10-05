@@ -137,9 +137,9 @@
   "records.time": "Hora",
   "records.title": "Registros",
   "remove.message": {
-    "one": "¿Quitar {count} elemento seleccionado de la lista?",
-    "many": "¿Quitar {count} de elementos seleccionados de la lista?",
-    "other": "¿Quitar {count} elementos seleccionados de la lista?"
+    "one": "¿Mostrar {count} elemento seleccionado y luego quitarlo de la lista? Si no se puede mostrar, se queda en la lista.",
+    "many": "¿Mostrar {count} de elementos seleccionados y luego quitarlos de la lista? Los que no se puedan mostrar se quedan en la lista.",
+    "other": "¿Mostrar {count} elementos seleccionados y luego quitarlos de la lista? Los que no se puedan mostrar se quedan en la lista."
   },
   "remove.title": "Quitar elementos de la lista",
   "result.added": {

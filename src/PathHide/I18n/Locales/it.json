@@ -137,9 +137,9 @@
   "records.time": "Ora",
   "records.title": "Log",
   "remove.message": {
-    "one": "Vuoi rimuovere {count} elemento selezionato dall’elenco?",
-    "many": "Vuoi rimuovere {count} di elementi selezionati dall’elenco?",
-    "other": "Vuoi rimuovere {count} elementi selezionati dall’elenco?"
+    "one": "Vuoi mostrare {count} elemento selezionato e poi rimuoverlo dall’elenco? Se non può essere mostrato, resta nell’elenco.",
+    "many": "Vuoi mostrare {count} di elementi selezionati e poi rimuoverli dall’elenco? Quelli che non possono essere mostrati restano nell’elenco.",
+    "other": "Vuoi mostrare {count} elementi selezionati e poi rimuoverli dall’elenco? Quelli che non possono essere mostrati restano nell’elenco."
   },
   "remove.title": "Rimuovi elementi dall’elenco",
   "result.added": {

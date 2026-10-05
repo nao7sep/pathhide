@@ -137,9 +137,9 @@
   "records.time": "Heure",
   "records.title": "Journal",
   "remove.message": {
-    "one": "Retirer {count} entrée sélectionnée de la liste\u00a0?",
-    "many": "Retirer les {count} d’entrées sélectionnées de la liste\u00a0?",
-    "other": "Retirer les {count} entrées sélectionnées de la liste\u00a0?"
+    "one": "Afficher {count} entrée sélectionnée, puis la retirer de la liste\u00a0? Si elle ne peut pas être affichée, elle reste dans la liste.",
+    "many": "Afficher les {count} d’entrées sélectionnées, puis les retirer de la liste\u00a0? Celles qui ne peuvent pas être affichées restent dans la liste.",
+    "other": "Afficher les {count} entrées sélectionnées, puis les retirer de la liste\u00a0? Celles qui ne peuvent pas être affichées restent dans la liste."
   },
   "remove.title": "Retirer des entrées",
   "result.added": {
