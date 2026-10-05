@@ -75,11 +75,15 @@ public partial class MainWindow : Window
         Deactivated += (_, _) => Classes.Set("windowInactive", true);
 
         // Coming back to the front rescans the list, so what changed on disk meanwhile shows without
-        // a Reload. Not under a modal dialog or a picker: its outcome decides what runs next.
+        // a Reload. Only coming BACK: the window's first activation, which can arrive after the first
+        // scan has finished, is its opening. Not under a modal dialog or a picker: its outcome decides
+        // what runs next.
+        var activatedBefore = false;
         Activated += (_, _) =>
         {
-            if (DataContext is MainWindowViewModel vm && OwnedWindows.Count == 0 && !_pickerOpen)
+            if (activatedBefore && DataContext is MainWindowViewModel vm && OwnedWindows.Count == 0 && !_pickerOpen)
                 vm.RescanOnActivation();
+            activatedBefore = true;
         };
 
         PathListReceiver.AddHandler(DragDrop.DropEvent, OnDrop);

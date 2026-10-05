@@ -59,6 +59,22 @@ public sealed class MainWindowActivationTests : WindowTest
     }
 
     [AvaloniaFact]
+    public async Task The_first_activation_after_the_first_scan_starts_no_rescan()
+    {
+        // The window's first activation can arrive after the first scan has finished; the window
+        // has not come back to the front, so nothing is scanned again.
+        var (vm, visibility, _) = CreateViewModel();
+        vm.Initialize();
+        await vm.ScanTask;
+        var scanned = visibility.Inspected.Count;
+
+        Show(new MainWindow { DataContext = vm });
+        await SettleAsync(vm);
+
+        Assert.Equal(scanned, visibility.Inspected.Count);
+    }
+
+    [AvaloniaFact]
     public async Task Coming_back_to_the_front_under_a_modal_dialog_starts_no_rescan()
     {
         var (vm, visibility, clock) = CreateViewModel();
