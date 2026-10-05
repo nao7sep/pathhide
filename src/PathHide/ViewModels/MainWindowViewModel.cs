@@ -32,6 +32,11 @@ public partial class MainWindowViewModel : ObservableObject
     private AppState _state;
 
     private List<PathEntry> _entries = [];
+
+    // Whether paths.json holds _entries. False only after a Reload set an unreadable file aside and
+    // kept the entries on screen, so the next save writes them back even if nothing else changed.
+    private bool _entriesOnDisk = true;
+
     private CancellationTokenSource? _scanCts;
     private CancellationTokenSource? _applyCts;
 
@@ -657,12 +662,14 @@ public partial class MainWindowViewModel : ObservableObject
             // and the rows on screen are the last good state. Keep them rather
             // than replacing them with an empty list, and say what happened.
             Log.Warn("reload: path list unreadable; keeping the loaded entries");
+            _entriesOnDisk = false;
             await ReportQuarantinesAsync();
             StartBackgroundScan();
             return;
         }
 
         _entries = reloaded.Value;
+        _entriesOnDisk = true;
         SyncRowsWithEntries();
 
         // A load can find the file unreadable and set it aside, and this one
@@ -930,7 +937,8 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// Persists <paramref name="updated"/> off the UI thread and, only if the save lands, makes it the
     /// live entry list and re-syncs the rows. Returns what to tell the user when the save failed,
-    /// having changed nothing, or null when it landed.
+    /// having changed nothing, or null when it landed. A list whose content equals the saved one
+    /// writes nothing and changes nothing (content-lifecycle conventions, Files).
     /// </summary>
     /// <remarks>
     /// Commit after save, never mutate-then-roll-back. The previous shape deep-cloned the list,
@@ -946,7 +954,14 @@ public partial class MainWindowViewModel : ObservableObject
     {
         // Sort a snapshot so paths.json is diff-stable without imposing that order on the
         // live list. UI ordering is a separate concern handled by the DataGrid's own sort.
-        var snapshot = updated.OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase).ToList();
+        var snapshot = SortedForDisk(updated);
+
+        if (_entriesOnDisk && SameContent(snapshot, SortedForDisk(_entries)))
+        {
+            Log.Debug("paths: unchanged, not saved");
+            return null;
+        }
+
         try
         {
             await Task.Run(() => _pathListStore.Save(snapshot));
@@ -958,9 +973,20 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         _entries = updated;
+        _entriesOnDisk = true;
         SyncRowsWithEntries();
         return null;
     }
+
+    private static List<PathEntry> SortedForDisk(IEnumerable<PathEntry> entries) =>
+        entries.OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>Whether two lists in disk order hold the same paths with the same desired visibility.</summary>
+    private static bool SameContent(List<PathEntry> left, List<PathEntry> right) =>
+        left.Count == right.Count
+        && left.Zip(right).All(pair =>
+            string.Equals(pair.First.Path, pair.Second.Path, StringComparison.Ordinal)
+            && pair.First.DesiredVisibility == pair.Second.DesiredVisibility);
 
     private void StartBackgroundScan()
     {

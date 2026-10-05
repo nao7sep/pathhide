@@ -786,6 +786,46 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task HideSelected_OnAnEntryAlreadyHidden_ReappliesWithoutRewritingThePathList()
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
+        Assert.Equal(1, paths.SaveCount);
+
+        vm.Rows.Single().IsSelected = true;
+        await ((IAsyncRelayCommand)vm.HideSelectedCommand).ExecuteAsync(null);
+
+        // Its desired visibility was already Hidden: paths.json would be rewritten byte for byte.
+        Assert.Equal(1, paths.SaveCount);
+        Assert.Equal(["/x", "/x"], visibility.Hidden);
+        Assert.Empty(vm.OperationalResults);
+    }
+
+    [Fact]
+    public async Task AfterAnUnreadableReload_TheNextCommandWritesTheKeptEntriesBack()
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>> { Value = [Entry("/x")] };
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+
+        // The reload sets the unreadable file aside and keeps the entry on screen, so paths.json no
+        // longer holds it, though nothing about the entry has changed.
+        paths.LoadIsUnreadable = true;
+        await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
+        await vm.ScanTask;
+        Assert.Equal(0, paths.SaveCount);
+
+        vm.Rows.Single().IsSelected = true;
+        await ((IAsyncRelayCommand)vm.HideSelectedCommand).ExecuteAsync(null);
+
+        Assert.Equal(1, paths.SaveCount);
+        Assert.Equal("/x", Assert.Single(paths.Value).Path);
+    }
+
+    [Fact]
     public async Task RemoveSelected_WhenDeclined_KeepsRow()
     {
         var visibility = new FakeVisibilityService();
