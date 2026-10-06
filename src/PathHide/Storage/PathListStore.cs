@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using PathHide.Models;
+using PathHide.Services;
 
 namespace PathHide.Storage;
 
@@ -30,11 +32,32 @@ public sealed class PathListStore : IJsonStore<List<PathEntry>>
 }
 
 /// <summary>What <c>paths.json</c> holds beside its format version.</summary>
+/// <remarks>
+/// Every entry must be one the app could have added: an absolute path in any family the grammar accepts,
+/// whichever platform reads it, with a defined desired visibility. Anything else makes the file
+/// unreadable; nothing is repaired, and whether the path exists is not this check's business.
+/// </remarks>
 internal sealed class PathListDocument
 {
     public List<PathEntry> Paths
     {
         get;
-        init => field = value ?? throw new JsonException("The path list file holds null instead of its paths.");
+        init => field = Validated(value);
     } = [];
+
+    private static List<PathEntry> Validated(List<PathEntry>? paths)
+    {
+        if (paths is null)
+            throw new JsonException("The path list file holds null instead of its paths.");
+
+        foreach (var entry in paths)
+        {
+            if (entry?.Path is null
+                || !PathNormalizer.TryNormalize(entry.Path, out _, out _)
+                || !Enum.IsDefined(entry.DesiredVisibility))
+                throw new JsonException("The path list file holds an entry that is not an absolute path with a defined visibility.");
+        }
+
+        return paths;
+    }
 }

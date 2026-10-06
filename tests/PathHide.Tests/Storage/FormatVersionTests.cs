@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -115,6 +116,11 @@ public sealed class FormatVersionTests : IDisposable
     [InlineData("""{ "formatVersion": 1.5, "paths": [] }""")]
     [InlineData("""{ "formatVersion": null, "paths": [] }""")]
     [InlineData("""{ "formatVersion": 1, "paths": null }""")]
+    [InlineData("""{ "formatVersion": 1, "paths": [ null ] }""")]
+    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": null, "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "relative/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a", "desiredVisibility": 2 } ] }""")]
     public void PathList_WithoutAReadableVersionOrShape_IsLeftInPlace(string contents)
     {
         var bytes = WriteNewer(PathListStore.FileName, contents);
@@ -127,9 +133,30 @@ public sealed class FormatVersionTests : IDisposable
     }
 
     [Fact]
-    public void PathList_Unreadable_HaltsEveryLaunchWithoutTouchingTheFileOrAnyItem()
+    public void PathList_AcceptsEveryPathFamilyOnEveryPlatform()
     {
-        var bytes = WriteNewer(PathListStore.FileName, "{ not valid json");
+        File.WriteAllText(PathOf(PathListStore.FileName), """
+            { "formatVersion": 1, "paths": [
+              { "path": "/a", "desiredVisibility": "hidden" },
+              { "path": "C:\\a", "desiredVisibility": "shown" },
+              { "path": "\\\\server\\share\\a", "desiredVisibility": 0 } ] }
+            """);
+
+        var loaded = new PathListStore().Load().Value;
+
+        Assert.Equal(["/a", @"C:\a", @"\\server\share\a"], loaded.Select(entry => entry.Path));
+        Assert.Equal([DesiredVisibility.Hidden, DesiredVisibility.Shown, DesiredVisibility.Hidden],
+            loaded.Select(entry => entry.DesiredVisibility));
+    }
+
+    [Theory]
+    [InlineData("{ not valid json")]
+    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a", "desiredVisibility": "hidden" }, null ] }""")]
+    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "relative/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a", "desiredVisibility": 7 } ] }""")]
+    public void PathList_Unreadable_HaltsEveryLaunchWithoutTouchingTheFileOrAnyItem(string contents)
+    {
+        var bytes = WriteNewer(PathListStore.FileName, contents);
         var visibility = new FakeVisibilityService();
 
         // Each launch builds a fresh view model over the real store; none may start, and none may
