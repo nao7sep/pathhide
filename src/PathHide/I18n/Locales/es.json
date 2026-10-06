@@ -26,7 +26,7 @@
   },
   "apply.elevationBusy": {
     "one": "{count} sin cambios: todavía se está ejecutando un cambio anterior como administrador",
-    "many": "{count} de entradas sin cambios: todavía se está ejecutando un cambio anterior como administrador",
+    "many": "{count} de elementos sin cambios: todavía se está ejecutando un cambio anterior como administrador",
     "other": "{count} sin cambios: todavía se está ejecutando un cambio anterior como administrador"
   },
   "apply.errors": {
