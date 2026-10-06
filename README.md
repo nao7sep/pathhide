@@ -6,7 +6,7 @@ Hide chosen files and folders in one step, show them again when you need them, a
 
 **Adding a path hides it immediately.** Use **Add Files** or **Add Directories** to open the platform's native multi-selection picker, or drop files and folders into the path list. Accepted paths disappear from Finder or Explorer on the spot — adding is the act of hiding, not a bookkeeping step before it. The result strip reports paths that were duplicates, unavailable, or could not be changed. Select an entry and choose **Show** to bring it back.
 
-**Removing an entry shows it first.** Remove makes the file or folder visible again, then drops the entry from the list, so nothing is left hidden that PathHide can no longer show. An entry whose file could not be shown stays in the list, and the result strip says why.
+**Removing an entry only takes it off the list.** The file or folder stays exactly as it is, so a hidden item stays hidden; select it and choose **Show** first if you want it visible again.
 
 ## Features
 

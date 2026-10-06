@@ -138,9 +138,9 @@
   "records.time": "Ora",
   "records.title": "Log",
   "remove.message": {
-    "one": "Vuoi mostrare {count} elemento selezionato e poi rimuoverlo dall’elenco? Se non può essere mostrato, resta nell’elenco.",
-    "many": "Vuoi mostrare {count} di elementi selezionati e poi rimuoverli dall’elenco? Quelli che non possono essere mostrati restano nell’elenco.",
-    "other": "Vuoi mostrare {count} elementi selezionati e poi rimuoverli dall’elenco? Quelli che non possono essere mostrati restano nell’elenco."
+    "one": "Vuoi rimuovere {count} elemento selezionato dall’elenco? Il file o la cartella corrispondente non viene modificato.",
+    "many": "Vuoi rimuovere {count} di elementi selezionati dall’elenco? I file e le cartelle corrispondenti non vengono modificati.",
+    "other": "Vuoi rimuovere {count} elementi selezionati dall’elenco? I file e le cartelle corrispondenti non vengono modificati."
   },
   "remove.title": "Rimuovi elementi dall’elenco",
   "result.added": {

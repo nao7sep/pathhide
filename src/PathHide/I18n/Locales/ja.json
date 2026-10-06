@@ -124,7 +124,7 @@
   "records.time": "時刻",
   "records.title": "ログ",
   "remove.message": {
-    "other": "選択した {count} 件の項目を表示してから、一覧から削除しますか？表示できなかった項目は一覧に残ります。"
+    "other": "選択した {count} 件の項目を一覧から削除しますか？ファイルやフォルダ自体は変更されません。"
   },
   "remove.title": "項目を一覧から削除",
   "result.added": {

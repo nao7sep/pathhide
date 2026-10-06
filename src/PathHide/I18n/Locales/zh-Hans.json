@@ -124,7 +124,7 @@
   "records.time": "时间",
   "records.title": "日志",
   "remove.message": {
-    "other": "要先显示所选的 {count} 个条目，再将其从列表中移除吗？无法显示的条目会保留在列表中。"
+    "other": "要从列表中移除所选的 {count} 个条目吗？文件或文件夹本身不会被更改。"
   },
   "remove.title": "从列表中移除条目",
   "result.added": {

@@ -131,8 +131,8 @@
   "records.time": "Time",
   "records.title": "Records",
   "remove.message": {
-    "one": "Show {count} selected entry, then remove it from the list? If it cannot be shown, it stays in the list.",
-    "other": "Show {count} selected entries, then remove them from the list? Any that cannot be shown stay in the list."
+    "one": "Remove {count} selected entry from the list? Its file or folder is not changed.",
+    "other": "Remove {count} selected entries from the list? Their files and folders are not changed."
   },
   "remove.title": "Remove entries",
   "result.added": {
