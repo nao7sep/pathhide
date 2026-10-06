@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Input;
 using PathHide.Models;
 using PathHide.Services;
 using PathHide.Tests.Fakes;
@@ -52,6 +53,61 @@ public sealed class MainWindowCloseTests : WindowTest
             Thread.Sleep(10);
         }
         Assert.Equal(1, elevated.Releases);
+    }
+
+    [AvaloniaFact]
+    public void A_quit_called_off_after_a_failed_save_keeps_the_window_and_a_later_close_closes_it()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var paths = new FakeJsonStore<List<PathEntry>>
+        {
+            Value = [new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }],
+        };
+        var settings = new FakeSettingsStore();
+        var vm = new MainWindowViewModel(
+            new BoundedVisibility(new FakeVisibilityService()), paths, settings,
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+        var main = Show(new MainWindow { DataContext = vm });
+        vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
+        var asked = 0;
+        vm.AskUnsavedAtQuitAsync = _ =>
+        {
+            asked++;
+            return Task.FromResult(UnsavedQuitChoice.KeepOpen);
+        };
+        var closed = false;
+        main.Closed += (_, _) => closed = true;
+        WaitFor(() => vm.ScanTask.IsCompleted);
+
+        // A Remove whose save is running and will fail.
+        paths.SaveGate = gate;
+        paths.ThrowOnSave = true;
+        vm.Rows[0].IsSelected = true;
+        _ = ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
+
+        main.Close();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(closed);
+
+        gate.Set();
+        WaitFor(() => asked == 1);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(closed);
+
+        main.Close();
+        WaitFor(() => closed);
+        Assert.Equal(1, asked);
+    }
+
+    private static void WaitFor(Func<bool> condition)
+    {
+        var clock = Stopwatch.StartNew();
+        while (!condition())
+        {
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), "The condition did not hold in time.");
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(10);
+        }
     }
 
     private sealed class HeldApplicator : IElevatedApplicator

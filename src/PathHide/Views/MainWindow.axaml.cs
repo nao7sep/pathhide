@@ -163,32 +163,47 @@ public partial class MainWindow : Window
         }
     }
 
-    // The finishing of in-flight work for closing, once a close has started it; set to done when it
-    // has finished, so the close that follows goes through.
+    // The finishing of in-flight work for closing, once a close has started it, until it ends; set to
+    // done when the window may close, so the close that follows goes through.
     private Task? _finishingWork;
     private bool _workFinishedForClose;
 
+    // Every quit path closes the main window: menu Quit, Cmd+Q and Dock Quit through the lifetime, the
+    // window's own close, and the operating system ending the session (unsaved-edits-conventions,
+    // Quitting).
     protected override void OnClosing(WindowClosingEventArgs e)
     {
-        // Closing is itself a command: it cancels the running scan or apply and waits for it, bounded,
-        // before the window goes, so no apply is dropped mid-way and an elevated child's temp files are
-        // removed rather than stranded. A second close or quit while that runs joins the same wait,
-        // even once the work it waits for no longer counts as busy: the wait is not over until it
-        // returns, and the window going earlier would end the process under it.
-        if (!_workFinishedForClose && DataContext is MainWindowViewModel busy
-            && (_finishingWork is not null || busy.HasWorkToFinish))
+        if (!_workFinishedForClose && DataContext is MainWindowViewModel vm
+            && (_finishingWork is not null || vm.HasWorkToFinish))
         {
-            e.Cancel = true;
-            _finishingWork ??= FinishWorkThenCloseAsync(busy);
-            base.OnClosing(e);
-            return;
+            if (SessionEnd.Is(e.CloseReason))
+            {
+                // The system waits for this close to answer, so the quit's waits run here to their bound
+                // and the window closes whatever they left. A quit the user started and that is still
+                // waiting or asking ends with it.
+                _workFinishedForClose = true;
+                RunUntilDone(vm.EndSessionAsync());
+            }
+            else
+            {
+                // Closing is itself a command: it cancels the running scan or apply and waits, bounded,
+                // for it and for the user's saves before the window goes, so no apply is dropped mid-way,
+                // no save is cut off, and an elevated child's temp files are removed rather than
+                // stranded. A second close or quit while that runs joins the same wait, even once the
+                // work it waits for no longer counts as busy: the wait is not over until it returns, and
+                // the window going earlier would end the process under it.
+                e.Cancel = true;
+                _finishingWork ??= FinishWorkThenCloseAsync(vm);
+                base.OnClosing(e);
+                return;
+            }
         }
 
-        if (_placement.ForClose() is { } placement && DataContext is MainWindowViewModel vm)
+        if (_placement.ForClose() is { } placement && DataContext is MainWindowViewModel state)
         {
             try
             {
-                vm.SaveWindowPlacement(placement.X, placement.Y, placement.Width, placement.Height, placement.Maximized);
+                state.SaveWindowPlacement(placement.X, placement.Y, placement.Width, placement.Height, placement.Maximized);
             }
             catch (Exception ex)
             {
@@ -202,17 +217,48 @@ public partial class MainWindow : Window
 
     private async Task FinishWorkThenCloseAsync(MainWindowViewModel vm)
     {
+        // Lets OnClosing record this wait before it can end and clear it.
+        await Task.Yield();
+
+        bool exit;
         try
         {
-            await vm.ShutdownAsync();
+            exit = await vm.QuitAsync();
         }
         catch (Exception ex)
         {
             Log.Error("shutdown: finishing work failed", ex);
+            exit = true;
         }
+
+        _finishingWork = null;
+
+        // The session ended while this quit waited or asked, and closed the window itself; or the user
+        // called the quit off.
+        if (_workFinishedForClose || !exit)
+            return;
 
         _workFinishedForClose = true;
         Close();
+    }
+
+    // Keeps the dispatcher running, so the work's own continuations can run, until the work is done. The
+    // work carries its own bounds.
+    private static void RunUntilDone(Task work)
+    {
+        if (work.IsCompleted)
+            return;
+
+        try
+        {
+            var frame = new DispatcherFrame();
+            work.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
+            Dispatcher.UIThread.PushFrame(frame);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("shutdown: could not wait for the quit's work as the session ended", ex);
+        }
     }
 
     private void ApplyNativeMinimum(Screen? target = null)
@@ -248,6 +294,7 @@ public partial class MainWindow : Window
         ViewModel.ConfirmDestructiveAsync = request =>
             ConfirmDialog.ConfirmDestructiveAsync(this, request.Title, request.Message, request.ConfirmLabelKey);
         ViewModel.ShowNoticeAsync = (title, body) => NoticeDialog.ShowAsync(this, title, body);
+        ViewModel.AskUnsavedAtQuitAsync = lines => UnsavedQuitDialog.AskAsync(this, lines);
         ViewModel.Initialize();
         PathGrid.Columns.First(c => c.SortMemberPath == nameof(PathRowViewModel.Path))
             .Sort(ListSortDirection.Ascending);

@@ -62,6 +62,12 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public Func<Message, Message, Task>? ShowNoticeAsync { get; set; }
 
+    /// <summary>
+    /// Set by the view to ask, as a quit the user started stops, whether to save again or quit with
+    /// the lines' changes unsaved. Left null in headless contexts (tests), where the quit goes on.
+    /// </summary>
+    public Func<IReadOnlyList<Message>, Task<UnsavedQuitChoice>>? AskUnsavedAtQuitAsync { get; set; }
+
     public ObservableCollection<PathRowViewModel> Rows { get; } = [];
 
     /// <summary>The path grid is mandatory, so it remains present and explains its empty body.</summary>
@@ -135,8 +141,15 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     internal IElevatedApplicator? ElevatedApplicator { get; init; }
 
-    /// <summary>How long closing waits for a running command, and then for an elevated child, to finish.</summary>
-    internal TimeSpan ShutdownBound { get; init; } = TimeSpan.FromSeconds(5);
+    /// <summary>
+    /// How long a quit waits, in all, for a running command, the user's saves and an elevated child.
+    /// With <see cref="PlacementSaveBound"/> for each window it stays under the system's kill delay at
+    /// logout (unsaved-edits-conventions, Quitting).
+    /// </summary>
+    internal TimeSpan ShutdownBound { get; init; } = TimeSpan.FromSeconds(3);
+
+    /// <summary>How long a window's placement save may hold its close.</summary>
+    internal TimeSpan PlacementSaveBound { get; init; } = TimeSpan.FromMilliseconds(500);
 
     /// <summary>The clock the activation rescan's quiet period is measured on; tests replace it.</summary>
     internal TimeProvider Clock { get; init; } = TimeProvider.System;
@@ -278,6 +291,10 @@ public partial class MainWindowViewModel : ObservableObject
         await _mutationGate.WaitAsync();
         try
         {
+            // A command that reaches the gate once a quit has begun does not start; the quit takes it.
+            if (_quitting)
+                return;
+
             await body();
         }
         finally
@@ -690,8 +707,9 @@ public partial class MainWindowViewModel : ObservableObject
         if (_lastActivationRescan is { } last && Clock.GetElapsedTime(last, now) < ActivationRescanQuietPeriod)
             return false;
 
-        // Taken without waiting: a command holding the gate (closing included, which never releases
-        // it) means this is no moment to scan, and the command starts its own scan when it is done.
+        // Taken without waiting: a command holding the gate (a quit included, which keeps it until the
+        // app exits or the quit is called off) means this is no moment to scan, and the command starts
+        // its own scan when it is done.
         if (!_mutationGate.Wait(0))
             return false;
         try
@@ -743,13 +761,17 @@ public partial class MainWindowViewModel : ObservableObject
         AppSettings? previous;
         try
         {
-            previous = await Task.Run(() => CommitSettings(candidate =>
-            {
-                candidate.Language = language;
-                candidate.UiFontFamily = family;
-                candidate.WindowsHideMode = newMode;
-                candidate.Theme = theme;
-            }));
+            previous = await RunUserSaveAsync(
+                UserStore.Settings,
+                () => CommitSettings(candidate =>
+                {
+                    candidate.Language = language;
+                    candidate.UiFontFamily = family;
+                    candidate.WindowsHideMode = newMode;
+                    candidate.Theme = theme;
+                }),
+                FailurePresentation.SettingsSave,
+                () => TryApplySettingsAsync(language, family, hiddenAndSystem, theme));
         }
         catch (Exception ex)
         {
@@ -780,13 +802,14 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Saves the window placement to the state store, never the settings. Synchronous on purpose: it
-    /// runs as the window closes, and the write must finish before the process exits — on a worker
-    /// thread it would be cut off, and the placement lost, when the app quits. An unchanged placement
-    /// writes nothing; a failed save throws and leaves the live placement untouched.
+    /// Saves the window placement to the state store, never the settings. It holds the close on
+    /// purpose: the write must finish before the process exits, or it would be cut off and the
+    /// placement lost when the app quits. It holds it for at most <see cref="PlacementSaveBound"/>.
+    /// An unchanged placement writes nothing; a failed or unfinished save throws and leaves the live
+    /// placement untouched.
     /// </summary>
     public void SaveWindowPlacement(int x, int y, double width, double height, bool maximized) =>
-        SaveState(state => state with
+        SaveStateForClose(state => state with
         {
             WindowPositionX = x,
             WindowPositionY = y,
@@ -809,7 +832,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// <see cref="SaveWindowPlacement"/> gives.
     /// </summary>
     public void SaveRecordsWindowPlacement(int x, int y, double width, double height, bool maximized) =>
-        SaveState(state => state with
+        SaveStateForClose(state => state with
         {
             RecordsWindowPositionX = x,
             RecordsWindowPositionY = y,
@@ -829,6 +852,11 @@ public partial class MainWindowViewModel : ObservableObject
     // save of one window's state keeps the other's. The gate orders a list-width save on a worker
     // against a placement save as a window closes. An unchanged state writes nothing.
     private readonly object _stateGate = new();
+
+    // A placement save as a window closes, off the UI thread and within its bound. Past the bound the
+    // close goes on, the save carries on until the process ends, and the caller logs the timeout.
+    private void SaveStateForClose(Func<AppState, AppState> change) =>
+        Task.Run(() => SaveState(change)).WaitAsync(PlacementSaveBound, Clock).GetAwaiter().GetResult();
 
     private void SaveState(Func<AppState, AppState> change)
     {
@@ -895,31 +923,267 @@ public partial class MainWindowViewModel : ObservableObject
         _applyCts?.Cancel();
     }
 
-    private Task? _shutdown;
+    // --- Quitting (unsaved-edits-conventions, Quitting) ---
 
-    /// <summary>Whether closing has work to finish first: a scan or apply, or an elevated child still running.</summary>
-    public bool HasWorkToFinish => IsBusy || ElevatedApplicator?.HasRunningChild == true;
+    private Task<bool>? _shutdown;
+
+    // From a quit's start until the app exits or the user calls the quit off: no command starts, an apply
+    // that starts is cancelled at once, and a save of the user's that fails is kept for Retry.
+    private volatile bool _quitting;
+
+    // Whether the quit holds the mutation gate. It keeps it, so nothing starts behind it, until the app
+    // exits or the quit is called off.
+    private bool _quitHoldsGate;
+
+    private bool _sessionEnding;
+
+    // The user's own saves still running (the path list's and the settings'), which a quit waits for, and
+    // each one that failed while a quit waited, kept with what to tell the user so Retry can save it again.
+    private readonly object _userSavesGate = new();
+    private readonly HashSet<Task> _userSaves = [];
+    private readonly Dictionary<UserStore, UnsavedChange> _unsavedAtQuit = [];
+
+    private enum UserStore { PathList, Settings }
+
+    private sealed record UnsavedChange(Message Failure, Func<Task> SaveAgain);
 
     /// <summary>
-    /// Finishes in-flight work for closing, within <see cref="ShutdownBound"/> per wait: cancels the
-    /// scan and the apply, takes the mutation gate so no command starts after it, and gives a still-
-    /// running elevated child the chance to exit so its temp files are removed now rather than by the
-    /// next launch. Idempotent: a second close joins the first.
+    /// Whether closing has work to finish first: a scan or apply, a save of the user's, or an elevated
+    /// child still running.
     /// </summary>
-    public Task ShutdownAsync() => _shutdown ??= ShutdownCoreAsync();
+    public bool HasWorkToFinish => IsBusy || UserSavesRunning || ElevatedApplicator?.HasRunningChild == true;
 
-    private async Task ShutdownCoreAsync()
+    private bool UserSavesRunning
     {
-        Log.Info("shutdown: finishing work in flight", new { busy = IsBusy });
+        get
+        {
+            lock (_userSavesGate)
+                return _userSaves.Count > 0;
+        }
+    }
+
+    /// <summary>
+    /// The waits every quit runs, within <see cref="ShutdownBound"/> in all: cancels the scan and the
+    /// apply, takes the mutation gate so no command starts after it, saves again what a save that failed
+    /// during an earlier round of this quit left unsaved, waits for the user's saves still running, and
+    /// gives a still-running elevated child the chance to exit so its temp files are removed now rather
+    /// than by the next launch. It never asks anything. Returns whether everything of the user's is on
+    /// disk. Idempotent while it runs: a second close joins the first.
+    /// </summary>
+    public Task<bool> ShutdownAsync() => _shutdown ??= ShutdownCoreAsync();
+
+    /// <summary>
+    /// The quit the user started: menu Quit, Cmd+Q, Dock Quit, or closing the main window. When a save of
+    /// the user's failed or is still running at the bound, the quit stops and the user chooses Retry or
+    /// Quit anyway; dismissing that question calls the quit off and keeps the app open. Returns true
+    /// when the app may exit.
+    /// </summary>
+    public async Task<bool> QuitAsync()
+    {
+        while (!await ShutdownAsync())
+        {
+            // Once the session is ending, its own quit has taken over.
+            if (_sessionEnding || AskUnsavedAtQuitAsync is null)
+                return !_sessionEnding;
+
+            var choice = await AskUnsavedAtQuitAsync(UnsavedAtQuitLines());
+            if (_sessionEnding)
+                return false;
+
+            switch (choice)
+            {
+                case UnsavedQuitChoice.Retry:
+                    _shutdown = null;
+                    continue;
+                case UnsavedQuitChoice.QuitAnyway:
+                    Log.Warn("quit: quitting with the user's changes unsaved", UnsavedAtQuitFields());
+                    return true;
+                default:
+                    CallOffQuit();
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The operating system is logging out, restarting or shutting down: the same waits as any quit,
+    /// within the same bound, and never a question. What did not land is logged and the app exits.
+    /// </summary>
+    public async Task EndSessionAsync()
+    {
+        _sessionEnding = true;
+        if (!await ShutdownAsync())
+            Log.Error("shutdown: the session ended with the user's changes unsaved", UnsavedAtQuitFields());
+    }
+
+    private async Task<bool> ShutdownCoreAsync()
+    {
+        var started = Clock.GetTimestamp();
+        TimeSpan Remaining()
+        {
+            var left = ShutdownBound - Clock.GetElapsedTime(started);
+            return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+        }
+
+        _quitting = true;
+        KeyValuePair<UserStore, UnsavedChange>[] saveAgain;
+        lock (_userSavesGate)
+            saveAgain = [.. _unsavedAtQuit];
+
+        Log.Info("shutdown: finishing work in flight",
+            new { busy = IsBusy, saving = UserSavesRunning, saveAgain = saveAgain.Length });
         Cancel();
 
-        // Held, never released: the window is closing, and nothing may start behind it.
-        if (!await _mutationGate.WaitAsync(ShutdownBound))
-            Log.Warn("shutdown: a command did not finish within the bound");
+        if (!_quitHoldsGate)
+        {
+            _quitHoldsGate = await TakeGateAsync(Remaining());
+            if (!_quitHoldsGate)
+                Log.Warn("shutdown: a command did not finish within the bound");
+        }
         _scanCts?.Cancel();
 
+        foreach (var (store, change) in saveAgain)
+        {
+            // The path list saves only under the gate; while a command still holds it, the change stays
+            // unsaved and the user is asked again.
+            if (store == UserStore.PathList && !_quitHoldsGate)
+                continue;
+
+            try
+            {
+                await change.SaveAgain().WaitAsync(Remaining(), Clock);
+            }
+            catch (TimeoutException)
+            {
+                // Still running, and waited for below.
+            }
+        }
+
+        await WaitForUserSavesAsync(Remaining());
+
         if (ElevatedApplicator is { } elevated)
-            await elevated.ReleaseAsync(ShutdownBound);
+            await elevated.ReleaseAsync(Remaining());
+
+        lock (_userSavesGate)
+            return _userSaves.Count == 0 && _unsavedAtQuit.Count == 0;
+    }
+
+    private async Task<bool> TakeGateAsync(TimeSpan bound)
+    {
+        if (bound <= TimeSpan.Zero)
+            return _mutationGate.Wait(0);
+
+        using var timeout = new CancellationTokenSource(bound, Clock);
+        try
+        {
+            await _mutationGate.WaitAsync(timeout.Token);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    private async Task WaitForUserSavesAsync(TimeSpan bound)
+    {
+        Task[] running;
+        lock (_userSavesGate)
+            running = [.. _userSaves];
+        if (running.Length == 0)
+            return;
+
+        try
+        {
+            await Task.WhenAll(running).WaitAsync(bound, Clock);
+        }
+        catch (TimeoutException)
+        {
+            Log.Warn("shutdown: a save did not finish within the bound", new { running = running.Length });
+        }
+        catch (Exception)
+        {
+            // Each failed save has logged itself and, as the quit waited, kept its change for Retry.
+        }
+    }
+
+    /// <summary>What the quit's question tells the user: each failed save, any still running, and what quitting costs.</summary>
+    internal IReadOnlyList<Message> UnsavedAtQuitLines()
+    {
+        var lines = new List<Message>();
+        lock (_userSavesGate)
+        {
+            lines.AddRange(_unsavedAtQuit.OrderBy(pair => pair.Key).Select(pair => pair.Value.Failure));
+            if (_userSaves.Count > 0)
+                lines.Add(Message.Of("quit.stillSaving"));
+        }
+
+        lines.Add(Message.Of("quit.unsavedMessage"));
+        return lines;
+    }
+
+    private object UnsavedAtQuitFields()
+    {
+        lock (_userSavesGate)
+            return new { unsaved = _unsavedAtQuit.Keys.Select(store => store.ToString()).ToArray(), running = _userSaves.Count };
+    }
+
+    // The user dismissed the question: the app stays open as it was before the quit. A change whose save
+    // failed is dropped, as any failed save is; the window already shows its failure.
+    private void CallOffQuit()
+    {
+        _quitting = false;
+        _shutdown = null;
+        lock (_userSavesGate)
+            _unsavedAtQuit.Clear();
+        if (_quitHoldsGate)
+        {
+            _quitHoldsGate = false;
+            _mutationGate.Release();
+        }
+
+        Log.Info("quit: called off; the app stays open");
+    }
+
+    /// <summary>
+    /// Runs one of the user's own saves off the UI thread, tracked while it runs so a quit waits for it.
+    /// A save that fails while a quit waits keeps its change, with what to tell the user, for Retry; the
+    /// record is made before the task ends, so a quit that has waited for the task sees it.
+    /// </summary>
+    private Task<T> RunUserSaveAsync<T>(
+        UserStore store, Func<T> save, Func<Exception, Message> describe, Func<Task> saveAgain)
+    {
+        var task = Task.Run(() =>
+        {
+            try
+            {
+                var result = save();
+                lock (_userSavesGate)
+                    _unsavedAtQuit.Remove(store);
+                return result;
+            }
+            catch (Exception ex) when (_quitting)
+            {
+                lock (_userSavesGate)
+                    _unsavedAtQuit[store] = new UnsavedChange(describe(ex), saveAgain);
+                throw;
+            }
+        });
+
+        lock (_userSavesGate)
+            _userSaves.Add(task);
+        task.ContinueWith(
+            done =>
+            {
+                lock (_userSavesGate)
+                    _userSaves.Remove(done);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+        return task;
     }
 
     // --- Internals ---
@@ -949,12 +1213,22 @@ public partial class MainWindowViewModel : ObservableObject
         if (_entriesOnDisk && SameContent(snapshot, SortedForDisk(_entries)))
         {
             Log.Debug("paths: unchanged, not saved");
+            lock (_userSavesGate)
+                _unsavedAtQuit.Remove(UserStore.PathList);
             return null;
         }
 
         try
         {
-            await Task.Run(() => _pathListStore.Save(snapshot));
+            await RunUserSaveAsync(
+                UserStore.PathList,
+                () =>
+                {
+                    _pathListStore.Save(snapshot);
+                    return true;
+                },
+                FailurePresentation.PathListSave,
+                () => TrySaveEntriesAsync(updated));
         }
         catch (Exception ex)
         {
@@ -1147,6 +1421,9 @@ public partial class MainWindowViewModel : ObservableObject
     {
         using var applyCts = new CancellationTokenSource();
         _applyCts = applyCts;
+        // An apply that follows a save the quit waited for stops at once.
+        if (_quitting)
+            applyCts.Cancel();
         IsApplying = true;
         try
         {

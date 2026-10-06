@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace PathHide.Views;
 
 /// <summary>
-/// The few Objective-C runtime calls the macOS menu bar needs, made directly. objc_msgSend takes the
+/// The few Objective-C runtime calls the macOS menu bar and the quit need, made directly. objc_msgSend takes the
 /// signature of the method it calls, so each call shape has its own import. macOS only.
 /// </summary>
 internal static class ObjC
@@ -40,6 +40,10 @@ internal static class ObjC
     /// <summary>Sends a message taking one index, such as <c>objectAtIndex:</c>.</summary>
     internal static IntPtr SendWithIndex(IntPtr receiver, string selector, ulong index) =>
         MsgSendIndex(receiver, Sel(selector), index);
+
+    /// <summary>Sends a message taking one four-character code, such as <c>attributeDescriptorForKeyword:</c>.</summary>
+    internal static IntPtr SendWithCode(IntPtr receiver, string selector, uint code) =>
+        MsgSendCode(receiver, Sel(selector), code);
 
     internal static ulong SendForUInt(IntPtr receiver, string selector) => MsgSendForUInt(receiver, Sel(selector));
 
@@ -108,6 +112,9 @@ internal static class ObjC
 
     [DllImport(Runtime, EntryPoint = "objc_msgSend")]
     private static extern IntPtr MsgSendIndex(IntPtr receiver, IntPtr selector, ulong index);
+
+    [DllImport(Runtime, EntryPoint = "objc_msgSend")]
+    private static extern IntPtr MsgSendCode(IntPtr receiver, IntPtr selector, uint code);
 
     [DllImport(Runtime, EntryPoint = "objc_msgSend")]
     private static extern ulong MsgSendForUInt(IntPtr receiver, IntPtr selector);

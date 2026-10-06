@@ -59,6 +59,16 @@ sealed class Program
         if (recordsFailure is not null)
             Log.Error("logger: could not open the records database", recordsFailure, new { file = StorageRoot.RecordsFile });
         var clean = true;
+        var logClosed = false;
+        void CloseLog()
+        {
+            if (logClosed)
+                return;
+            logClosed = true;
+            Log.Info("shutdown", new { clean });
+            Log.Shutdown();
+        }
+
         try
         {
             Log.Info("startup", new
@@ -69,7 +79,11 @@ sealed class Program
                 storageDir = StorageRoot.Directory,
                 debugLogging = Log.DebugEnabled,
             });
-            return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            // On macOS a Dock Quit, logout or shutdown ends the process as the lifetime exits, and neither
+            // the finally below nor ProcessExit runs, so what the quit logged is written there first.
+            return BuildAvaloniaApp().StartWithClassicDesktopLifetime(
+                args,
+                lifetime => lifetime.Exit += (_, _) => CloseLog());
         }
         catch (Exception ex)
         {
@@ -81,8 +95,7 @@ sealed class Program
         }
         finally
         {
-            Log.Info("shutdown", new { clean });
-            Log.Shutdown();
+            CloseLog();
         }
     }
 
