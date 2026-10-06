@@ -699,11 +699,18 @@ public class MainWindowViewModelTests
         // losing it, and the first add would then write a fresh file holding
         // only that entry — the user working on top of an apparent loss.
         var visibility = new FakeVisibilityService();
-        var paths = new FakeJsonStore<List<PathEntry>> { LoadIsUnreadable = true };
+        var paths = new FakeJsonStore<List<PathEntry>>
+        {
+            LoadException = new PathHide.Storage.UnreadableStoreException("/r/paths.json", new System.Text.Json.JsonException()),
+        };
         var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
 
-        Assert.Throws<PathHide.Storage.PathListUnreadableException>(() => vm.LoadPersistedState());
+        var halted = Assert.Throws<PathHide.Storage.UnreadableStoreException>(() => vm.LoadPersistedState());
+        Assert.Equal("/r/paths.json", halted.Path);
+        Assert.Empty(vm.Rows);
+        Assert.Equal(0, paths.SaveCount);
+        Assert.Empty(visibility.Inspected);
     }
 
     [Fact]
@@ -715,16 +722,6 @@ public class MainWindowViewModelTests
             [new PathHide.Storage.QuarantinedStore("settings", "/r/config-x.invalid")]);
         Assert.Contains("settings", English.Of(settings.Title));
         Assert.DoesNotContain("path list", English.Of(settings.Body));
-
-        var pathList = PathHide.Storage.QuarantineJournal.Describe(
-            [new PathHide.Storage.QuarantinedStore("paths", "/r/paths-x.invalid")]);
-        Assert.Contains("path list", English.Of(pathList.Title));
-        Assert.Contains("Open Records from the menu", English.Of(pathList.Body));
-        Assert.DoesNotContain("/r/paths-x.invalid", English.Of(pathList.Body), StringComparison.Ordinal);
-
-        // Reload keeps the entries already on screen, so the path list's notice must not claim the
-        // app started over with defaults, as the settings file's rightly does.
-        Assert.DoesNotContain("default", English.Of(pathList.Body), StringComparison.OrdinalIgnoreCase);
         Assert.Contains("default", English.Of(settings.Body), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -816,12 +813,14 @@ public class MainWindowViewModelTests
         var vm = CreateViewModel(visibility, paths);
         await vm.ScanTask;
 
-        // The reload sets the unreadable file aside and keeps the entry on screen, so paths.json no
-        // longer holds it, though nothing about the entry has changed.
-        paths.LoadIsUnreadable = true;
+        // The reload finds a file it cannot read and keeps the entry on screen, so paths.json does
+        // not hold it, though nothing about the entry has changed. The user then repairs or moves
+        // the file, which the store then lets the next save replace.
+        paths.LoadException = new PathHide.Storage.UnreadableStoreException("/r/paths.json", new System.Text.Json.JsonException());
         await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
         await vm.ScanTask;
         Assert.Equal(0, paths.SaveCount);
+        Assert.Equal("/x", Assert.Single(vm.Rows).Path);
 
         vm.Rows.Single().IsSelected = true;
         await ((IAsyncRelayCommand)vm.HideSelectedCommand).ExecuteAsync(null);

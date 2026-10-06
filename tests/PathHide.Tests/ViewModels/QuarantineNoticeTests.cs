@@ -27,27 +27,31 @@ public sealed class QuarantineNoticeTests : IDisposable
     public void Dispose() => QuarantineJournal.Drain();
 
     [Fact]
-    public async Task Reload_WhenThePathListIsUnreadable_KeepsTheRowsOnScreen()
+    public async Task Reload_WhenThePathListIsUnreadable_KeepsTheRowsAndNamesTheFileLeftInPlace()
     {
         // Mid-session there is nothing to halt: the rows already shown are the
         // last good state, so they stay rather than being replaced by an empty
-        // list, and the user is told what happened.
+        // list, and the user is told which file was left as it is.
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = MainWindowViewModelTests.CreateViewModel(visibility, paths);
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/keep-me" });
         Assert.Single(vm.Rows);
 
-        var told = false;
-        vm.ShowNoticeAsync = (_, _) => { told = true; return Task.CompletedTask; };
-        paths.LoadIsUnreadable = true;
-        QuarantineJournal.Record("paths", "/r/paths-x.invalid");
+        (Message Title, Message Body)? shown = null;
+        vm.ShowNoticeAsync = (title, body) =>
+        {
+            shown = (title, body);
+            return Task.CompletedTask;
+        };
+        paths.LoadException = new UnreadableStoreException("/home/u/.pathhide/paths.json", new System.Text.Json.JsonException());
 
         await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
 
-        Assert.Single(vm.Rows);
-        Assert.Equal("/keep-me", vm.Rows[0].Path);
-        Assert.True(told);
+        Assert.Equal("/keep-me", Assert.Single(vm.Rows).Path);
+        Assert.Equal("quarantine.pathListTitle", shown!.Value.Title.Key);
+        Assert.Contains("/home/u/.pathhide/paths.json", English.Of(shown.Value.Body), StringComparison.Ordinal);
+        Assert.Empty(QuarantineJournal.Drain());
     }
 
     [Fact]
@@ -70,37 +74,6 @@ public sealed class QuarantineNoticeTests : IDisposable
         Assert.Equal("/keep-me", Assert.Single(vm.Rows).Path);
         Assert.Equal("quarantine.pathListTitle", shown!.Value.Title.Key);
         Assert.Contains("/home/u/.pathhide/paths.json", English.Of(shown.Value.Body), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task Reload_WhenTheStoreWasQuarantined_TellsTheUser()
-    {
-        // The startup drain runs once, in the window's Opened handler. A load
-        // that quarantines afterwards - pressing Reload on a paths.json edited
-        // into invalid JSON - emptied every row with no notice, no explanation
-        // and no safe recovery guidance for the copy that was set aside.
-        var visibility = new FakeVisibilityService();
-        var paths = new FakeJsonStore<List<PathEntry>>();
-        var vm = MainWindowViewModelTests.CreateViewModel(visibility, paths);
-
-        (Message Title, Message Body)? shown = null;
-        vm.ShowNoticeAsync = (title, body) =>
-        {
-            shown = (title, body);
-            return Task.CompletedTask;
-        };
-
-        // The store finds the file unreadable on this load and sets it aside.
-        QuarantineJournal.Record("paths", "/home/u/.pathhide/paths-20260821-000000-000-utc.invalid");
-
-        await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
-
-        Assert.NotNull(shown);
-        Assert.Equal("quarantine.pathListTitle", shown!.Value.Title.Key);
-        Assert.Contains("Open Records from the menu", English.Of(shown.Value.Body));
-        Assert.DoesNotContain("/home/u/.pathhide", English.Of(shown.Value.Body), StringComparison.Ordinal);
-        // Drained, so a second reload does not repeat it.
-        Assert.Empty(QuarantineJournal.Drain());
     }
 
     [Fact]

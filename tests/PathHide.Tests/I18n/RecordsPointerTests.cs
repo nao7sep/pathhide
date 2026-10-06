@@ -15,8 +15,6 @@ public class RecordsPointerTests
     [
         "about.openGitHubFailed",
         "about.openIssuesFailed",
-        "quarantine.manyBody",
-        "quarantine.pathListBody",
         "quarantine.settingsBody",
     ];
 

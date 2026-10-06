@@ -14,10 +14,6 @@ public class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
     public T Value { get; set; } = new();
     public bool ThrowOnSave { get; set; }
 
-    /// <summary>Models a live file that was present but could not be read (and
-    /// so has been set aside), as distinct from one that was simply absent.</summary>
-    public bool LoadIsUnreadable { get; set; }
-
     /// <summary>When set, <see cref="Load"/> throws it, like a file a newer build wrote.</summary>
     public System.Exception? LoadException { get; set; }
     public int SaveCount { get; private set; }
@@ -33,9 +29,7 @@ public class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
         LoadCount++;
         if (LoadException is not null)
             throw LoadException;
-        return LoadIsUnreadable
-            ? new LoadedStore<T>(new T(), WasUnreadable: true)
-            : new LoadedStore<T>(Value, WasUnreadable: false);
+        return new LoadedStore<T>(Value, WasUnreadable: false);
     }
 
     /// <summary>When set, <see cref="Save"/> blocks on this gate first, like a write to a slow share.</summary>

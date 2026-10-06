@@ -49,12 +49,17 @@ public sealed class JsonStoreTests : IDisposable
         // Release the backups.sqlite3 handle before deleting the root, and reset the singleton so the next
         // throwaway root re-opens its own store.
         BackupStore.Close();
+        QuarantineJournal.Drain();
         Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _previousHome);
         try { Directory.Delete(_root, recursive: true); }
         catch { /* best-effort cleanup */ }
     }
 
     private string PathOf(string fileName) => Path.Combine(_root, fileName);
+
+    /// <summary>A store that quarantines what it cannot read, as config.json's does.</summary>
+    private static JsonStore<TestDocument> SettingsDocumentStore() =>
+        new("config.json", QuarantineJournal.SettingsLabel, FormatVersions.Settings);
 
     public sealed class TestDocument
     {
@@ -117,45 +122,42 @@ public sealed class JsonStoreTests : IDisposable
         // The .bak last-good sidecar is retired: an unreadable live file is quarantined (moved aside,
         // bytes preserved) rather than reset over — the storage-path conventions' quarantine-then-reset
         // path — and the caller falls back to defaults. Never a .bak.
-        var store = new PathListStore();
-        store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
-        store.Save([
-            new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden },
-            new PathEntry { Path = "/b", DesiredVisibility = DesiredVisibility.Shown },
-        ]);
+        var store = SettingsDocumentStore();
+        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
+        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem, Theme = ThemePreference.Dark });
 
         const string corrupt = "{ not valid json";
-        File.WriteAllText(PathOf("paths.json"), corrupt);
+        File.WriteAllText(PathOf("config.json"), corrupt);
 
         var loaded = store.Load().Value;
 
-        Assert.Empty(loaded);
-        Assert.False(File.Exists(PathOf("paths.json")));
-        Assert.False(File.Exists(PathOf("paths.json.bak")));
+        Assert.Equal(WindowsHideMode.HiddenOnly, loaded.WindowsHideMode);
+        Assert.False(File.Exists(PathOf("config.json")));
+        Assert.False(File.Exists(PathOf("config.json.bak")));
 
         // Quarantined under the grammar-shaped name <stem>-<millisecond-utc-stamp>.invalid, in the
         // same directory, with the original (corrupt) bytes intact.
-        var quarantined = Directory.EnumerateFiles(_root, "paths-*.invalid").ToList();
+        var quarantined = Directory.EnumerateFiles(_root, "config-*.invalid").ToList();
         Assert.Single(quarantined);
-        Assert.Matches(@"^paths-\d{8}-\d{6}-\d{3}-utc\.invalid$", Path.GetFileName(quarantined[0]));
+        Assert.Matches(@"^config-\d{8}-\d{6}-\d{3}-utc\.invalid$", Path.GetFileName(quarantined[0]));
         Assert.Equal(corrupt, File.ReadAllText(quarantined[0]));
     }
 
     [Fact]
     public void Save_AfterQuarantine_RecreatesLiveFileAndNeverTouchesTheQuarantinedFile()
     {
-        var store = new PathListStore();
+        var store = SettingsDocumentStore();
         const string corrupt = "{ not valid json";
-        File.WriteAllText(PathOf("paths.json"), corrupt);
+        File.WriteAllText(PathOf("config.json"), corrupt);
 
         store.Load();
-        var quarantinedPath = Directory.EnumerateFiles(_root, "paths-*.invalid").Single();
+        var quarantinedPath = Directory.EnumerateFiles(_root, "config-*.invalid").Single();
 
-        store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
+        store.Save(new TestDocument { Theme = ThemePreference.Dark });
 
         // A user change recreates the live file without touching the quarantined bytes.
-        Assert.True(File.Exists(PathOf("paths.json")));
-        Assert.Single(store.Load().Value);
+        Assert.True(File.Exists(PathOf("config.json")));
+        Assert.Equal(ThemePreference.Dark, store.Load().Value.Theme);
         Assert.Equal(corrupt, File.ReadAllText(quarantinedPath));
     }
 
@@ -173,19 +175,16 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_LiteralNullPathList_QuarantinesAndReportsUnreadable()
+    public void Load_LiteralNullPathList_IsLeftInPlaceAndRefused()
     {
         File.WriteAllText(PathOf("paths.json"), "null");
         var store = new PathListStore();
 
-        var loaded = store.Load();
+        Assert.Throws<UnreadableStoreException>(() => store.Load());
+        Assert.Throws<UnreadableStoreException>(() => store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]));
 
-        Assert.True(loaded.WasUnreadable);
-        Assert.Empty(loaded.Value);
-        Assert.False(File.Exists(PathOf("paths.json")));
-        var quarantined = Directory.EnumerateFiles(_root, "paths-*.invalid").ToList();
-        Assert.Single(quarantined);
-        Assert.Equal("null", File.ReadAllText(quarantined[0]));
+        Assert.Equal("null", File.ReadAllText(PathOf("paths.json")));
+        Assert.Empty(Directory.EnumerateFiles(_root, "*.invalid"));
     }
 
     [Fact]

@@ -8,7 +8,10 @@ using Microsoft.Data.Sqlite;
 using PathHide.Backup;
 using PathHide.I18n;
 using PathHide.Models;
+using PathHide.Services;
 using PathHide.Storage;
+using PathHide.Tests.Fakes;
+using PathHide.ViewModels;
 using Xunit;
 
 namespace PathHide.Tests.Storage;
@@ -68,15 +71,16 @@ public sealed class FormatVersionTests : IDisposable
     // --- paths.json ---
 
     [Fact]
-    public void PathList_WithoutAVersion_IsUnreadable()
+    public void PathList_WithoutAVersion_IsUnreadableAndLeftInPlace()
     {
-        const string contents = """{ "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""";
-        File.WriteAllText(PathOf(PathListStore.FileName), contents);
+        var bytes = WriteNewer(PathListStore.FileName, """{ "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""");
+        var store = new PathListStore();
 
-        var loaded = new PathListStore().Load();
+        var refused = Assert.Throws<UnreadableStoreException>(() => store.Load());
+        Assert.Throws<UnreadableStoreException>(() => store.Save([Entry("/b")]));
 
-        Assert.True(loaded.WasUnreadable);
-        Assert.Equal(contents, File.ReadAllText(Assert.Single(Directory.GetFiles(_root, "paths-*.invalid"))));
+        Assert.Equal(PathOf(PathListStore.FileName), refused.Path);
+        AssertLeftAsItWas(PathListStore.FileName, bytes);
     }
 
     [Fact]
@@ -111,14 +115,39 @@ public sealed class FormatVersionTests : IDisposable
     [InlineData("""{ "formatVersion": 1.5, "paths": [] }""")]
     [InlineData("""{ "formatVersion": null, "paths": [] }""")]
     [InlineData("""{ "formatVersion": 1, "paths": null }""")]
-    public void PathList_WithoutAReadableVersionOrShape_IsQuarantined(string contents)
+    public void PathList_WithoutAReadableVersionOrShape_IsLeftInPlace(string contents)
     {
-        File.WriteAllText(PathOf(PathListStore.FileName), contents);
+        var bytes = WriteNewer(PathListStore.FileName, contents);
+        var store = new PathListStore();
 
-        var loaded = new PathListStore().Load();
+        Assert.Throws<UnreadableStoreException>(() => store.Load());
+        Assert.Throws<UnreadableStoreException>(() => store.Save([Entry("/b")]));
 
-        Assert.True(loaded.WasUnreadable);
-        Assert.Equal(contents, File.ReadAllText(Assert.Single(Directory.GetFiles(_root, "paths-*.invalid"))));
+        AssertLeftAsItWas(PathListStore.FileName, bytes);
+    }
+
+    [Fact]
+    public void PathList_Unreadable_HaltsEveryLaunchWithoutTouchingTheFileOrAnyItem()
+    {
+        var bytes = WriteNewer(PathListStore.FileName, "{ not valid json");
+        var visibility = new FakeVisibilityService();
+
+        // Each launch builds a fresh view model over the real store; none may start, and none may
+        // move, rewrite or act on anything.
+        for (var launch = 0; launch < 2; launch++)
+        {
+            var settingsStore = new FakeSettingsStore();
+            var vm = new MainWindowViewModel(new BoundedVisibility(visibility), new PathListStore(), settingsStore,
+                settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+            var halted = Assert.Throws<UnreadableStoreException>(vm.LoadPersistedState);
+            Assert.Equal(PathOf(PathListStore.FileName), halted.Path);
+            Assert.Empty(vm.Rows);
+        }
+
+        AssertLeftAsItWas(PathListStore.FileName, bytes);
+        Assert.Empty(visibility.Inspected);
+        Assert.Empty(visibility.Hidden);
+        Assert.Empty(visibility.Shown);
     }
 
     // --- config.json ---

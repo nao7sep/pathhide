@@ -12,7 +12,8 @@ namespace PathHide.Storage;
 /// Generic JSON-backed store with atomic replace (write-to-temp-then-rename).
 /// A missing file yields the type's default-constructed value; a present but
 /// unparseable file is quarantined aside, bytes preserved, before the default
-/// is returned (storage-path conventions).
+/// is returned (storage-path conventions), or, for a store holding the user's work
+/// product, left in place (store-recovery-conventions).
 /// </summary>
 /// <remarks>
 /// The file is a JSON object: <typeparamref name="T"/>'s properties beside the format version this
@@ -37,6 +38,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     private readonly string _label;
     private readonly int _formatVersion;
     private readonly bool _recordBackup;
+    private readonly bool _haltWhenUnreadable;
 
     /// <summary>
     /// Creates a store rooted at <see cref="StorageRoot.Directory"/>.
@@ -46,18 +48,25 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     /// <param name="formatVersion">The file's format version, from <see cref="FormatVersions"/>.</param>
     /// <param name="recordBackup">False for a store that is volatile state and nothing else (window
     /// placement): its saves are written atomically but not recorded into the backup history.</param>
-    public JsonStore(string fileName, string label, int formatVersion, bool recordBackup = true)
+    /// <param name="haltWhenUnreadable">True for a store holding the user's work product: a file present
+    /// but unreadable is left exactly in place, and <see cref="Load"/> and <see cref="Save"/> throw
+    /// <see cref="UnreadableStoreException"/> instead of setting it aside or writing over it.</param>
+    public JsonStore(string fileName, string label, int formatVersion, bool recordBackup = true, bool haltWhenUnreadable = false)
     {
         _filePath = Path.Combine(StorageRoot.Directory, fileName);
         _label = label;
         _formatVersion = formatVersion;
         _recordBackup = recordBackup;
+        _haltWhenUnreadable = haltWhenUnreadable;
     }
 
     public LoadedStore<T> Load()
     {
         if (TryLoadFile(out var value, out var wasUnreadable))
+        {
+            Log.Info("store: loaded", new { label = _label, path = _filePath });
             return new LoadedStore<T>(value, WasUnreadable: false);
+        }
 
         // Reached on first run (no file yet — normal) or after the live file was present but
         // unreadable (already quarantined and logged a warn above). There is no .bak fallback: a
@@ -79,7 +88,12 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         try
         {
             StorageRoot.EnsureExists();
-            RefuseNewerFile();
+            // A store that halts when unreadable reads the file it would replace, so it refuses an
+            // unreadable one as well as a newer one.
+            if (_haltWhenUnreadable)
+                TryLoadFile(out _, out _);
+            else
+                RefuseNewerFile();
             var document = JsonSerializer.SerializeToNode(value, JsonOptions.Default) as JsonObject
                 ?? throw new InvalidOperationException($"The {_label} store holds a JSON object.");
             document.Insert(0, FormatVersions.JsonKey, _formatVersion);
@@ -118,11 +132,16 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
             value = document.RootElement.Deserialize<T>(JsonOptions.Default)
                 ?? throw new JsonException($"The {_label} file could not be read as its document.");
-            Log.Info("store: loaded", new { label = _label, path = _filePath });
             return true;
         }
         catch (Exception ex) when (ex is not NewerFormatException)
         {
+            if (_haltWhenUnreadable)
+            {
+                Log.Warn("store: file unreadable, left in place", ex, new { label = _label, path = _filePath });
+                throw new UnreadableStoreException(_filePath, ex);
+            }
+
             // Present but unparseable: quarantine aside (bytes preserved) before the caller
             // decides what to do; only a later user change recreates the file through Save.
             Quarantine(ex);

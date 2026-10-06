@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -90,18 +89,16 @@ public partial class App : Application
                 // the same startup report/catch as config.json.
                 viewModel.LoadPersistedState();
             }
-            catch (Storage.PathListUnreadableException)
+            catch (UnreadableStoreException unreadable)
             {
-                // The list WAS set aside successfully — its bytes are safe. The
-                // halt is not about the move failing; it is that opening with an
-                // empty list would look exactly like losing it, and the first add
-                // would then write a fresh file containing only that entry.
-                var quarantined = Storage.QuarantineJournal.Drain();
-                Log.Warn("startup: the path list could not be read; halting rather than starting empty",
-                    new { quarantined = string.Join(", ", quarantined.Select(q => q.Path)) });
+                // The list is left exactly where it is, on this launch and every later one until the
+                // user repairs or moves it: opening with an empty list would look exactly like losing
+                // it, and the first add would then write a fresh file containing only that entry.
+                Log.Warn("startup: the path list could not be read; halting with it left in place",
+                    new { path = unreadable.Path });
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
                     I18n.Message.Of("startup.pathListTitle"),
-                    FailurePresentation.PathListStartup());
+                    FailurePresentation.PathListStartup(unreadable));
                 RegisterOwnerActivation(desktop.MainWindow);
                 base.OnFrameworkInitializationCompleted();
                 return;

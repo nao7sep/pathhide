@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using PathHide.I18n;
 
 namespace PathHide.Storage;
@@ -48,26 +47,10 @@ public static class QuarantineJournal
     public const string StateLabel = "state";
 
     /// <summary>
-    /// The recovery notice for a set of quarantined stores, naming which store was reset. The wording
-    /// used to be hardcoded for the path list, so a quarantined settings file told the user their
-    /// hidden-path list was in a file that does not contain it.
+    /// The recovery notice for a set of quarantined stores. Only the settings file reaches it: the path
+    /// list is left in place and halts instead, and window state resets with a warning in the log.
     /// </summary>
-    /// <remarks>
-    /// Each store has its own sentences rather than a name slotted into one, because a store's name
-    /// changes the words around it in most languages. They also say different things: the settings
-    /// file is only read at startup, which then goes on with defaults, while the path list reaches
-    /// this notice only from Reload — an unreadable list at startup halts instead — and Reload keeps
-    /// the entries already on screen.
-    /// </remarks>
     public static (Message Title, Message Body) Describe(
-        IReadOnlyList<QuarantinedStore> quarantined)
-    {
-        var labels = quarantined.Select(q => q.Label).Distinct().ToArray();
-        return labels switch
-        {
-            [SettingsLabel] => (Message.Of("quarantine.settingsTitle"), Message.Of("quarantine.settingsBody")),
-            [PathListLabel] => (Message.Of("quarantine.pathListTitle"), Message.Of("quarantine.pathListBody")),
-            _ => (Message.Of("quarantine.manyTitle"), Message.Of("quarantine.manyBody")),
-        };
-    }
+        IReadOnlyList<QuarantinedStore> quarantined) =>
+        (Message.Of("quarantine.settingsTitle"), Message.Of("quarantine.settingsBody"));
 }

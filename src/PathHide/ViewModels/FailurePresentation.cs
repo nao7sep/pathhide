@@ -24,9 +24,14 @@ public static class FailurePresentation
     public static Message PathListSave(Exception error) => error switch
     {
         NewerFormatException newer => NewerStore(newer),
+        UnreadableStoreException unreadable => PathListUnreadable(unreadable),
         UnauthorizedAccessException => Message.Of("failure.pathListSavePermission"),
         _ => Message.Of("failure.pathListSave"),
     };
+
+    /// <summary>A path list PathHide cannot read, named by its path and left as it is.</summary>
+    public static Message PathListUnreadable(UnreadableStoreException unreadable) =>
+        Message.Of("failure.pathListUnreadable", ("path", unreadable.Path));
 
     /// <summary>A file a newer PathHide wrote, named by its path and left as it is.</summary>
     public static Message NewerStore(NewerFormatException newer) =>
@@ -42,5 +47,6 @@ public static class FailurePresentation
 
     public static Message Startup() => Message.Of("failure.startupData");
 
-    public static Message PathListStartup() => Message.Of("failure.pathListStartup");
+    public static Message PathListStartup(UnreadableStoreException unreadable) =>
+        Message.Of("failure.pathListStartup", ("path", unreadable.Path));
 }

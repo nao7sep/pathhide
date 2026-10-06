@@ -33,7 +33,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private List<PathEntry> _entries = [];
 
-    // Whether paths.json holds _entries. False only after a Reload set an unreadable file aside and
+    // Whether paths.json holds _entries. False only after a Reload found a file it cannot read and
     // kept the entries on screen, so the next save writes them back even if nothing else changed.
     private bool _entriesOnDisk = true;
 
@@ -253,20 +253,10 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         _persistedStateLoaded = true;
 
-        var loaded = _pathListStore.Load();
-        if (loaded.WasUnreadable)
-        {
-            // The path list is the user's work product: a curated registry they
-            // built, re-derivable from nothing else on disk. Opening with an
-            // empty list would look exactly like losing it, and the first add
-            // would then write a fresh file containing only that entry — the
-            // user working on top of an apparent loss. The storage-path
-            // conventions require a halt here; only re-derivable stores may
-            // quarantine and continue.
-            throw new PathListUnreadableException();
-        }
-
-        _entries = loaded.Value;
+        // An unreadable list throws UnreadableStoreException with the file left in place, which halts
+        // startup before anything is shown or applied: opening with an empty list would look exactly
+        // like losing it (store-recovery-conventions).
+        _entries = _pathListStore.Load().Value;
         SyncRowsWithEntries();
     }
 
@@ -664,25 +654,15 @@ public partial class MainWindowViewModel : ObservableObject
         {
             reloaded = await Task.Run(_pathListStore.Load);
         }
-        catch (NewerFormatException newer)
+        catch (Exception ex) when (ex is NewerFormatException or UnreadableStoreException)
         {
-            // A newer PathHide wrote the list: keep the rows on screen, as for an unreadable one, and
-            // let the store refuse every save over that file.
+            // Mid-session there is nothing to halt: the rows on screen are the last good state. Keep
+            // them, say which file was left as it is, and let the store refuse every save over it.
             _entriesOnDisk = false;
             if (ShowNoticeAsync is not null)
-                await ShowNoticeAsync(Message.Of("quarantine.pathListTitle"), FailurePresentation.NewerStore(newer));
-            StartBackgroundScan();
-            return;
-        }
-
-        if (reloaded.WasUnreadable)
-        {
-            // Mid-session there is nothing to halt: the app is already running
-            // and the rows on screen are the last good state. Keep them rather
-            // than replacing them with an empty list, and say what happened.
-            Log.Warn("reload: path list unreadable; keeping the loaded entries");
-            _entriesOnDisk = false;
-            await ReportQuarantinesAsync();
+                await ShowNoticeAsync(Message.Of("quarantine.pathListTitle"), ex is NewerFormatException newer
+                    ? FailurePresentation.NewerStore(newer)
+                    : FailurePresentation.PathListUnreadable((UnreadableStoreException)ex));
             StartBackgroundScan();
             return;
         }
@@ -690,14 +670,6 @@ public partial class MainWindowViewModel : ObservableObject
         _entries = reloaded.Value;
         _entriesOnDisk = true;
         SyncRowsWithEntries();
-
-        // A load can find the file unreadable and set it aside, and this one
-        // happens long after startup — where the startup drain has already run
-        // and will never run again. Without reporting here, pressing Reload on
-        // a hand-edited-into-invalid paths.json emptied every row with no
-        // notice, no explanation, and no pointer to the quarantined file.
-        await ReportQuarantinesAsync();
-
         StartBackgroundScan();
     });
 
