@@ -58,7 +58,7 @@
   "failure.settingsSavePermission": "无法保存设置。请检查 PathHide 数据文件夹是否可写，然后重试。",
   "failure.startupData": "PathHide 无法读取文件 {path}，也无法将其移到一旁，因此没有改动该文件，以免将其覆盖。你的文件既未被隐藏，也未被取消隐藏。请修复该文件或将其移出 PathHide 数据文件夹，然后再次启动 PathHide。",
   "failure.startupStorage": "PathHide 无法打开其数据文件夹。请检查该文件夹是否存在且可写，然后再次启动 PathHide。",
-  "failure.startupUnexpected": "由于意外问题，PathHide 无法启动。你的文件既未被隐藏，也未被取消隐藏。详细信息记录在会话日志中。",
+  "failure.startupUnexpected": "由于意外问题，PathHide 无法启动。你的文件既未被隐藏，也未被取消隐藏。详细信息在日志（{records}）中；如果无法写入日志，则在 {logs} 中的文件里。",
   "failure.windowAction": "无法完成请求的窗口操作。请重试。",
   "family.posix": "POSIX",
   "family.unc": "UNC",

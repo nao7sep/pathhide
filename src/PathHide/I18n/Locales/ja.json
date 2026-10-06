@@ -58,7 +58,7 @@
   "failure.settingsSavePermission": "設定を保存できませんでした。PathHide のデータフォルダに書き込めるか確認してから、もう一度お試しください。",
   "failure.startupData": "ファイル {path} を読み取れず、PathHide はそれを退避することもできなかったため、上書きの危険を冒さずにそのまま残しました。ファイルの非表示・再表示は行っていません。ファイルを修復するか PathHide のデータフォルダの外へ移動してから、PathHide をもう一度起動してください。",
   "failure.startupStorage": "PathHide のデータフォルダを開けませんでした。そのフォルダが存在し、書き込み可能であることを確認してから、PathHide をもう一度起動してください。",
-  "failure.startupUnexpected": "予期しない問題のため、PathHide を起動できませんでした。ファイルの非表示・再表示は行っていません。詳細はセッションログに記録されています。",
+  "failure.startupUnexpected": "予期しない問題のため、PathHide を起動できませんでした。ファイルの非表示・再表示は行っていません。詳細はログ（{records}）に、ログに書き込めなかった場合は {logs} 内のファイルにあります。",
   "failure.windowAction": "要求されたウインドウ操作を完了できませんでした。もう一度お試しください。",
   "family.posix": "POSIX",
   "family.unc": "UNC",

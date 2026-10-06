@@ -72,7 +72,7 @@
   "failure.settingsSavePermission": "No se pudo guardar la configuración. Comprueba que se pueda escribir en la carpeta de datos de PathHide y vuelve a intentarlo.",
   "failure.startupData": "PathHide no pudo leer el archivo {path} ni tampoco apartarlo, así que lo dejó sin cambios para no correr el riesgo de sobrescribirlo. No se ocultó ni se volvió a mostrar ninguno de tus archivos. Repara el archivo o sácalo de la carpeta de datos de PathHide y vuelve a iniciar PathHide.",
   "failure.startupStorage": "PathHide no pudo abrir su carpeta de datos. Comprueba que la carpeta exista y que se pueda escribir en ella, y vuelve a iniciar PathHide.",
-  "failure.startupUnexpected": "PathHide no pudo iniciarse por un problema inesperado. No se ocultó ni se volvió a mostrar ninguno de tus archivos. Los detalles figuran en el registro de sesión.",
+  "failure.startupUnexpected": "PathHide no pudo iniciarse por un problema inesperado. No se ocultó ni se volvió a mostrar ninguno de tus archivos. Los detalles figuran en Registros, guardados en {records}, o en un archivo de {logs} si no se pudieron escribir los Registros.",
   "failure.windowAction": "No se pudo completar la acción de ventana solicitada. Inténtalo de nuevo.",
   "family.posix": "POSIX",
   "family.unc": "UNC",

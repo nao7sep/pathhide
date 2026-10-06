@@ -72,7 +72,7 @@
   "failure.settingsSavePermission": "Não foi possível salvar as configurações. Verifique se a pasta de dados do PathHide permite gravação e tente novamente.",
   "failure.startupData": "O PathHide não conseguiu ler o arquivo {path} nem guardá-lo à parte, por isso o deixou como estava para não correr o risco de sobrescrevê-lo. Seus arquivos não foram ocultados nem mostrados. Corrija o arquivo ou tire-o da pasta de dados do PathHide e, em seguida, inicie o PathHide novamente.",
   "failure.startupStorage": "O PathHide não conseguiu abrir a pasta de dados. Verifique se a pasta existe e permite gravação e, em seguida, inicie o PathHide novamente.",
-  "failure.startupUnexpected": "O PathHide não pôde ser iniciado devido a um problema inesperado. Seus arquivos não foram ocultados nem mostrados. Os detalhes estão no log da sessão.",
+  "failure.startupUnexpected": "O PathHide não pôde ser iniciado devido a um problema inesperado. Seus arquivos não foram ocultados nem mostrados. Os detalhes estão em Registros, salvos em {records}, ou em um arquivo em {logs} se não foi possível gravar os Registros.",
   "failure.windowAction": "Não foi possível concluir a ação solicitada na janela. Tente novamente.",
   "family.posix": "POSIX",
   "family.unc": "UNC",

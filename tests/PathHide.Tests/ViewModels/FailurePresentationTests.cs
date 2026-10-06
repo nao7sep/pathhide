@@ -34,6 +34,15 @@ public sealed class FailurePresentationTests
     }
 
     [Fact]
+    public void AnUnexpectedStartupFailureNamesWhereItsDetailsAre()
+    {
+        var text = English.Of(FailurePresentation.Startup());
+
+        Assert.Contains(StorageRoot.RecordsFile, text, StringComparison.Ordinal);
+        Assert.Contains(StorageRoot.LogsDirectory, text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void PermissionFailuresUseStructuredRecovery()
     {
         var error = new UnauthorizedAccessException(Hostile);

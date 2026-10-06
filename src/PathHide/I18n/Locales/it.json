@@ -72,7 +72,7 @@
   "failure.settingsSavePermission": "Impossibile salvare le impostazioni. Verifica che la cartella dati di PathHide sia scrivibile, quindi riprova.",
   "failure.startupData": "PathHide non è riuscito a leggere il file {path} né a metterlo da parte, quindi lo ha lasciato invariato per non rischiare di sovrascriverlo. I tuoi file non sono stati né nascosti né mostrati. Ripara il file oppure spostalo fuori dalla cartella dati di PathHide, quindi avvia di nuovo PathHide.",
   "failure.startupStorage": "PathHide non è riuscito ad aprire la sua cartella dati. Verifica che la cartella esista e sia scrivibile, quindi avvia di nuovo PathHide.",
-  "failure.startupUnexpected": "PathHide non è riuscito ad avviarsi a causa di un problema imprevisto. I tuoi file non sono stati né nascosti né mostrati. I dettagli sono nel log della sessione.",
+  "failure.startupUnexpected": "PathHide non è riuscito ad avviarsi a causa di un problema imprevisto. I tuoi file non sono stati né nascosti né mostrati. I dettagli sono nel Log, salvato in {records}, oppure in un file in {logs} se non è stato possibile scrivere il Log.",
   "failure.windowAction": "Impossibile completare l’azione richiesta sulla finestra. Riprova.",
   "family.posix": "POSIX",
   "family.unc": "UNC",

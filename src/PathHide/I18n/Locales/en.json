@@ -65,7 +65,7 @@
   "failure.settingsSavePermission": "Settings could not be saved. Check that the PathHide data folder is writable, then try again.",
   "failure.startupData": "PathHide could not read the file {path}, and could not set it aside either, so it left the file as it is rather than risk overwriting it. Your files were not hidden or unhidden. Repair the file or move it out of the PathHide data folder, then start PathHide again.",
   "failure.startupStorage": "PathHide could not open its data folder. Check that the folder exists and is writable, then start PathHide again.",
-  "failure.startupUnexpected": "PathHide could not start because of an unexpected problem. Your files were not hidden or unhidden. The session log has the details.",
+  "failure.startupUnexpected": "PathHide could not start because of an unexpected problem. Your files were not hidden or unhidden. The details are in Records, stored at {records}, or in a file in {logs} if Records could not be written.",
   "failure.windowAction": "The requested window action could not be completed. Try again.",
   "family.posix": "POSIX",
   "family.unc": "UNC",

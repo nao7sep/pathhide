@@ -58,7 +58,7 @@
   "failure.settingsSavePermission": "설정을 저장하지 못했습니다. PathHide 데이터 폴더에 쓸 수 있는지 확인한 뒤 다시 시도하십시오.",
   "failure.startupData": "{path} 파일을 읽지 못했고 PathHide가 그 파일을 따로 옮겨 둘 수도 없어, 덮어쓸 위험을 피하기 위해 그대로 두었습니다. 어떤 파일도 숨기거나 숨김 해제하지 않았습니다. 파일을 복구하거나 PathHide 데이터 폴더 밖으로 옮긴 뒤 PathHide를 다시 시작하십시오.",
   "failure.startupStorage": "PathHide가 데이터 폴더를 열지 못했습니다. 해당 폴더가 존재하고 쓸 수 있는지 확인한 뒤 PathHide를 다시 시작하십시오.",
-  "failure.startupUnexpected": "예기치 않은 문제로 PathHide를 시작하지 못했습니다. 어떤 파일도 숨기거나 숨김 해제하지 않았습니다. 자세한 내용은 세션 로그에 기록되어 있습니다.",
+  "failure.startupUnexpected": "예기치 않은 문제로 PathHide를 시작하지 못했습니다. 어떤 파일도 숨기거나 숨김 해제하지 않았습니다. 자세한 내용은 로그({records})에 있으며, 로그에 기록하지 못한 경우 {logs} 안의 파일에 있습니다.",
   "failure.windowAction": "요청한 창 작업을 완료하지 못했습니다. 다시 시도하십시오.",
   "family.posix": "POSIX",
   "family.unc": "UNC",

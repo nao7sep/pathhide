@@ -65,7 +65,7 @@
   "failure.settingsSavePermission": "Die Einstellungen konnten nicht gespeichert werden. Prüfen Sie, ob der Datenordner von PathHide beschreibbar ist, und versuchen Sie es dann erneut.",
   "failure.startupData": "PathHide konnte die Datei {path} nicht lesen und auch nicht beiseitelegen. Daher hat PathHide sie unverändert gelassen, statt ein Überschreiben zu riskieren. Ihre Dateien wurden weder versteckt noch wieder sichtbar gemacht. Reparieren Sie die Datei oder verschieben Sie sie aus dem Datenordner von PathHide und starten Sie PathHide dann erneut.",
   "failure.startupStorage": "PathHide konnte seinen Datenordner nicht öffnen. Prüfen Sie, ob der Ordner vorhanden und beschreibbar ist, und starten Sie PathHide dann erneut.",
-  "failure.startupUnexpected": "PathHide konnte wegen eines unerwarteten Problems nicht starten. Ihre Dateien wurden weder versteckt noch wieder sichtbar gemacht. Einzelheiten stehen im Sitzungsprotokoll.",
+  "failure.startupUnexpected": "PathHide konnte wegen eines unerwarteten Problems nicht starten. Ihre Dateien wurden weder versteckt noch wieder sichtbar gemacht. Einzelheiten stehen im Protokoll unter {records} oder, falls es nicht geschrieben werden konnte, in einer Datei in {logs}.",
   "failure.windowAction": "Die angeforderte Fensteraktion konnte nicht ausgeführt werden. Versuchen Sie es erneut.",
   "family.posix": "POSIX",
   "family.unc": "UNC",
