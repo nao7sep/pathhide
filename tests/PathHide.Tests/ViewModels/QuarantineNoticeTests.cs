@@ -44,7 +44,7 @@ public sealed class QuarantineNoticeTests : IDisposable
             shown = (title, body);
             return Task.CompletedTask;
         };
-        paths.LoadException = new UnreadableStoreException("/home/u/.pathhide/paths.json", new System.Text.Json.JsonException());
+        paths.LoadException = new UnreadableStoreException("paths", "/home/u/.pathhide/paths.json", new System.Text.Json.JsonException());
 
         await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
 
@@ -96,6 +96,7 @@ public sealed class QuarantineNoticeTests : IDisposable
 
         Assert.Contains("Settings could not be saved", English.Of(failure));
         Assert.Equal("quarantine.settingsTitle", shown!.Value.Title.Key);
+        Assert.Contains("/home/u/.pathhide/config-20261002-000000-000-utc.invalid", English.Of(shown.Value.Body), StringComparison.Ordinal);
         Assert.Empty(QuarantineJournal.Drain());
     }
 }

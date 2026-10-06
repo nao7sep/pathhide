@@ -15,7 +15,6 @@ public class RecordsPointerTests
     [
         "about.openGitHubFailed",
         "about.openIssuesFailed",
-        "quarantine.settingsBody",
     ];
 
     private static string Text(Catalogue catalogue, string key)

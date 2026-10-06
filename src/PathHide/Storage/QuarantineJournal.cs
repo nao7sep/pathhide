@@ -47,10 +47,10 @@ public static class QuarantineJournal
     public const string StateLabel = "state";
 
     /// <summary>
-    /// The recovery notice for a set of quarantined stores. Only the settings file reaches it: the path
-    /// list is left in place and halts instead, and window state resets with a warning in the log.
+    /// The recovery notice for a quarantined store, naming its preserved copy. Only the settings file
+    /// reaches it: the path list is left in place and halts instead, and window state resets with a
+    /// warning in the log.
     /// </summary>
-    public static (Message Title, Message Body) Describe(
-        IReadOnlyList<QuarantinedStore> quarantined) =>
-        (Message.Of("quarantine.settingsTitle"), Message.Of("quarantine.settingsBody"));
+    public static (Message Title, Message Body) Describe(QuarantinedStore quarantined) =>
+        (Message.Of("quarantine.settingsTitle"), Message.Of("quarantine.settingsBody", ("path", quarantined.Path)));
 }

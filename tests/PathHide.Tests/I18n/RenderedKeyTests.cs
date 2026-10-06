@@ -147,7 +147,7 @@ public class RenderedKeyTests : WindowTest
         AssertNoKeys(Show(NoticeDialog.CreateStartupFailure(
             Message.Of("startup.failedTitle"), Message.Of("failure.startupStorage"))));
         var (title, body) = global::PathHide.Storage.QuarantineJournal.Describe(
-            [new global::PathHide.Storage.QuarantinedStore(global::PathHide.Storage.QuarantineJournal.SettingsLabel, "/r/config-x.invalid")]);
+            new global::PathHide.Storage.QuarantinedStore(global::PathHide.Storage.QuarantineJournal.SettingsLabel, "/r/config-x.invalid"));
         AssertNoKeys(Show(NoticeDialog.CreateStartupFailure(title, body)));
     }
 

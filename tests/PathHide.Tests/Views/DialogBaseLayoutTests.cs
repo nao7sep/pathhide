@@ -29,7 +29,7 @@ public sealed class DialogBaseLayoutTests
     {
         var dialog = (DialogBase)NoticeDialog.CreateStartupFailure(
             Message.Of("startup.failedTitle"),
-            Message.Of("failure.startupData"));
+            Message.Of("failure.startupData", ("path", "/r/config.json")));
 
         var content = dialog.GetLogicalDescendants()
             .OfType<ContentPresenter>()

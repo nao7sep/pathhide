@@ -284,9 +284,11 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Dark));
 
         Assert.Equal("theme", Assert.Single(StoredSets()).Key);
-        Assert.Equal(corrupt, File.ReadAllText(Assert.Single(Directory.GetFiles(_root, "config-*.invalid"))));
+        var preserved = Assert.Single(Directory.GetFiles(_root, "config-*.invalid"));
+        Assert.Equal(corrupt, File.ReadAllText(preserved));
         Assert.Equal(Message.Of("quarantine.settingsTitle"), Assert.Single(notices).Title);
-        Assert.Equal(Message.Of("quarantine.settingsBody"), Assert.Single(notices).Body);
+        Assert.Equal("quarantine.settingsBody", Assert.Single(notices).Body.Key);
+        Assert.Contains(preserved, PathHide.Tests.I18n.English.Of(Assert.Single(notices).Body), StringComparison.Ordinal);
         Assert.Empty(QuarantineJournal.Drain());
     }
 

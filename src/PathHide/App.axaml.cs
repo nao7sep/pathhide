@@ -91,14 +91,19 @@ public partial class App : Application
             }
             catch (UnreadableStoreException unreadable)
             {
-                // The list is left exactly where it is, on this launch and every later one until the
-                // user repairs or moves it: opening with an empty list would look exactly like losing
-                // it, and the first add would then write a fresh file containing only that entry.
-                Log.Warn("startup: the path list could not be read; halting with it left in place",
-                    new { path = unreadable.Path });
+                // The file is left exactly where it is, on this launch and every later one until the
+                // user repairs or moves it. For the path list that is the point: opening with an empty
+                // list would look exactly like losing it, and the first add would then write a fresh
+                // file containing only that entry. Any other store got here because it could not be
+                // set aside, and a reset would overwrite it.
+                var pathList = unreadable.Label == QuarantineJournal.PathListLabel;
+                Log.Warn("startup: a file could not be read; halting with it left in place",
+                    new { label = unreadable.Label, path = unreadable.Path });
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
-                    I18n.Message.Of("startup.pathListTitle"),
-                    FailurePresentation.PathListStartup(unreadable));
+                    I18n.Message.Of(pathList ? "startup.pathListTitle" : "startup.failedTitle"),
+                    pathList
+                        ? FailurePresentation.PathListStartup(unreadable)
+                        : FailurePresentation.StartupUnreadable(unreadable));
                 RegisterOwnerActivation(desktop.MainWindow);
                 base.OnFrameworkInitializationCompleted();
                 return;
@@ -117,7 +122,7 @@ public partial class App : Application
             }
             catch (Exception ex)
             {
-                Log.Error("startup: a settings file could not be read or set aside", ex);
+                Log.Error("startup: failed", ex);
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
                     I18n.Message.Of("startup.failedTitle"),
                     FailurePresentation.Startup());
@@ -145,8 +150,7 @@ public partial class App : Application
             // Report material recovery once the main window can own the dialog.
             mainWindow.Opened += async (_, _) =>
             {
-                var quarantined = Storage.QuarantineJournal.Drain();
-                if (quarantined.Count > 0)
+                foreach (var quarantined in Storage.QuarantineJournal.Drain())
                 {
                     var (title, body) = Storage.QuarantineJournal.Describe(quarantined);
                     await Views.NoticeDialog.ShowAsync(mainWindow, title, body);

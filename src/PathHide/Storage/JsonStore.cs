@@ -139,7 +139,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             if (_haltWhenUnreadable)
             {
                 Log.Warn("store: file unreadable, left in place", ex, new { label = _label, path = _filePath });
-                throw new UnreadableStoreException(_filePath, ex);
+                throw new UnreadableStoreException(_label, _filePath, ex);
             }
 
             // Present but unparseable: quarantine aside (bytes preserved) before the caller
@@ -184,8 +184,9 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     /// <summary>
     /// Moves the unparseable live file aside to its timestamped <c>.invalid</c> quarantine name,
     /// preserving its bytes, and logs one warning naming both paths. The move either lands or its
-    /// failure propagates — swallowing it would leave the corrupt file in place for the caller's
-    /// reset to overwrite. The composition root catches the propagation and reports a startup halt.
+    /// failure propagates as <see cref="UnreadableStoreException"/> naming the file left in place —
+    /// swallowing it would leave the corrupt file in place for the caller's reset to overwrite. The
+    /// composition root catches the propagation and reports a startup halt.
     /// </summary>
     private void Quarantine(Exception ex)
     {
@@ -201,7 +202,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         {
             Log.Warn("store: file unreadable; quarantine move failed", moveEx,
                 new { label = _label, path = _filePath, quarantinePath, readError = ex.Message });
-            throw;
+            throw new UnreadableStoreException(_label, _filePath, moveEx);
         }
 
         Log.Warn("store: file unreadable, quarantined", ex,

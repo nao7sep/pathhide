@@ -25,7 +25,8 @@ public sealed class FailurePresentationTests
             FailurePresentation.WindowAction(error),
             FailurePresentation.StartupStorage(),
             FailurePresentation.Startup(),
-            FailurePresentation.PathListStartup(new UnreadableStoreException("/r/paths.json", error)),
+            FailurePresentation.StartupUnreadable(new UnreadableStoreException("settings", "/r/config.json", error)),
+            FailurePresentation.PathListStartup(new UnreadableStoreException("paths", "/r/paths.json", error)),
         };
 
         Assert.All(messages, message => Assert.DoesNotContain(Hostile, English.Of(message), StringComparison.Ordinal));
@@ -55,10 +56,21 @@ public sealed class FailurePresentationTests
     [Fact]
     public void AnUnreadablePathListNamesTheFileLeftInPlace()
     {
-        var error = new UnreadableStoreException("/home/u/.pathhide/paths.json", new IOException(Hostile));
+        var error = new UnreadableStoreException("paths", "/home/u/.pathhide/paths.json", new IOException(Hostile));
 
         Assert.Equal("failure.pathListUnreadable", FailurePresentation.PathListSave(error).Key);
         Assert.Contains("/home/u/.pathhide/paths.json", English.Of(FailurePresentation.PathListSave(error)), StringComparison.Ordinal);
         Assert.Contains("/home/u/.pathhide/paths.json", English.Of(FailurePresentation.PathListStartup(error)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStoreThatCouldNotBeSetAsideNamesTheFileLeftInPlace()
+    {
+        var error = new UnreadableStoreException("settings", "/home/u/.pathhide/config.json", new IOException(Hostile));
+
+        var text = English.Of(FailurePresentation.StartupUnreadable(error));
+
+        Assert.Contains("/home/u/.pathhide/config.json", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(Hostile, text, StringComparison.Ordinal);
     }
 }

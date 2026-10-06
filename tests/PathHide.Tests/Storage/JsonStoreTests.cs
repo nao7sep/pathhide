@@ -175,6 +175,42 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
+    public void Load_WhenTheUnreadableFileCannotBeSetAside_ThrowsNamingTheFileLeftInPlace()
+    {
+        const string corrupt = "{ not valid json";
+        File.WriteAllText(PathOf("config.json"), corrupt);
+        var store = SettingsDocumentStore();
+
+        // The move aside fails: on Windows the file is held open without sharing, elsewhere its folder
+        // cannot be written.
+        UnreadableStoreException refused;
+        if (OperatingSystem.IsWindows())
+        {
+            using (new FileStream(PathOf("config.json"), FileMode.Open, FileAccess.Read, FileShare.None))
+                refused = Assert.Throws<UnreadableStoreException>(() => store.Load());
+        }
+        else
+        {
+            var mode = File.GetUnixFileMode(_root);
+            File.SetUnixFileMode(_root, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            try
+            {
+                refused = Assert.Throws<UnreadableStoreException>(() => store.Load());
+            }
+            finally
+            {
+                File.SetUnixFileMode(_root, mode);
+            }
+        }
+
+        Assert.Equal(QuarantineJournal.SettingsLabel, refused.Label);
+        Assert.Equal(PathOf("config.json"), refused.Path);
+        Assert.Equal(corrupt, File.ReadAllText(PathOf("config.json")));
+        Assert.Empty(Directory.EnumerateFiles(_root, "*.invalid"));
+        Assert.Empty(QuarantineJournal.Drain());
+    }
+
+    [Fact]
     public void Load_LiteralNullPathList_IsLeftInPlaceAndRefused()
     {
         File.WriteAllText(PathOf("paths.json"), "null");

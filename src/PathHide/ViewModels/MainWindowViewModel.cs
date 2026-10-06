@@ -720,12 +720,11 @@ public partial class MainWindowViewModel : ObservableObject
         if (ShowNoticeAsync is null)
             return;
 
-        var quarantined = QuarantineJournal.Drain();
-        if (quarantined.Count == 0)
-            return;
-
-        var (title, body) = QuarantineJournal.Describe(quarantined);
-        await ShowNoticeAsync(title, body);
+        foreach (var quarantined in QuarantineJournal.Drain())
+        {
+            var (title, body) = QuarantineJournal.Describe(quarantined);
+            await ShowNoticeAsync(title, body);
+        }
     }
 
     /// <summary>

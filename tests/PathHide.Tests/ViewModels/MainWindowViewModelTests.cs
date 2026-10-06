@@ -701,7 +701,7 @@ public class MainWindowViewModelTests
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>
         {
-            LoadException = new PathHide.Storage.UnreadableStoreException("/r/paths.json", new System.Text.Json.JsonException()),
+            LoadException = new PathHide.Storage.UnreadableStoreException("paths", "/r/paths.json", new System.Text.Json.JsonException()),
         };
         var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
@@ -719,10 +719,11 @@ public class MainWindowViewModelTests
         // One hardcoded wording told a user whose settings file was reset that
         // their hidden-path list was in a file that does not contain it.
         var settings = PathHide.Storage.QuarantineJournal.Describe(
-            [new PathHide.Storage.QuarantinedStore("settings", "/r/config-x.invalid")]);
+            new PathHide.Storage.QuarantinedStore("settings", "/r/config-x.invalid"));
         Assert.Contains("settings", English.Of(settings.Title));
         Assert.DoesNotContain("path list", English.Of(settings.Body));
         Assert.Contains("default", English.Of(settings.Body), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("/r/config-x.invalid", English.Of(settings.Body), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -816,7 +817,7 @@ public class MainWindowViewModelTests
         // The reload finds a file it cannot read and keeps the entry on screen, so paths.json does
         // not hold it, though nothing about the entry has changed. The user then repairs or moves
         // the file, which the store then lets the next save replace.
-        paths.LoadException = new PathHide.Storage.UnreadableStoreException("/r/paths.json", new System.Text.Json.JsonException());
+        paths.LoadException = new PathHide.Storage.UnreadableStoreException("paths", "/r/paths.json", new System.Text.Json.JsonException());
         await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
         await vm.ScanTask;
         Assert.Equal(0, paths.SaveCount);

@@ -45,7 +45,11 @@ public static class FailurePresentation
 
     public static Message WindowAction(Exception error) => Message.Of("failure.windowAction");
 
-    public static Message Startup() => Message.Of("failure.startupData");
+    public static Message Startup() => Message.Of("failure.startupUnexpected");
+
+    /// <summary>A store that could not be read or set aside, named by its path and left as it is.</summary>
+    public static Message StartupUnreadable(UnreadableStoreException unreadable) =>
+        Message.Of("failure.startupData", ("path", unreadable.Path));
 
     public static Message PathListStartup(UnreadableStoreException unreadable) =>
         Message.Of("failure.pathListStartup", ("path", unreadable.Path));
