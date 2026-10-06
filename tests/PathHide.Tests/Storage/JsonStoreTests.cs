@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Microsoft.Data.Sqlite;
 using PathHide.Backup;
 using PathHide.Models;
 using PathHide.Storage;
@@ -50,9 +51,11 @@ public sealed class JsonStoreTests : IDisposable
         // throwaway root re-opens its own store.
         BackupStore.Close();
         QuarantineJournal.Drain();
+        // Closing returns each connection to Microsoft.Data.Sqlite's pool, which keeps its file open;
+        // Windows cannot delete an open database file.
+        SqliteConnection.ClearAllPools();
         Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _previousHome);
-        try { Directory.Delete(_root, recursive: true); }
-        catch { /* best-effort cleanup */ }
+        Directory.Delete(_root, recursive: true);
     }
 
     private string PathOf(string fileName) => Path.Combine(_root, fileName);

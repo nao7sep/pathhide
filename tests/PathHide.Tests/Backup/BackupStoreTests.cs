@@ -39,9 +39,11 @@ public sealed class BackupStoreTests : IDisposable
     public void Dispose()
     {
         BackupStore.Close();
+        // Closing returns each connection to Microsoft.Data.Sqlite's pool, which keeps its file open;
+        // Windows cannot delete an open database file.
+        SqliteConnection.ClearAllPools();
         Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _previousHome);
-        try { Directory.Delete(_root, recursive: true); }
-        catch { /* best-effort cleanup */ }
+        Directory.Delete(_root, recursive: true);
     }
 
     private string StoreFile => Path.Combine(_root, "backups.sqlite3");

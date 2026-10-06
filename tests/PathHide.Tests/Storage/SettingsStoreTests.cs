@@ -35,6 +35,9 @@ public sealed class SettingsStoreTests : IDisposable
         Log.Shutdown();
         BackupStore.Close();
         QuarantineJournal.Drain();
+        // Closing returns each connection to Microsoft.Data.Sqlite's pool, which keeps its file open;
+        // Windows cannot delete an open database file.
+        SqliteConnection.ClearAllPools();
         Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _previousDataDir);
         Directory.Delete(_root, recursive: true);
     }

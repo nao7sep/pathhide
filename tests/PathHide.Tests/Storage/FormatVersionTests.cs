@@ -40,9 +40,11 @@ public sealed class FormatVersionTests : IDisposable
     {
         BackupStore.Close();
         QuarantineJournal.Drain();
+        // Closing returns each connection to Microsoft.Data.Sqlite's pool, which keeps its file open;
+        // Windows cannot delete an open database file.
+        SqliteConnection.ClearAllPools();
         Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _previousDataDir);
-        try { Directory.Delete(_root, recursive: true); }
-        catch { /* best-effort cleanup */ }
+        Directory.Delete(_root, recursive: true);
     }
 
     private string PathOf(string fileName) => Path.Combine(_root, fileName);
