@@ -72,7 +72,7 @@
   "failure.settingsSavePermission": "Les paramètres n’ont pas pu être enregistrés. Vérifiez que le dossier de données de PathHide est accessible en écriture, puis réessayez.",
   "failure.startupData": "PathHide n’a pas pu lire le fichier {path}, ni le mettre de côté\u00a0; il l’a donc laissé tel quel plutôt que de risquer de l’écraser. Vos fichiers n’ont été ni masqués ni affichés. Réparez le fichier ou retirez-le du dossier de données de PathHide, puis relancez PathHide.",
   "failure.startupStorage": "PathHide n’a pas pu ouvrir son dossier de données. Vérifiez que ce dossier existe et est accessible en écriture, puis relancez PathHide.",
-  "failure.startupUnexpected": "PathHide n’a pas pu démarrer en raison d’un problème inattendu. Vos fichiers n’ont été ni masqués ni affichés. Les détails se trouvent dans le Journal, enregistré dans {records}, ou dans un fichier de {logs} si le Journal n'a pas pu être écrit.",
+  "failure.startupUnexpected": "PathHide n’a pas pu démarrer en raison d’un problème inattendu. Vos fichiers n’ont été ni masqués ni affichés. Les détails se trouvent dans le Journal, enregistré dans {records}, ou dans un fichier de {logs} si le Journal n’a pas pu être écrit.",
   "failure.windowAction": "L’action demandée sur la fenêtre n’a pas pu être effectuée. Réessayez.",
   "family.posix": "POSIX",
   "family.unc": "UNC",
