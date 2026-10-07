@@ -39,6 +39,14 @@ public static class Log
     /// </summary>
     public static event Action? RecordStored;
 
+    // Optional early diagnostics cannot hold required startup or its failure presentation.
+    internal static Task ReportStartup(string message, Exception? error = null, SessionLogger? logger = null,
+        bool warning = false)
+    {
+        var target = logger ?? _logger;
+        return target.ReportStartupAsync(message, error, warning);
+    }
+
     /// <summary>
     /// Begins logging this session to <paramref name="sink"/>, which the log then owns: the records
     /// database in the app, the results file in the elevated child. Entries are written off the

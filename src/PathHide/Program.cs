@@ -25,6 +25,11 @@ sealed class Program
         // It reads the saved preference straight from config.json and falls back to the computer's own
         // languages, so it holds on the startup-failure path below, where there is no usable storage.
         App.ComputerLanguages = LanguageBootstrap.Start();
+        if (App.StartupFailureMessage is not null)
+        {
+            _ = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            return 1;
+        }
 
         // Resolve and create the storage root before anything else reads or writes it.
         // An unusable PATHHIDE_DATA_DIR (or an unwritable home) is a startup error we report
@@ -33,29 +38,44 @@ sealed class Program
         // root, and outside the try below so a bad root can never reach the UI.
         try
         {
-            StorageRoot.EnsureExists();
+            BoundedStartupWork.RunAsync(() =>
+            {
+                StorageRoot.EnsureExists();
+                return true;
+            }).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
             // Diagnostics on stderr, which stay English with the exception's own message: this is the
             // log channel, not an interface surface. What the reader sees is the notice window.
-            Console.Error.WriteLine(
-                "PathHide cannot start: its storage location could not be created. " + ex.Message);
+            _ = Log.ReportStartup("startup: the storage location could not be created", ex);
             App.StartupFailureMessage = ViewModels.FailurePresentation.StartupStorage();
             _ = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
             return 1;
         }
 
-        if (!SingleInstanceLease.TryAcquire(StorageRoot.Directory, out var instanceLease))
+        SingleInstanceLease? instanceLease;
+        try
         {
-            Console.Error.WriteLine("PathHide is already running; activated the existing window.");
-            return 0;
+            if (!SingleInstanceLease.TryAcquire(StorageRoot.Directory, out instanceLease))
+            {
+                _ = Log.ReportStartup("PathHide is already running; requested activation of its existing window.");
+                return 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            _ = Log.ReportStartup("startup: storage ownership could not be established", ex);
+            App.StartupFailureMessage = ViewModels.FailurePresentation.StartupStorage();
+            _ = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            return 1;
         }
         using var ownedInstance = instanceLease;
 
         // This process alone owns the records database; the logger installs its own crash hooks and
         // falls back to the session's file under logs/.
-        Log.Start(RecordsStore.TryOpen(StorageRoot.RecordsFile, out var recordsFailure), StorageRoot.LogsDirectory);
+        var (records, recordsFailure) = OpenRecordsForStartup();
+        Log.Start(records, StorageRoot.LogsDirectory);
         if (recordsFailure is not null)
             Log.Error("logger: could not open the records database", recordsFailure, new { file = StorageRoot.RecordsFile });
         var clean = true;
@@ -97,6 +117,32 @@ sealed class Program
         {
             CloseLog();
         }
+    }
+
+    internal static (ILogSink? Store, Exception? Failure) OpenRecordsForStartup(
+        Func<(ILogSink? Store, Exception? Failure)>? open = null, TimeSpan? bound = null)
+    {
+        try
+        {
+            return BoundedStartupWork.RunAsync(open ?? OpenRecords,
+                abandoned: opened =>
+                {
+                    if (opened.Failure is not null)
+                        _ = Log.ReportStartup("startup: abandoned records open failed", opened.Failure, warning: true);
+                    opened.Store?.Dispose();
+                }, bound: bound).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            // Records are optional: the logger retains its ordinary file/console fallback.
+            return (null, ex);
+        }
+    }
+
+    private static (ILogSink? Store, Exception? Failure) OpenRecords()
+    {
+        var store = RecordsStore.TryOpen(StorageRoot.RecordsFile, out var failure);
+        return (store, failure);
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.

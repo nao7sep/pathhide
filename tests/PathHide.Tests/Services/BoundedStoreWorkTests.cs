@@ -38,7 +38,7 @@ public sealed class BoundedStoreWorkTests
         {
             gate.Set();
             if (physical is not null)
-                await physical.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+                await physical.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
         }
         Assert.Equal(3, await owner.RunAsync(() => 3, TimeSpan.FromSeconds(2), TimeProvider.System, TestContext.Current.CancellationToken));
     }
@@ -73,7 +73,7 @@ public sealed class BoundedStoreWorkTests
         {
             gate.Set();
             if (physical is not null)
-                await physical.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+                await physical.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
         }
     }
 }

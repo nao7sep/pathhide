@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
@@ -115,6 +116,12 @@ public sealed class SessionLogger : IDisposable
 
     public void Error(string message, Exception exception, object? fields = null) =>
         Submit(Build(LogLevel.Error, message, exception, fields));
+
+    internal Task ReportStartupAsync(string message, Exception? error, bool warning = false)
+    {
+        var entry = Build(warning ? LogLevel.Warn : error is null ? LogLevel.Info : LogLevel.Error, message, error, null);
+        return Task.Run(() => Submit(entry));
+    }
 
     /// <summary>Writes entries another process logged, as it logged them.</summary>
     public void Import(IEnumerable<LogEntry> entries)

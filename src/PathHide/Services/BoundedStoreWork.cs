@@ -12,7 +12,7 @@ internal sealed class BoundedStoreWork
     private Task _tail = Task.CompletedTask;
 
     public async Task<T> RunAsync<T>(Func<T> call, TimeSpan bound, TimeProvider clock,
-        CancellationToken cancellationToken = default, Action<Task>? started = null)
+        CancellationToken cancellationToken = default, Action<Task>? started = null, bool reportAbandonedFailure = true)
     {
         using var deadline = new CancellationTokenSource(bound, clock);
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token, cancellationToken);
@@ -44,7 +44,7 @@ internal sealed class BoundedStoreWork
             {
                 _ = work.ContinueWith(done =>
                 {
-                    if (done.IsFaulted)
+                    if (done.IsFaulted && reportAbandonedFailure)
                         Log.Warn("abandoned storage operation failed", (Exception)done.Exception!);
                 }, TaskScheduler.Default);
             }
