@@ -227,11 +227,9 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             // the file.
             if (File.Exists(_filePath))
             {
-                // On macOS File.Replace is a bare rename, so the replacement first takes the original's
-                // permissions, ACL and extended attributes; Windows' ReplaceFile carries them itself
-                // (content-lifecycle-conventions).
+                // Keep ordinary permission bits through the runtime (content-lifecycle-conventions).
                 if (OperatingSystem.IsMacOS())
-                    MacFs.CopyReplaceMetadata(_filePath, tempPath);
+                    File.SetUnixFileMode(tempPath, File.GetUnixFileMode(_filePath));
                 File.Replace(tempPath, _filePath, null, ignoreMetadataErrors: true);
             }
             else

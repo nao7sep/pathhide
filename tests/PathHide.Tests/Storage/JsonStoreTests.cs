@@ -253,15 +253,13 @@ public sealed class JsonStoreTests : IDisposable
 
     [MacOnlyFact]
     [System.Runtime.Versioning.SupportedOSPlatform("macos")]
-    public void Save_Changed_KeepsTheFilesModeAndExtendedAttributes_ButTakesAFreshModifiedTime()
+    public void Save_Changed_KeepsTheFilesMode_ButTakesAFreshModifiedTime()
     {
         var store = SettingsDocumentStore();
         store.Save(new TestDocument { Theme = ThemePreference.Light });
         var path = PathOf("config.json");
         const UnixFileMode mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead;
         File.SetUnixFileMode(path, mode);
-        byte[] tag = "kept (test)"u8.ToArray();
-        Assert.Equal(0, setxattr(path, "com.pathhide.test", tag, (nuint)tag.Length, 0, 0));
         var old = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         File.SetLastWriteTimeUtc(path, old);
 
@@ -269,17 +267,8 @@ public sealed class JsonStoreTests : IDisposable
 
         Assert.Equal(ThemePreference.Dark, store.Load().Value.Theme);
         Assert.Equal(mode, File.GetUnixFileMode(path));
-        var read = new byte[64];
-        var length = getxattr(path, "com.pathhide.test", read, (nuint)read.Length, 0, 0);
-        Assert.Equal(tag, read.AsSpan(0, (int)length).ToArray());
         Assert.NotEqual(old, File.GetLastWriteTimeUtc(path));
     }
-
-    [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
-    private static extern int setxattr(string path, string name, byte[] value, nuint size, uint position, int options);
-
-    [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
-    private static extern nint getxattr(string path, string name, byte[] value, nuint size, uint position, int options);
 
     [Fact]
     public void Save_SecondTime_ReplacesLiveFileAndWritesNoBak()

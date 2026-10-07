@@ -1,8 +1,5 @@
 using System;
-using System.IO;
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
-using Microsoft.Win32.SafeHandles;
 
 namespace PathHide.Services;
 
@@ -82,41 +79,6 @@ internal static partial class MacFs
             free(pointer);
         }
     }
-
-    /// <summary>
-    /// Carries <paramref name="source"/>'s ACL, extended attributes (Finder tags among them) and
-    /// permission mode onto <paramref name="destination"/>, the replacement an atomic write is about to
-    /// rename over it (content-lifecycle-conventions). Never its times or ownership. A volume that cannot
-    /// hold ACLs or extended attributes keeps what it can; any other failure throws, so the original
-    /// stays as it is.
-    /// </summary>
-    [SupportedOSPlatform("macos")]
-    public static void CopyReplaceMetadata(string source, string destination)
-    {
-        using (var from = File.OpenHandle(source))
-        using (var to = File.OpenHandle(destination, FileMode.Open, FileAccess.ReadWrite))
-        {
-            if (fcopyfile(from, to, IntPtr.Zero, CopyfileAcl | CopyfileXattr) < 0)
-            {
-                var errno = Marshal.GetLastPInvokeError();
-                if (errno != ENOTSUP)
-                    throw new IOException($"fcopyfile from {source} to {destination} failed (errno {errno}).");
-            }
-        }
-
-        // After the extended attributes, which a read-only mode would refuse.
-        File.SetUnixFileMode(destination, File.GetUnixFileMode(source));
-    }
-
-    [LibraryImport("libc", SetLastError = true)]
-    private static partial int fcopyfile(SafeFileHandle from, SafeFileHandle to, IntPtr state, uint flags);
-
-    // From <copyfile.h>. COPYFILE_SECURITY would add COPYFILE_STAT, which copies the original's times.
-    private const uint CopyfileAcl = 1 << 0;
-    private const uint CopyfileXattr = 1 << 2;
-
-    // ENOTSUP from <sys/errno.h> on macOS.
-    private const int ENOTSUP = 45;
 
     [LibraryImport("libc", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static partial int chflags(string path, uint flags);
