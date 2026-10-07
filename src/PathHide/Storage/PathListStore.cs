@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using PathHide.Models;
 using PathHide.Services;
 
@@ -39,6 +40,7 @@ public sealed class PathListStore : IJsonStore<List<PathEntry>>
 /// </remarks>
 internal sealed class PathListDocument
 {
+    [JsonRequired]
     public List<PathEntry> Paths
     {
         get;
@@ -50,12 +52,15 @@ internal sealed class PathListDocument
         if (paths is null)
             throw new JsonException("The path list file holds null instead of its paths.");
 
+        var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in paths)
         {
             if (entry?.Path is null
-                || !PathNormalizer.TryNormalize(entry.Path, out _, out _)
+                || !PathNormalizer.TryNormalize(entry.Path, out var normalized, out var family)
                 || !Enum.IsDefined(entry.DesiredVisibility))
                 throw new JsonException("The path list file holds an entry that is not an absolute path with a defined visibility.");
+            if (!identities.Add($"{family}:{normalized}"))
+                throw new JsonException("The path list file holds duplicate path identities.");
         }
 
         return paths;

@@ -18,6 +18,7 @@ public static class FailurePresentation
     {
         NewerFormatException newer => NewerStore(newer),
         UnauthorizedAccessException => Message.Of("failure.settingsSavePermission"),
+        TimeoutException => Message.Of("failure.settingsSaveTimeout"),
         _ => Message.Of("failure.settingsSave"),
     };
 
@@ -26,6 +27,7 @@ public static class FailurePresentation
         NewerFormatException newer => NewerStore(newer),
         UnreadableStoreException unreadable => PathListUnreadable(unreadable),
         UnauthorizedAccessException => Message.Of("failure.pathListSavePermission"),
+        TimeoutException => Message.Of("failure.pathListSaveTimeout"),
         _ => Message.Of("failure.pathListSave"),
     };
 

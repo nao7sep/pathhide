@@ -64,8 +64,8 @@ public class ActivationRescanTests
         finally
         {
             gate.Set();
+            await vm.ScanTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         }
-        await vm.ScanTask;
 
         Assert.Single(visibility.Inspected);
     }
@@ -79,9 +79,9 @@ public class ActivationRescanTests
         await vm.ScanTask;
         vm.Rows.Single().IsSelected = true;
         visibility.WriteGate = gate;
+        var show = vm.ShowSelectedCommand.ExecuteAsync(null);
         try
         {
-            var show = vm.ShowSelectedCommand.ExecuteAsync(null);
             await visibility.WriteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
             Assert.False(vm.RescanOnActivation());
@@ -93,6 +93,7 @@ public class ActivationRescanTests
         finally
         {
             gate.Set();
+            await show.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         }
 
         // Once the command is done, the next activation rescans.

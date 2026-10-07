@@ -26,10 +26,10 @@ public sealed class SettingsDialog : DialogBase
     private readonly ImeTextBox _uiFontBox;
     private readonly CheckBox _hiddenAndSystemCheckBox;
     private readonly IReadOnlyList<RadioButton> _themeButtons;
-    private readonly string _originalLanguage;
-    private readonly string _originalUiFont;
-    private readonly bool _originalIsHiddenAndSystem;
-    private readonly ThemePreference _originalTheme;
+    private string _originalLanguage;
+    private string _originalUiFont;
+    private bool _originalIsHiddenAndSystem;
+    private ThemePreference _originalTheme;
     private readonly Button _saveButton;
     private readonly TextBlock _saveError;
     private readonly Func<string, string, bool, ThemePreference, Task<Message?>> _trySave;
@@ -173,9 +173,20 @@ public sealed class SettingsDialog : DialogBase
 
         _saveError.IsVisible = false;
         _saveError.Text = string.Empty;
-        var failure = await _trySave(SelectedLanguage, UiFontFamily, IsHiddenAndSystem, SelectedTheme);
+        var language = SelectedLanguage;
+        var font = UiFontFamily;
+        var hiddenAndSystem = IsHiddenAndSystem;
+        var theme = SelectedTheme;
+        var failure = await _trySave(language, font, hiddenAndSystem, theme);
         if (failure is null)
-            return true;
+        {
+            _originalLanguage = language;
+            _originalUiFont = font;
+            _originalIsHiddenAndSystem = hiddenAndSystem;
+            _originalTheme = theme;
+            UpdateSaveState();
+            return !HasUnsavedChanges;
+        }
 
         _saveError.Text = Localizer.Of(failure);
         _saveError.IsVisible = true;

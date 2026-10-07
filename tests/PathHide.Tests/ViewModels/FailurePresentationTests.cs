@@ -53,6 +53,24 @@ public sealed class FailurePresentationTests
     }
 
     [Fact]
+    public void SaveTimeoutsDescribeTheUnknownOutcomeWithoutExposingDiagnostics()
+    {
+        var error = new TimeoutException(Hostile, new IOException("root cause"));
+        var paths = FailurePresentation.PathListSave(error);
+        var settings = FailurePresentation.SettingsSave(error);
+
+        Assert.Equal("failure.pathListSaveTimeout", paths.Key);
+        Assert.Equal("failure.settingsSaveTimeout", settings.Key);
+        Assert.Equal("Saving the path list took too long and may still finish. The current list is still in use. Use Reload to check before trying again.", English.Of(paths));
+        Assert.Equal("Saving settings took too long and may still finish. Your draft is still here; try Save again.", English.Of(settings));
+        Assert.DoesNotContain(Hostile, English.Of(paths), StringComparison.Ordinal);
+        Assert.DoesNotContain(Hostile, English.Of(settings), StringComparison.Ordinal);
+        Assert.Equal("failure.pathListSave", FailurePresentation.PathListSave(new IOException("timeout " + Hostile)).Key);
+        Assert.Equal("failure.settingsSave", FailurePresentation.SettingsSave(new IOException("timeout " + Hostile)).Key);
+        Assert.NotNull(error.InnerException);
+    }
+
+    [Fact]
     public void ASaveRefusedOverANewerFileNamesTheFile()
     {
         var error = new NewerFormatException("/home/u/.pathhide/paths.json", 2, 1);

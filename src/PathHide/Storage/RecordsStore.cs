@@ -45,28 +45,10 @@ CREATE INDEX IF NOT EXISTS idx_log_entries_time_id ON log_entries (time, id);
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-            // not recorded: a binary store written here, never through the managed-text atomic-write
-            // path (data-backup conventions).
-            // Pooling off, so closing the store releases the file.
-            connection = new SqliteConnection(new SqliteConnectionStringBuilder
-            {
-                DataSource = path,
-                Mode = SqliteOpenMode.ReadWriteCreate,
-                Pooling = false,
-            }.ToString());
-            connection.Open();
-
+            connection = FormatVersions.OpenDatabase(path, FormatVersions.Records, Schema);
             using (var command = connection.CreateCommand())
             {
-                command.CommandText = "PRAGMA busy_timeout = 5000;";
-                command.ExecuteNonQuery();
-                // Before anything writes, the journal mode included: a newer database is left as it is.
-                FormatVersions.AdoptDatabase(connection, path, FormatVersions.Records);
-                // WAL with synchronous NORMAL keeps every committed entry through a process crash
-                // without a disk sync per line.
                 command.CommandText = "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;";
-                command.ExecuteNonQuery();
-                command.CommandText = Schema;
                 command.ExecuteNonQuery();
             }
 
@@ -75,7 +57,8 @@ CREATE INDEX IF NOT EXISTS idx_log_entries_time_id ON log_entries (time, id);
         }
         catch (Exception ex)
         {
-            connection?.Dispose();
+            try { connection?.Dispose(); }
+            catch (Exception cleanup) { Log.Warn("records: failed to close after open failure", cleanup, new { path }); }
             failure = ex;
             return null;
         }

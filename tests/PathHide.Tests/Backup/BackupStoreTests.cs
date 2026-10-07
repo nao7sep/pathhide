@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -189,22 +190,43 @@ public sealed class BackupStoreTests : IDisposable
             insert.ExecuteNonQuery();
         }
 
-        using var started = new ManualResetEventSlim();
+        using var admitted = new ManualResetEventSlim();
+        using var nativeRelease = new ManualResetEventSlim();
+        string? firstDecisionStatement = null;
+        var singleton = (SqliteConnection)typeof(BackupStore)
+            .GetField("_connection", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+        SQLitePCL.raw.sqlite3_trace(singleton.Handle, (_, statement) =>
+        {
+            if (firstDecisionStatement is null &&
+                (statement.StartsWith("BEGIN", StringComparison.OrdinalIgnoreCase) ||
+                 statement.StartsWith("SELECT content_sha256", StringComparison.OrdinalIgnoreCase)))
+            {
+                firstDecisionStatement = statement;
+                admitted.Set();
+                nativeRelease.Wait(TimeSpan.FromSeconds(5));
+            }
+        }, null);
         var cancellationToken = TestContext.Current.CancellationToken;
         var competingRecord = Task.Run(() =>
         {
-            started.Set();
             BackupStore.Record(path, (byte[])successor.Clone());
         }, cancellationToken);
-        Assert.True(started.Wait(TimeSpan.FromSeconds(2), cancellationToken));
-
-        // Give Record a bounded opportunity to reach SQLite while the other writer owns the
-        // reservation. It must be waiting, whether at BEGIN IMMEDIATE (fixed) or INSERT (old).
-        await Task.Delay(100, cancellationToken);
-        Assert.False(competingRecord.IsCompleted);
-
-        otherTransaction.Commit();
-        await competingRecord.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken);
+        try
+        {
+            Assert.True(admitted.Wait(TimeSpan.FromSeconds(5), cancellationToken));
+            Assert.StartsWith("BEGIN IMMEDIATE", firstDecisionStatement, StringComparison.OrdinalIgnoreCase);
+            Assert.False(competingRecord.IsCompleted);
+        }
+        finally
+        {
+            nativeRelease.Set();
+            try { otherTransaction.Commit(); }
+            finally
+            {
+                try { await competingRecord.WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None); }
+                finally { SQLitePCL.raw.sqlite3_trace(singleton.Handle, (SQLitePCL.strdelegate_trace?)null, null); }
+            }
+        }
 
         var rows = RowsFor(path);
         Assert.Equal(2, rows.Count);

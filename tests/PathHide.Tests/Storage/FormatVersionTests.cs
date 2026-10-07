@@ -112,6 +112,9 @@ public sealed class FormatVersionTests : IDisposable
     }
 
     [Theory]
+    [InlineData("""{ "formatVersion": 1 }""")]
+    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a/", "desiredVisibility": "hidden" }, { "path": "/A", "desiredVisibility": "shown" } ] }""")]
+    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "C:/a", "desiredVisibility": "hidden" }, { "path": "c:\\A\\", "desiredVisibility": "shown" } ] }""")]
     [InlineData("""[ { "path": "/a", "desiredVisibility": "hidden" } ]""")]
     [InlineData("""{ "formatVersion": 0, "paths": [] }""")]
     [InlineData("""{ "formatVersion": "1", "paths": [] }""")]
@@ -287,13 +290,40 @@ public sealed class FormatVersionTests : IDisposable
         return (long)command.ExecuteScalar()!;
     }
 
-    // --- records.sqlite3 ---
-
     [Fact]
-    public async Task Records_WithoutAVersion_AreUnreadableAndLeftByteIdentical()
+    public void ExistingEmptyUnmarkedDatabaseIsNeverClaimed()
     {
         var path = PathOf(RecordsStore.FileName);
-        CreateDatabase(path, userVersion: 0);
+        File.WriteAllBytes(path, []);
+        var store = RecordsStore.TryOpen(path, out var failure);
+        Assert.Null(store);
+        Assert.IsType<InvalidDataException>(failure);
+        Assert.Empty(File.ReadAllBytes(path));
+
+        File.WriteAllBytes(BackupsPath, []);
+        BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{}"));
+        BackupStore.Close();
+        Assert.Empty(File.ReadAllBytes(BackupsPath));
+    }
+
+    [Fact]
+    public void FailedOwnedInitializationLeavesNoDatabaseOrPartialSchema()
+    {
+        var path = PathOf("failed.sqlite3");
+        Assert.Throws<SqliteException>(() => FormatVersions.OpenDatabase(path, 1,
+            "CREATE TABLE first (x); INVALID SQL;"));
+        Assert.False(File.Exists(path));
+    }
+
+    // --- records.sqlite3 ---
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task Records_WithoutAVersion_AreUnreadableAndLeftByteIdentical(int version)
+    {
+        var path = PathOf(RecordsStore.FileName);
+        CreateDatabase(path, userVersion: version);
         var bytes = File.ReadAllBytes(path);
 
         var store = RecordsStore.TryOpen(path, out var failure);
@@ -302,6 +332,17 @@ public sealed class FormatVersionTests : IDisposable
         Assert.Null(store);
         Assert.IsType<InvalidDataException>(failure);
         Assert.Equal(bytes, File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public async Task Records_CompatibleMarkerCompletesMissingSchema()
+    {
+        var path = PathOf(RecordsStore.FileName);
+        CreateDatabase(path, FormatVersions.Records);
+        using (var store = RecordsStore.TryOpen(path, out var failure) ?? throw failure!)
+            store.Write(new LogEntry("2026-10-05T00:00:00.000Z", "2026-10-05T00:00:00.000Z", "info", "kept", null, null));
+        Assert.Equal(FormatVersions.Records, UserVersion(path));
+        Assert.Equal("kept", Assert.Single((await new RecordsReader(path).ReadPageAsync(new RecordsQuery(null, null, "", null))).Records).Message);
     }
 
     [Fact]
@@ -343,16 +384,28 @@ public sealed class FormatVersionTests : IDisposable
         return (long)command.ExecuteScalar()!;
     }
 
-    [Fact]
-    public void Backups_WithoutAVersion_AreUnreadableAndLeftByteIdentical()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Backups_WithoutAVersion_AreUnreadableAndLeftByteIdentical(int version)
     {
-        CreateDatabase(BackupsPath, userVersion: 0);
+        CreateDatabase(BackupsPath, userVersion: version);
         var bytes = File.ReadAllBytes(BackupsPath);
 
         BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{}"));
         BackupStore.Close();
 
         Assert.Equal(bytes, File.ReadAllBytes(BackupsPath));
+    }
+
+    [Fact]
+    public void Backups_CompatibleMarkerCompletesMissingSchema()
+    {
+        CreateDatabase(BackupsPath, FormatVersions.Backups);
+        BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{}"));
+        BackupStore.Close();
+        Assert.Equal(FormatVersions.Backups, UserVersion(BackupsPath));
+        Assert.Equal(1, BackupRows());
     }
 
     [Fact]

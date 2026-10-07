@@ -1,4 +1,6 @@
+using System;
 using System.IO;
+using PathHide.Services;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
@@ -56,22 +58,57 @@ public static class FormatVersions
             throw new NewerFormatException(path, (int)recorded, supported);
     }
 
-    /// <summary>
-    /// Stamps a brand-new database, one holding nothing yet, with <paramref name="supported"/>; any other
-    /// database goes through <see cref="CheckDatabase"/>. Runs before anything else writes to it.
-    /// </summary>
-    internal static void AdoptDatabase(SqliteConnection connection, string path, int supported)
+    // store-recovery-conventions: creation is an owned filesystem fact, not an empty schema.
+    internal static SqliteConnection OpenDatabase(string path, int supported, string schema)
     {
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM sqlite_master;";
-        if (UserVersion(connection) == 0 && (long)command.ExecuteScalar()! == 0)
+        var created = false;
+        SqliteConnection? connection = null;
+        try
         {
-            command.CommandText = $"PRAGMA user_version = {supported};";
-            command.ExecuteNonQuery();
-            return;
-        }
+            try
+            {
+                using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite);
+                created = true;
+            }
+            catch (IOException) when (File.Exists(path)) { }
 
-        CheckDatabase(connection, path, supported);
+            connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            {
+                DataSource = path,
+                Mode = SqliteOpenMode.ReadWrite,
+                Pooling = false,
+            }.ToString());
+            connection.Open();
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "PRAGMA busy_timeout = 5000;";
+                command.ExecuteNonQuery();
+            }
+            if (!created)
+                CheckDatabase(connection, path, supported);
+            using (var transaction = connection.BeginTransaction(deferred: false))
+            {
+                if (!created)
+                    CheckDatabase(connection, path, supported);
+                using var initialize = connection.CreateCommand();
+                initialize.Transaction = transaction;
+                initialize.CommandText = created ? schema + $"PRAGMA user_version = {supported};" : schema;
+                initialize.ExecuteNonQuery();
+                transaction.Commit();
+            }
+            return connection;
+        }
+        catch
+        {
+            try { connection?.Dispose(); }
+            catch (Exception cleanup) { Log.Warn("database: failed to close after initialization failure", cleanup, new { path }); }
+            if (created)
+            {
+                try { File.Delete(path); }
+                catch (Exception cleanup) { Log.Warn("database: failed to remove owned initialization file", cleanup, new { path }); }
+            }
+            throw;
+        }
     }
 
     private static long UserVersion(SqliteConnection connection)

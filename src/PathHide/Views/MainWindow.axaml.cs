@@ -228,7 +228,8 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             Log.Error("shutdown: finishing work failed", ex);
-            exit = true;
+            vm.CancelQuit();
+            exit = false;
         }
 
         _finishingWork = null;

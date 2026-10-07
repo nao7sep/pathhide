@@ -48,22 +48,21 @@ public static class Log
     /// </summary>
     public static void Start(ILogSink? sink, string logsDirectory)
     {
+        SessionLogger previous;
         lock (Gate)
         {
             if (_started)
+                previous = new SessionLogger(SessionStart, sink, null, IsDebugEnabled(), writeInBackground: false);
+            else
             {
-                sink?.Dispose();
-                return;
+                _started = true;
+                InstallCrashHooks();
+                previous = _logger;
+                _logger = new SessionLogger(SessionStart, sink, logsDirectory, IsDebugEnabled(), writeInBackground: true,
+                    stored: () => RecordStored?.Invoke());
             }
-            _started = true;
-
-            InstallCrashHooks();
-
-            var previous = _logger;
-            _logger = new SessionLogger(SessionStart, sink, logsDirectory, IsDebugEnabled(), writeInBackground: true,
-                stored: () => RecordStored?.Invoke());
-            previous.Dispose(); // console logger: leaveOpen, so this closes nothing
         }
+        previous.Dispose();
     }
 
     /// <summary>
@@ -72,16 +71,17 @@ public static class Log
     /// </summary>
     public static void Shutdown()
     {
+        SessionLogger previous;
         lock (Gate)
         {
             if (!_started)
                 return;
             _started = false;
 
-            var previous = _logger;
+            previous = _logger;
             _logger = CreateConsoleLogger();
-            previous.Dispose();
         }
+        previous.Dispose();
     }
 
     /// <summary>Writes entries another process logged and handed back, as it logged them.</summary>

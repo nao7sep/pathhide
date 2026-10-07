@@ -145,19 +145,34 @@ public sealed class SessionLogger : IDisposable
             _queue.CompleteAdding();
             if (!_writer!.Join(drainBound))
             {
-                var left = 0;
-                while (_queue.TryTake(out var entry))
+                // Logging remains optional even when the fallback volume or sink close stalls.
+                var fallback = new Thread(() =>
                 {
-                    WriteFallback(entry, sinkError: null);
-                    left++;
-                }
-                WriteFallback(Build(LogLevel.Error, "logger: the sink did not finish before closing",
-                    null, new { waitedMs = (long)drainBound.TotalMilliseconds, left }), sinkError: null);
-                return;
+                    var left = 0;
+                    while (_queue.TryTake(out var entry))
+                    {
+                        WriteFallback(entry, sinkError: null);
+                        left++;
+                    }
+                    WriteFallback(Build(LogLevel.Error, "logger: the sink did not finish before closing",
+                        null, new { waitedMs = (long)drainBound.TotalMilliseconds, left }), sinkError: null);
+                    _writer.Join();
+                    _queue.Dispose();
+                }) { IsBackground = true, Name = "PathHide log fallback drain" };
+                fallback.Start();
             }
-            _queue.Dispose();
+            else
+                _queue.Dispose();
+            return;
         }
 
+        var close = new Thread(CloseSink) { IsBackground = true, Name = "PathHide log close" };
+        close.Start();
+        close.Join(drainBound);
+    }
+
+    private void CloseSink()
+    {
         lock (_sinkGate)
         {
             _sinkClosed = true;
@@ -190,8 +205,12 @@ public sealed class SessionLogger : IDisposable
 
     private void WriteQueued()
     {
-        foreach (var entry in _queue!.GetConsumingEnumerable())
-            Write(entry);
+        try
+        {
+            foreach (var entry in _queue!.GetConsumingEnumerable())
+                Write(entry);
+        }
+        finally { CloseSink(); }
     }
 
     private void Write(LogEntry entry)

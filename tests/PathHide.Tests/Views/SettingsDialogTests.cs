@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Threading;
 using PathHide.Models;
 using PathHide.Views;
 using PathHide.I18n;
@@ -51,6 +52,28 @@ public sealed class SettingsDialogTests
             .Single(panel => panel.Name == "ButtonPanel");
         Assert.Empty(footer.GetLogicalAncestors().OfType<ScrollViewer>());
         Assert.All(footer.Children.OfType<Button>(), button => Assert.True(button.MinWidth >= 80));
+    }
+
+    [AvaloniaFact]
+    public async Task SuccessfulSaveKeepsNewerDraftOpenAndAdvancesSavedBaseline()
+    {
+        var pending = new TaskCompletionSource<Message?>();
+        var dialog = new SettingsDialog(Languages.System, "Inter", ThemePreference.System,
+            false, false, (_, _, _, _) => pending.Task);
+        var font = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
+        var save = dialog.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "save"));
+        font.Text = "Menlo";
+        save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        font.Text = "Arial";
+        pending.SetResult(null);
+        await Task.Yield();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(dialog.Accepted);
+        Assert.Equal("Arial", font.Text);
+        Assert.True(save.IsEnabled);
+        font.Text = "Menlo";
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(save.IsEnabled);
     }
 
     [AvaloniaFact]

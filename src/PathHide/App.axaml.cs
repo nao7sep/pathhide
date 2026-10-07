@@ -35,13 +35,13 @@ public partial class App : Application
         MenuGestureColumn.Install();
     }
 
-    public override void OnFrameworkInitializationCompleted()
+    public override async void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // The app quits with its main window. The records window is a window of its own, which
             // must neither keep a closed main window's app running nor be what is left of it.
-            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             // A Dock click brings the main window back, as a second launch does, even while the
             // records window is open and so macOS sees a visible window and restores nothing itself.
@@ -68,6 +68,7 @@ public partial class App : Application
 
             if (StartupFailureMessage is { } startupFailure)
             {
+                desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
                     I18n.Message.Of("startup.failedTitle"),
                     startupFailure);
@@ -83,11 +84,13 @@ public partial class App : Application
             MainWindowViewModel viewModel;
             try
             {
-                viewModel = CreateMainViewModel();
-                // paths.json normally loads from the window's Loaded handler. Do
-                // the read now so its recovery and any failed quarantine share
-                // the same startup report/catch as config.json.
-                viewModel.LoadPersistedState();
+                // Required reads settle before the normal shell exists. Build the view model on
+                // the dispatcher only after the bounded worker has prepared all persisted values.
+                base.OnFrameworkInitializationCompleted();
+                var loaded = await new BoundedStoreWork().RunAsync(ReadStartupStores,
+                    BoundedStoreWork.DefaultBound, TimeProvider.System);
+                viewModel = CreateMainViewModel(loaded.Settings, loaded.State);
+                viewModel.LoadPersistedState(loaded.Paths);
             }
             catch (UnreadableStoreException unreadable)
             {
@@ -105,7 +108,8 @@ public partial class App : Application
                         ? FailurePresentation.PathListStartup(unreadable)
                         : FailurePresentation.StartupUnreadable(unreadable));
                 RegisterOwnerActivation(desktop.MainWindow);
-                base.OnFrameworkInitializationCompleted();
+                desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+                desktop.MainWindow.Show();
                 return;
             }
             catch (NewerFormatException newer)
@@ -117,7 +121,8 @@ public partial class App : Application
                     I18n.Message.Of("startup.failedTitle"),
                     FailurePresentation.NewerStore(newer));
                 RegisterOwnerActivation(desktop.MainWindow);
-                base.OnFrameworkInitializationCompleted();
+                desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+                desktop.MainWindow.Show();
                 return;
             }
             catch (Exception ex)
@@ -127,7 +132,8 @@ public partial class App : Application
                     I18n.Message.Of("startup.failedTitle"),
                     FailurePresentation.Startup());
                 RegisterOwnerActivation(desktop.MainWindow);
-                base.OnFrameworkInitializationCompleted();
+                desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+                desktop.MainWindow.Show();
                 return;
             }
 
@@ -144,6 +150,7 @@ public partial class App : Application
             };
             mainWindow.RestoreWindowGeometry();
             desktop.MainWindow = mainWindow;
+            desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
             _mainWindow = mainWindow;
             RegisterOwnerActivation(mainWindow);
 
@@ -156,6 +163,8 @@ public partial class App : Application
                     await Views.NoticeDialog.ShowAsync(mainWindow, title, body);
                 }
             };
+            mainWindow.Show();
+            return;
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -174,19 +183,27 @@ public partial class App : Application
     /// window is placed before it is shown; path entries are loaded later, when the window
     /// calls <see cref="MainWindowViewModel.Initialize"/>.
     /// </summary>
-    internal static MainWindowViewModel CreateMainViewModel()
+    private static (AppSettings Settings, AppState State, List<PathEntry> Paths) ReadStartupStores() =>
+        (new SettingsStore().Load().Value,
+         new JsonStore<AppState>(AppState.FileName, QuarantineJournal.StateLabel,
+             FormatVersions.State, recordBackup: false).Load().Value,
+         new PathListStore().Load().Value);
+
+    internal static MainWindowViewModel CreateMainViewModel() => CreateMainViewModel(null, null);
+
+    private static MainWindowViewModel CreateMainViewModel(AppSettings? loadedSettings, AppState? loadedState)
     {
         var pathListStore = new PathListStore();
         var settingsStore = new SettingsStore();
         // Settings are re-derivable, so an unreadable config.json correctly falls back to
         // defaults; the recovery notice tells the user it happened. The path list does NOT —
         // see LoadPersistedState.
-        var settings = settingsStore.Load().Value;
+        var settings = loadedSettings ?? settingsStore.Load().Value;
 
         // Window geometry remains independent, disposable, and outside backup history.
         var stateStore = new JsonStore<AppState>(
             AppState.FileName, QuarantineJournal.StateLabel, FormatVersions.State, recordBackup: false);
-        var state = stateStore.Load().Value;
+        var state = loadedState ?? stateStore.Load().Value;
 
         // Key effective configuration at startup (the conventions' baseline): every user-tunable
         // setting, not a subset. Logging only the hide mode meant a session log could not answer

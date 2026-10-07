@@ -22,6 +22,10 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IJsonStore<AppState> _stateStore;
     private readonly BoundedVisibility _visibility;
     private readonly PathScanner _scanner;
+    private readonly BoundedStoreWork _pathWork = new();
+    private readonly BoundedStoreWork _settingsWork = new();
+    private readonly BoundedStoreWork _stateWork = new();
+    internal TimeSpan StorageWaitBound { get; init; } = BoundedStoreWork.DefaultBound;
 
     // The same AppSettings instance the Windows visibility service closes over (wired in
     // App's composition root). Mutate its fields in place; never reassign the reference,
@@ -270,6 +274,15 @@ public partial class MainWindowViewModel : ObservableObject
         // startup before anything is shown or applied: opening with an empty list would look exactly
         // like losing it (store-recovery-conventions).
         _entries = _pathListStore.Load().Value;
+        SyncRowsWithEntries();
+    }
+
+    internal void LoadPersistedState(List<PathEntry> entries)
+    {
+        if (_persistedStateLoaded)
+            return;
+        _persistedStateLoaded = true;
+        _entries = entries;
         SyncRowsWithEntries();
     }
 
@@ -657,7 +670,7 @@ public partial class MainWindowViewModel : ObservableObject
     // pause-then-resume: it always ends by starting a fresh background scan of the reloaded
     // list, rather than putting back the one it interrupted. That scan runs after the gate is
     // released, like every other, so the next command pauses it instead of queueing behind it.
-    private Task ReloadAsync() => UnderMutationGateAsync(async () =>
+    private Task ReloadAsync() => UnderMutationGateAsync(() => RunCancellableAsync(async token =>
     {
         await PauseScanningAsync();
 
@@ -669,7 +682,7 @@ public partial class MainWindowViewModel : ObservableObject
         LoadedStore<List<PathEntry>> reloaded;
         try
         {
-            reloaded = await Task.Run(_pathListStore.Load);
+            reloaded = await _pathWork.RunAsync(_pathListStore.Load, StorageWaitBound, Clock, token);
         }
         catch (Exception ex) when (ex is NewerFormatException or UnreadableStoreException)
         {
@@ -684,11 +697,26 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        catch (OperationCanceledException)
+        {
+            StartBackgroundScan();
+            return;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("reload: read failed", ex);
+            ShowOperationalResult(OperationalResultOwner.PathStore, Message.Of("failure.pathListReload"), error: true);
+            StartBackgroundScan();
+            return;
+        }
+
         _entries = reloaded.Value;
         _entriesOnDisk = true;
+        lock (_userSavesGate)
+            _unsavedAtQuit.Remove(UserStore.PathList);
         SyncRowsWithEntries();
         StartBackgroundScan();
-    });
+    }));
 
     /// <summary>
     /// Rescans the path list because the window came back to the front, so a path unhidden, moved
@@ -758,18 +786,18 @@ public partial class MainWindowViewModel : ObservableObject
         family = UiFontFamilyValue.Normalize(family);
         var newMode = hiddenAndSystem ? WindowsHideMode.HiddenAndSystem : WindowsHideMode.HiddenOnly;
 
-        AppSettings? previous;
+        var previous = CopySettings();
+        var candidate = CopySettings();
+        candidate.Language = language;
+        candidate.UiFontFamily = family;
+        candidate.WindowsHideMode = newMode;
+        candidate.Theme = theme;
+        bool changed;
         try
         {
-            previous = await RunUserSaveAsync(
+            changed = await RunUserSaveAsync(
                 UserStore.Settings,
-                () => CommitSettings(candidate =>
-                {
-                    candidate.Language = language;
-                    candidate.UiFontFamily = family;
-                    candidate.WindowsHideMode = newMode;
-                    candidate.Theme = theme;
-                }),
+                () => _settingsStore.SaveChanges(_settingsStore.Load().Value, candidate),
                 FailurePresentation.SettingsSave,
                 () => TryApplySettingsAsync(language, family, hiddenAndSystem, theme));
         }
@@ -780,8 +808,16 @@ public partial class MainWindowViewModel : ObservableObject
             return FailurePresentation.SettingsSave(ex);
         }
 
-        if (previous is null)
+        if (!changed && previous.Language == candidate.Language
+            && previous.UiFontFamily == candidate.UiFontFamily
+            && previous.WindowsHideMode == candidate.WindowsHideMode
+            && previous.Theme == candidate.Theme)
             return null;
+
+        _settings.Language = candidate.Language;
+        _settings.UiFontFamily = candidate.UiFontFamily;
+        _settings.WindowsHideMode = candidate.WindowsHideMode;
+        _settings.Theme = candidate.Theme;
 
         if (previous.UiFontFamily != family)
         {
@@ -846,54 +882,22 @@ public partial class MainWindowViewModel : ObservableObject
     /// the window is in use, not as it closes. A failed save faults the task and changes nothing.
     /// </summary>
     public Task SaveRecordsListWidthAsync(double width) =>
-        Task.Run(() => SaveState(state => state with { RecordsListWidth = width }));
+        SaveStateAsync(state => state with { RecordsListWidth = width }, StorageWaitBound);
 
-    // Every window-state save goes through here, so each one starts from the last state saved and a
-    // save of one window's state keeps the other's. The gate orders a list-width save on a worker
-    // against a placement save as a window closes. An unchanged state writes nothing.
-    private readonly object _stateGate = new();
-
-    // A placement save as a window closes, off the UI thread and within its bound. Past the bound the
-    // close goes on, the save carries on until the process ends, and the caller logs the timeout.
+    // Window-state operations share physical ordering, including after a close abandons its wait.
     private void SaveStateForClose(Func<AppState, AppState> change) =>
-        Task.Run(() => SaveState(change)).WaitAsync(PlacementSaveBound, Clock).GetAwaiter().GetResult();
+        SaveStateAsync(change, PlacementSaveBound).GetAwaiter().GetResult();
 
-    private void SaveState(Func<AppState, AppState> change)
-    {
-        lock (_stateGate)
+    private Task<bool> SaveStateAsync(Func<AppState, AppState> change, TimeSpan bound) =>
+        _stateWork.RunAsync(() =>
         {
             var candidate = change(_state);
             if (candidate == _state)
-                return;
-
+                return false;
             _stateStore.Save(candidate);
             _state = candidate;
-        }
-    }
-
-    /// <summary>
-    /// Applies <paramref name="change"/> to a copy of the live settings, saves it, and only then copies it
-    /// into the live instance (which the Windows visibility service reads). Returns the settings as they
-    /// were before, or null when the store wrote nothing because no set changed. A failed save throws and
-    /// leaves the live settings untouched.
-    /// </summary>
-    /// <remarks>
-    /// The Settings dialog is the one writer, and it holds while its save runs, so saves never overlap.
-    /// </remarks>
-    private AppSettings? CommitSettings(Action<AppSettings> change)
-    {
-        var previous = CopySettings();
-        var candidate = CopySettings();
-        change(candidate);
-        if (!_settingsStore.SaveChanges(previous, candidate))
-            return null;
-
-        _settings.Language = candidate.Language;
-        _settings.UiFontFamily = candidate.UiFontFamily;
-        _settings.WindowsHideMode = candidate.WindowsHideMode;
-        _settings.Theme = candidate.Theme;
-        return previous;
-    }
+            return true;
+        }, bound, Clock);
 
     private AppSettings CopySettings() => new()
     {
@@ -951,7 +955,12 @@ public partial class MainWindowViewModel : ObservableObject
     /// Whether closing has work to finish first: a scan or apply, a save of the user's, or an elevated
     /// child still running.
     /// </summary>
-    public bool HasWorkToFinish => IsBusy || UserSavesRunning || ElevatedApplicator?.HasRunningChild == true;
+    public bool HasWorkToFinish => IsBusy || UserSavesRunning || HasUnsavedChanges || ElevatedApplicator?.HasRunningChild == true;
+
+    private bool HasUnsavedChanges
+    {
+        get { lock (_userSavesGate) return _unsavedAtQuit.Count > 0; }
+    }
 
     private bool UserSavesRunning
     {
@@ -986,7 +995,17 @@ public partial class MainWindowViewModel : ObservableObject
             if (_sessionEnding || AskUnsavedAtQuitAsync is null)
                 return !_sessionEnding;
 
-            var choice = await AskUnsavedAtQuitAsync(UnsavedAtQuitLines());
+            UnsavedQuitChoice choice;
+            try
+            {
+                choice = await AskUnsavedAtQuitAsync(UnsavedAtQuitLines());
+            }
+            catch (Exception ex)
+            {
+                Log.Error("quit: unsaved changes question failed; keeping the app open", ex);
+                CallOffQuit();
+                return false;
+            }
             if (_sessionEnding)
                 return false;
 
@@ -1132,6 +1151,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     // The user dismissed the question: the app stays open as it was before the quit. A change whose save
     // failed is dropped, as any failed save is; the window already shows its failure.
+    internal void CancelQuit() => CallOffQuit();
+
     private void CallOffQuit()
     {
         _quitting = false;
@@ -1155,35 +1176,43 @@ public partial class MainWindowViewModel : ObservableObject
     private Task<T> RunUserSaveAsync<T>(
         UserStore store, Func<T> save, Func<Exception, Message> describe, Func<Task> saveAgain)
     {
-        var task = Task.Run(() =>
-        {
-            try
-            {
-                var result = save();
-                lock (_userSavesGate)
-                    _unsavedAtQuit.Remove(store);
-                return result;
-            }
-            catch (Exception ex) when (_quitting)
-            {
-                lock (_userSavesGate)
-                    _unsavedAtQuit[store] = new UnsavedChange(describe(ex), saveAgain);
-                throw;
-            }
-        });
+        var wait = RunUserSaveCoreAsync(store, save, describe, saveAgain);
+        TrackUserSave(wait);
+        return wait;
+    }
 
+    private void TrackUserSave(Task task)
+    {
         lock (_userSavesGate)
             _userSaves.Add(task);
-        task.ContinueWith(
-            done =>
+        _ = task.ContinueWith(done =>
+        {
+            lock (_userSavesGate)
+                _userSaves.Remove(done);
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+    }
+
+    private async Task<T> RunUserSaveCoreAsync<T>(
+        UserStore store, Func<T> save, Func<Exception, Message> describe, Func<Task> saveAgain)
+    {
+        var owner = store == UserStore.PathList ? _pathWork : _settingsWork;
+        try
+        {
+            var result = await owner.RunAsync(save, StorageWaitBound, Clock, started: TrackUserSave);
+            lock (_userSavesGate)
+                _unsavedAtQuit.Remove(store);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            // A timeout leaves an unknown physical outcome, retained for Reload/Retry and quit.
+            lock (_userSavesGate)
             {
-                lock (_userSavesGate)
-                    _userSaves.Remove(done);
-            },
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
-        return task;
+                if (_quitting || ex is TimeoutException || _unsavedAtQuit.ContainsKey(store))
+                    _unsavedAtQuit[store] = new UnsavedChange(describe(ex), saveAgain);
+            }
+            throw;
+        }
     }
 
     // --- Internals ---
@@ -1232,6 +1261,8 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            if (ex is TimeoutException)
+                _entriesOnDisk = false;
             Log.Error("paths: save failed", ex);
             return FailurePresentation.PathListSave(ex);
         }

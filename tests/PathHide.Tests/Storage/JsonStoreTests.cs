@@ -251,6 +251,23 @@ public sealed class JsonStoreTests : IDisposable
         Assert.False(File.Exists(PathOf("config.json.bak")));
     }
 
+    [Fact]
+    public void Save_IdenticalBytesKeepsModifiedTimeAfterMarkerAdmission()
+    {
+        var store = SettingsDocumentStore();
+        var value = new TestDocument { Theme = ThemePreference.Light };
+        store.Save(value);
+        var path = PathOf("config.json");
+        var timestamp = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(path, timestamp);
+        var before = File.ReadAllBytes(path);
+        store.Save(value);
+        Assert.Equal(before, File.ReadAllBytes(path));
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(path));
+        File.WriteAllText(path, "{\"formatVersion\":2}");
+        Assert.Throws<NewerFormatException>(() => store.Save(value));
+    }
+
     [MacOnlyFact]
     [System.Runtime.Versioning.SupportedOSPlatform("macos")]
     public void Save_Changed_KeepsTheFilesMode_ButTakesAFreshModifiedTime()

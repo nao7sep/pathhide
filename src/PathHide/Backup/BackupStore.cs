@@ -93,31 +93,11 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
             // the first thing written on a fresh root.
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
 
-            connection = new SqliteConnection(new SqliteConnectionStringBuilder
-            {
-                DataSource = file,
-                Mode = SqliteOpenMode.ReadWriteCreate,
-            }.ToString());
-            connection.Open();
-
+            connection = FormatVersions.OpenDatabase(file, FormatVersions.Backups, Schema);
             using (var pragma = connection.CreateCommand())
             {
-                // busy_timeout: under the tolerated two-instance case, a contended write waits up to this
-                // long for SQLite's write lock instead of immediately failing with SQLITE_BUSY and dropping
-                // that record.
-                pragma.CommandText = "PRAGMA busy_timeout = 5000;";
-                pragma.ExecuteNonQuery();
-                // Before anything writes, the journal mode included: a newer store is left as it is, and
-                // recording stays off for the session like any other failed open.
-                FormatVersions.AdoptDatabase(connection, file, FormatVersions.Backups);
                 pragma.CommandText = "PRAGMA journal_mode = WAL;";
                 pragma.ExecuteNonQuery();
-            }
-
-            using (var create = connection.CreateCommand())
-            {
-                create.CommandText = Schema;
-                create.ExecuteNonQuery();
             }
 
             _connection = connection;
@@ -129,7 +109,8 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
             // PATHHIDE_DATA_DIR) and that second throw would escape EnsureOpen entirely.
             Log.Warn("backup store: could not open; recording disabled for this session", ex,
                 new { file = storeFile });
-            connection?.Dispose();
+            try { connection?.Dispose(); }
+            catch (Exception cleanup) { Log.Warn("backup store: failed to close after open failure", cleanup); }
             _connection = null;
         }
 

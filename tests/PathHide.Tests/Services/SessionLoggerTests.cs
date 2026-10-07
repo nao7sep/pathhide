@@ -305,12 +305,22 @@ public sealed class SessionLoggerTests
         var sink = new BlockingSink();
         var log = new SessionLogger(SessionStart, sink, fallbackDirectory: null, debugEnabled: true, writeInBackground: true);
 
-        log.Info("first");
-        Assert.True(sink.Entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
-        var second = Task.Run(() => log.Info("second"), TestContext.Current.CancellationToken);
-        var returned = await Task.WhenAny(second, Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)) == second;
-        sink.Release.Set();
-        log.Dispose();
+        Task? second = null;
+        var returned = false;
+        try
+        {
+            log.Info("first");
+            Assert.True(sink.Entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+            second = Task.Run(() => log.Info("second"), TestContext.Current.CancellationToken);
+            returned = await Task.WhenAny(second, Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)) == second;
+        }
+        finally
+        {
+            sink.Release.Set();
+            if (second is not null)
+                await second.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            log.Dispose();
+        }
 
         Assert.True(returned);
         Assert.Equal(["first", "second"], sink.Messages);
@@ -339,19 +349,27 @@ public sealed class SessionLoggerTests
         var sink = new BlockingSink();
         var log = new SessionLogger(SessionStart, sink, temp.Path, debugEnabled: true, writeInBackground: true);
 
-        log.Info("stuck");
-        Assert.True(sink.Entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
-        log.Info("queued");
-        log.Close(TimeSpan.FromMilliseconds(50));
-        var lines = File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-123-utc.log"));
-        sink.Release.Set();
-
-        Assert.Equal(2, lines.Length);
-        Assert.Equal("queued", JsonNode.Parse(lines[0])!["message"]!.GetValue<string>());
-        var note = JsonNode.Parse(lines[1])!;
-        Assert.Equal("error", note["level"]!.GetValue<string>());
-        Assert.Equal(1, note["fields"]!["left"]!.GetValue<int>());
-        Assert.False(sink.Disposed);
+        try
+        {
+            log.Info("stuck");
+            Assert.True(sink.Entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+            log.Info("queued");
+            log.Close(TimeSpan.FromMilliseconds(50));
+            var path = Path.Combine(temp.Path, "20261002-093015-123-utc.log");
+            Assert.True(SpinWait.SpinUntil(() => File.Exists(path) && File.ReadAllLines(path).Length == 2,
+                TimeSpan.FromSeconds(5)));
+            var lines = File.ReadAllLines(path);
+            Assert.Equal("queued", JsonNode.Parse(lines[0])!["message"]!.GetValue<string>());
+            var note = JsonNode.Parse(lines[1])!;
+            Assert.Equal("error", note["level"]!.GetValue<string>());
+            Assert.Equal(1, note["fields"]!["left"]!.GetValue<int>());
+            Assert.False(sink.Disposed);
+        }
+        finally
+        {
+            sink.Release.Set();
+            Assert.True(SpinWait.SpinUntil(() => sink.Disposed, TimeSpan.FromSeconds(5)));
+        }
     }
 
     [Fact]
@@ -411,6 +429,41 @@ public sealed class SessionLoggerTests
         log.Dispose();
 
         Assert.Equal(["a", "b"], Lines(sw).ConvertAll(line => line["message"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void ClosingIncludesAStalledSinkDisposeWithinTheBound()
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        using var settled = new ManualResetEventSlim();
+        var logger = new SessionLogger(SessionStart, new BlockingCloseSink(entered, release, settled),
+            null, true, writeInBackground: true);
+        try
+        {
+            var started = System.Diagnostics.Stopwatch.StartNew();
+            logger.Close(TimeSpan.FromMilliseconds(50));
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+            Assert.False(settled.IsSet);
+            Assert.True(started.Elapsed < TimeSpan.FromSeconds(2));
+        }
+        finally
+        {
+            release.Set();
+            Assert.True(settled.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        }
+    }
+
+    private sealed class BlockingCloseSink(ManualResetEventSlim entered, ManualResetEventSlim release,
+        ManualResetEventSlim settled) : ILogSink
+    {
+        public void Write(LogEntry entry) { }
+        public void Dispose()
+        {
+            entered.Set();
+            release.Wait();
+            settled.Set();
+        }
     }
 
     private sealed class BlockingSink : ILogSink

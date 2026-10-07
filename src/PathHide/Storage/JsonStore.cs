@@ -102,6 +102,8 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             // backup store after the rename (no re-encode, no re-read). No BOM: File.WriteAllText/Encoding
             // .UTF8 without a preamble matches what the app writes and reads back.
             var bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
+            if (File.Exists(_filePath) && File.ReadAllBytes(_filePath).AsSpan().SequenceEqual(bytes))
+                return;
             WriteAtomically(bytes);
             Log.Info("store: saved", new { label = _label, path = _filePath });
         }
