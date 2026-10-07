@@ -224,7 +224,7 @@ internal static class MacMenuBar
 
     private static void SetBar()
     {
-        var bar = BuildBar(s_appName, s_appActionTarget, s_editShortcuts);
+        using var bar = BuildBar(s_appName, s_appActionTarget, s_editShortcuts);
         var app = Send(Class("NSApplication"), "sharedApplication");
         Send(app, "setServicesMenu:", bar.Services);
         Send(app, "setWindowsMenu:", bar.Window);
@@ -252,75 +252,110 @@ internal static class MacMenuBar
     }
 
     /// <summary>The native bar, and the Services and Window menus AppKit is told about.</summary>
-    internal readonly record struct NativeBar(IntPtr Bar, IntPtr Services, IntPtr Window);
+    internal sealed class NativeBar(OwnedObject bar, IntPtr services, IntPtr window) : IDisposable
+    {
+        public IntPtr Bar => bar.Pointer;
+        public IntPtr Services { get; } = services;
+        public IntPtr Window { get; } = window;
+
+        public void Dispose() => bar.Dispose();
+    }
 
     /// <summary>
-    /// Builds the native bar from <see cref="Layout"/>, without setting it. Without
-    /// <paramref name="editShortcuts"/> the Edit items carry no shortcuts.
+    /// Builds an owned native bar. Children belong to their menus; the caller releases the bar after
+    /// AppKit takes ownership, or after inspecting it in a test.
     /// </summary>
     internal static NativeBar BuildBar(string appName, IntPtr appActionTarget, bool editShortcuts = true)
     {
-        // Every message to a class that is not loaded returns nothing, so without AppKit this would
-        // build an empty bar and report no error.
         if (Class("NSMenu") == IntPtr.Zero)
             throw new InvalidOperationException("AppKit is not loaded.");
 
         var bar = NewMenu("");
-        var services = IntPtr.Zero;
-        var window = IntPtr.Zero;
-        foreach (var (role, title, items) in Layout(appName))
+        try
         {
-            var menu = NewMenu(title);
-            foreach (var item in items)
+            var services = IntPtr.Zero;
+            var window = IntPtr.Zero;
+            foreach (var (role, title, items) in Layout(appName))
             {
-                IntPtr native;
-                if (item is null)
+                using var menu = NewMenu(title);
+                foreach (var item in items)
                 {
-                    native = Send(Class("NSMenuItem"), "separatorItem");
-                }
-                else if (item.Action == ServicesSubmenu)
-                {
-                    services = NewMenu(item.Title);
-                    native = NewSubmenuItem(item.Title, services);
-                }
-                else
-                {
-                    var shortcut = editShortcuts || !EditActions.Contains(item.Action);
-                    native = NewItem(shortcut ? item : item with { Key = "" }, appActionTarget);
+                    if (item is null)
+                    {
+                        // separatorItem is autoreleased, unlike our alloc/init objects.
+                        Send(menu.Pointer, "addItem:", Send(Class("NSMenuItem"), "separatorItem"));
+                        continue;
+                    }
+
+                    if (item.Action == ServicesSubmenu)
+                    {
+                        using var serviceMenu = NewMenu(item.Title);
+                        services = serviceMenu.Pointer;
+                        using var native = NewSubmenuItem(item.Title, services);
+                        Send(menu.Pointer, "addItem:", native.Pointer);
+                    }
+                    else
+                    {
+                        var shortcut = editShortcuts || !EditActions.Contains(item.Action);
+                        using var native = NewItem(shortcut ? item : item with { Key = "" }, appActionTarget);
+                        Send(menu.Pointer, "addItem:", native.Pointer);
+                    }
                 }
 
-                Send(menu, "addItem:", native);
+                if (role == MenuRole.Window)
+                    window = menu.Pointer;
+                using var submenu = NewSubmenuItem(title, menu.Pointer);
+                Send(bar.Pointer, "addItem:", submenu.Pointer);
             }
 
-            if (role == MenuRole.Window)
-                window = menu;
-            Send(bar, "addItem:", NewSubmenuItem(title, menu));
+            return new NativeBar(bar, services, window);
         }
-
-        return new NativeBar(bar, services, window);
+        catch
+        {
+            bar.Dispose();
+            throw;
+        }
     }
 
-    private static IntPtr NewMenu(string title) =>
-        Send(Send(Class("NSMenu"), "alloc"), "initWithTitle:", NSString(title));
-
-    private static IntPtr NewSubmenuItem(string title, IntPtr menu)
+    internal static OwnedObject NewMenu(string title)
     {
-        var native = Send(Send(Class("NSMenuItem"), "alloc"), "initWithTitle:action:keyEquivalent:",
-            NSString(title), IntPtr.Zero, NSString(""));
-        Send(native, "setSubmenu:", menu);
-        return native;
+        using var nativeTitle = new OwnedObject(NSString(title));
+        return new OwnedObject(Send(Send(Class("NSMenu"), "alloc"), "initWithTitle:", nativeTitle.Pointer));
     }
 
-    internal static IntPtr NewItem(Item item, IntPtr appActionTarget)
+    private static OwnedObject NewSubmenuItem(string title, IntPtr menu)
     {
-        var native = Send(Send(Class("NSMenuItem"), "alloc"), "initWithTitle:action:keyEquivalent:",
-            NSString(item.Title), Sel(item.Action), NSString(item.Key));
-        SendUInt(native, "setKeyEquivalentModifierMask:", (ulong)item.Modifiers);
-        // Without a target an item's action goes to whatever has focus and on up to the app; the app's
-        // own actions go to their object.
-        if (AppActions.Contains(item.Action))
-            Send(native, "setTarget:", appActionTarget);
-        return native;
+        var native = NewItem(new Item(title, ""), IntPtr.Zero);
+        try
+        {
+            Send(native.Pointer, "setSubmenu:", menu);
+            return native;
+        }
+        catch
+        {
+            native.Dispose();
+            throw;
+        }
+    }
+
+    internal static OwnedObject NewItem(Item item, IntPtr appActionTarget)
+    {
+        using var title = new OwnedObject(NSString(item.Title));
+        using var key = new OwnedObject(NSString(item.Key));
+        var native = new OwnedObject(Send(Send(Class("NSMenuItem"), "alloc"), "initWithTitle:action:keyEquivalent:",
+            title.Pointer, item.Action.Length == 0 ? IntPtr.Zero : Sel(item.Action), key.Pointer));
+        try
+        {
+            SendUInt(native.Pointer, "setKeyEquivalentModifierMask:", (ulong)item.Modifiers);
+            if (AppActions.Contains(item.Action))
+                Send(native.Pointer, "setTarget:", appActionTarget);
+            return native;
+        }
+        catch
+        {
+            native.Dispose();
+            throw;
+        }
     }
 
     /// <summary>An object of a new class <paramref name="className"/> that answers About, Settings, and Quit.</summary>

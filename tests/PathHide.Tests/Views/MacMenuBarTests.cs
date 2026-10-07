@@ -194,7 +194,7 @@ public sealed class MacMenuBarTests
     {
         LoadAppKit();
         var target = CreateAppActionTarget(UniqueClassName("Target"));
-        var bar = BuildBar("PathHide", target);
+        using var bar = BuildBar("PathHide", target);
         var layout = Layout("PathHide");
 
         Assert.Equal(layout.Count, Count(bar.Bar));
@@ -235,7 +235,7 @@ public sealed class MacMenuBarTests
     public void The_keys_that_type_each_shortcut_reach_the_native_bar()
     {
         LoadAppKit();
-        var bar = BuildBar("PathHide", CreateAppActionTarget(UniqueClassName("Target")));
+        using var bar = BuildBar("PathHide", CreateAppActionTarget(UniqueClassName("Target")));
         foreach (var item in Layout("PathHide").SelectMany(menu => menu.Items).OfType<Item>().Where(item => item.Key.Length > 0))
         {
             var (characters, modifiers) = Typed(item);
@@ -250,7 +250,7 @@ public sealed class MacMenuBarTests
         LoadAppKit();
         var window = new Window();
         window.Show();
-        var bar = BuildBar("PathHide", CreateAppActionTarget(UniqueClassName("Target")));
+        using var bar = BuildBar("PathHide", CreateAppActionTarget(UniqueClassName("Target")));
 
         // The characters each catalog key types; a new shortcut key needs its entry here.
         var typed = new Dictionary<Key, string>
@@ -306,7 +306,7 @@ public sealed class MacMenuBarTests
     public void Without_the_Edit_actions_the_Edit_items_leave_their_shortcuts_to_Avalonia()
     {
         LoadAppKit();
-        var bar = BuildBar("PathHide", CreateAppActionTarget(UniqueClassName("Target")), editShortcuts: false);
+        using var bar = BuildBar("PathHide", CreateAppActionTarget(UniqueClassName("Target")), editShortcuts: false);
 
         var edit = ObjC.Send(ItemAt(bar.Bar, 1), "submenu");
         for (var i = 0; i < Count(edit); i++)
@@ -338,12 +338,12 @@ public sealed class MacMenuBarTests
             ObjC.Send(target, SettingsAction, IntPtr.Zero);
             Assert.Equal((1, 1), (about, settings));
 
-            var aboutItem = NewItem(new Item("About PathHide", AboutAction), target);
-            var quitItem = NewItem(new Item("Quit PathHide", QuitAction, "q"), target);
-            Assert.True(Validates(target, aboutItem));
+            using var aboutItem = NewItem(new Item("About PathHide", AboutAction), target);
+            using var quitItem = NewItem(new Item("Quit PathHide", QuitAction, "q"), target);
+            Assert.True(Validates(target, aboutItem.Pointer));
             canShow = false;
-            Assert.False(Validates(target, aboutItem));
-            Assert.True(Validates(target, quitItem));
+            Assert.False(Validates(target, aboutItem.Pointer));
+            Assert.True(Validates(target, quitItem.Pointer));
         }
         finally
         {
@@ -383,18 +383,18 @@ public sealed class MacMenuBarTests
             // A click: the items follow the field, and act on it.
             FocusedFieldOf = _ => field;
             CurrentShortcut = () => IntPtr.Zero;
-            Assert.False(Validates(view, items["copy:"]));
-            Assert.True(Validates(view, items["selectAll:"]));
-            ObjC.Send(view, "selectAll:", items["selectAll:"]);
+            Assert.False(Validates(view, items["copy:"].Pointer));
+            Assert.True(Validates(view, items["selectAll:"].Pointer));
+            ObjC.Send(view, "selectAll:", items["selectAll:"].Pointer);
             Assert.Equal("scripts", field.SelectedText);
-            Assert.True(Validates(view, items["copy:"]));
+            Assert.True(Validates(view, items["copy:"].Pointer));
 
             // Its shortcut: accepted even with no field, and handed back as the key it was.
             FocusedFieldOf = _ => null;
             var shortcut = new IntPtr(0x5eed);
             CurrentShortcut = () => shortcut;
-            Assert.True(Validates(view, items["copy:"]));
-            ObjC.Send(view, "copy:", items["copy:"]);
+            Assert.True(Validates(view, items["copy:"].Pointer));
+            ObjC.Send(view, "copy:", items["copy:"].Pointer);
             Assert.Equal(new[] { shortcut }, s_forwarded);
 
             // An action no menu item sent is not a shortcut, even while one is being dispatched.
@@ -406,6 +406,8 @@ public sealed class MacMenuBarTests
             FocusedFieldOf = focusedFieldOf;
             CurrentShortcut = currentShortcut;
             window.Close();
+            foreach (var item in items.Values)
+                item.Dispose();
         }
     }
 

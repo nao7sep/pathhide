@@ -53,9 +53,24 @@ internal static class ObjC
     internal static bool SendForBool(IntPtr receiver, string selector, IntPtr argument) =>
         MsgSendForBool(receiver, Sel(selector), argument) != 0;
 
-    /// <summary>A new NSString, owned by the caller; the menu bar keeps its strings for the process's life.</summary>
+    /// <summary>A new NSString, owned by the caller.</summary>
     internal static IntPtr NSString(string text) =>
         MsgSendUtf8(Send(Class("NSString"), "alloc"), Sel("initWithUTF8String:"), text);
+
+    /// <summary>An owned Objective-C reference, released on the thread that disposes its scope.</summary>
+    internal sealed class OwnedObject(IntPtr pointer) : IDisposable
+    {
+        public IntPtr Pointer { get; private set; } = pointer != IntPtr.Zero
+            ? pointer : throw new InvalidOperationException("An Objective-C object could not be created.");
+
+        public void Dispose()
+        {
+            var pointer = Pointer;
+            Pointer = IntPtr.Zero;
+            if (pointer != IntPtr.Zero)
+                Send(pointer, "release");
+        }
+    }
 
     internal static string String(IntPtr nsString) =>
         nsString == IntPtr.Zero ? "" : Marshal.PtrToStringUTF8(Send(nsString, "UTF8String")) ?? "";
