@@ -314,6 +314,9 @@ public sealed partial class RecordsViewModel : ObservableObject
         if (generation != _generation || _closed)
             return;
         _liveSuspended = false;
+        // A newest-page read of this same generation may have filled the list while this read ran;
+        // this first page replaces whatever it put there instead of adding the same records again.
+        Rows.Clear();
         foreach (var record in page.Records)
             Rows.Add(new RecordRowViewModel(record));
         HasMore = page.More;

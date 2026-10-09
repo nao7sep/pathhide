@@ -222,6 +222,28 @@ public sealed class RecordsViewModelTests
     }
 
     [AvaloniaFact]
+    public void A_newest_page_read_that_lands_before_a_filter_reload_leaves_each_record_listed_once()
+    {
+        var vm = Started();
+        Answer(false, Record(1));
+
+        vm.SelectedLevel = vm.LevelOptions.Single(option => option.Level == RecordLevelFilter.Error);
+        Settle();
+        var reload = _reader.Unanswered.Single();
+        Signal(vm);
+        ElapseLive();
+        var newest = _reader.Unanswered.Single(page => page != reload);
+
+        // Both read the first page of the same filters; the newest-page read lands first.
+        newest.Answer(false, Record(3, level: "error"), Record(2, level: "error"));
+        Settle();
+        reload.Answer(false, Record(3, level: "error"), Record(2, level: "error"));
+        Settle();
+
+        Assert.Equal([3, 2], vm.Rows.Select(row => row.Id));
+    }
+
+    [AvaloniaFact]
     public void A_burst_of_new_records_reads_the_newest_page_once_while_at_the_top_keeping_the_rows_shown()
     {
         var vm = Started();

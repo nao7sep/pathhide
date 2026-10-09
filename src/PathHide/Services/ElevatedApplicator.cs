@@ -68,10 +68,19 @@ public delegate Task<Task<int>?> ElevatedChildLauncher(IReadOnlyList<string> arg
 /// temp files and the one child that may outlive a call.
 /// </summary>
 /// <remarks>
-/// An elevated child cannot be stopped from here — a higher-integrity process is not ours to signal —
+/// <para>An elevated child cannot be stopped from here — a higher-integrity process is not ours to signal —
 /// so a cancel or a timeout only ends the wait. At most one child runs: while one is outstanding, a new
 /// apply is refused instead of launched, because two children writing the same paths let the older
-/// one's late write undo the newer one (hide a path the user has just shown) behind the list's back.
+/// one's late write undo the newer one (hide a path the user has just shown) behind the list's back.</para>
+/// <para>That refusal covers one GUI only. The child holds no lease and applies the absolute states of its
+/// request snapshot without reading <c>paths.json</c>, and a quit waits for it only within the shutdown
+/// bound. So a child still running after a quit can undo what a restarted PathHide has since applied to
+/// the same paths. This is accepted (developer decision): <c>paths.json</c> keeps the newer desired
+/// state, the next scan shows the difference, and applying again repairs it; no lock, IPC or child-side
+/// recheck is added for it.</para>
+/// <para>Every await here resumes on the thread pool: reading the results and removing the temp files
+/// touch the OS temp volume, which antivirus or a slow disk can stall, so none of it runs on the
+/// caller's UI thread.</para>
 /// </remarks>
 public sealed class ElevatedApplicator : IElevatedApplicator
 {
@@ -126,7 +135,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         {
             // not recorded: a transient request for the elevated child in the OS temp directory,
             // removed on every outcome and never reloaded as managed state.
-            await Task.Run(() => File.WriteAllText(files.RequestPath, ElevatedApplyCommand.SerializeRequest(buckets)));
+            await Task.Run(() => File.WriteAllText(files.RequestPath, ElevatedApplyCommand.SerializeRequest(buckets))).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -148,13 +157,13 @@ public sealed class ElevatedApplicator : IElevatedApplicator
             ElevatedApplyCommand.BuildArguments(files.RequestPath, files.ResultsPath, _storageRoot), started);
         _outstanding = run;
 
-        var status = await WaitAsync(run, started.Task, cancellationToken);
+        var status = await WaitAsync(run, started.Task, cancellationToken).ConfigureAwait(false);
         var results = files.ReadResults();
 
         if (status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted)
         {
             files.TryDelete();
-            var exitCode = await run;
+            var exitCode = await run.ConfigureAwait(false);
             if (status == ElevatedApplyStatus.Completed)
                 Log.Info("elevated apply: exited", new { exitCode, reported = results.Count });
             return new ElevatedApplyOutcome(status, exitCode, results);
@@ -182,7 +191,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         if (outstanding.IsCompleted)
             return;
 
-        if (await Task.WhenAny(outstanding, Task.Delay(bound)) != outstanding)
+        if (await Task.WhenAny(outstanding, Task.Delay(bound)).ConfigureAwait(false) != outstanding)
             Log.Warn("elevated apply: a child is still running at quit; the next launch removes its files");
     }
 
@@ -192,7 +201,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         Task<int>? child;
         try
         {
-            child = await _launch(arguments);
+            child = await _launch(arguments).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -206,7 +215,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         started.TrySetResult();
         try
         {
-            return await child;
+            return await child.ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -224,7 +233,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var registration = cancellationToken.Register(() => cancelled.TrySetResult());
 
-        var first = await Task.WhenAny(run, started, cancelled.Task);
+        var first = await Task.WhenAny(run, started, cancelled.Task).ConfigureAwait(false);
         if (first == cancelled.Task)
             return ElevatedApplyStatus.Cancelled;
         if (first == run && !started.IsCompleted)
@@ -232,7 +241,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
 
         using var timer = new CancellationTokenSource();
         var timeout = Task.Delay(_childTimeout, timer.Token);
-        first = await Task.WhenAny(run, cancelled.Task, timeout);
+        first = await Task.WhenAny(run, cancelled.Task, timeout).ConfigureAwait(false);
         timer.Cancel();
 
         return first == run ? ElevatedApplyStatus.Completed
@@ -242,7 +251,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
 
     private static async Task DeleteAfterExitAsync(Task<int?> run, ElevatedApplyFiles files)
     {
-        await run;
+        await run.ConfigureAwait(false);
         if (!files.TryDelete())
             Log.Warn("elevated apply: could not remove the finished child's files; the next launch retries");
     }

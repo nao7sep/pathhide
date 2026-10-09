@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Headless.XUnit;
 using CommunityToolkit.Mvvm.Input;
 using PathHide.Models;
 using PathHide.Services;
@@ -137,6 +139,57 @@ public sealed class ElevatedRetryTests : IDisposable
         Assert.True(vm.HasWorkToFinish);
 
         run.Exit();
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task Cancel_EndsWithoutReinspectingTheRowsTheChildReported()
+    {
+        var applicator = Applicator();
+        var vm = ViewModel(applicator, null, "/a", "/b");
+        await vm.ScanTask;
+
+        var launch = _child.NextLaunch;
+        var hide = HideAll(vm);
+        var run = await launch;
+        Hide(run, "/a");
+        // Any inspection from here on waits for this gate: a re-inspection after the cancel would hold the
+        // apply until its bound and leave the row unresponsive instead of taking the child's verdict.
+        using var gate = new ManualResetEventSlim(false);
+        _visibility.InspectGate = gate;
+        vm.CancelCommand.Execute(null);
+        try
+        {
+            await hide;
+
+            Assert.Equal(ActualState.Hidden, StateOf(vm, "/a"));
+            Assert.Equal(ActualState.Unknown, StateOf(vm, "/b"));
+            Assert.Equal("1 applied, 1 cancelled", ResultText(vm));
+        }
+        finally
+        {
+            gate.Set();
+            run.Exit();
+        }
+    }
+
+    [AvaloniaFact]
+    public void ReadingAndRemovingTheHelpersFiles_RunsOffTheUiThread()
+    {
+        // Called from the UI thread, which then stays busy: the apply can only finish and remove its
+        // temp files if none of that work waits for the UI thread.
+        _child.OnStart = run =>
+        {
+            foreach (var path in run.Request.ToHide)
+                run.Report(path);
+            run.Exit(0);
+        };
+        var buckets = ElevatedApplyCommand.Partition([("/a", DesiredVisibility.Hidden)], WindowsHideMode.HiddenOnly);
+
+        var apply = Applicator().ApplyAsync(buckets, CancellationToken.None);
+
+        Assert.True(SpinWait.SpinUntil(() => apply.IsCompleted, TimeSpan.FromSeconds(5)));
+        Assert.Equal(ElevatedApplyStatus.Completed, apply.Result.Status);
+        Assert.Empty(TempFiles());
     }
 
     [Fact(Timeout = 10_000)]

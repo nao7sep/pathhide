@@ -26,6 +26,7 @@ public static class Log
     private static volatile SessionLogger _logger = CreateConsoleLogger();
     private static bool _started;
     private static bool _hooksInstalled;
+    private static volatile bool _sessionEnding;
 
     /// <summary>Whether developer-only <c>debug</c> events are being written.</summary>
     public static bool DebugEnabled => _logger.DebugEnabled;
@@ -64,6 +65,7 @@ public static class Log
             else
             {
                 _started = true;
+                _sessionEnding = false;
                 InstallCrashHooks();
                 previous = _logger;
                 _logger = new SessionLogger(SessionStart, sink, logsDirectory, IsDebugEnabled(), writeInBackground: true,
@@ -72,6 +74,13 @@ public static class Log
         }
         previous.Dispose();
     }
+
+    /// <summary>
+    /// Records that the operating system is ending the session, so <see cref="Shutdown"/> gives the
+    /// queued entries only <see cref="SessionLogger.SessionEndDrainBound"/>: logging must not hold up a
+    /// logout or restart past the quit's own bound (logging-conventions).
+    /// </summary>
+    public static void EndingSession() => _sessionEnding = true;
 
     /// <summary>
     /// Writes the queued entries, within a bound, and closes the session's sink. Idempotent. Late events
@@ -89,7 +98,7 @@ public static class Log
             previous = _logger;
             _logger = CreateConsoleLogger();
         }
-        previous.Dispose();
+        previous.Close(_sessionEnding ? SessionLogger.SessionEndDrainBound : SessionLogger.DrainBound);
     }
 
     /// <summary>Writes entries another process logged and handed back, as it logged them.</summary>

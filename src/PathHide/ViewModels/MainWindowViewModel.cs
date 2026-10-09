@@ -150,9 +150,12 @@ public partial class MainWindowViewModel : ObservableObject
     internal IElevatedApplicator? ElevatedApplicator { get; init; }
 
     /// <summary>
-    /// How long a quit waits, in all, for a running command, the user's saves and an elevated child.
-    /// With <see cref="PlacementSaveBound"/> for each window it stays under the system's kill delay at
-    /// logout (unsaved-edits-conventions, Quitting).
+    /// How long a quit waits, in all, for a running command, the user's saves, pending backup history and
+    /// an elevated child. After it come <see cref="PlacementSaveBound"/> for each window, then, once the
+    /// window has gone, the session log's drain (<see cref="SessionLogger.DrainBound"/>, or
+    /// <see cref="SessionLogger.SessionEndDrainBound"/> when the OS is ending the session) and the
+    /// single-instance lease's release (at most 2 s, normally immediate). At logout the whole stays near
+    /// 3 s plus placement plus 1 s (unsaved-edits-conventions, Quitting).
     /// </summary>
     internal TimeSpan ShutdownBound { get; init; } = TimeSpan.FromSeconds(3);
 
@@ -1641,6 +1644,24 @@ public partial class MainWindowViewModel : ObservableObject
                     else
                         unresponsive++;
                     problemPaths.Add(row.Path);
+                    continue;
+                }
+
+                // The user cancelled: a row the child reported takes its own verdict as it stands, and
+                // the next scan refreshes what it shows. Re-inspecting here could not be cancelled, and
+                // would keep the apply running row by row after Cancel.
+                if (reported && outcome.Status == ElevatedApplyStatus.Cancelled)
+                {
+                    var desiredState = row.Entry.DesiredVisibility == DesiredVisibility.Hidden
+                        ? ActualState.Hidden
+                        : ActualState.Visible;
+                    row.ActualState = ok ? desiredState : ActualState.Unknown;
+                    if (ok) applied++;
+                    else
+                    {
+                        errors++;
+                        problemPaths.Add(row.Path);
+                    }
                     continue;
                 }
 

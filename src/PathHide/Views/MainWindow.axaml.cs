@@ -173,6 +173,9 @@ public partial class MainWindow : Window
     // Quitting).
     protected override void OnClosing(WindowClosingEventArgs e)
     {
+        if (SessionEnd.Is(e.CloseReason))
+            Log.EndingSession();
+
         if (!_workFinishedForClose && DataContext is MainWindowViewModel vm
             && (_finishingWork is not null || vm.HasWorkToFinish))
         {
