@@ -116,7 +116,7 @@
   "records.error": "エラー",
   "records.launch": "起動",
   "records.level": "レベル",
-  "records.levelAttention": "要対応",
+  "records.levelWarningsAndErrors": "警告とエラー",
   "records.levelDebug": "デバッグ",
   "records.levelError": "エラー",
   "records.levelInfo": "情報",

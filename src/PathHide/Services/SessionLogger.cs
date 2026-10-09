@@ -37,10 +37,17 @@ public sealed class SessionLogger : IDisposable
     internal static readonly TimeSpan DrainBound = TimeSpan.FromSeconds(5);
     internal static readonly TimeSpan SessionEndDrainBound = TimeSpan.FromSeconds(1);
 
+    // How many entries may wait for a stalled sink (logging-conventions: no unbounded pending records).
+    // A session writes tens of entries and a large apply with failures a few hundred, so this only fills
+    // while the sink is stalled; past it, entries are counted and dropped rather than written from the
+    // caller's thread, and the writer records how many once it catches up.
+    internal const int QueueCapacity = 1000;
+
     private readonly DateTimeOffset _sessionStart;
     private readonly string _session;
     private readonly ILogSink? _sink;
     private readonly string? _fallbackDirectory;
+    private int _dropped;
     private readonly BlockingCollection<LogEntry>? _queue;
     private readonly Thread? _writer;
     private readonly object _sinkGate = new();
@@ -77,7 +84,7 @@ public sealed class SessionLogger : IDisposable
 
         if (writeInBackground)
         {
-            _queue = new BlockingCollection<LogEntry>();
+            _queue = new BlockingCollection<LogEntry>(QueueCapacity);
             // A background thread, so a sink that never returns cannot keep the process alive.
             _writer = new Thread(WriteQueued) { IsBackground = true, Name = "PathHide log writer" };
             _writer.Start();
@@ -166,6 +173,8 @@ public sealed class SessionLogger : IDisposable
                     }
                     WriteFallback(Build(LogLevel.Error, "logger: the sink did not finish before closing",
                         null, new { waitedMs = (long)drainBound.TotalMilliseconds, left }), sinkError: null);
+                    if (TakeDroppedNote() is { } note)
+                        WriteFallback(note, sinkError: null);
                     _writer.Join();
                     _queue.Dispose();
                 }) { IsBackground = true, Name = "PathHide log fallback drain" };
@@ -194,6 +203,15 @@ public sealed class SessionLogger : IDisposable
         }
     }
 
+    /// <summary>A warning naming how many entries the full queue dropped since the last one, or null.</summary>
+    private LogEntry? TakeDroppedNote()
+    {
+        var dropped = Interlocked.Exchange(ref _dropped, 0);
+        return dropped == 0
+            ? null
+            : Build(LogLevel.Warn, "logger: entries dropped while the sink was busy", null, new { dropped });
+    }
+
     private void Submit(LogEntry entry)
     {
         if (_queue is null)
@@ -204,7 +222,8 @@ public sealed class SessionLogger : IDisposable
 
         try
         {
-            _queue.Add(entry);
+            if (!_queue.TryAdd(entry))
+                Interlocked.Increment(ref _dropped);
         }
         catch (InvalidOperationException)
         {
@@ -218,7 +237,11 @@ public sealed class SessionLogger : IDisposable
         try
         {
             foreach (var entry in _queue!.GetConsumingEnumerable())
+            {
                 Write(entry);
+                if (TakeDroppedNote() is { } note)
+                    Write(note);
+            }
         }
         finally { CloseSink(); }
     }

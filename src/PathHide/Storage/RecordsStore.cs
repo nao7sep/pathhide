@@ -15,7 +15,9 @@ public sealed class RecordsStore : ILogSink
 {
     public const string FileName = "records.sqlite3";
 
-    // No retention: logging conventions, Never deleted. The session index serves reading one launch's
+    // No pruning: records are kept until an approved retention policy says otherwise, and none has been
+    // needed (data-lifecycle-conventions, Retention; logging-conventions, Retention). The session index
+    // serves reading one launch's
     // entries in order and listing the launches; the time index serves the records window's pages,
     // newest first (RecordsReader).
     private const string Schema = @"

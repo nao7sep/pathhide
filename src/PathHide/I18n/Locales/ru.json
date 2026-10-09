@@ -137,7 +137,7 @@
   "records.error": "Ошибка",
   "records.launch": "Запуск",
   "records.level": "Уровень",
-  "records.levelAttention": "Требует внимания",
+  "records.levelWarningsAndErrors": "Предупреждения и ошибки",
   "records.levelDebug": "Отладка",
   "records.levelError": "Ошибка",
   "records.levelInfo": "Информация",

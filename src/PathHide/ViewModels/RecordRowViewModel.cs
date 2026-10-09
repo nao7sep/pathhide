@@ -52,7 +52,7 @@ public abstract class RecordFilterOption : ObservableObject
     internal void Retranslate() => OnPropertyChanged(nameof(Label));
 }
 
-/// <summary>A level choice: one level, every record that needs attention, or all of them (null).</summary>
+/// <summary>A level choice: one level, every warning and error, or all of them (null).</summary>
 public sealed class RecordLevelOption(RecordLevelFilter? level) : RecordFilterOption
 {
     public RecordLevelFilter? Level { get; } = level;
@@ -60,7 +60,7 @@ public sealed class RecordLevelOption(RecordLevelFilter? level) : RecordFilterOp
     public override string Label => Level switch
     {
         null => Localizer.T("records.allLevels"),
-        RecordLevelFilter.Attention => Localizer.T("records.levelAttention"),
+        RecordLevelFilter.WarningsAndErrors => Localizer.T("records.levelWarningsAndErrors"),
         RecordLevelFilter.Error => Localizer.T("records.levelError"),
         RecordLevelFilter.Warn => Localizer.T("records.levelWarn"),
         RecordLevelFilter.Info => Localizer.T("records.levelInfo"),

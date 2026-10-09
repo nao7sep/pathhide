@@ -162,7 +162,10 @@ public sealed class ElevatedApplicator : IElevatedApplicator
 
         if (status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted)
         {
-            files.TryDelete();
+            // The files name the user's paths; one that outlives the child is worth a line, and the
+            // next launch's sweep retries it.
+            if (!files.TryDelete())
+                Log.Warn("elevated apply: could not remove the finished child's files; the next launch retries");
             var exitCode = await run.ConfigureAwait(false);
             if (status == ElevatedApplyStatus.Completed)
                 Log.Info("elevated apply: exited", new { exitCode, reported = results.Count });

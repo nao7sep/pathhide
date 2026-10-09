@@ -123,7 +123,7 @@
   "records.error": "Error",
   "records.launch": "Launch",
   "records.level": "Level",
-  "records.levelAttention": "Needs attention",
+  "records.levelWarningsAndErrors": "Warnings and errors",
   "records.levelDebug": "Debug",
   "records.levelError": "Error",
   "records.levelInfo": "Info",

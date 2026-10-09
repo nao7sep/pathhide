@@ -116,7 +116,7 @@
   "records.error": "错误",
   "records.launch": "启动",
   "records.level": "级别",
-  "records.levelAttention": "需要关注",
+  "records.levelWarningsAndErrors": "警告和错误",
   "records.levelDebug": "调试",
   "records.levelError": "错误",
   "records.levelInfo": "信息",

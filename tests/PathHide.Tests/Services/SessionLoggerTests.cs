@@ -373,6 +373,31 @@ public sealed class SessionLoggerTests
     }
 
     [Fact]
+    public void A_stalled_sink_holds_a_bounded_queue_and_the_writer_says_how_many_it_dropped()
+    {
+        using var temp = new TempDirectory();
+        var sink = new BlockingSink();
+        var log = new SessionLogger(SessionStart, sink, temp.Path, debugEnabled: true, writeInBackground: true);
+        try
+        {
+            log.Info("stuck");
+            Assert.True(sink.Entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+            for (var i = 0; i < SessionLogger.QueueCapacity + 5; i++)
+                log.Info("queued");
+
+            sink.Release.Set();
+            log.Close(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(1 + SessionLogger.QueueCapacity, sink.Messages.Count(message => message is "stuck" or "queued"));
+            Assert.Contains("logger: entries dropped while the sink was busy", sink.Messages);
+        }
+        finally
+        {
+            sink.Release.Set();
+        }
+    }
+
+    [Fact]
     public void An_entry_after_a_background_logger_closes_goes_to_the_fallback_file()
     {
         using var temp = new TempDirectory();

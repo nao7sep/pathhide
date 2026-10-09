@@ -130,7 +130,7 @@
   "records.error": "Erro",
   "records.launch": "Inicialização",
   "records.level": "Nível",
-  "records.levelAttention": "Requer atenção",
+  "records.levelWarningsAndErrors": "Avisos e erros",
   "records.levelDebug": "Depuração",
   "records.levelError": "Erro",
   "records.levelInfo": "Informação",

@@ -93,17 +93,17 @@ public sealed class RecordsReaderTests : IDisposable
     }
 
     [Fact]
-    public async Task Needs_attention_is_every_warning_and_error_and_a_level_is_just_that_level()
+    public async Task Warnings_and_errors_is_every_warning_and_error_and_a_level_is_just_that_level()
     {
         Write(1, "e", "error");
         Write(2, "w", "warn");
         Write(3, "i", "info");
         Write(4, "d", "debug");
 
-        var attention = await _reader.ReadPageAsync(All() with { Level = RecordLevelFilter.Attention });
+        var warningsAndErrors = await _reader.ReadPageAsync(All() with { Level = RecordLevelFilter.WarningsAndErrors });
         var debug = await _reader.ReadPageAsync(All() with { Level = RecordLevelFilter.Debug });
 
-        Assert.Equal(["w", "e"], attention.Records.Select(record => record.Message));
+        Assert.Equal(["w", "e"], warningsAndErrors.Records.Select(record => record.Message));
         Assert.Equal("d", Assert.Single(debug.Records).Message);
     }
 

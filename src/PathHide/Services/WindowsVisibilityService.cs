@@ -41,7 +41,9 @@ public sealed class WindowsVisibilityService : IVisibilityService
         }
         catch (Exception ex)
         {
-            Log.Debug("inspect: failed", ex, new { path });
+            // Unexpected, unlike the missing and access-denied cases above: the row shows Error, and the
+            // cause is kept at warn so a release build can explain it.
+            Log.Warn("inspect: failed", ex, new { path });
             return new PathInspection(ActualState.Error, ItemKind.Unknown);
         }
     }

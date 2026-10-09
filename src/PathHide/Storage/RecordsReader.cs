@@ -8,7 +8,7 @@ namespace PathHide.Storage;
 /// <summary>What the level filter offers: a record's own level, or every record at warn or error.</summary>
 public enum RecordLevelFilter
 {
-    Attention,
+    WarningsAndErrors,
     Error,
     Warn,
     Info,
@@ -101,7 +101,7 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
         }
         if (query.Level is { } level)
         {
-            if (level == RecordLevelFilter.Attention)
+            if (level == RecordLevelFilter.WarningsAndErrors)
             {
                 where.Add("level IN ('warn', 'error')");
             }
@@ -189,6 +189,6 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
         RecordLevelFilter.Warn => "warn",
         RecordLevelFilter.Info => "info",
         RecordLevelFilter.Debug => "debug",
-        _ => throw new ArgumentOutOfRangeException(nameof(level), level, "Attention is not one level."),
+        _ => throw new ArgumentOutOfRangeException(nameof(level), level, "Warnings and errors is not one level."),
     };
 }

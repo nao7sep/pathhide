@@ -75,7 +75,7 @@ public sealed class RecordsViewModelTests
     }
 
     [AvaloniaFact]
-    public void Every_filter_is_off_when_it_opens_and_needs_attention_comes_first_among_the_levels()
+    public void Every_filter_is_off_when_it_opens_and_warnings_and_errors_comes_first_among_the_levels()
     {
         var vm = Started();
 
@@ -83,9 +83,9 @@ public sealed class RecordsViewModelTests
         Assert.Null(vm.SelectedLevel.Level);
         Assert.Null(vm.SelectedLaunch.Session);
         Assert.Equal(
-            [null, RecordLevelFilter.Attention, RecordLevelFilter.Error, RecordLevelFilter.Warn, RecordLevelFilter.Info, RecordLevelFilter.Debug],
+            [null, RecordLevelFilter.WarningsAndErrors, RecordLevelFilter.Error, RecordLevelFilter.Warn, RecordLevelFilter.Info, RecordLevelFilter.Debug],
             vm.LevelOptions.Select(option => option.Level));
-        Assert.Equal(["All levels", "Needs attention", "Error", "Warning", "Info", "Debug"], vm.LevelOptions.Select(option => option.Label));
+        Assert.Equal(["All levels", "Warnings and errors", "Error", "Warning", "Info", "Debug"], vm.LevelOptions.Select(option => option.Label));
     }
 
     [AvaloniaFact]
@@ -107,9 +107,9 @@ public sealed class RecordsViewModelTests
         var vm = Started();
         Answer(false, Record(1));
 
-        vm.SelectedLevel = vm.LevelOptions.Single(option => option.Level == RecordLevelFilter.Attention);
+        vm.SelectedLevel = vm.LevelOptions.Single(option => option.Level == RecordLevelFilter.WarningsAndErrors);
         Settle();
-        Assert.Equal(RecordLevelFilter.Attention, _reader.LastPage.Query.Level);
+        Assert.Equal(RecordLevelFilter.WarningsAndErrors, _reader.LastPage.Query.Level);
         Answer(false);
 
         vm.SelectedLaunch = vm.LaunchOptions[1];
@@ -128,7 +128,7 @@ public sealed class RecordsViewModelTests
         Settle();
 
         Assert.Equal(reads + 1, _reader.Pages.Count);
-        Assert.Equal(new RecordsQuery(ThisLaunch, RecordLevelFilter.Attention, "save", null), _reader.LastPage.Query);
+        Assert.Equal(new RecordsQuery(ThisLaunch, RecordLevelFilter.WarningsAndErrors, "save", null), _reader.LastPage.Query);
     }
 
     [AvaloniaFact]
