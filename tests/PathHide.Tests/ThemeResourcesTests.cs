@@ -85,6 +85,38 @@ public sealed class ThemeResourcesTests
             $"{theme}: dialog separator ({separatorKey}) contrast {separatorContrast:F2} is fainter than the control border's {controlContrast:F2}");
     }
 
+    // Each line kind's contrast target, against the colours each is painted beside, in both themes
+    // (interface-styling conventions): band edges and dividers 1.35-1.70, control edges 2.0-2.5.
+    [Theory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public void EveryLineKindMeetsItsTargetWhereItIsPainted(string theme)
+    {
+        var b = ThemeBrushes(theme);
+        foreach (var (line, beside) in new[]
+        {
+            ("BorderBrush", "AppBackgroundBrush"),
+            ("BorderBrush", "SurfaceBrush"),
+            ("StatusBorderBrush", "AppBackgroundBrush"),
+        })
+        {
+            var ratio = Contrast(b[line], b[beside]);
+            Assert.True(ratio is >= 1.35 and <= 1.70, $"{theme}: band edge {line} beside {beside} is {ratio:F2}:1");
+        }
+
+        foreach (var (line, beside) in new[]
+        {
+            ("ControlEdgeBrush", "AppBackgroundBrush"),
+            ("ControlEdgeBrush", "SurfaceBrush"),
+            ("CheckBoxCheckBackgroundStrokeUnchecked", "AppBackgroundBrush"),
+            ("RadioButtonOuterEllipseStroke", "AppBackgroundBrush"),
+        })
+        {
+            var ratio = Contrast(b[line], b[beside]);
+            Assert.True(ratio is >= 2.0 and <= 2.5, $"{theme}: control edge {line} beside {beside} is {ratio:F2}:1");
+        }
+    }
+
     [Fact]
     public void WhiteLabelsKeepHighContrastOnEveryActionFill()
     {

@@ -14,14 +14,17 @@
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F6F8FA"/>
                     <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF"/>
-                    <SolidColorBrush x:Key="BorderBrush" Color="#D8DEE8"/>
+                    <!-- Lines are measured against the colour painted beside them, in both themes
+                         (interface-styling conventions, line kinds): BorderBrush draws band edges and
+                         section dividers, 1.35-1.70; ControlEdgeBrush draws control edges, 2.0-2.5. -->
+                    <SolidColorBrush x:Key="BorderBrush" Color="#C8CFD9"/>
                     <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1F2430"/>
                     <SolidColorBrush x:Key="TextSecondaryBrush" Color="#586070"/>
                     <!-- The scroll-bar thumb in the app's palette: every region here floats its bar,
                          which is the brush that one reads (app-chrome conventions). -->
                     <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#586070"/>
                     <SolidColorBrush x:Key="StatusBackgroundBrush" Color="#F8FAFC"/>
-                    <SolidColorBrush x:Key="StatusBorderBrush" Color="#D8DEE8"/>
+                    <SolidColorBrush x:Key="StatusBorderBrush" Color="#C8CFD9"/>
                     <SolidColorBrush x:Key="StatusAccentBrush" Color="#1D4ED8"/>
                     <SolidColorBrush x:Key="DangerTextBrush" Color="#DC2626"/>
                     <!-- A warning read as letters, as the records window's level marks are. -->
@@ -33,8 +36,16 @@
                     <SolidColorBrush x:Key="ControlBrush" Color="#FFFFFF"/>
                     <SolidColorBrush x:Key="ControlHoverBrush" Color="#EEF2F7"/>
                     <SolidColorBrush x:Key="ControlPressedBrush" Color="#E1E7EF"/>
-                    <SolidColorBrush x:Key="ControlEdgeBrush" Color="#B0B8C3"/>
-                    <SolidColorBrush x:Key="ControlEdgeHoverBrush" Color="#959FAE"/>
+                    <SolidColorBrush x:Key="ControlEdgeBrush" Color="#A0A8B4"/>
+                    <SolidColorBrush x:Key="ControlEdgeHoverBrush" Color="#8892A1"/>
+                    <!-- Fluent draws the checkbox and radio outlines from its own keys, far stronger
+                         than any other control edge; they take the app's control edge instead. -->
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUnchecked" Color="#A0A8B4"/>
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" Color="#8892A1"/>
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUncheckedPressed" Color="#8892A1"/>
+                    <SolidColorBrush x:Key="RadioButtonOuterEllipseStroke" Color="#A0A8B4"/>
+                    <SolidColorBrush x:Key="RadioButtonOuterEllipseStrokePointerOver" Color="#8892A1"/>
+                    <SolidColorBrush x:Key="RadioButtonOuterEllipseStrokePressed" Color="#8892A1"/>
                     <SolidColorBrush x:Key="FieldBrush" Color="#FFFFFF"/>
                     <SolidColorBrush x:Key="RowHoverBrush" Color="#F1F4F9"/>
                     <SolidColorBrush x:Key="RowPressedBrush" Color="#E6EBF2"/>
@@ -62,8 +73,14 @@
                     <SolidColorBrush x:Key="ControlBrush" Color="#232932"/>
                     <SolidColorBrush x:Key="ControlHoverBrush" Color="#2B323D"/>
                     <SolidColorBrush x:Key="ControlPressedBrush" Color="#343C48"/>
-                    <SolidColorBrush x:Key="ControlEdgeBrush" Color="#5A6473"/>
+                    <SolidColorBrush x:Key="ControlEdgeBrush" Color="#4B5461"/>
                     <SolidColorBrush x:Key="ControlEdgeHoverBrush" Color="#788496"/>
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUnchecked" Color="#4B5461"/>
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" Color="#788496"/>
+                    <SolidColorBrush x:Key="CheckBoxCheckBackgroundStrokeUncheckedPressed" Color="#788496"/>
+                    <SolidColorBrush x:Key="RadioButtonOuterEllipseStroke" Color="#4B5461"/>
+                    <SolidColorBrush x:Key="RadioButtonOuterEllipseStrokePointerOver" Color="#788496"/>
+                    <SolidColorBrush x:Key="RadioButtonOuterEllipseStrokePressed" Color="#788496"/>
                     <SolidColorBrush x:Key="FieldBrush" Color="#1A1E24"/>
                     <SolidColorBrush x:Key="RowHoverBrush" Color="#262C35"/>
                     <SolidColorBrush x:Key="RowPressedBrush" Color="#2B323D"/>
