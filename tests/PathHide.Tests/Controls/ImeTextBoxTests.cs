@@ -129,9 +129,14 @@ public sealed class ImeTextBoxTests : WindowTest
         var cursorChanges = 0;
         client.CursorRectangleChanged += (_, _) => cursorChanges++;
 
+        var previousRectangle = client.CursorRectangle;
         client.SetPreeditText("にほん", 2);
 
         Assert.Equal("にほん", presenter.PreeditText);
+        // Avalonia 12.1.3 measures the preedit caret during layout, then notifies native IME.
+        // Text remains synchronous; requiring its new rectangle before layout tests obsolete timing.
+        box.UpdateLayout();
+        Assert.NotEqual(previousRectangle, client.CursorRectangle);
         Assert.True(cursorChanges > 0);
     }
 

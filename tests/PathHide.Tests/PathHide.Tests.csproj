@@ -11,22 +11,23 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="coverlet.collector" Version="10.0.1">
+    <PackageReference Include="coverlet.collector" Version="10.1.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
-    <!-- Avalonia.Headless.XUnit 12.1.2 calls xUnit 3.2.2 discovery internals and fails
-         discovery under xUnit 4. Keep this pair until Avalonia publishes compatible integration. -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <!-- Avalonia.Headless.XUnit 12.1.3 is built against xUnit 3.2.2 and still calls the
+         GetTestCaseDetails overload removed in xUnit 4. Keep the framework pinned until
+         Avalonia updates its discovery and runner integration. -->
     <PackageReference Include="xunit.v3" Version="3.2.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <!-- Official xUnit headless integration ([AvaloniaFact]); depends on xunit.v3. Lets the
          scan-lifecycle tests run on a real dispatcher/UI thread, matching how the view model
          marshals scan progress in the app. -->
-    <PackageReference Include="Avalonia.Headless.XUnit" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Headless.XUnit" Version="12.1.3" />
   </ItemGroup>
 
   <ItemGroup>
