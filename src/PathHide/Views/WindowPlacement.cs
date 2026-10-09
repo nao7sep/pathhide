@@ -36,15 +36,15 @@ internal sealed class WindowPlacement
 
     /// <summary>
     /// Applies a saved rectangle, and on Windows its maximized state, before the window is shown. A
-    /// rectangle that no screen can show is left unused, so the window opens at its designed size
-    /// where the toolkit puts it. <paramref name="prepare"/> runs first with the screen it lands on.
+    /// rectangle whose title bar no screen shows grabbably is discarded as a unit, so the window opens
+    /// at its designed size where the toolkit puts it. <paramref name="prepare"/> runs first with the screen it lands on.
     /// </summary>
     internal void Restore(int? x, int? y, double? width, double? height, bool maximized, Action<Screen>? prepare = null)
     {
         try
         {
             var target = _window.Screens.All.FirstOrDefault(screen =>
-                WindowMetrics.CanRestoreWindowGeometry(x, y, width, height, [screen.WorkingArea]));
+                WindowMetrics.CanRestoreWindowGeometry(x, y, width, height, screen.WorkingArea, screen.Scaling));
             if (target is null)
                 return;
 

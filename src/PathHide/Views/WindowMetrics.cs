@@ -24,21 +24,34 @@ public static class WindowMetrics
             ? Avalonia.Controls.WindowState.Maximized
             : Avalonia.Controls.WindowState.Normal;
 
+    // What "usable or recoverable" means for a restored window (window-conventions, Placement): its title
+    // bar can be grabbed and dragged with ordinary window interaction. So the band where the native
+    // title bar is drawn on both platforms (about 28 pt on macOS, 31 px at 100 % on Windows) must lie
+    // inside one working area from top to bottom (above it, the macOS menu bar or the screen edge takes
+    // the clicks), and enough of its width to grab must be on that screen. Values in device-independent
+    // units, scaled by the screen.
+    private const double TitleBandHeight = 32;
+    private const double GrabWidth = 120;
+
     public static bool CanRestoreWindowGeometry(
         int? x, int? y, double? width, double? height,
-        IEnumerable<Avalonia.PixelRect> workingAreas)
+        Avalonia.PixelRect workingArea, double scale)
     {
         if (x is not { } savedX || y is not { } savedY
             || width is not > 0 || height is not > 0
-            || !double.IsFinite(width.Value) || !double.IsFinite(height.Value))
+            || !double.IsFinite(width.Value) || !double.IsFinite(height.Value)
+            || workingArea.Width <= 0 || workingArea.Height <= 0 || scale <= 0)
         {
             return false;
         }
 
-        return workingAreas.Any(area =>
-            area.Width > 0 && area.Height > 0
-            && savedX >= area.X && savedX < (long)area.X + area.Width
-            && savedY >= area.Y && savedY < (long)area.Y + area.Height);
+        var band = TitleBandHeight * scale;
+        if (savedY < workingArea.Y || savedY + band > (long)workingArea.Y + workingArea.Height)
+            return false;
+
+        var left = System.Math.Max((double)savedX, workingArea.X);
+        var right = System.Math.Min(savedX + width.Value * scale, (double)workingArea.X + workingArea.Width);
+        return right - left >= System.Math.Min(width.Value, GrabWidth) * scale;
     }
 
     public static bool IsMaximizedGeometry(

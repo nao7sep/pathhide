@@ -121,6 +121,48 @@ public sealed class RecordsWindowTests : WindowTest
         Assert.Equal(640, owner.RecordsListWidth);
     }
 
+    private static void Press(GridSplitter splitter, Key key)
+    {
+        splitter.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key });
+        splitter.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = key });
+    }
+
+    [AvaloniaFact]
+    public void The_keyboard_steps_the_list_by_16_and_Home_and_End_go_to_its_bounds_each_saved_once()
+    {
+        var (window, _) = ShowRecords(Owner(new AppState { RecordsListWidth = 500 }));
+        Settle(window);
+        var splitter = window.FindControl<GridSplitter>("Splitter")!;
+
+        Press(splitter, Avalonia.Input.Key.Right);
+        WaitFor(() => _stateStore.SaveCount == 1);
+        Assert.Equal(516, _stateStore.LastSaved!.RecordsListWidth);
+
+        Press(splitter, Avalonia.Input.Key.Home);
+        WaitFor(() => _stateStore.SaveCount == 2);
+        Assert.Equal(RecordsLayout.ListMin, _stateStore.LastSaved!.RecordsListWidth);
+
+        Press(splitter, Avalonia.Input.Key.End);
+        WaitFor(() => _stateStore.SaveCount == 3);
+        Assert.Equal(RecordsLayout.ListMax, _stateStore.LastSaved!.RecordsListWidth);
+        Settle(window);
+        Assert.Equal(RecordsLayout.ListMax, ListColumn(window).Width.Value);
+    }
+
+    [AvaloniaFact]
+    public void A_key_that_moves_nothing_saves_nothing()
+    {
+        var (window, _) = ShowRecords(Owner(new AppState { RecordsListWidth = RecordsLayout.ListMax }));
+        Settle(window);
+        var splitter = window.FindControl<GridSplitter>("Splitter")!;
+
+        Press(splitter, Avalonia.Input.Key.End);
+        Press(splitter, Avalonia.Input.Key.Right);
+        Settle(window);
+
+        Assert.Equal(0, _stateStore.SaveCount);
+    }
+
     [AvaloniaFact]
     public void A_narrower_window_narrows_the_list_and_saves_nothing_and_the_width_returns_with_the_room()
     {

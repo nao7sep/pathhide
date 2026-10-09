@@ -204,7 +204,7 @@
         </Border>
 
         <GridSplitter Grid.Column="1" x:Name="Splitter"
-                      Background="Transparent" ResizeDirection="Columns"
+                      Background="Transparent" ResizeDirection="Columns" KeyboardIncrement="16"
                       i18n:Localized.AutomationName="records.resizeList"/>
 
         <Border Grid.Column="2" Classes="recordsPane">

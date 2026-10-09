@@ -30,6 +30,8 @@ public partial class RecordsWindow : Window
 
     // The list width the user last dragged to: window conventions, Content-based minimum size.
     private double _listIntent;
+    // A keyboard change not yet saved: committed on key release or when the splitter loses focus.
+    private bool _keyedChange;
 
     /// <summary>For the XAML previewer only.</summary>
     public RecordsWindow()
@@ -76,7 +78,15 @@ public partial class RecordsWindow : Window
         // The filters' height follows the UI font, which Settings can change while this is open.
         FiltersBand.SizeChanged += (_, e) => MinHeight = RecordsLayout.MinHeightFor(e.NewSize.Height);
         Splitter.DragCompleted += (_, _) => CommitListWidth();
+        // handledEventsToo: the splitter handles its own arrow steps (KeyboardIncrement) before a bubbling
+        // handler would see them.
+        Splitter.AddHandler(KeyDownEvent, OnSplitterKeyDown, handledEventsToo: true);
         Splitter.KeyUp += OnSplitterKeyUp;
+        Splitter.LostFocus += (_, _) =>
+        {
+            if (_keyedChange)
+                CommitListWidth();
+        };
 
         RecordList.TemplateApplied += OnListTemplateApplied;
         records.PageApplied += OnPageApplied;
@@ -135,10 +145,15 @@ public partial class RecordsWindow : Window
         DetailColumn.Width = GridLength.Star;
     }
 
-    // Only a finished drag, or a keyboard step, saves; a resize never does.
+    // Only a finished drag, or a keyboard change, saves, and only a width that moved; a resize never does.
     private void CommitListWidth()
     {
-        _listIntent = RecordsLayout.Intent(ListColumn.ActualWidth);
+        _keyedChange = false;
+        // The splitter and Home/End set a pixel width; read it before layout has caught up.
+        var intent = RecordsLayout.Intent(ListColumn.Width.IsAbsolute ? ListColumn.Width.Value : ListColumn.ActualWidth);
+        if (intent == _listIntent)
+            return;
+        _listIntent = intent;
         ApplyListWidth();
         _ = SaveListWidthAsync(_listIntent);
     }
@@ -156,9 +171,27 @@ public partial class RecordsWindow : Window
         }
     }
 
-    private void OnSplitterKeyUp(object? sender, KeyEventArgs e)
+    // Arrows step by the splitter's KeyboardIncrement; Home and End go to the list's bounds.
+    private void OnSplitterKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key is Key.Left or Key.Right)
+        {
+            _keyedChange = true;
+            return;
+        }
+        if (e.Key is not (Key.Home or Key.End))
+            return;
+
+        var available = Shell.Bounds.Width > 0 ? Shell.Bounds.Width : Width - RecordsLayout.Padding * 2;
+        var target = e.Key == Key.Home ? RecordsLayout.ListMin : RecordsLayout.ListMax;
+        ListColumn.Width = new GridLength(RecordsLayout.DisplayedListWidth(target, available));
+        _keyedChange = true;
+        e.Handled = true;
+    }
+
+    private void OnSplitterKeyUp(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Left or Key.Right or Key.Home or Key.End)
             CommitListWidth();
     }
 

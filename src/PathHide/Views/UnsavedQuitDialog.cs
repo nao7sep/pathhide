@@ -9,13 +9,13 @@ using PathHide.ViewModels;
 namespace PathHide.Views;
 
 /// <summary>
-/// The question a quit the user started asks when a save of theirs did not land: Retry, the default,
-/// or Quit anyway. Escape and closing the dialog keep the app open (unsaved-edits-conventions,
-/// Quitting).
+/// The question a quit the user started asks when a save of theirs did not land: Cancel, Retry (the
+/// default) or Quit anyway. Cancel, Escape and closing the dialog keep the app open
+/// (unsaved-edits-conventions, Quitting; modal-dialog-conventions, a labelled dismiss).
 /// </summary>
 public sealed class UnsavedQuitDialog : DialogBase
 {
-    private UnsavedQuitDialog(IReadOnlyList<Message> lines)
+    internal UnsavedQuitDialog(IReadOnlyList<Message> lines)
     {
         Width = 440;
         // Rendered once, as it is built: it is modal, so the language cannot change while it is up.
@@ -32,6 +32,7 @@ public sealed class UnsavedQuitDialog : DialogBase
 
         var buttons = SetButtons(
         [
+            new DialogButton("common.cancel", "cancel"),
             new DialogButton("quit.retry", "retry", DialogButtonKind.Primary) { IsDefault = true },
             new DialogButton("quit.quitAnyway", "quitAnyway", DialogButtonKind.Danger),
         ]);
@@ -39,15 +40,17 @@ public sealed class UnsavedQuitDialog : DialogBase
         SetInitialFocus(buttons["retry"]);
     }
 
+    internal UnsavedQuitChoice Choice => ResultTag switch
+    {
+        "retry" => UnsavedQuitChoice.Retry,
+        "quitAnyway" => UnsavedQuitChoice.QuitAnyway,
+        _ => UnsavedQuitChoice.KeepOpen,
+    };
+
     public static async Task<UnsavedQuitChoice> AskAsync(Window owner, IReadOnlyList<Message> lines)
     {
         var dialog = new UnsavedQuitDialog(lines);
         await dialog.ShowBoundedAsync(owner);
-        return dialog.ResultTag switch
-        {
-            "retry" => UnsavedQuitChoice.Retry,
-            "quitAnyway" => UnsavedQuitChoice.QuitAnyway,
-            _ => UnsavedQuitChoice.KeepOpen,
-        };
+        return dialog.Choice;
     }
 }

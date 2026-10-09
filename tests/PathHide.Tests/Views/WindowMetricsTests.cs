@@ -32,19 +32,45 @@ public sealed class WindowMetricsTests
         Assert.Equal(expected, WindowMetrics.RestoredWindowState(maximized, isWindows));
     }
 
+    private static bool OnAnyScreen(int? x, int? y, double? width, double? height, double scale = 1) =>
+        new Avalonia.PixelRect[] { new(-1920, -1080, 1920, 1080), new(0, 0, 2560, 1440) }
+            .Any(area => WindowMetrics.CanRestoreWindowGeometry(x, y, width, height, area, scale));
+
     [Fact]
     public void Saved_window_geometry_accepts_negative_coordinates_on_a_current_screen()
     {
-        Avalonia.PixelRect[] workingAreas =
-        [
-            new(-1920, -1080, 1920, 1080),
-            new(0, 0, 2560, 1440),
-        ];
+        Assert.True(OnAnyScreen(-1800, -1000, 1280, 720));
+        Assert.True(OnAnyScreen(0, 0, 1280, 720));
+        Assert.False(OnAnyScreen(-2500, 0, 1280, 720));
+        Assert.False(OnAnyScreen(2560, 0, 1280, 720));
+    }
 
-        Assert.True(WindowMetrics.CanRestoreWindowGeometry(-1800, -1000, 1280, 720, workingAreas));
-        Assert.True(WindowMetrics.CanRestoreWindowGeometry(0, 0, 1280, 720, workingAreas));
-        Assert.False(WindowMetrics.CanRestoreWindowGeometry(-2500, 0, 1280, 720, workingAreas));
-        Assert.False(WindowMetrics.CanRestoreWindowGeometry(2560, 0, 1280, 720, workingAreas));
+    [Theory]
+    // Only a corner left on the screen: the title bar cannot be grabbed.
+    [InlineData(2550, 1430, false)]
+    // The title bar below the bottom of the working area.
+    [InlineData(100, 1420, false)]
+    // The title bar above the top, where the menu bar or the screen edge takes the clicks.
+    [InlineData(100, -10, false)]
+    // Less than a grabbable stretch of the title bar on the screen, on either side.
+    [InlineData(2500, 100, false)]
+    [InlineData(-1220, 100, false)]
+    // Most of the window off the side, but a grabbable stretch of title bar left.
+    [InlineData(2400, 100, true)]
+    [InlineData(-1100, 100, true)]
+    public void Restored_geometry_needs_a_grabbable_title_bar(int x, int y, bool restorable)
+    {
+        Assert.Equal(restorable, OnAnyScreen(x, y, 1280, 720));
+    }
+
+    [Fact]
+    public void The_title_bar_band_scales_with_the_screen()
+    {
+        var area = new Avalonia.PixelRect(0, 0, 2560, 1440);
+
+        // 40 px left at the bottom holds the 32 pt band at 1x but not at 2x.
+        Assert.True(WindowMetrics.CanRestoreWindowGeometry(0, 1400, 1280, 720, area, 1));
+        Assert.False(WindowMetrics.CanRestoreWindowGeometry(0, 1400, 1280, 720, area, 2));
     }
 
     [Theory]
@@ -59,7 +85,7 @@ public sealed class WindowMetricsTests
         int? x, int? y, double? width, double? height)
     {
         Assert.False(WindowMetrics.CanRestoreWindowGeometry(
-            x, y, width, height, [new Avalonia.PixelRect(0, 0, 1920, 1080)]));
+            x, y, width, height, new Avalonia.PixelRect(0, 0, 1920, 1080), 1));
     }
 
     [Theory]

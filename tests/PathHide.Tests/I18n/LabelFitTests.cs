@@ -77,6 +77,19 @@ public class LabelFitTests : WindowTest
 
     [AvaloniaTheory]
     [MemberData(nameof(Tags))]
+    public void the_unsaved_quit_dialog_clips_nothing(string tag)
+    {
+        using var speaking = Localizer.Speaking(tag);
+
+        var dialog = Show(new UnsavedQuitDialog(
+            [Message.Of("failure.pathListSave"), Message.Of("quit.unsavedMessage")]));
+
+        // Its body wraps by design; the three buttons share a fixed width.
+        AssertNothingClipped(dialog, tag, atLeast: 3);
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(Tags))]
     public async Task the_main_window_clips_nothing_at_its_default_size(string tag)
     {
         using var speaking = Localizer.Speaking(tag);
