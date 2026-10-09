@@ -239,7 +239,7 @@ public partial class DialogBase : Window
         // so the in-progress close is cancelled deterministically.
         e.Cancel = true;
         var (title, message) = DiscardPrompt;
-        if (await ConfirmDialog.ConfirmDestructiveAsync(this, title, message, "dialog.discard"))
+        if (await ConfirmDialog.ConfirmDestructiveAsync(this, title, message, "dialog.discard", "dialog.keepEditing"))
         {
             _bypassCloseGuard = true;
             Close();

@@ -129,6 +129,48 @@ public sealed class SettingsDialogTests
     }
 
     [AvaloniaFact]
+    public async Task KeepEditingRetainsTheDraftAndDiscardClosesWithoutSaving()
+    {
+        using var speaking = Localizer.Speaking("en");
+        var (_, settings, owner, dialog) = OpenDirtySettings();
+        try
+        {
+            dialog.Close();
+            Dispatcher.UIThread.RunJobs();
+            var question = dialog.OwnedWindows.OfType<ConfirmDialog>().Single();
+            Assert.Equal("Discard changes?", question.Title);
+            var keep = question.GetLogicalDescendants().OfType<Button>()
+                .Single(button => Equals(button.Tag, "cancel"));
+            Assert.Equal("Keep editing", keep.Content);
+            Assert.True(keep.IsDefault);
+            Assert.True(keep.IsFocused);
+            keep.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Task.Yield();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(dialog.IsVisible);
+            Assert.Equal("Menlo", dialog.GetLogicalDescendants().OfType<TextBox>().Single().Text);
+            Assert.Equal(0, settings.SaveCount);
+
+            dialog.Close();
+            Dispatcher.UIThread.RunJobs();
+            question = dialog.OwnedWindows.OfType<ConfirmDialog>().Single();
+            question.GetLogicalDescendants().OfType<Button>()
+                .Single(button => Equals(button.Tag, "confirm"))
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Task.Yield();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(dialog.IsVisible);
+            Assert.False(dialog.Accepted);
+            Assert.Equal(0, settings.SaveCount);
+        }
+        finally
+        {
+            owner.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
+    [AvaloniaFact]
     public async Task QuittingWithADirtyDraftDiscardsItWithoutWritingConfig()
     {
         // The draft lives only in the dialog: the main window closing at quit closes it without asking,

@@ -7,13 +7,13 @@ namespace PathHide.Views;
 
 /// <summary>
 /// The app's shared confirmation dialog. Shows a message with a specific, danger-styled
-/// action button (for example <c>Remove</c> or <c>Discard</c>) beside a neutral Cancel.
-/// Cancel is focused and Enter-activated, so a stray keypress or click never confirms a
+/// action button (for example <c>Remove</c> or <c>Discard</c>) beside a neutral dismissal action.
+/// The dismissal action is focused and Enter-activated, so a stray keypress or click never confirms a
 /// destructive action.
 /// </summary>
 public sealed class ConfirmDialog : DialogBase
 {
-    private ConfirmDialog(Message title, Message message, string confirmLabelKey)
+    private ConfirmDialog(Message title, Message message, string confirmLabelKey, string cancelLabelKey)
     {
         Width = 400;
         // A dialog's own words are rendered once, as it is built: it is modal, so the language cannot
@@ -29,7 +29,7 @@ public sealed class ConfirmDialog : DialogBase
 
         var buttons = SetButtons(
         [
-            new DialogButton("common.cancel", "cancel") { IsDefault = true },
+            new DialogButton(cancelLabelKey, "cancel") { IsDefault = true },
             new DialogButton(confirmLabelKey, "confirm", DialogButtonKind.Danger),
         ]);
 
@@ -43,9 +43,10 @@ public sealed class ConfirmDialog : DialogBase
     /// only if the user chooses the destructive action; Cancel, Escape, and window close all
     /// resolve to false, so the promise always settles on the safe path.
     /// </summary>
-    public static async Task<bool> ConfirmDestructiveAsync(Window owner, Message title, Message message, string confirmLabelKey)
+    public static async Task<bool> ConfirmDestructiveAsync(Window owner, Message title, Message message, string confirmLabelKey,
+        string cancelLabelKey = "common.cancel")
     {
-        var dialog = new ConfirmDialog(title, message, confirmLabelKey);
+        var dialog = new ConfirmDialog(title, message, confirmLabelKey, cancelLabelKey);
         await dialog.ShowBoundedAsync(owner);
         return dialog.Confirmed;
     }

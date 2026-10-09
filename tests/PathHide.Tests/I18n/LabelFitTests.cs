@@ -90,6 +90,25 @@ public class LabelFitTests : WindowTest
 
     [AvaloniaTheory]
     [MemberData(nameof(Tags))]
+    public async Task the_discard_question_clips_nothing(string tag)
+    {
+        using var speaking = Localizer.Speaking(tag);
+        var owner = Show(new Window());
+        var pending = ConfirmDialog.ConfirmDestructiveAsync(owner,
+            Message.Of("dialog.discardTitle"), Message.Of("dialog.discardMessage"),
+            "dialog.discard", "dialog.keepEditing");
+        var dialog = Track(owner.OwnedWindows.OfType<ConfirmDialog>().Single());
+        Dispatcher.UIThread.RunJobs();
+        AssertNothingClipped(dialog, tag, atLeast: 2);
+        var panel = dialog.FindControl<StackPanel>("ButtonPanel")!;
+        Assert.True(panel.Bounds.Width <= dialog.ClientSize.Width - 32,
+            $"{tag}: confirmation buttons exceed the footer width.");
+        dialog.Close();
+        Assert.False(await pending);
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(Tags))]
     public async Task the_main_window_clips_nothing_at_its_default_size(string tag)
     {
         using var speaking = Localizer.Speaking(tag);
