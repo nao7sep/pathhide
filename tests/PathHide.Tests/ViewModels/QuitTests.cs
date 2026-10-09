@@ -66,6 +66,25 @@ public sealed class QuitTests
     }
 
     [Fact(Timeout = 10_000)]
+    public async Task A_reload_released_after_the_quit_begins_changes_no_file_or_attribute()
+    {
+        var vm = CreateViewModel();
+        await vm.ScanTask;
+        using var gate = new ManualResetEventSlim(false);
+        _paths.LoadGate = gate;
+        var reload = ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
+
+        var quit = vm.QuitAsync();
+        gate.Set();
+        await reload;
+
+        Assert.True(await quit.WaitAsync(Guard, TestContext.Current.CancellationToken));
+        Assert.Equal(0, _paths.SaveCount);
+        Assert.Empty(_visibility.Hidden);
+        Assert.Empty(_visibility.Shown);
+    }
+
+    [Fact(Timeout = 10_000)]
     public async Task A_save_still_running_holds_the_quit_until_it_lands()
     {
         using var gate = new ManualResetEventSlim(false);

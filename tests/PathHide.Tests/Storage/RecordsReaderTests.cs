@@ -13,7 +13,7 @@ namespace PathHide.Tests.Storage;
 /// <summary>The records window's reads, against a real records database written by <see cref="RecordsStore"/>.</summary>
 public sealed class RecordsReaderTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "pathhide-records-reader-tests", NanoId.New());
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "pathhide-records-reader-tests", Guid.NewGuid().ToString("N"));
     private readonly RecordsStore _store;
     private readonly RecordsReader _reader;
 

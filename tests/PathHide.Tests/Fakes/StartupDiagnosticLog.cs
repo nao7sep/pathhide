@@ -7,7 +7,7 @@ namespace PathHide.Tests.Fakes;
 
 internal sealed class StartupDiagnosticLog : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "pathhide-startup-tests", NanoId.New());
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "pathhide-startup-tests", Guid.NewGuid().ToString("N"));
     internal TaskCompletionSource<LogEntry> Reported { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     internal StartupDiagnosticLog(string expectedMessage) => Log.Start(new Sink(expectedMessage, Reported), _root);

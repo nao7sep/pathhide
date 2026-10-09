@@ -4,11 +4,10 @@ using System.Globalization;
 namespace PathHide.Storage;
 
 /// <summary>
-/// The machine-paced UTC filename stamp — <c>yyyyMMdd-HHmmss-fff-utc</c> — for names the app assigns at
-/// runtime as part of its own operation. The one current use is <see cref="JsonStore{T}.QuarantinePath"/>'s
-/// <c>&lt;stem&gt;-&lt;stamp&gt;.invalid</c> quarantine name; the same form is what <see cref="Services.SessionLog"/>
-/// uses for a session's fallback log file, so the fleet has one machine-paced filename formatter rather than
-/// several (see the timestamp conventions).
+/// The UTC filename stamp — <c>yyyyMMdd-HHmmss-utc</c> — for names the app assigns at runtime. Its one use
+/// is <see cref="Services.SessionLog"/>'s fallback log file for a session. Second precision is enough: two
+/// sessions starting in the same second append to one file, which is harmless (see the timestamp
+/// conventions).
 /// </summary>
 /// <remarks>
 /// A <b>filename</b> stamp is deliberately distinct from the <b>serialized</b> ISO-8601-ms form
@@ -18,10 +17,10 @@ namespace PathHide.Storage;
 /// </remarks>
 public static class FileTimestamp
 {
-    private const string FileStampFormat = "yyyyMMdd-HHmmss-fff";
+    private const string FileStampFormat = "yyyyMMdd-HHmmss";
 
-    /// <summary>Filename-safe UTC stamp in the <c>yyyyMMdd-HHmmss-fff-utc</c> convention (the millisecond,
-    /// machine-paced form). The instant is converted to UTC, so the stamp never carries a local offset.</summary>
+    /// <summary>Filename-safe UTC stamp in the <c>yyyyMMdd-HHmmss-utc</c> form. The instant is converted to
+    /// UTC, so the stamp never carries a local offset.</summary>
     public static string FileStamp(DateTimeOffset value) =>
         value.ToUniversalTime().ToString(FileStampFormat, CultureInfo.InvariantCulture) + "-utc";
 

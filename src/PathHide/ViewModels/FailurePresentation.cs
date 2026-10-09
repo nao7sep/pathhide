@@ -16,7 +16,6 @@ public static class FailurePresentation
 
     public static Message SettingsSave(Exception error) => error switch
     {
-        NewerFormatException newer => NewerStore(newer),
         UnauthorizedAccessException => Message.Of("failure.settingsSavePermission"),
         TimeoutException => Message.Of("failure.settingsSaveTimeout"),
         _ => Message.Of("failure.settingsSave"),
@@ -31,9 +30,13 @@ public static class FailurePresentation
         _ => Message.Of("failure.pathListSave"),
     };
 
-    /// <summary>A path list PathHide cannot read, named by its path and left as it is.</summary>
+    /// <summary>
+    /// A path list PathHide cannot read, named by its path and left as it is: either the file could not
+    /// be opened, or its content is not a path list.
+    /// </summary>
     public static Message PathListUnreadable(UnreadableStoreException unreadable) =>
-        Message.Of("failure.pathListUnreadable", ("path", unreadable.Path));
+        Message.Of(unreadable.IsAccessFailure ? "failure.pathListUnreadableAccess" : "failure.pathListUnreadable",
+            ("path", unreadable.Path));
 
     /// <summary>A file a newer PathHide wrote, named by its path and left as it is.</summary>
     public static Message NewerStore(NewerFormatException newer) =>
@@ -51,10 +54,8 @@ public static class FailurePresentation
     public static Message Startup() =>
         Message.Of("failure.startupUnexpected", ("records", StorageRoot.RecordsFile), ("logs", StorageRoot.LogsDirectory));
 
-    /// <summary>A store that could not be read or set aside, named by its path and left as it is.</summary>
-    public static Message StartupUnreadable(UnreadableStoreException unreadable) =>
-        Message.Of("failure.startupData", ("path", unreadable.Path));
-
+    /// <summary>The startup halt for a path list that could not be opened, or whose content is not a path list.</summary>
     public static Message PathListStartup(UnreadableStoreException unreadable) =>
-        Message.Of("failure.pathListStartup", ("path", unreadable.Path));
+        Message.Of(unreadable.IsAccessFailure ? "failure.pathListStartupAccess" : "failure.pathListStartup",
+            ("path", unreadable.Path));
 }

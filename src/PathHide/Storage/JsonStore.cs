@@ -9,23 +9,26 @@ using PathHide.Services;
 namespace PathHide.Storage;
 
 /// <summary>
-/// Generic JSON-backed store with atomic replace (write-to-temp-then-rename).
-/// A missing file yields the type's default-constructed value; a present but
-/// unparseable file is quarantined aside, bytes preserved, before the default
-/// is returned (storage-path conventions), or, for a store holding the user's work
-/// product, left in place (store-recovery-conventions).
+/// Generic JSON-backed store with atomic replace (write-to-temp-then-rename). A missing file yields the
+/// type's default-constructed value. What a present file that cannot be used yields depends on what the
+/// store holds (store-recovery-conventions):
+/// <list type="bullet">
+///   <item>A store holding the user's work product (<c>haltWhenUnreadable</c>) is left exactly in place:
+///   <see cref="Load"/> and <see cref="Save"/> throw <see cref="UnreadableStoreException"/> or
+///   <see cref="NewerFormatException"/>, so an unreadable or newer file is never written over.</item>
+///   <item>Any other store holds only harmless preferences or presentation state: a file that cannot be
+///   read, is invalid or records a newer version yields defaults with a warning in the log and stays
+///   untouched, and the next save replaces it. Nothing is moved aside.</item>
+/// </list>
 /// </summary>
 /// <remarks>
 /// The file is a JSON object: <typeparamref name="T"/>'s properties beside the format version this
-/// store owns (store-recovery-conventions). A file recording a newer version is neither read,
-/// quarantined nor written: <see cref="Load"/> and <see cref="Save"/> throw
-/// <see cref="NewerFormatException"/> and leave it as it is.
+/// store owns (store-recovery-conventions).
 /// </remarks>
 /// <remarks>
-/// The app's single managed-text atomic-write choke point, and so the one place
-/// the data-backup hook lives: <see cref="WriteAtomically"/> records the exact
-/// bytes it just wrote into <see cref="BackupStore"/> strictly AFTER the rename
-/// lands. A managed-text write that bypasses this store is a silent backup gap.
+/// The app's single managed-text atomic-write choke point, and so the one place the data-backup hook
+/// lives: <see cref="WriteAtomically"/> hands the exact bytes it just wrote to <see cref="BackupStore"/>
+/// strictly AFTER the rename lands. A managed-text write that bypasses this store is a silent backup gap.
 /// </remarks>
 /// <remarks>
 /// The store imposes no ordering on the value it receives. If on-disk ordering
@@ -49,8 +52,8 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     /// <param name="recordBackup">False for a store that is volatile state and nothing else (window
     /// placement): its saves are written atomically but not recorded into the backup history.</param>
     /// <param name="haltWhenUnreadable">True for a store holding the user's work product: a file present
-    /// but unreadable is left exactly in place, and <see cref="Load"/> and <see cref="Save"/> throw
-    /// <see cref="UnreadableStoreException"/> instead of setting it aside or writing over it.</param>
+    /// but unreadable or newer is left exactly in place, and <see cref="Load"/> and <see cref="Save"/>
+    /// throw instead of falling back to defaults or writing over it.</param>
     public JsonStore(string fileName, string label, int formatVersion, bool recordBackup = true, bool haltWhenUnreadable = false)
     {
         _filePath = Path.Combine(StorageRoot.Directory, fileName);
@@ -62,25 +65,27 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
     public LoadedStore<T> Load()
     {
-        if (TryLoadFile(out var value, out var wasUnreadable))
+        // An absent file is normal (first run): not a failure, so it is not logged as one.
+        if (!File.Exists(_filePath))
         {
+            Log.Info("store: no existing data, using defaults", new { label = _label });
+            return new LoadedStore<T>(new T(), WasUnreadable: false);
+        }
+
+        try
+        {
+            var value = ReadFile();
             Log.Info("store: loaded", new { label = _label, path = _filePath });
             return new LoadedStore<T>(value, WasUnreadable: false);
         }
-
-        // Reached on first run (no file yet — normal) or after the live file was present but
-        // unreadable (already quarantined and logged a warn above). There is no .bak fallback: a
-        // live file that will not parse is moved aside rather than reset over, and its earlier
-        // content is recovered, if ever needed, from the quarantined file itself or the
-        // write-through backup store backups.sqlite3 (see the data-backup conventions).
-        //
-        // The two are reported apart, because they mean opposite things to the
-        // caller: absent is a first run, unreadable means the user had content
-        // that could not be read.
-        if (!wasUnreadable)
-            Log.Info("store: no existing data, using defaults", new { label = _label });
-
-        return new LoadedStore<T>(new T(), wasUnreadable);
+        catch (Exception ex) when (!_haltWhenUnreadable)
+        {
+            // The file stays exactly as it is until the next save replaces it; this session runs on
+            // defaults. Absent and unreadable are reported apart: unreadable means there was content.
+            Log.Warn("store: file unusable, using defaults; left in place until the next save", ex,
+                new { label = _label, path = _filePath });
+            return new LoadedStore<T>(new T(), WasUnreadable: true);
+        }
     }
 
     public void Save(T value)
@@ -89,11 +94,10 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         {
             StorageRoot.EnsureExists();
             // A store that halts when unreadable reads the file it would replace, so it refuses an
-            // unreadable one as well as a newer one.
-            if (_haltWhenUnreadable)
-                TryLoadFile(out _, out _);
-            else
-                RefuseNewerFile();
+            // unreadable or newer one: after a failed Reload of a hand-edited list, a save must not
+            // overwrite the user's edit. Other stores replace whatever is there.
+            if (_haltWhenUnreadable && File.Exists(_filePath))
+                ReadFile();
             var document = JsonSerializer.SerializeToNode(value, JsonOptions.Default) as JsonObject
                 ?? throw new InvalidOperationException($"The {_label} store holds a JSON object.");
             document.Insert(0, FormatVersions.JsonKey, _formatVersion);
@@ -114,107 +118,40 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         }
     }
 
-    private bool TryLoadFile(out T value, out bool wasUnreadable)
+    /// <summary>
+    /// Reads the present file. For a store that halts, every failure surfaces as
+    /// <see cref="NewerFormatException"/> or <see cref="UnreadableStoreException"/> naming the file.
+    /// </summary>
+    private T ReadFile()
     {
-        value = new T();
-        wasUnreadable = false;
-
-        // An absent file is normal (first run): not a failure, so it is not logged here — the
-        // caller decides what the absence means.
-        if (!File.Exists(_filePath))
-            return false;
-
         try
         {
             using var document = JsonDocument.Parse(File.ReadAllText(_filePath));
             var version = FormatVersions.Recorded(document.RootElement)
                 ?? throw new JsonException($"The {_label} file is not an object with a valid {FormatVersions.JsonKey}.");
             if (version > _formatVersion)
-                throw Newer(version);
+                throw new NewerFormatException(_filePath, version, _formatVersion);
 
-            value = document.RootElement.Deserialize<T>(JsonOptions.Default)
+            return document.RootElement.Deserialize<T>(JsonOptions.Default)
                 ?? throw new JsonException($"The {_label} file could not be read as its document.");
-            return true;
         }
-        catch (Exception ex) when (ex is not NewerFormatException)
+        catch (NewerFormatException newer) when (_haltWhenUnreadable)
         {
-            if (_haltWhenUnreadable)
-            {
-                Log.Warn("store: file unreadable, left in place", ex, new { label = _label, path = _filePath });
-                throw new UnreadableStoreException(_label, _filePath, ex);
-            }
-
-            // Present but unparseable: quarantine aside (bytes preserved) before the caller
-            // decides what to do; only a later user change recreates the file through Save.
-            Quarantine(ex);
-            wasUnreadable = true;
-            return false;
+            Log.Warn("store: written by a newer version, left as it is",
+                new { label = _label, path = _filePath, version = newer.Version, supported = _formatVersion });
+            throw;
         }
-    }
-
-    /// <summary>
-    /// Refuses to write over a file that records a newer version than this store's. Any other file present
-    /// is one this build cannot read or one it wrote, and is written over as before.
-    /// </summary>
-    private void RefuseNewerFile()
-    {
-        if (!File.Exists(_filePath))
-            return;
-
-        int? recorded;
-        try
+        catch (Exception ex) when (_haltWhenUnreadable)
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(_filePath));
-            recorded = FormatVersions.Recorded(document.RootElement);
+            Log.Warn("store: file unreadable, left in place", ex, new { label = _label, path = _filePath });
+            throw new UnreadableStoreException(_label, _filePath, ex);
         }
-        catch (JsonException)
-        {
-            return;
-        }
-
-        if (recorded > _formatVersion)
-            throw Newer(recorded.Value);
-    }
-
-    private NewerFormatException Newer(int version)
-    {
-        Log.Warn("store: written by a newer version, left as it is",
-            new { label = _label, path = _filePath, version, supported = _formatVersion });
-        return new NewerFormatException(_filePath, version, _formatVersion);
-    }
-
-    /// <summary>
-    /// Moves the unparseable live file aside to its timestamped <c>.invalid</c> quarantine name,
-    /// preserving its bytes, and logs one warning naming both paths. The move either lands or its
-    /// failure propagates as <see cref="UnreadableStoreException"/> naming the file left in place —
-    /// swallowing it would leave the corrupt file in place for the caller's reset to overwrite. The
-    /// composition root catches the propagation and reports a startup halt.
-    /// </summary>
-    private void Quarantine(Exception ex)
-    {
-        var quarantinePath = QuarantinePath(_filePath, DateTimeOffset.UtcNow);
-
-        try
-        {
-            // not recorded: a move-aside of an already-unreadable file, not a managed-text write.
-            // A later user change through WriteAtomically records its saved content.
-            File.Move(_filePath, quarantinePath);
-        }
-        catch (Exception moveEx)
-        {
-            Log.Warn("store: file unreadable; quarantine move failed", moveEx,
-                new { label = _label, path = _filePath, quarantinePath, readError = ex.Message });
-            throw new UnreadableStoreException(_label, _filePath, moveEx);
-        }
-
-        Log.Warn("store: file unreadable, quarantined", ex,
-            new { label = _label, path = _filePath, quarantinePath });
-        QuarantineJournal.Record(_label, quarantinePath);
     }
 
     private void WriteAtomically(byte[] bytes)
     {
-        var tempPath = TempPath(_filePath, NanoId.New());
+        // The BCL's random name, its dot removed so the temp keeps one role extension.
+        var tempPath = TempPath(_filePath, Path.GetRandomFileName().Replace(".", "", StringComparison.Ordinal));
 
         try
         {
@@ -225,7 +162,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
             // A pure atomic temp-then-rename with no .bak sidecar: replace the existing file in place, or
             // move the temp into a fresh one. This is the durability floor (the storage-path conventions);
-            // point-in-time history lives in the write-through backup store, not a last-good copy beside
+            // point-in-time history lives in the backup store, not a last-good copy beside
             // the file.
             if (File.Exists(_filePath))
             {
@@ -245,16 +182,17 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
                 File.Delete(tempPath);
         }
 
-        // Strictly AFTER the rename lands: the file is now exactly where it belongs, so record the exact
-        // bytes we just wrote — the same buffer already in hand, never a re-read of the file (which would
-        // risk capturing a concurrent writer's content). Recording before the rename would risk a "backup
-        // of a save that never happened" if the rename then failed. The record is best-effort and silent:
-        // BackupStore.Record catches, logs once, and swallows every failure, so a backup problem can never
-        // break the save that already succeeded above (data-backup conventions).
+        // Strictly AFTER the rename lands: the save is complete here. Hand over the exact bytes just
+        // written — the same buffer already in hand, never a re-read of the file (which would risk
+        // capturing another writer's content). Handing over before the rename would risk a "backup of a
+        // save that never happened" if the rename then failed. The hand-over only queues: the backup
+        // writer records on its own thread, so a slow or failing history can neither delay nor fail this
+        // save (data-backup conventions).
         //
         // record: config.json (durable user settings) and paths.json (the user's tracked path list — the
-        // externally-linked locations whose loss would strand their work) are captured on every real
-        // save. state.json (window geometry) is volatile state and opts out via recordBackup: false.
+        // externally-linked locations whose loss would strand their work) are captured at every real
+        // save, keeping the session's last version of each. state.json (window geometry) is volatile
+        // state and opts out via recordBackup: false.
         // This is the ONLY managed-text write site in the app.
         if (_recordBackup)
             BackupStore.Record(_filePath, bytes);
@@ -264,7 +202,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     /// The atomic-write temp path for <paramref name="targetPath"/>: the target's stem plus
     /// <paramref name="discriminator"/>, one role extension (<c>.tmp</c>), in the same directory as the
     /// target — the derived-filename grammar, never a dot-appended suffix (e.g. never
-    /// <c>config.json.&lt;x&gt;.tmp</c>). The discriminator is a <see cref="NanoId"/> (see
+    /// <c>config.json.&lt;x&gt;.tmp</c>). The discriminator is a random name without dots (see
     /// <see cref="WriteAtomically"/>); internal so the shape is directly unit-testable without
     /// touching disk.
     /// </summary>
@@ -272,18 +210,4 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         Path.Combine(
             Path.GetDirectoryName(targetPath) ?? string.Empty,
             $"{Path.GetFileNameWithoutExtension(targetPath)}-{discriminator}.tmp");
-
-    /// <summary>
-    /// The quarantine path for <paramref name="targetPath"/> at <paramref name="timestamp"/>: the target's
-    /// stem plus a millisecond UTC stamp, one role extension (<c>.invalid</c>), in the same directory as
-    /// the target — the derived-filename grammar's quarantine name (see the storage-path conventions). The
-    /// stamp is <see cref="FileTimestamp.FileStamp"/>, the <c>yyyyMMdd-HHmmss-fff-utc</c> machine-paced
-    /// filename form a session's fallback log file also uses, so the fleet has one timestamp formatter for
-    /// machine-paced names rather than several; internal so the shape is directly unit-testable without
-    /// touching disk.
-    /// </summary>
-    internal static string QuarantinePath(string targetPath, DateTimeOffset timestamp) =>
-        Path.Combine(
-            Path.GetDirectoryName(targetPath) ?? string.Empty,
-            $"{Path.GetFileNameWithoutExtension(targetPath)}-{FileTimestamp.FileStamp(timestamp)}.invalid");
 }

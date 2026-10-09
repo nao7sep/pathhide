@@ -6,7 +6,7 @@ namespace PathHide.Services;
 /// <summary>
 /// The plain-text fallback file for one session's entries that its sink could not take (logging
 /// conventions, <em>When logging itself fails</em>). One file per session, named by the session's start
-/// in the machine-paced filename stamp: <c>yyyymmdd-hhmmss-fff-utc.log</c>.
+/// to the second: <c>yyyymmdd-hhmmss-utc.log</c>. Files from earlier builds keep their millisecond names.
 /// </summary>
 public static class SessionLog
 {

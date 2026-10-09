@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using PathHide.Backup;
 using PathHide.I18n;
 using PathHide.Models;
 using PathHide.Services;
@@ -40,6 +41,9 @@ public partial class MainWindowViewModel : ObservableObject
     // Whether paths.json holds _entries. False only after a Reload found a file it cannot read and
     // kept the entries on screen, so the next save writes them back even if nothing else changed.
     private bool _entriesOnDisk = true;
+    // False after a Settings save failed or timed out: it may still have landed, so the settings held in
+    // memory no longer prove what config.json holds, and the next Settings save writes whatever it holds.
+    private bool _settingsOnDisk = true;
 
     private CancellationTokenSource? _scanCts;
     private CancellationTokenSource? _applyCts;
@@ -604,6 +608,10 @@ public partial class MainWindowViewModel : ObservableObject
     /// <para><paramref name="selectTargets"/> is a callback rather than a list
     /// because the selection must be read AFTER the scan pause completes — the
     /// pause awaits, and the rows can change across it.</para>
+    /// <para>Desired visibility in <c>paths.json</c> is authoritative; the rows show the actual attribute
+    /// state. There is no transaction or rollback between the two: the save lands first, so an apply that
+    /// fails, is cancelled or is cut short by a quit leaves desired state ahead of the attributes. The next
+    /// scan shows the difference, and applying again repairs it.</para>
     /// </remarks>
     private Task SetVisibilityAsync(
         Func<List<PathRowViewModel>> selectTargets,
@@ -690,7 +698,7 @@ public partial class MainWindowViewModel : ObservableObject
             // them, say which file was left as it is, and let the store refuse every save over it.
             _entriesOnDisk = false;
             if (ShowNoticeAsync is not null)
-                await ShowNoticeAsync(Message.Of("quarantine.pathListTitle"), ex is NewerFormatException newer
+                await ShowNoticeAsync(Message.Of("failure.pathListReloadTitle"), ex is NewerFormatException newer
                     ? FailurePresentation.NewerStore(newer)
                     : FailurePresentation.PathListUnreadable((UnreadableStoreException)ex));
             StartBackgroundScan();
@@ -757,27 +765,10 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Tells the user about any store a load just set aside, if there is a
-    /// window to tell them through. Startup has its own drain, because at that
-    /// point no window exists yet to own the dialog.
-    /// </summary>
-    private async Task ReportQuarantinesAsync()
-    {
-        if (ShowNoticeAsync is null)
-            return;
-
-        foreach (var quarantined in QuarantineJournal.Drain())
-        {
-            var (title, body) = QuarantineJournal.Describe(quarantined);
-            await ShowNoticeAsync(title, body);
-        }
-    }
-
-    /// <summary>
     /// Saves the Settings draft atomically, off the UI thread, and publishes the draft only after
     /// disk agrees. Returns what to tell the reader when the save failed, or null when it landed.
-    /// The save loads config first, so it can set aside a file changed since the dialog opened; that
-    /// is reported whether the save then lands or fails.
+    /// The draft is compared with the settings held in memory, or always written after a save whose
+    /// outcome is unknown; <c>config.json</c> is not read.
     /// </summary>
     public async Task<Message?> TryApplySettingsAsync(
         string language, string family, bool hiddenAndSystem, ThemePreference theme)
@@ -797,16 +788,17 @@ public partial class MainWindowViewModel : ObservableObject
         {
             changed = await RunUserSaveAsync(
                 UserStore.Settings,
-                () => _settingsStore.SaveChanges(_settingsStore.Load().Value, candidate),
+                () => _settingsStore.SaveChanges(_settingsOnDisk ? previous : null, candidate),
                 FailurePresentation.SettingsSave,
                 () => TryApplySettingsAsync(language, family, hiddenAndSystem, theme));
         }
         catch (Exception ex)
         {
             Log.Error("settings: save failed", ex);
-            await ReportQuarantinesAsync();
+            _settingsOnDisk = false;
             return FailurePresentation.SettingsSave(ex);
         }
+        _settingsOnDisk = true;
 
         if (!changed && previous.Language == candidate.Language
             && previous.UiFontFamily == candidate.UiFontFamily
@@ -833,7 +825,6 @@ public partial class MainWindowViewModel : ObservableObject
 
         // Last, once disk agrees: a language change redraws everything already on screen.
         Localizer.Use(language, ComputerLanguages);
-        await ReportQuarantinesAsync();
         return null;
     }
 
@@ -974,8 +965,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// The waits every quit runs, within <see cref="ShutdownBound"/> in all: cancels the scan and the
     /// apply, takes the mutation gate so no command starts after it, saves again what a save that failed
-    /// during an earlier round of this quit left unsaved, waits for the user's saves still running, and
-    /// gives a still-running elevated child the chance to exit so its temp files are removed now rather
+    /// during an earlier round of this quit left unsaved, waits for the user's saves still running, gives
+    /// pending backup history the rest of the bound unless the OS session is ending, and gives a
+    /// still-running elevated child the chance to exit so its temp files are removed now rather
     /// than by the next launch. It never asks anything. Returns whether everything of the user's is on
     /// disk. Idempotent while it runs: a second close joins the first.
     /// </summary>
@@ -1081,6 +1073,11 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         await WaitForUserSavesAsync(Remaining());
+
+        // Backup history is best effort: an ordinary quit gives pending history what remains of the bound,
+        // and the end of the OS session does not wait for it (data-backup-conventions).
+        if (!_sessionEnding)
+            await BackupStore.FlushAsync(Remaining(), Clock);
 
         if (ElevatedApplicator is { } elevated)
             await elevated.ReleaseAsync(Remaining());
@@ -1229,9 +1226,8 @@ public partial class MainWindowViewModel : ObservableObject
     /// correctness of every mutating command rested on each one remembering to snapshot at the
     /// right moment. Building the new list as a value makes a failed save a no-op by
     /// construction: nothing in memory moves until disk agrees.
-    /// <para>The save is a write-then-rename plus a backup-store transaction that may wait seconds
-    /// for SQLite's write lock, and the data folder may sit on a redirected profile share, so it
-    /// never runs on the UI thread. Every caller holds the mutation gate, so saves stay ordered.</para>
+    /// <para>The save is a write-then-rename, and the data folder may sit on a redirected profile
+    /// share, so it never runs on the UI thread. Every caller holds the mutation gate, so saves stay ordered.</para>
     /// </remarks>
     private async Task<Message?> TrySaveEntriesAsync(List<PathEntry> updated)
     {

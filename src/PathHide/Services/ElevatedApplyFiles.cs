@@ -31,7 +31,9 @@ public sealed record ElevatedApplyFiles(string RequestPath, string ResultsPath)
     /// <summary>A fresh, unguessable pair of names in <paramref name="directory"/> owned by this process.</summary>
     public static ElevatedApplyFiles Create(string directory)
     {
-        var stem = Path.Combine(directory, $"{Prefix}{Host()}.{Environment.ProcessId}.{NanoId.New()}");
+        // The BCL's random name, its dot removed so the stem keeps exactly two separators.
+        var id = Path.GetRandomFileName().Replace(".", "", StringComparison.Ordinal);
+        var stem = Path.Combine(directory, $"{Prefix}{Host()}.{Environment.ProcessId}.{id}");
         return new ElevatedApplyFiles(stem + RequestSuffix, stem + ResultsSuffix);
     }
 

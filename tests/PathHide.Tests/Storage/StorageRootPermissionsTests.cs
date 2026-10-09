@@ -24,7 +24,7 @@ public sealed class StorageRootPermissionsTests : IDisposable
     public StorageRootPermissionsTests()
     {
         _previousHome = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
-        _target = Path.Combine(Path.GetTempPath(), "pathhide-perm-tests-" + NanoId.New());
+        _target = Path.Combine(Path.GetTempPath(), "pathhide-perm-tests-" + Guid.NewGuid().ToString("N"));
         Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _target);
     }
 

@@ -77,10 +77,11 @@ public partial class App : Application
             }
 
             // Loads effective settings before the window without creating or rewriting config.json.
-            // The data backup is now write-through — recorded the instant each managed save's atomic rename
-            // lands (see JsonStore/BackupStore) — so there is no startup backup pass to kick off here.
+            // Backup history is handed each managed save's bytes once its atomic rename lands (see
+            // JsonStore/BackupStore), so there is no startup backup pass to kick off here.
             //
-            // If an unreadable store cannot be set aside, stop before any defaults can overwrite it.
+            // An unreadable or newer path list stops startup before defaults could overwrite it; the
+            // settings and window-state files fall back to defaults inside their loads.
             MainWindowViewModel viewModel;
             try
             {
@@ -94,19 +95,15 @@ public partial class App : Application
             }
             catch (UnreadableStoreException unreadable)
             {
-                // The file is left exactly where it is, on this launch and every later one until the
-                // user repairs or moves it. For the path list that is the point: opening with an empty
-                // list would look exactly like losing it, and the first add would then write a fresh
-                // file containing only that entry. Any other store got here because it could not be
-                // set aside, and a reset would overwrite it.
-                var pathList = unreadable.Label == QuarantineJournal.PathListLabel;
-                Log.Warn("startup: a file could not be read; halting with it left in place",
-                    new { label = unreadable.Label, path = unreadable.Path });
+                // Only the path list halts. The file is left exactly where it is, on this launch and
+                // every later one until the user repairs or moves it: opening with an empty list would
+                // look exactly like losing it, and the first add would then write a fresh file
+                // containing only that entry.
+                Log.Warn("startup: the path list could not be read; halting with it left in place",
+                    new { path = unreadable.Path, access = unreadable.IsAccessFailure });
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
-                    I18n.Message.Of(pathList ? "startup.pathListTitle" : "startup.failedTitle"),
-                    pathList
-                        ? FailurePresentation.PathListStartup(unreadable)
-                        : FailurePresentation.StartupUnreadable(unreadable));
+                    I18n.Message.Of("startup.pathListTitle"),
+                    FailurePresentation.PathListStartup(unreadable));
                 RegisterOwnerActivation(desktop.MainWindow);
                 desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
                 desktop.MainWindow.Show();
@@ -114,9 +111,9 @@ public partial class App : Application
             }
             catch (NewerFormatException newer)
             {
-                // Intact data a newer PathHide wrote: opening without it would let this version write
-                // over it, so startup stops with the file left exactly as it is.
-                Log.Warn("startup: a file was written by a newer version; halting", new { path = newer.Path });
+                // An intact path list a newer PathHide wrote: opening without it would let this version
+                // write over it, so startup stops with the file left exactly as it is.
+                Log.Warn("startup: the path list was written by a newer version; halting", new { path = newer.Path });
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
                     I18n.Message.Of("startup.failedTitle"),
                     FailurePresentation.NewerStore(newer));
@@ -153,16 +150,6 @@ public partial class App : Application
             desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
             _mainWindow = mainWindow;
             RegisterOwnerActivation(mainWindow);
-
-            // Report material recovery once the main window can own the dialog.
-            mainWindow.Opened += async (_, _) =>
-            {
-                foreach (var quarantined in Storage.QuarantineJournal.Drain())
-                {
-                    var (title, body) = Storage.QuarantineJournal.Describe(quarantined);
-                    await Views.NoticeDialog.ShowAsync(mainWindow, title, body);
-                }
-            };
             mainWindow.Show();
             return;
         }
@@ -185,9 +172,15 @@ public partial class App : Application
     /// </summary>
     private static (AppSettings Settings, AppState State, List<PathEntry> Paths) ReadStartupStores() =>
         (new SettingsStore().Load().Value,
-         new JsonStore<AppState>(AppState.FileName, QuarantineJournal.StateLabel,
-             FormatVersions.State, recordBackup: false).Load().Value,
+         CreateStateStore().Load().Value,
          new PathListStore().Load().Value);
+
+    /// <summary>
+    /// Window geometry: independent, disposable presentation state outside backup history. An unusable
+    /// file gives defaults silently and the next save replaces it.
+    /// </summary>
+    private static JsonStore<AppState> CreateStateStore() =>
+        new(AppState.FileName, "state", FormatVersions.State, recordBackup: false);
 
     internal static MainWindowViewModel CreateMainViewModel() => CreateMainViewModel(null, null);
 
@@ -195,14 +188,12 @@ public partial class App : Application
     {
         var pathListStore = new PathListStore();
         var settingsStore = new SettingsStore();
-        // Settings are re-derivable, so an unreadable config.json correctly falls back to
-        // defaults; the recovery notice tells the user it happened. The path list does NOT —
-        // see LoadPersistedState.
+        // Settings are four harmless preferences, so an unusable config.json falls back to built-ins
+        // for the session with a warning in the log, and stays untouched until the next Settings save
+        // replaces it. The path list does NOT — see LoadPersistedState.
         var settings = loadedSettings ?? settingsStore.Load().Value;
 
-        // Window geometry remains independent, disposable, and outside backup history.
-        var stateStore = new JsonStore<AppState>(
-            AppState.FileName, QuarantineJournal.StateLabel, FormatVersions.State, recordBackup: false);
+        var stateStore = CreateStateStore();
         var state = loadedState ?? stateStore.Load().Value;
 
         // Key effective configuration at startup (the conventions' baseline): every user-tunable

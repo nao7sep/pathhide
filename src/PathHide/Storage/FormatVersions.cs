@@ -58,41 +58,41 @@ public static class FormatVersions
             throw new NewerFormatException(path, (int)recorded, supported);
     }
 
-    // store-recovery-conventions: creation is an owned filesystem fact, not an empty schema.
+    /// <summary>
+    /// Opens the database at <paramref name="path"/>, creating it when absent, with one marker check. A
+    /// database holding no schema objects is new: it receives <paramref name="schema"/> and its version
+    /// in one transaction, so a failed initialization leaves an empty file that the next open
+    /// initializes again. Any other database must record a version this build reads; its
+    /// <paramref name="schema"/> statements then run as written, so they must be idempotent.
+    /// </summary>
+    /// <remarks>
+    /// One GUI per data root is the only writer of a store (<see cref="Services.SingleInstanceLease"/>),
+    /// so creation needs no claim against a concurrent creator.
+    /// </remarks>
     internal static SqliteConnection OpenDatabase(string path, int supported, string schema)
     {
-        var created = false;
-        SqliteConnection? connection = null;
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Pooling = false,
+        }.ToString());
         try
         {
-            try
-            {
-                using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite);
-                created = true;
-            }
-            catch (IOException) when (File.Exists(path)) { }
-
-            connection = new SqliteConnection(new SqliteConnectionStringBuilder
-            {
-                DataSource = path,
-                Mode = SqliteOpenMode.ReadWrite,
-                Pooling = false,
-            }.ToString());
             connection.Open();
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "PRAGMA busy_timeout = 5000;";
                 command.ExecuteNonQuery();
             }
-            if (!created)
+            var isNew = UserVersion(connection) == 0 && !HasSchema(connection);
+            if (!isNew)
                 CheckDatabase(connection, path, supported);
-            using (var transaction = connection.BeginTransaction(deferred: false))
+            using (var transaction = connection.BeginTransaction())
             {
-                if (!created)
-                    CheckDatabase(connection, path, supported);
                 using var initialize = connection.CreateCommand();
                 initialize.Transaction = transaction;
-                initialize.CommandText = created ? schema + $"PRAGMA user_version = {supported};" : schema;
+                initialize.CommandText = isNew ? schema + $"PRAGMA user_version = {supported};" : schema;
                 initialize.ExecuteNonQuery();
                 transaction.Commit();
             }
@@ -100,15 +100,17 @@ public static class FormatVersions
         }
         catch
         {
-            try { connection?.Dispose(); }
-            catch (Exception cleanup) { Log.Warn("database: failed to close after initialization failure", cleanup, new { path }); }
-            if (created)
-            {
-                try { File.Delete(path); }
-                catch (Exception cleanup) { Log.Warn("database: failed to remove owned initialization file", cleanup, new { path }); }
-            }
+            try { connection.Dispose(); }
+            catch (Exception cleanup) { Log.Warn("database: failed to close after open failure", cleanup, new { path }); }
             throw;
         }
+    }
+
+    private static bool HasSchema(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT EXISTS (SELECT 1 FROM sqlite_master);";
+        return (long)command.ExecuteScalar()! != 0;
     }
 
     private static long UserVersion(SqliteConnection connection)

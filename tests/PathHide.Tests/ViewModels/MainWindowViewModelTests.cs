@@ -714,19 +714,6 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void QuarantineNotice_NamesTheStoreThatWasReset()
-    {
-        // One hardcoded wording told a user whose settings file was reset that
-        // their hidden-path list was in a file that does not contain it.
-        var settings = PathHide.Storage.QuarantineJournal.Describe(
-            new PathHide.Storage.QuarantinedStore("settings", "/r/config-x.invalid"));
-        Assert.Contains("settings", English.Of(settings.Title));
-        Assert.DoesNotContain("path list", English.Of(settings.Body));
-        Assert.Contains("default", English.Of(settings.Body), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("/r/config-x.invalid", English.Of(settings.Body), StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task HideAll_And_ShowAll_ActOnEveryRowNotJustTheSelection()
     {
         // The four visibility commands share one body now; these pin that the

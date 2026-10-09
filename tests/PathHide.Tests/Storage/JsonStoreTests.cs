@@ -20,11 +20,11 @@ namespace PathHide.Tests.Storage;
 /// assert that no such file is ever created.
 /// </summary>
 /// <remarks>
-/// Every real <see cref="JsonStore{T}.Save"/> here also drives the write-through
-/// <see cref="BackupStore"/> (the record fires after the atomic rename). The
-/// store is a process-wide singleton, so <see cref="Dispose"/> closes it before
-/// deleting the throwaway root — that releases its <c>backups.sqlite3</c> handle
-/// (so the delete succeeds) and forces the next test to re-open against its own
+/// Every real <see cref="JsonStore{T}.Save"/> here also queues a write for the
+/// <see cref="BackupStore"/> (handed over after the atomic rename). The store is a
+/// process-wide singleton, so <see cref="Dispose"/> closes it — waiting for pending
+/// writes — before deleting the throwaway root. That releases its <c>backups.sqlite3</c>
+/// handle (so the delete succeeds) and forces the next test to re-open against its own
 /// fresh <c>PATHHIDE_DATA_DIR</c>, rather than keep writing into this test's root.
 /// </remarks>
 [Collection(StorageRootEnvironment.CollectionName)]
@@ -35,7 +35,7 @@ public sealed class JsonStoreTests : IDisposable
 
     public JsonStoreTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "pathhide-tests", NanoId.New());
+        _root = Path.Combine(Path.GetTempPath(), "pathhide-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
 
         _previousHome = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
@@ -50,7 +50,6 @@ public sealed class JsonStoreTests : IDisposable
         // Release the backups.sqlite3 handle before deleting the root, and reset the singleton so the next
         // throwaway root re-opens its own store.
         BackupStore.Close();
-        QuarantineJournal.Drain();
         // Closing returns each connection to Microsoft.Data.Sqlite's pool, which keeps its file open;
         // Windows cannot delete an open database file.
         SqliteConnection.ClearAllPools();
@@ -60,9 +59,9 @@ public sealed class JsonStoreTests : IDisposable
 
     private string PathOf(string fileName) => Path.Combine(_root, fileName);
 
-    /// <summary>A store that quarantines what it cannot read, as config.json's does.</summary>
+    /// <summary>A store that falls back to defaults for what it cannot use, as config.json's does.</summary>
     private static JsonStore<TestDocument> SettingsDocumentStore() =>
-        new("config.json", QuarantineJournal.SettingsLabel, FormatVersions.Settings);
+        new("config.json", "settings", FormatVersions.Settings);
 
     public sealed class TestDocument
     {
@@ -89,7 +88,7 @@ public sealed class JsonStoreTests : IDisposable
     [Fact]
     public void SaveThenLoad_RoundTripsWindowState()
     {
-        var store = new JsonStore<AppState>(AppState.FileName, QuarantineJournal.StateLabel, FormatVersions.State);
+        var store = new JsonStore<AppState>(AppState.FileName, "state", FormatVersions.State);
         store.Save(new AppState
         {
             WindowPositionX = -1200,
@@ -120,97 +119,100 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_CorruptPrimary_QuarantinesFileAndReturnsDefault_WithNoBakFallback()
+    public void Load_CorruptConfig_GivesDefaultsAndLeavesTheFileByteIdentical()
     {
-        // The .bak last-good sidecar is retired: an unreadable live file is quarantined (moved aside,
-        // bytes preserved) rather than reset over — the storage-path conventions' quarantine-then-reset
-        // path — and the caller falls back to defaults. Never a .bak.
+        // config.json holds harmless preferences: the session runs on defaults, and nothing is moved
+        // aside, reset over or left beside it until the next save replaces the file.
         var store = SettingsDocumentStore();
         store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
-        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem, Theme = ThemePreference.Dark });
 
         const string corrupt = "{ not valid json";
         File.WriteAllText(PathOf("config.json"), corrupt);
 
-        var loaded = store.Load().Value;
+        var loaded = store.Load();
 
-        Assert.Equal(WindowsHideMode.HiddenOnly, loaded.WindowsHideMode);
-        Assert.False(File.Exists(PathOf("config.json")));
-        Assert.False(File.Exists(PathOf("config.json.bak")));
-
-        // Quarantined under the grammar-shaped name <stem>-<millisecond-utc-stamp>.invalid, in the
-        // same directory, with the original (corrupt) bytes intact.
-        var quarantined = Directory.EnumerateFiles(_root, "config-*.invalid").ToList();
-        Assert.Single(quarantined);
-        Assert.Matches(@"^config-\d{8}-\d{6}-\d{3}-utc\.invalid$", Path.GetFileName(quarantined[0]));
-        Assert.Equal(corrupt, File.ReadAllText(quarantined[0]));
+        Assert.True(loaded.WasUnreadable);
+        Assert.Equal(WindowsHideMode.HiddenOnly, loaded.Value.WindowsHideMode);
+        Assert.Equal(corrupt, File.ReadAllText(PathOf("config.json")));
+        Assert.Equal(["config.json"], Directory.EnumerateFiles(_root, "config*").Select(Path.GetFileName));
     }
 
     [Fact]
-    public void Save_AfterQuarantine_RecreatesLiveFileAndNeverTouchesTheQuarantinedFile()
+    public void Load_NewerConfig_GivesDefaultsAndTheNextSaveReplacesIt()
+    {
+        const string newer = "{\"formatVersion\":2,\"theme\":\"dark\"}";
+        File.WriteAllText(PathOf("config.json"), newer);
+        var store = SettingsDocumentStore();
+
+        var loaded = store.Load();
+
+        Assert.True(loaded.WasUnreadable);
+        Assert.Equal(ThemePreference.System, loaded.Value.Theme);
+        Assert.Equal(newer, File.ReadAllText(PathOf("config.json")));
+
+        store.Save(new TestDocument { Theme = ThemePreference.Light });
+
+        Assert.Equal(ThemePreference.Light, store.Load().Value.Theme);
+        Assert.Contains("\"formatVersion\": 1", File.ReadAllText(PathOf("config.json")));
+    }
+
+    [Fact]
+    public void Save_AfterAnUnusableLoad_ReplacesTheFileWithoutReadingIt()
     {
         var store = SettingsDocumentStore();
-        const string corrupt = "{ not valid json";
-        File.WriteAllText(PathOf("config.json"), corrupt);
-
+        File.WriteAllText(PathOf("config.json"), "{ not valid json");
         store.Load();
-        var quarantinedPath = Directory.EnumerateFiles(_root, "config-*.invalid").Single();
 
         store.Save(new TestDocument { Theme = ThemePreference.Dark });
 
-        // A user change recreates the live file without touching the quarantined bytes.
-        Assert.True(File.Exists(PathOf("config.json")));
         Assert.Equal(ThemePreference.Dark, store.Load().Value.Theme);
-        Assert.Equal(corrupt, File.ReadAllText(quarantinedPath));
-    }
-
-    [Fact]
-    public void QuarantinePath_IsStemHyphenMillisecondUtcStampDotInvalid_InTheSameDirectory()
-    {
-        // Derived-filename grammar: <stem>-<discriminator>.invalid, one role extension, the same
-        // millisecond UTC stamp form the data-backup engine's archive names use.
-        var targetPath = PathOf("config.json");
-        var timestamp = new DateTimeOffset(2026, 7, 1, 2, 22, 20, 7, TimeSpan.Zero);
-
-        var quarantinePath = JsonStore<TestDocument>.QuarantinePath(targetPath, timestamp);
-
-        Assert.Equal(PathOf("config-20260701-022220-007-utc.invalid"), quarantinePath);
-    }
-
-    [Fact]
-    public void Load_WhenTheUnreadableFileCannotBeSetAside_ThrowsNamingTheFileLeftInPlace()
-    {
-        const string corrupt = "{ not valid json";
-        File.WriteAllText(PathOf("config.json"), corrupt);
-        var store = SettingsDocumentStore();
-
-        // The move aside fails: on Windows the file is held open without sharing, elsewhere its folder
-        // cannot be written.
-        UnreadableStoreException refused;
-        if (OperatingSystem.IsWindows())
-        {
-            using (new FileStream(PathOf("config.json"), FileMode.Open, FileAccess.Read, FileShare.None))
-                refused = Assert.Throws<UnreadableStoreException>(() => store.Load());
-        }
-        else
-        {
-            var mode = File.GetUnixFileMode(_root);
-            File.SetUnixFileMode(_root, UnixFileMode.UserRead | UnixFileMode.UserExecute);
-            try
-            {
-                refused = Assert.Throws<UnreadableStoreException>(() => store.Load());
-            }
-            finally
-            {
-                File.SetUnixFileMode(_root, mode);
-            }
-        }
-
-        Assert.Equal(QuarantineJournal.SettingsLabel, refused.Label);
-        Assert.Equal(PathOf("config.json"), refused.Path);
-        Assert.Equal(corrupt, File.ReadAllText(PathOf("config.json")));
         Assert.Empty(Directory.EnumerateFiles(_root, "*.invalid"));
-        Assert.Empty(QuarantineJournal.Drain());
+    }
+
+    [MacOnlyFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public void Load_InaccessibleConfig_GivesDefaultsAndLeavesTheFileAlone()
+    {
+        var path = PathOf("config.json");
+        File.WriteAllText(path, "{\"formatVersion\":1,\"theme\":\"dark\"}");
+        var mode = File.GetUnixFileMode(path);
+        File.SetUnixFileMode(path, UnixFileMode.None);
+        try
+        {
+            var loaded = SettingsDocumentStore().Load();
+
+            Assert.True(loaded.WasUnreadable);
+            Assert.Equal(ThemePreference.System, loaded.Value.Theme);
+        }
+        finally
+        {
+            File.SetUnixFileMode(path, mode);
+        }
+        Assert.Contains("dark", File.ReadAllText(path));
+    }
+
+    [MacOnlyFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public void Load_InaccessiblePathList_HaltsAsAnAccessFailureAndLeavesTheFileAlone()
+    {
+        var path = PathOf("paths.json");
+        const string content = "{\"formatVersion\":1,\"paths\":[]}";
+        File.WriteAllText(path, content);
+        var mode = File.GetUnixFileMode(path);
+        File.SetUnixFileMode(path, UnixFileMode.None);
+        UnreadableStoreException refused;
+        try
+        {
+            refused = Assert.Throws<UnreadableStoreException>(() => new PathListStore().Load());
+        }
+        finally
+        {
+            File.SetUnixFileMode(path, mode);
+        }
+
+        Assert.True(refused.IsAccessFailure);
+        Assert.Equal(path, refused.Path);
+        Assert.Equal(content, File.ReadAllText(path));
     }
 
     [Fact]
@@ -227,16 +229,41 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_UnreadableStateQuarantinesWithoutANotice()
+    public void Load_InvalidPathList_HaltsAsInvalidContent()
     {
-        QuarantineJournal.Drain();
-        File.WriteAllText(PathOf(AppState.FileName), "{ not json");
+        File.WriteAllText(PathOf("paths.json"), "{ not json");
 
-        var loaded = new JsonStore<AppState>(AppState.FileName, QuarantineJournal.StateLabel, FormatVersions.State, recordBackup: false).Load();
+        var refused = Assert.Throws<UnreadableStoreException>(() => new PathListStore().Load());
+
+        Assert.False(refused.IsAccessFailure);
+    }
+
+    [Fact]
+    public void Load_UnreadableStateResetsAndLeavesTheFileForTheNextSave()
+    {
+        File.WriteAllText(PathOf(AppState.FileName), "{ not json");
+        var store = new JsonStore<AppState>(AppState.FileName, "state", FormatVersions.State, recordBackup: false);
+
+        var loaded = store.Load();
 
         Assert.True(loaded.WasUnreadable);
         Assert.Null(loaded.Value.WindowPositionX);
-        Assert.Empty(QuarantineJournal.Drain());
+        Assert.Equal("{ not json", File.ReadAllText(PathOf(AppState.FileName)));
+
+        store.Save(new AppState { WindowWidth = 900 });
+
+        Assert.Equal(900, store.Load().Value.WindowWidth);
+    }
+
+    [Fact]
+    public void Load_NewerStateResetsInsteadOfHalting()
+    {
+        File.WriteAllText(PathOf(AppState.FileName), "{\"formatVersion\":2}");
+
+        var loaded = new JsonStore<AppState>(AppState.FileName, "state", FormatVersions.State, recordBackup: false).Load();
+
+        Assert.True(loaded.WasUnreadable);
+        Assert.Null(loaded.Value.WindowPositionX);
     }
 
     [Fact]
@@ -264,8 +291,6 @@ public sealed class JsonStoreTests : IDisposable
         store.Save(value);
         Assert.Equal(before, File.ReadAllBytes(path));
         Assert.Equal(timestamp, File.GetLastWriteTimeUtc(path));
-        File.WriteAllText(path, "{\"formatVersion\":2}");
-        Assert.Throws<NewerFormatException>(() => store.Save(value));
     }
 
     [MacOnlyFact]
@@ -371,9 +396,10 @@ public sealed class JsonStoreTests : IDisposable
     // rename, for both managed files, byte-identically to what landed on disk, keyed by the FINAL path. ---
 
     /// <summary>Reads the recorded content blob(s) for a path from the throwaway root's backups.sqlite3,
-    /// opening a private read-only connection.</summary>
+    /// opening a private read-only connection once the pending writes have landed.</summary>
     private List<byte[]> RecordedContentsFor(string absolutePath)
     {
+        BackupStore.Close();
         var contents = new List<byte[]>();
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
             new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
@@ -399,6 +425,7 @@ public sealed class JsonStoreTests : IDisposable
     /// <summary>Every distinct <c>path</c> value recorded in the throwaway root's store.</summary>
     private List<string> RecordedPaths()
     {
+        BackupStore.Close();
         var paths = new List<string>();
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
             new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
@@ -459,15 +486,13 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Save_UnchangedResave_RecordsNoSecondVersion_ButAChangedSaveDoes()
+    public void Save_ChangedResaveInOneSession_KeepsOneRowHoldingTheLastVersion()
     {
         var store = new JsonStore<TestDocument>("config.json", "settings", FormatVersions.Settings);
         store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenOnly });
-        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenOnly });  // identical -> deduped
-        Assert.Single(RecordedContentsFor(PathOf("config.json")));
+        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
 
-        store.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem }); // changed -> row
-        Assert.Equal(2, RecordedContentsFor(PathOf("config.json")).Count);
+        Assert.Equal(File.ReadAllBytes(PathOf("config.json")), Assert.Single(RecordedContentsFor(PathOf("config.json"))));
     }
 
     [Fact]

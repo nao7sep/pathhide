@@ -174,7 +174,7 @@ public sealed class RecordsWindowTests : WindowTest
     [AvaloniaFact]
     public void A_stored_record_signals_the_open_window_and_a_closed_one_stops_listening()
     {
-        Log.Start(new NullSink(), Path.Combine(Path.GetTempPath(), "pathhide-records-window-tests", NanoId.New()));
+        Log.Start(new NullSink(), Path.Combine(Path.GetTempPath(), "pathhide-records-window-tests", Guid.NewGuid().ToString("N")));
         try
         {
             var (window, records) = ShowRecords(Owner());

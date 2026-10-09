@@ -7,6 +7,9 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using PathHide.Models;
+using PathHide.Services;
+using PathHide.Storage;
+using PathHide.Tests.Fakes;
 using PathHide.Views;
 using PathHide.I18n;
 using PathHide.Tests.I18n;
@@ -107,5 +110,54 @@ public sealed class SettingsDialogTests
         save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.True(dialog.Accepted);
         Assert.Equal(ThemePreference.Dark, saved);
+    }
+
+    private static (MainWindowViewModel Vm, FakeSettingsStore Settings, Window Owner, SettingsDialog Dialog) OpenDirtySettings()
+    {
+        var settings = new FakeSettingsStore();
+        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()),
+            new FakeJsonStore<System.Collections.Generic.List<PathEntry>>(), settings, settings.Load().Value,
+            new FakeJsonStore<AppState>(), new AppState());
+        var owner = new Window();
+        owner.Show();
+        var dialog = new SettingsDialog(vm.Language, vm.UiFontFamily, vm.Theme, vm.IsHiddenAndSystem,
+            showWindowsHideMode: false, vm.TryApplySettingsAsync);
+        _ = dialog.ShowDialog(owner);
+        dialog.GetLogicalDescendants().OfType<TextBox>().Single().Text = "Menlo";
+        Dispatcher.UIThread.RunJobs();
+        return (vm, settings, owner, dialog);
+    }
+
+    [AvaloniaFact]
+    public async Task QuittingWithADirtyDraftDiscardsItWithoutWritingConfig()
+    {
+        // The draft lives only in the dialog: the main window closing at quit closes it without asking,
+        // and nothing is saved that Save did not save.
+        var (vm, settings, owner, dialog) = OpenDirtySettings();
+
+        owner.Close();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(await vm.QuitAsync());
+
+        Assert.False(dialog.IsVisible);
+        Assert.False(dialog.Accepted);
+        Assert.Equal(0, settings.SaveCount);
+    }
+
+    [AvaloniaFact]
+    public async Task QuittingAfterSaveKeepsWhatSaveWrote()
+    {
+        var (vm, settings, owner, dialog) = OpenDirtySettings();
+        dialog.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "save"))
+            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Task.Yield();
+        Dispatcher.UIThread.RunJobs();
+
+        owner.Close();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(await vm.QuitAsync());
+
+        Assert.Equal(1, settings.SaveCount);
+        Assert.Equal("Menlo", settings.Value.UiFontFamily);
     }
 }

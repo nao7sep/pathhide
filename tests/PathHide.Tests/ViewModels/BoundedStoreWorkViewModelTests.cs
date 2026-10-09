@@ -97,7 +97,7 @@ public sealed class BoundedStoreWorkViewModelTests
     }
 
     [Fact]
-    public async Task Retrying_the_same_settings_after_a_late_commit_adopts_the_persisted_candidate()
+    public async Task Retrying_the_same_settings_after_a_late_commit_saves_them_again()
     {
         using var gate = new ManualResetEventSlim();
         var settings = new FakeSettingsStore { SaveGate = gate };
@@ -113,7 +113,32 @@ public sealed class BoundedStoreWorkViewModelTests
             Assert.Null(await vm.TryApplySettingsAsync("en", "", false, ThemePreference.Dark));
         }
         Assert.Equal(ThemePreference.Dark, vm.Theme);
-        Assert.Equal(1, settings.SaveCount);
+        // The timed-out save may have landed, so memory no longer proves what is on disk and the retry
+        // writes; the real store then skips identical bytes.
+        Assert.Equal(2, settings.SaveCount);
+    }
+
+    [Fact]
+    public async Task Keeping_the_original_settings_after_a_late_commit_writes_them_back()
+    {
+        using var gate = new ManualResetEventSlim();
+        var settings = new FakeSettingsStore { SaveGate = gate };
+        var vm = Create(new FakeJsonStore<List<PathEntry>>(), settings);
+        try
+        {
+            Assert.NotNull(await vm.TryApplySettingsAsync("en", "", false, ThemePreference.Dark));
+        }
+        finally
+        {
+            gate.Set();
+        }
+
+        // Saving the settings the app still holds must not be skipped as unchanged: the late commit put
+        // Dark on disk.
+        Assert.Null(await vm.TryApplySettingsAsync("en", "", false, ThemePreference.System));
+
+        Assert.Equal(ThemePreference.System, settings.Value.Theme);
+        Assert.Equal(ThemePreference.System, vm.Theme);
     }
 
     [Fact]

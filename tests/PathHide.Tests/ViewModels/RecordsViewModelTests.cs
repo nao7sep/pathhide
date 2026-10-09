@@ -377,7 +377,7 @@ public sealed class RecordsViewModelTests
     public void A_read_that_succeeds_writes_no_record_and_a_failed_one_writes_one()
     {
         var sink = new CapturingSink();
-        Log.Start(sink, Path.Combine(Path.GetTempPath(), "pathhide-records-vm-tests", NanoId.New()));
+        Log.Start(sink, Path.Combine(Path.GetTempPath(), "pathhide-records-vm-tests", Guid.NewGuid().ToString("N")));
         try
         {
             _reader.Details[1] = new RecordDetail(1, ThisLaunch, Record(1).Time, "info", "m1", null, null);

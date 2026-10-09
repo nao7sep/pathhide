@@ -23,7 +23,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
 
     public MacVisibilityServiceTests()
     {
-        _dir = Path.Combine(Path.GetTempPath(), "pathhide-mac-tests", NanoId.New());
+        _dir = Path.Combine(Path.GetTempPath(), "pathhide-mac-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dir);
     }
 
@@ -279,7 +279,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
     [MacOnlyFact]
     public void ResolveDirectory_ResolvesAParentAlias()
     {
-        var name = $"pathhide-resolve-{NanoId.New()}";
+        var name = $"pathhide-resolve-{Guid.NewGuid().ToString("N")}";
         Directory.CreateDirectory(Path.Combine("/tmp", name));
         try
         {

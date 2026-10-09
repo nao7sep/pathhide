@@ -34,9 +34,13 @@ internal sealed class BoundedStoreWork
                 if (done.IsFaulted)
                     _ = done.Exception;
             }, TaskScheduler.Default);
-            var result = await work.WaitAsync(stop.Token).ConfigureAwait(false);
-            stop.Token.ThrowIfCancellationRequested();
-            return result;
+            return await work.WaitAsync(stop.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (work is { IsCompletedSuccessfully: true })
+        {
+            // The work finished as the deadline or cancellation fired: it landed, so it is not reported
+            // as timed out or cancelled.
+            return work.Result;
         }
         catch (OperationCanceledException)
         {

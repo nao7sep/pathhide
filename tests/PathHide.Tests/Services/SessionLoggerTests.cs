@@ -253,7 +253,7 @@ public sealed class SessionLoggerTests
         log.Info("one");
         log.Info("two");
 
-        var lines = File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-123-utc.log"));
+        var lines = File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-utc.log"));
         Assert.Equal(["one", "two"], Array.ConvertAll(lines, l => JsonNode.Parse(l)!["message"]!.GetValue<string>()));
     }
 
@@ -266,7 +266,7 @@ public sealed class SessionLoggerTests
         var thrown = Record.Exception(() => log.Info("kept"));
 
         Assert.Null(thrown);
-        var lines = File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-123-utc.log"));
+        var lines = File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-utc.log"));
         Assert.Equal(2, lines.Length);
         Assert.Equal("kept", JsonNode.Parse(lines[0])!["message"]!.GetValue<string>());
         var reason = JsonNode.Parse(lines[1])!;
@@ -355,7 +355,7 @@ public sealed class SessionLoggerTests
             Assert.True(sink.Entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
             log.Info("queued");
             log.Close(TimeSpan.FromMilliseconds(50));
-            var path = Path.Combine(temp.Path, "20261002-093015-123-utc.log");
+            var path = Path.Combine(temp.Path, "20261002-093015-utc.log");
             Assert.True(SpinWait.SpinUntil(() => File.Exists(path) && File.ReadAllLines(path).Length == 2,
                 TimeSpan.FromSeconds(5)));
             var lines = File.ReadAllLines(path);
@@ -384,7 +384,7 @@ public sealed class SessionLoggerTests
         log.Info("late");
 
         Assert.Empty(sink.Messages);
-        var line = Assert.Single(File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-123-utc.log")));
+        var line = Assert.Single(File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-utc.log")));
         Assert.Equal("late", JsonNode.Parse(line)!["message"]!.GetValue<string>());
     }
 
@@ -414,7 +414,7 @@ public sealed class SessionLoggerTests
         log.Info("not stored");
 
         Assert.Equal(0, signals);
-        Assert.NotEmpty(File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-123-utc.log")));
+        Assert.NotEmpty(File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-utc.log")));
     }
 
     [Fact]

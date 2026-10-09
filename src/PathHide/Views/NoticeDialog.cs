@@ -7,7 +7,7 @@ namespace PathHide.Views;
 
 /// <summary>
 /// A single-button informational dialog: a wrapped message with a Close button.
-/// Used for notices the user must see once (a quarantined store) rather than
+/// Used for notices the user must see once (a path list Reload left as it is) rather than
 /// choices — the shared ConfirmDialog handles those.
 /// </summary>
 public sealed class NoticeDialog : DialogBase

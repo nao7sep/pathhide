@@ -18,7 +18,7 @@ namespace PathHide.Tests.Storage;
 [Collection(StorageRootEnvironment.CollectionName)]
 public sealed class SettingsStoreTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "pathhide-tests", NanoId.New());
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "pathhide-tests", Guid.NewGuid().ToString("N"));
     private readonly string? _previousDataDir;
 
     public SettingsStoreTests()
@@ -27,14 +27,12 @@ public sealed class SettingsStoreTests : IDisposable
         _previousDataDir = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
         Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, _root);
         BackupStore.Close();
-        QuarantineJournal.Drain();
     }
 
     public void Dispose()
     {
         Log.Shutdown();
         BackupStore.Close();
-        QuarantineJournal.Drain();
         // Closing returns each connection to Microsoft.Data.Sqlite's pool, which keeps its file open;
         // Windows cannot delete an open database file.
         SqliteConnection.ClearAllPools();
@@ -192,7 +190,6 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(WindowsHideMode.HiddenOnly, loaded.Value.WindowsHideMode);
         Assert.Equal(original, File.ReadAllText(ConfigPath));
         Assert.Empty(Directory.GetFiles(_root, "config-*.invalid"));
-        Assert.Empty(QuarantineJournal.Drain());
         Assert.Equal(key, JsonSerializer.Deserialize<JsonElement>(Assert.Single(WarningFields())).GetProperty("key").GetString());
     }
 
@@ -256,23 +253,28 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("{ invalid json")]
     [InlineData("[]")]
     [InlineData("null")]
-    public void Startup_UnreadableConfigQuarantinesWithoutSeedingAReplacement(string original)
+    [InlineData("{ \"formatVersion\": 2, \"theme\": \"dark\" }")]
+    public async Task Startup_UnusableConfigUsesBuiltIns_LeavesTheFileUntilASettingsSaveReplacesIt(string original)
     {
+        using var restoreLanguage = Localizer.Speaking(Localizer.Language);
         File.WriteAllText(ConfigPath, original);
 
         var vm = App.CreateMainViewModel();
 
         Assert.Equal(ThemePreference.System, vm.Theme);
-        Assert.False(File.Exists(ConfigPath));
-        var quarantine = Assert.Single(Directory.GetFiles(_root, "config-*.invalid"));
-        Assert.Equal(original, File.ReadAllText(quarantine));
-        Assert.Equal(QuarantineJournal.SettingsLabel, Assert.Single(QuarantineJournal.Drain()).Label);
-        AssertBuiltIns(new SettingsStore().Load().Value);
+        Assert.Equal(original, File.ReadAllText(ConfigPath));
+        Assert.Empty(Directory.GetFiles(_root, "config-*.invalid"));
+
+        Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Light));
+
+        Assert.Equal("light", Assert.Single(StoredSets()).Value.GetString());
     }
 
     [AvaloniaFact]
-    public async Task DialogSave_ConfigCorruptedAfterOpeningPreservesBytesAndReportsRecovery()
+    public async Task DialogSave_DoesNotReadConfig_AndReplacesWhatChangedOnDisk()
     {
+        // The draft is compared with the settings held in memory: a config.json damaged after startup is
+        // neither read nor set aside, and the save writes the session's settings over it.
         using var restoreLanguage = Localizer.Speaking(Localizer.Language);
         var vm = App.CreateMainViewModel();
         var notices = new List<(Message Title, Message Body)>();
@@ -281,18 +283,13 @@ public sealed class SettingsStoreTests : IDisposable
             notices.Add((title, body));
             return Task.CompletedTask;
         };
-        const string corrupt = "{ invalid json";
-        File.WriteAllText(ConfigPath, corrupt);
+        File.WriteAllText(ConfigPath, "{ invalid json");
 
         Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Dark));
 
         Assert.Equal("theme", Assert.Single(StoredSets()).Key);
-        var preserved = Assert.Single(Directory.GetFiles(_root, "config-*.invalid"));
-        Assert.Equal(corrupt, File.ReadAllText(preserved));
-        Assert.Equal(Message.Of("quarantine.settingsTitle"), Assert.Single(notices).Title);
-        Assert.Equal("quarantine.settingsBody", Assert.Single(notices).Body.Key);
-        Assert.Contains(preserved, PathHide.Tests.I18n.English.Of(Assert.Single(notices).Body), StringComparison.Ordinal);
-        Assert.Empty(QuarantineJournal.Drain());
+        Assert.Empty(Directory.GetFiles(_root, "config-*.invalid"));
+        Assert.Empty(notices);
     }
 
     [AvaloniaFact]
@@ -313,6 +310,7 @@ public sealed class SettingsStoreTests : IDisposable
     {
         var store = new SettingsStore();
         store.SaveChanges(new AppSettings(), new AppSettings { Theme = ThemePreference.Dark });
+        BackupStore.Close();
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
             new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
             {

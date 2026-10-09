@@ -21,7 +21,7 @@ public sealed class PathListStore : IJsonStore<List<PathEntry>>
     public const string FileName = "paths.json";
 
     private readonly JsonStore<PathListDocument> _store =
-        new(FileName, QuarantineJournal.PathListLabel, FormatVersions.PathList, haltWhenUnreadable: true);
+        new(FileName, "paths", FormatVersions.PathList, haltWhenUnreadable: true);
 
     public LoadedStore<List<PathEntry>> Load()
     {

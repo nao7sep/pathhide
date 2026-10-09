@@ -25,7 +25,6 @@ public sealed class FailurePresentationTests
             FailurePresentation.WindowAction(error),
             FailurePresentation.StartupStorage(),
             FailurePresentation.Startup(),
-            FailurePresentation.StartupUnreadable(new UnreadableStoreException("settings", "/r/config.json", error)),
             FailurePresentation.PathListStartup(new UnreadableStoreException("paths", "/r/paths.json", error)),
         };
 
@@ -71,11 +70,10 @@ public sealed class FailurePresentationTests
     }
 
     [Fact]
-    public void ASaveRefusedOverANewerFileNamesTheFile()
+    public void APathListSaveRefusedOverANewerFileNamesTheFile()
     {
         var error = new NewerFormatException("/home/u/.pathhide/paths.json", 2, 1);
 
-        Assert.Equal("failure.newerStore", FailurePresentation.SettingsSave(error).Key);
         Assert.Equal("failure.newerStore", FailurePresentation.PathListSave(error).Key);
         Assert.Contains("/home/u/.pathhide/paths.json", English.Of(FailurePresentation.NewerStore(error)), StringComparison.Ordinal);
     }
@@ -83,21 +81,23 @@ public sealed class FailurePresentationTests
     [Fact]
     public void AnUnreadablePathListNamesTheFileLeftInPlace()
     {
-        var error = new UnreadableStoreException("paths", "/home/u/.pathhide/paths.json", new IOException(Hostile));
+        var error = new UnreadableStoreException("paths", "/home/u/.pathhide/paths.json", new System.Text.Json.JsonException(Hostile));
 
         Assert.Equal("failure.pathListUnreadable", FailurePresentation.PathListSave(error).Key);
+        Assert.Equal("failure.pathListStartup", FailurePresentation.PathListStartup(error).Key);
         Assert.Contains("/home/u/.pathhide/paths.json", English.Of(FailurePresentation.PathListSave(error)), StringComparison.Ordinal);
         Assert.Contains("/home/u/.pathhide/paths.json", English.Of(FailurePresentation.PathListStartup(error)), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AStoreThatCouldNotBeSetAsideNamesTheFileLeftInPlace()
+    public void APathListThatCouldNotBeOpenedSaysToCheckAccessAndNamesTheFile()
     {
-        var error = new UnreadableStoreException("settings", "/home/u/.pathhide/config.json", new IOException(Hostile));
+        var error = new UnreadableStoreException("paths", "/home/u/.pathhide/paths.json", new IOException(Hostile));
 
-        var text = English.Of(FailurePresentation.StartupUnreadable(error));
-
-        Assert.Contains("/home/u/.pathhide/config.json", text, StringComparison.Ordinal);
+        Assert.Equal("failure.pathListUnreadableAccess", FailurePresentation.PathListSave(error).Key);
+        Assert.Equal("failure.pathListStartupAccess", FailurePresentation.PathListStartup(error).Key);
+        var text = English.Of(FailurePresentation.PathListStartup(error));
+        Assert.Contains("/home/u/.pathhide/paths.json", text, StringComparison.Ordinal);
         Assert.DoesNotContain(Hostile, text, StringComparison.Ordinal);
     }
 }

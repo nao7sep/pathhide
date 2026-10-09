@@ -2,34 +2,39 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using CommunityToolkit.Mvvm.Input;
 using PathHide.Backup;
+using PathHide.Models;
+using PathHide.Services;
 using PathHide.Storage;
+using PathHide.Tests.Fakes;
 using PathHide.Tests.Storage;
+using PathHide.ViewModels;
 using Xunit;
 
 namespace PathHide.Tests.Backup;
 
 /// <summary>
-/// The write-through data-backup store (data-backup conventions). These exercise the real SQLite file
-/// against a throwaway root redirected via <c>PATHHIDE_DATA_DIR</c> — the one relocation seam — because BLOB
-/// fidelity and the dedup/insert behaviour are exactly what a fake would not exercise. The store is a
+/// The data-backup history (data-backup conventions). These exercise the real SQLite file against a
+/// throwaway root redirected via <c>PATHHIDE_DATA_DIR</c> — the one relocation seam — because BLOB fidelity,
+/// the per-session rows and the off-save writer are exactly what a fake would not exercise. The store is a
 /// process-wide singleton, so each test opens against its own fresh root and closes it in teardown (which
-/// releases the <c>backups.sqlite3</c> handle so the throwaway root can be deleted).
+/// waits for pending writes and releases the <c>backups.sqlite3</c> handle so the root can be deleted).
 /// </summary>
 [Collection(StorageRootEnvironment.CollectionName)]
 public sealed class BackupStoreTests : IDisposable
 {
     private readonly string _root;
     private readonly string? _previousHome;
+    private readonly string _session = BackupStore.Session;
 
     public BackupStoreTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "pathhide-backupstore-tests", NanoId.New());
+        _root = Path.Combine(Path.GetTempPath(), "pathhide-backupstore-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
 
         _previousHome = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
@@ -40,6 +45,7 @@ public sealed class BackupStoreTests : IDisposable
     public void Dispose()
     {
         BackupStore.Close();
+        BackupStore.Session = _session;
         // Closing returns each connection to Microsoft.Data.Sqlite's pool, which keeps its file open;
         // Windows cannot delete an open database file.
         SqliteConnection.ClearAllPools();
@@ -53,11 +59,18 @@ public sealed class BackupStoreTests : IDisposable
     /// internal or external, so any absolute path is a valid subject.</summary>
     private string PathOf(string fileName) => Path.Combine(_root, fileName);
 
-    private sealed record Row(string Path, byte[] Content, string Sha256, long ByteSize, string WrittenAtUtc);
+    private sealed record Row(string? Session, string Path, byte[] Content, string Sha256, long ByteSize, string WrittenAtUtc);
 
-    /// <summary>Reads all rows for a path in insert order, opening a private read connection so it never
-    /// contends with the store's own singleton connection.</summary>
+    /// <summary>Reads all rows for a path in insert order once the pending writes have landed, opening a
+    /// private read connection.</summary>
     private List<Row> RowsFor(string path)
+    {
+        BackupStore.Close();
+        return ReadRows(path);
+    }
+
+    /// <summary>Reads the rows written so far, without waiting for pending writes.</summary>
+    private List<Row> ReadRows(string path)
     {
         var rows = new List<Row>();
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -69,22 +82,23 @@ public sealed class BackupStoreTests : IDisposable
 
         using var command = connection.CreateCommand();
         command.CommandText =
-            "SELECT path, content, content_sha256, byte_size, written_at_utc FROM backups " +
+            "SELECT session_id, path, content, content_sha256, byte_size, written_at_utc FROM backups " +
             "WHERE path = $path ORDER BY id ASC";
         command.Parameters.AddWithValue("$path", path);
 
         using var reader = command.ExecuteReader();
         while (reader.Read())
         {
-            var length = reader.GetBytes(1, 0, null, 0, 0); // total BLOB length
+            var length = reader.GetBytes(2, 0, null, 0, 0); // total BLOB length
             var content = new byte[length];
-            reader.GetBytes(1, 0, content, 0, content.Length);
+            reader.GetBytes(2, 0, content, 0, content.Length);
             rows.Add(new Row(
-                reader.GetString(0),
+                reader.IsDBNull(0) ? null : reader.GetString(0),
+                reader.GetString(1),
                 content,
-                reader.GetString(2),
-                reader.GetInt64(3),
-                reader.GetString(4)));
+                reader.GetString(3),
+                reader.GetInt64(4),
+                reader.GetString(5)));
         }
 
         return rows;
@@ -153,118 +167,231 @@ public sealed class BackupStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task Record_ConcurrentWriterCommitsSameSuccessor_DedupsAcrossConnections()
-    {
-        var path = PathOf("config.json");
-        var before = Encoding.UTF8.GetBytes("before");
-        var successor = Encoding.UTF8.GetBytes("successor");
-        BackupStore.Record(path, before);
-
-        // Model a second PathHide process with its own connection. It has appended the same
-        // successor but has not committed yet, while this process begins its Record call.
-        // A SELECT outside an immediate transaction can still see `before`, then wait at INSERT
-        // and append a duplicate after this writer commits. Taking the write reservation before
-        // SELECT makes Record wait here, then observe and dedup the committed successor.
-        using var other = new SqliteConnection(new SqliteConnectionStringBuilder
-        {
-            DataSource = StoreFile,
-            Mode = SqliteOpenMode.ReadWrite,
-        }.ToString());
-        other.Open();
-        using var otherTransaction = other.BeginTransaction(deferred: false);
-        using (var insert = other.CreateCommand())
-        {
-            insert.Transaction = otherTransaction;
-            insert.CommandText =
-                "INSERT INTO backups (path, content, content_sha256, byte_size, written_at_utc) " +
-                "VALUES ($path, $content, $hash, $size, $writtenAt)";
-            insert.Parameters.AddWithValue("$path", path);
-            insert.Parameters.AddWithValue("$content", successor);
-            insert.Parameters.AddWithValue(
-                "$hash",
-                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(successor)));
-            insert.Parameters.AddWithValue("$size", successor.LongLength);
-            insert.Parameters.AddWithValue(
-                "$writtenAt",
-                FileTimestamp.SerializedStamp(DateTimeOffset.UtcNow));
-            insert.ExecuteNonQuery();
-        }
-
-        using var admitted = new ManualResetEventSlim();
-        using var nativeRelease = new ManualResetEventSlim();
-        string? firstDecisionStatement = null;
-        var singleton = (SqliteConnection)typeof(BackupStore)
-            .GetField("_connection", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
-        SQLitePCL.raw.sqlite3_trace(singleton.Handle, (_, statement) =>
-        {
-            if (firstDecisionStatement is null &&
-                (statement.StartsWith("BEGIN", StringComparison.OrdinalIgnoreCase) ||
-                 statement.StartsWith("SELECT content_sha256", StringComparison.OrdinalIgnoreCase)))
-            {
-                firstDecisionStatement = statement;
-                admitted.Set();
-                nativeRelease.Wait(TimeSpan.FromSeconds(5));
-            }
-        }, null);
-        var cancellationToken = TestContext.Current.CancellationToken;
-        var competingRecord = Task.Run(() =>
-        {
-            BackupStore.Record(path, (byte[])successor.Clone());
-        }, cancellationToken);
-        try
-        {
-            Assert.True(admitted.Wait(TimeSpan.FromSeconds(5), cancellationToken));
-            Assert.StartsWith("BEGIN IMMEDIATE", firstDecisionStatement, StringComparison.OrdinalIgnoreCase);
-            Assert.False(competingRecord.IsCompleted);
-        }
-        finally
-        {
-            nativeRelease.Set();
-            try { otherTransaction.Commit(); }
-            finally
-            {
-                try { await competingRecord.WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None); }
-                finally { SQLitePCL.raw.sqlite3_trace(singleton.Handle, (SQLitePCL.strdelegate_trace?)null, null); }
-            }
-        }
-
-        var rows = RowsFor(path);
-        Assert.Equal(2, rows.Count);
-        Assert.Equal(before, rows[0].Content);
-        Assert.Equal(successor, rows[1].Content);
-    }
-
-    [Fact]
-    public void Record_ChangedSave_InsertsANewRow()
+    public void Record_ChangedSaveInOneSession_ReplacesTheSessionsRow()
     {
         var path = PathOf("config.json");
         BackupStore.Record(path, Encoding.UTF8.GetBytes("{\"a\":1}"));
+        BackupStore.Close();
         BackupStore.Record(path, Encoding.UTF8.GetBytes("{\"a\":2}"));
 
-        var rows = RowsFor(path);
-        Assert.Equal(2, rows.Count);
-        Assert.Equal("{\"a\":1}", Encoding.UTF8.GetString(rows[0].Content));
-        Assert.Equal("{\"a\":2}", Encoding.UTF8.GetString(rows[1].Content));
+        var row = Assert.Single(RowsFor(path));
+        Assert.Equal("{\"a\":2}", Encoding.UTF8.GetString(row.Content));
+        Assert.Equal(BackupStore.Session, row.Session);
     }
 
     [Fact]
-    public void Record_Revert_InsertsANewRow_ComparingOnlyAgainstTheLatest()
+    public void Record_KeepsEachSessionsLastVersion_AndNeverChangesAnEarlierSessionsRow()
     {
-        // A revert differs from the IMMEDIATELY preceding row, so it is recorded as the new version it is —
-        // dedup compares only against the latest row for the path, not the whole history.
         var path = PathOf("config.json");
-        var v1 = Encoding.UTF8.GetBytes("{\"a\":1}");
-        var v2 = Encoding.UTF8.GetBytes("{\"a\":2}");
+        BackupStore.Session = "earlier";
+        BackupStore.Record(path, Encoding.UTF8.GetBytes("v1"));
+        BackupStore.Close();
 
-        BackupStore.Record(path, v1);
-        BackupStore.Record(path, v2);
-        BackupStore.Record(path, (byte[])v1.Clone()); // revert to v1's content
+        BackupStore.Session = "later";
+        BackupStore.Record(path, Encoding.UTF8.GetBytes("v2"));
+        BackupStore.Close();
+        BackupStore.Record(path, Encoding.UTF8.GetBytes("v3"));
 
         var rows = RowsFor(path);
-        Assert.Equal(3, rows.Count);
-        Assert.Equal(v1, rows[0].Content);
-        Assert.Equal(v2, rows[1].Content);
-        Assert.Equal(v1, rows[2].Content); // the revert is a distinct third row
+        Assert.Equal([("earlier", "v1"), ("later", "v3")],
+            rows.Select(row => (row.Session, Encoding.UTF8.GetString(row.Content))));
+    }
+
+    [Fact]
+    public void Record_FirstSaveEqualToTheLatestEarlierRow_WritesNothing()
+    {
+        var path = PathOf("config.json");
+        BackupStore.Session = "earlier";
+        BackupStore.Record(path, Encoding.UTF8.GetBytes("same"));
+        BackupStore.Close();
+
+        BackupStore.Session = "later";
+        BackupStore.Record(path, Encoding.UTF8.GetBytes("same"));
+
+        Assert.Equal("earlier", Assert.Single(RowsFor(path)).Session);
+    }
+
+    [Fact]
+    public void Record_KeepsRowsFromBeforeSessions_AndAddsTheColumnInPlace()
+    {
+        // A store written by a build without sessions: same table and version, no session_id column.
+        using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = StoreFile,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Pooling = false,
+        }.ToString()))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE backups (id INTEGER PRIMARY KEY, path TEXT NOT NULL, content BLOB NOT NULL,
+                  content_sha256 TEXT NOT NULL, byte_size INTEGER NOT NULL, written_at_utc TEXT NOT NULL);
+                CREATE INDEX idx_backups_path_id ON backups (path, id);
+                INSERT INTO backups (path, content, content_sha256, byte_size, written_at_utc)
+                  VALUES ($path, X'6F6C64', 'x', 3, '2026-01-01T00:00:00.000Z');
+                PRAGMA user_version = 1;
+                """;
+            command.Parameters.AddWithValue("$path", PathOf("config.json"));
+            command.ExecuteNonQuery();
+        }
+
+        BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("new"));
+
+        var rows = RowsFor(PathOf("config.json"));
+        Assert.Equal([(null, "old"), (BackupStore.Session, "new")],
+            rows.Select(row => (row.Session, Encoding.UTF8.GetString(row.Content))));
+    }
+
+    /// <summary>Holds SQLite's write lock on the store from another connection, as a stalled store would.</summary>
+    private SqliteConnection HoldWriteLock()
+    {
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = StoreFile,
+            Mode = SqliteOpenMode.ReadWrite,
+            Pooling = false,
+        }.ToString());
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "BEGIN IMMEDIATE;";
+        command.ExecuteNonQuery();
+        return connection;
+    }
+
+    private static void Release(SqliteConnection holder)
+    {
+        using (var command = holder.CreateCommand())
+        {
+            command.CommandText = "ROLLBACK;";
+            command.ExecuteNonQuery();
+        }
+        holder.Dispose();
+    }
+
+    [Fact]
+    public void Save_CompletesWhileTheHistoryIsStalled_AndTheHistoryCatchesUpAfterwards()
+    {
+        // The save's return while another connection still holds the store's write lock shows it did not
+        // wait for the history; the row landing after release shows the write was kept, not dropped.
+        var store = new PathListStore();
+        store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Shown }]);
+        BackupStore.Close();
+        var holder = HoldWriteLock();
+
+        store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
+        Release(holder);
+
+        Assert.Equal(File.ReadAllBytes(PathOf("paths.json")), Assert.Single(RowsFor(PathOf("paths.json"))).Content);
+    }
+
+    [Fact(Timeout = 30_000)]
+    public async Task Hide_AppliesAttributesWhileTheHistoryIsStalled()
+    {
+        var visibility = new FakeVisibilityService();
+        var settings = new FakeSettingsStore();
+        var vm = new MainWindowViewModel(new BoundedVisibility(visibility), new PathListStore(), settings,
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+        vm.Initialize();
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/a" });
+        await vm.ScanTask;
+        BackupStore.Close();
+        var holder = HoldWriteLock();
+        try
+        {
+            vm.Rows.Single().IsSelected = true;
+            await ((IAsyncRelayCommand)vm.HideSelectedCommand).ExecuteAsync(null);
+
+            Assert.Contains("/a", visibility.Hidden);
+            Assert.Contains("\"hidden\"", File.ReadAllText(PathOf("paths.json")));
+        }
+        finally
+        {
+            Release(holder);
+        }
+        Assert.Contains("\"hidden\"", Encoding.UTF8.GetString(Assert.Single(RowsFor(PathOf("paths.json"))).Content));
+    }
+
+    [Fact(Timeout = 30_000)]
+    public async Task Flush_WaitsForPendingHistory()
+    {
+        BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
+        BackupStore.Close();
+        var holder = HoldWriteLock();
+        BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("second"));
+
+        var flush = BackupStore.FlushAsync(TimeSpan.FromHours(1), TimeProvider.System);
+        Release(holder);
+        await flush;
+
+        Assert.Equal("second", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
+    }
+
+    [Fact(Timeout = 30_000)]
+    public async Task Flush_WithNoTimeLeft_ReturnsWithoutWaiting()
+    {
+        BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
+        BackupStore.Close();
+        var holder = HoldWriteLock();
+        try
+        {
+            BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("second"));
+
+            await BackupStore.FlushAsync(TimeSpan.Zero, TimeProvider.System);
+
+            Assert.Equal("first", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
+        }
+        finally
+        {
+            Release(holder);
+        }
+    }
+
+    private static MainWindowViewModel QuittingViewModel()
+    {
+        var settings = new FakeSettingsStore();
+        // A bound no test outlasts: completing at all shows whether the quit waited for the history.
+        return new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()),
+            new FakeJsonStore<List<PathEntry>>(), settings, settings.Load().Value, new FakeJsonStore<AppState>(),
+            new AppState())
+        {
+            ShutdownBound = TimeSpan.FromHours(1),
+        };
+    }
+
+    [Fact(Timeout = 30_000)]
+    public async Task Quit_WaitsForPendingHistory()
+    {
+        BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
+        BackupStore.Close();
+        var holder = HoldWriteLock();
+        BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("second"));
+
+        var quit = QuittingViewModel().QuitAsync();
+        Release(holder);
+
+        Assert.True(await quit);
+        Assert.Equal("second", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
+    }
+
+    [Fact(Timeout = 30_000)]
+    public async Task SessionEnd_DoesNotWaitForPendingHistory()
+    {
+        BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
+        BackupStore.Close();
+        var holder = HoldWriteLock();
+        try
+        {
+            BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("second"));
+
+            await QuittingViewModel().EndSessionAsync();
+
+            Assert.Equal("first", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
+        }
+        finally
+        {
+            Release(holder);
+        }
     }
 
     [Fact]
@@ -335,7 +462,7 @@ public sealed class BackupStoreTests : IDisposable
         // Point PATHHIDE_DATA_DIR at a location the store cannot open a DB in: a *file* standing where the root
         // directory would be. EnsureOpen's mkdir/-open fails, so recording is disabled for the session —
         // one warn is logged and every Record is a silent no-op that never throws.
-        var blocker = Path.Combine(Path.GetTempPath(), "pathhide-blocked-" + NanoId.New());
+        var blocker = Path.Combine(Path.GetTempPath(), "pathhide-blocked-" + Guid.NewGuid().ToString("N"));
         File.WriteAllText(blocker, "not a directory"); // a file where the store expects a directory
         var previousHome = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
         try

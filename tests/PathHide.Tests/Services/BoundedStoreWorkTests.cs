@@ -9,6 +9,24 @@ namespace PathHide.Tests.Services;
 public sealed class BoundedStoreWorkTests
 {
     [Fact]
+    public async Task Work_that_finished_as_the_bound_ran_out_is_reported_as_done()
+    {
+        // The started hook runs before the wait: it lets the work finish, then fires the deadline, so the
+        // wait meets both at once. The work landed, so its result is returned, not a timeout.
+        var clock = new PathHide.Tests.Fakes.ManualClock();
+        var bound = TimeSpan.FromSeconds(10);
+
+        var result = await new BoundedStoreWork().RunAsync(() => 7, bound, clock, TestContext.Current.CancellationToken,
+            started: work =>
+            {
+                work.Wait();
+                clock.Advance(bound);
+            });
+
+        Assert.Equal(7, result);
+    }
+
+    [Fact]
     public async Task Timeout_keeps_the_physical_tail_and_never_starts_a_conflicting_call()
     {
         var owner = new BoundedStoreWork();

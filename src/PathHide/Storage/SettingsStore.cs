@@ -9,7 +9,7 @@ namespace PathHide.Storage;
 public sealed class SettingsStore : ISettingsStore
 {
     private readonly JsonStore<Dictionary<string, JsonElement>> _store =
-        new(AppSettings.FileName, QuarantineJournal.SettingsLabel, FormatVersions.Settings);
+        new(AppSettings.FileName, "settings", FormatVersions.Settings);
 
     public LoadedStore<AppSettings> Load()
     {
@@ -20,15 +20,19 @@ public sealed class SettingsStore : ISettingsStore
         return new LoadedStore<AppSettings>(settings, loaded.WasUnreadable);
     }
 
-    public bool SaveChanges(AppSettings previous, AppSettings current)
+    /// <summary>
+    /// Writes <paramref name="current"/> when its sets differ from <paramref name="previous"/>, the
+    /// settings the app holds in memory, or always when <paramref name="previous"/> is null;
+    /// <c>config.json</c> is not read first. PathHide is the file's only writer while it runs, and its four
+    /// sets are harmless preferences, so a file that could not be used at startup is simply replaced by
+    /// this save (see <see cref="SettingsSets"/> for what it drops).
+    /// </summary>
+    public bool SaveChanges(AppSettings? previous, AppSettings current)
     {
         var sets = SettingsSets.Differing(current);
-        if (SettingsSets.SameSets(SettingsSets.Differing(previous), sets))
+        if (previous is not null && SettingsSets.SameSets(SettingsSets.Differing(previous), sets))
             return false;
 
-        // Loading first sets aside a file that cannot be read instead of writing over it
-        // (store-recovery-conventions); what it held is not carried into the new file.
-        _store.Load();
         _store.Save(sets);
         return true;
     }

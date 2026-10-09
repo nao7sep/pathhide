@@ -92,7 +92,7 @@ public sealed class ElevatedApplyFilesTests : IDisposable
     {
         var files = ElevatedApplyFiles.Create(_temp);
         var entry = new LogEntry("2026-10-02T09:31:00.000Z", "2026-10-02T09:31:00.500Z", "info",
-            "apply: done " + NanoId.New(), null, null);
+            "apply: done " + Guid.NewGuid().ToString("N"), null, null);
         File.WriteAllText(files.ResultsPath,
             ElevatedApplyResults.SerializeLine(new PathApplyResult(@"C:\a", Ok: true))
             + ElevatedApplyResults.SerializeLine(entry));

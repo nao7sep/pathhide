@@ -20,7 +20,7 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
 
     public WindowsVisibilityServiceTests()
     {
-        _dir = Path.Combine(Path.GetTempPath(), "pathhide-win-tests", NanoId.New());
+        _dir = Path.Combine(Path.GetTempPath(), "pathhide-win-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dir);
     }
 

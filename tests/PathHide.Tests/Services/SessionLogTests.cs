@@ -12,7 +12,7 @@ public sealed class SessionLogTests
         var name = SessionLog.FileName(
             new DateTimeOffset(2026, 6, 10, 9, 30, 15, 123, TimeSpan.Zero));
 
-        Assert.Equal("20260610-093015-123-utc.log", name);
+        Assert.Equal("20260610-093015-utc.log", name);
     }
 
     [Fact]
@@ -23,7 +23,7 @@ public sealed class SessionLogTests
         var name = SessionLog.FileName(
             new DateTimeOffset(2026, 6, 10, 18, 30, 15, 456, TimeSpan.FromHours(9)));
 
-        Assert.Equal("20260610-093015-456-utc.log", name);
+        Assert.Equal("20260610-093015-utc.log", name);
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public sealed class SessionLogTests
             Path = System.IO.Path.Combine(
                 System.IO.Path.GetTempPath(),
                 "pathhide-sessionlog-tests",
-                NanoId.New());
+                Guid.NewGuid().ToString("N"));
             System.IO.Directory.CreateDirectory(Path);
         }
 

@@ -9,6 +9,12 @@ using PathHide.Models;
 namespace PathHide.Storage;
 
 /// <summary>The config set keys, how each is read, and how each is written (config-sets-conventions).</summary>
+/// <remarks>
+/// Retirement policy: all four sets are harmless preferences. An invalid value falls back to its
+/// built-in and is normalized at the next Settings save that changes something; a key PathHide does not
+/// know (only possible from a newer build or a hand edit) is dropped at that save, because the file is
+/// written from <see cref="Differing"/> alone.
+/// </remarks>
 internal static class SettingsSets
 {
     internal const string Language = "language";
