@@ -57,6 +57,73 @@ public sealed class RecordsViewModelTests
     }
 
     [AvaloniaFact]
+    public void A_late_import_with_an_older_time_appears_inside_the_loaded_range()
+    {
+        var vm = Started();
+        Answer(true, Newest(300, 100));
+        vm.LoadMore();
+        Settle();
+        Answer(false, Newest(200, 100));
+        var selected = vm.Rows.Single(row => row.Id == 150);
+        vm.SelectedRow = selected;
+
+        Signal(vm);
+        ElapseLive();
+        Answer(true, Newest(300, 100));
+        Assert.Equal(new RecordCursor(Record(201).Time, 201), _reader.LastPage.Query.After);
+        var imported = Record(1000) with { Time = Record(150).Time };
+        Answer(true, Newest(200, 99).Append(imported).OrderByDescending(record => record.Time, StringComparer.Ordinal)
+            .ThenByDescending(record => record.Id).ToArray());
+        Answer(false, Record(101));
+
+        Assert.Contains(vm.Rows, row => row.Id == 1000);
+        Assert.Same(selected, vm.SelectedRow);
+        Assert.Equal(201, vm.Rows.Count);
+        Assert.False(vm.HasMore);
+    }
+
+    [AvaloniaFact]
+    public void A_live_burst_bridges_to_the_old_list_without_losing_selection_or_the_middle_records()
+    {
+        var vm = Started();
+        Answer(false, Newest(100, 100));
+        var selected = vm.Rows[20];
+        vm.SelectedRow = selected;
+        Signal(vm);
+        ElapseLive();
+        Answer(true, Newest(250, 100));
+
+        Assert.Equal(new RecordCursor(Record(151).Time, 151), _reader.LastPage.Query.After);
+        Assert.Equal(100, vm.Rows.Count); // The incomplete bridge is not displayed.
+        Answer(true, Newest(150, 100));
+        Answer(false, Newest(50, 50));
+
+        Assert.Equal(Newest(250, 250).Select(record => record.Id), vm.Rows.Select(row => row.Id));
+        Assert.Same(selected, vm.SelectedRow);
+        Assert.False(vm.HasMore);
+    }
+
+    [AvaloniaFact]
+    public void A_filter_change_discards_an_unfinished_live_bridge()
+    {
+        var vm = Started();
+        Answer(true, Newest(100, 100));
+        Signal(vm);
+        ElapseLive();
+        Answer(true, Newest(250, 100));
+        var bridge = _reader.LastPage;
+        vm.SelectedLevel = vm.LevelOptions.Single(option => option.Level == RecordLevelFilter.Error);
+        Settle();
+        _reader.LastPage.Answer(false, Record(300, level: "error"));
+        Settle();
+        bridge.Answer(true, Newest(150, 100));
+        Settle();
+
+        Assert.Equal([300], vm.Rows.Select(row => row.Id));
+        Assert.False(vm.HasMore);
+    }
+
+    [AvaloniaFact]
     public void It_shows_a_loading_note_while_the_first_page_is_read_then_the_rows_newest_first_with_nothing_selected()
     {
         var vm = Started();
@@ -254,7 +321,7 @@ public sealed class RecordsViewModelTests
     }
 
     [AvaloniaFact]
-    public void A_burst_of_new_records_reads_the_newest_page_once_while_at_the_top_keeping_the_rows_shown()
+    public void A_burst_of_signals_refreshes_the_loaded_range_once_while_at_the_top_keeping_the_rows_shown()
     {
         var vm = Started();
         Answer(true, Newest(300, RecordsReader.PageSize));
@@ -276,8 +343,10 @@ public sealed class RecordsViewModelTests
         Assert.Equal(2 * RecordsReader.PageSize, vm.Rows.Count);
 
         Answer(true, Newest(302, RecordsReader.PageSize));
+        Answer(true, Newest(202, RecordsReader.PageSize));
+        Answer(true, Newest(102, RecordsReader.PageSize));
 
-        Assert.Equal(reads + 1, _reader.Pages.Count);
+        Assert.Equal(reads + 3, _reader.Pages.Count);
         Assert.Equal(sessionReads + 1, _reader.SessionReads);
         Assert.Equal([302, 301, 300], vm.Rows.Take(3).Select(row => row.Id));
         Assert.Equal(2 * RecordsReader.PageSize + 2, vm.Rows.Count);
@@ -299,6 +368,7 @@ public sealed class RecordsViewModelTests
         vm.OnListScrolled(atTop: true, nearEnd: false);
         Settle();
         Answer(true, Newest(301, RecordsReader.PageSize));
+        Answer(true, Newest(201, RecordsReader.PageSize));
 
         Assert.Equal(301, vm.Rows[0].Id);
     }

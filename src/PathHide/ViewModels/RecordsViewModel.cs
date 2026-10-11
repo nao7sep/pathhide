@@ -333,10 +333,27 @@ public sealed partial class RecordsViewModel : ObservableObject
     private async Task ReadNewestAsync()
     {
         var generation = _generation;
+        // Refresh through the loaded range before merging. Besides bursts larger than a page,
+        // child records can arrive late with earlier event times inside an older displayed page.
+        var boundary = Rows.LastOrDefault()?.Record;
+        var query = _listQuery;
         RecordsPage page;
         try
         {
-            page = await _reader.ReadPageAsync(_listQuery);
+            page = await _reader.ReadPageAsync(query);
+            var records = page.Records.ToList();
+            while (boundary is not null && page.More && page.Records.Count > 0
+                && RecordFormat.NewestFirst(page.Records[^1], boundary) < 0)
+            {
+                if (generation != _generation || _closed)
+                    return;
+                query = query with { After = RecordFormat.CursorAfter(page.Records) };
+                page = await _reader.ReadPageAsync(query);
+                records.AddRange(page.Records);
+            }
+            var loadedRange = boundary is null ? records
+                : records.Where(record => RecordFormat.NewestFirst(record, boundary) <= 0).ToList();
+            page = new RecordsPage(loadedRange, page.More || loadedRange.Count < records.Count);
         }
         catch (Exception ex)
         {
