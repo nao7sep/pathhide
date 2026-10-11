@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
@@ -7,6 +6,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using PathHide.Models;
 using PathHide.Services;
+using PathHide.Tests.Infrastructure;
 using Xunit;
 
 namespace PathHide.Tests.Services;
@@ -14,7 +14,7 @@ namespace PathHide.Tests.Services;
 /// <summary>
 /// Windows behavior that only the real platform shows: the elevated <c>apply</c> child run as an ordinary
 /// process, an ACL that denies writing attributes, and the single-instance claim on a case-insensitive
-/// file system. Skipped elsewhere; the developer's Windows run executes them.
+/// file system. Skipped elsewhere; the ordinary Windows run executes them.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class WindowsPlatformTests : IDisposable
@@ -77,16 +77,7 @@ public sealed class WindowsPlatformTests : IDisposable
         File.WriteAllText(request, ElevatedApplyCommand.SerializeRequest(
             new ElevatedApplyCommand.Buckets([hide], [system], [show])));
 
-        // The child is the app itself in apply mode, started the way the runas launch starts it but
-        // without the elevation, so it runs here without a consent prompt.
-        var start = new ProcessStartInfo("dotnet") { UseShellExecute = false, CreateNoWindow = true };
-        start.ArgumentList.Add(typeof(App).Assembly.Location);
-        foreach (var argument in ElevatedApplyCommand.BuildArguments(request, results, Path.Combine(_dir, "root")))
-            start.ArgumentList.Add(argument);
-        using var child = Process.Start(start)!;
-
-        Assert.True(child.WaitForExit(TimeSpan.FromSeconds(60)), "The apply child did not exit.");
-        Assert.Equal(0, child.ExitCode);
+        Assert.Equal(0, ApplyChildProcess.Run(request, results, Path.Combine(_dir, "root")));
         Assert.Equal(FileAttributes.Hidden, File.GetAttributes(hide) & (FileAttributes.Hidden | FileAttributes.System));
         Assert.Equal(FileAttributes.Hidden | FileAttributes.System,
             File.GetAttributes(system) & (FileAttributes.Hidden | FileAttributes.System));
@@ -95,6 +86,27 @@ public sealed class WindowsPlatformTests : IDisposable
         var report = ElevatedApplyResults.Parse(File.ReadAllText(results));
         Assert.Equal([hide, system, show], report.Results.Select(result => result.Path));
         Assert.All(report.Results, result => Assert.True(result.Ok));
+    }
+
+    [WindowsOnlyFact]
+    public void A_failed_path_does_not_stop_later_paths_or_lose_their_reports()
+    {
+        var denied = NewFile("denied-first.txt");
+        DenyWriteAttributes(denied);
+        var hidden = NewFile("hidden-later.txt");
+        var shown = NewFile("shown-later.txt", FileAttributes.Hidden | FileAttributes.System);
+        var request = Path.Combine(_dir, "request.json");
+        var results = Path.Combine(_dir, "results.jsonl");
+        File.WriteAllText(request, ElevatedApplyCommand.SerializeRequest(new([denied, hidden], [], [shown])));
+
+        Assert.Equal(1, ApplyChildProcess.Run(request, results, Path.Combine(_dir, "root")));
+
+        var report = ElevatedApplyResults.Parse(File.ReadAllText(results));
+        Assert.Equal([new PathApplyResult(denied, false), new PathApplyResult(hidden, true),
+            new PathApplyResult(shown, true)], report.Results);
+        Assert.Equal((FileAttributes)0, File.GetAttributes(denied) & FileAttributes.Hidden);
+        Assert.Equal(FileAttributes.Hidden, File.GetAttributes(hidden) & FileAttributes.Hidden);
+        Assert.Equal((FileAttributes)0, File.GetAttributes(shown) & (FileAttributes.Hidden | FileAttributes.System));
     }
 
     [WindowsOnlyFact]

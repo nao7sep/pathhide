@@ -47,6 +47,8 @@ dotnet test --collect "XPlat Code Coverage" --results-directory coverage
 
 Some tests are platform-gated and report as skipped off their platform — the Windows attribute tests on macOS and vice versa — so a green run on one machine does not mean the whole suite ran. CI runs it on both.
 
+For Windows qualification, run `powershell -NoProfile -File .\scripts\test-windows.ps1` from the repository. It builds and runs the complete suite once and saves a TRX result plus SDK information under `TestResults/`. Enable Windows Developer Mode for the symbolic-link test; missing link privileges fail qualification instead of silently passing. Fixtures use disposable files; no GUI or administrator prompt is launched. Real UAC consent, antivirus delays, logout, disconnected network shares, native input methods and multiple-display behavior still require separate platform checks.
+
 ## License
 
 [GNU GPL v3 or later](LICENSE) © 2026 Yoshinao Inoguchi

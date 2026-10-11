@@ -112,6 +112,40 @@ public sealed class ElevatedApplyFilesTests : IDisposable
         Assert.Contains(sink.Entries, e => e.Message == entry.Message && e.Session == entry.Session);
     }
 
+    [WindowsOnlyFact]
+    public void Sweep_KeepsAChildsOpenResultsThenImportsThemOnceAfterTheHandleCloses()
+    {
+        var files = ElevatedApplyFiles.Create(_temp);
+        File.WriteAllText(files.RequestPath, "{}");
+        var sink = new CapturingSink();
+        var message = "held child result " + Guid.NewGuid().ToString("N");
+        Log.Start(sink, Path.Combine(_temp, "logs"));
+        try
+        {
+            using (var writer = ElevatedResultsWriter.Create(files.ResultsPath))
+            {
+                writer.Report(new PathApplyResult(@"C:\fixture.txt", true));
+                writer.Write(new LogEntry("2026-10-02T09:31:00.000Z", "2026-10-02T09:31:00.500Z",
+                    "info", message, null, null));
+                Assert.True(files.ReadResults()[@"C:\fixture.txt"]);
+                // The GUI owner has gone, but Windows still protects the child's open report.
+                Assert.Equal(1, ElevatedApplyFiles.SweepLeftovers(_temp, _ => false));
+                Assert.False(File.Exists(files.RequestPath));
+                Assert.True(File.Exists(files.ResultsPath));
+                Assert.DoesNotContain(sink.Entries, entry => entry.Message == message);
+            }
+
+            Assert.Equal(1, ElevatedApplyFiles.SweepLeftovers(_temp, _ => false));
+            Assert.Equal(0, ElevatedApplyFiles.SweepLeftovers(_temp, _ => false));
+        }
+        finally
+        {
+            Log.Shutdown();
+        }
+        Assert.Single(sink.Entries, entry => entry.Message == message);
+        Assert.False(File.Exists(files.ResultsPath));
+    }
+
     private sealed class CapturingSink : ILogSink
     {
         private readonly List<LogEntry> _entries = [];

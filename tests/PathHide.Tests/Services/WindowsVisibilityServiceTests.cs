@@ -130,12 +130,9 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         var target = NewFile();
         var link = Path.Combine(_dir, "symlink.txt");
 
-        // Creating a symbolic link needs SeCreateSymbolicLinkPrivilege (admin or Developer
-        // Mode). When it is absent the test cannot run, so it no-ops rather than failing — the
-        // junction test above covers the no-follow guarantee in that case, and this adds the
-        // symlink variant wherever the privilege is granted.
-        if (!TryCreateFileSymlink(link, target))
-            return;
+        // Qualification must exercise the link; missing privileges must not look like a pass.
+        // Enable Windows Developer Mode before running the ordinary suite.
+        File.CreateSymbolicLink(link, target);
 
         Service().Hide(link);
 
@@ -171,17 +168,4 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
             throw new InvalidOperationException($"mklink /J failed: {process.StandardError.ReadToEnd()}");
     }
 
-    private static bool TryCreateFileSymlink(string link, string target)
-    {
-        try
-        {
-            File.CreateSymbolicLink(link, target);
-            return true;
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
-        {
-            // Privilege not held (ERROR_PRIVILEGE_NOT_HELD).
-            return false;
-        }
-    }
 }
