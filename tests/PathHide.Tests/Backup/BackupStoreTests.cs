@@ -294,7 +294,7 @@ public sealed class BackupStoreTests : IDisposable
         var visibility = new FakeVisibilityService();
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(new BoundedVisibility(visibility), new PathListStore(), settings,
-            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), (new PathListStore()).Load().Value);
         vm.Initialize();
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/a" });
         await vm.ScanTask;
@@ -356,7 +356,7 @@ public sealed class BackupStoreTests : IDisposable
         // A bound no test outlasts: completing at all shows whether the quit waited for the history.
         return new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()),
             new FakeJsonStore<List<PathEntry>>(), settings, settings.Load().Value, new FakeJsonStore<AppState>(),
-            new AppState())
+            new AppState(), [])
         {
             ShutdownBound = TimeSpan.FromHours(1),
         };

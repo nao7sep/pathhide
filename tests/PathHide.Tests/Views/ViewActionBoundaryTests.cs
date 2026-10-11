@@ -24,7 +24,7 @@ public sealed class ViewActionBoundaryTests
             settings,
             settings.Load().Value,
             new FakeJsonStore<AppState>(),
-            new AppState());
+            new AppState(), []);
         var window = new MainWindow { DataContext = vm };
         var hostile = new IOException("EACCES IPC /private/tmp/PATHHIDE-SHORTCUT-SENTINEL");
 

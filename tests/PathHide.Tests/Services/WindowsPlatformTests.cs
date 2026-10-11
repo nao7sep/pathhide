@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
@@ -150,5 +151,84 @@ public sealed class WindowsPlatformTests : IDisposable
             Assert.False(SingleInstanceLease.TryAcquire(root.ToUpperInvariant(), out var duplicate));
             Assert.Null(duplicate);
         }
+    }
+
+    private static void Run(string executable, params string[] arguments)
+    {
+        var start = new ProcessStartInfo(executable) { UseShellExecute = false, RedirectStandardError = true,
+            RedirectStandardOutput = true, CreateNoWindow = true };
+        foreach (var argument in arguments)
+            start.ArgumentList.Add(argument);
+        using var process = Process.Start(start)!;
+        if (!process.WaitForExit(10_000))
+        {
+            process.Kill(entireProcessTree: true);
+            Assert.Fail("Fixture command did not finish.");
+        }
+        Assert.True(process.ExitCode == 0, process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd());
+    }
+
+    private static void AssertOneWriter(string root, string alias)
+    {
+        Assert.Equal(SingleInstanceLease.MutexName(root), SingleInstanceLease.MutexName(alias));
+        Assert.True(SingleInstanceLease.TryAcquire(root, out var owner));
+        using (owner)
+        {
+            SingleInstanceLease.RegisterOwnerActivationHandler(() => { });
+            Assert.False(SingleInstanceLease.TryAcquire(alias, out var duplicate));
+            Assert.Null(duplicate);
+        }
+    }
+
+    [WindowsOnlyFact]
+    public void A_parent_junction_is_the_same_managed_data_root()
+    {
+        var root = Directory.CreateDirectory(Path.Combine(_dir, "Root")).FullName;
+        var junction = Path.Combine(_dir, "alias");
+        Run("cmd.exe", "/c", "mklink", "/J", junction, _dir);
+        try { AssertOneWriter(root, Path.Combine(junction, "Root")); }
+        finally { Directory.Delete(junction); }
+    }
+
+    [WindowsOnlyFact]
+    public void A_subst_drive_is_the_same_managed_data_root()
+    {
+        var occupied = Directory.GetLogicalDrives().Select(path => char.ToUpperInvariant(path[0])).ToHashSet();
+        var letter = Enumerable.Range('D', 'Z' - 'D' + 1).Reverse().Select(value => (char)value)
+            .First(value => !occupied.Contains(value));
+        var drive = letter + ":";
+        var root = Directory.CreateDirectory(Path.Combine(_dir, "Root")).FullName;
+        Run("subst.exe", drive, _dir);
+        try { AssertOneWriter(root, Path.Combine(drive + @"\", "Root")); }
+        finally { Run("subst.exe", drive, "/d"); }
+    }
+
+    [WindowsOnlyFact]
+    public void Long_data_root_identity_grows_the_native_output_buffer()
+    {
+        var root = _dir;
+        for (var index = 0; index < 7; index++)
+            root = Path.Combine(root, new string('a', 90));
+        Directory.CreateDirectory(root);
+        AssertOneWriter(root, root + Path.DirectorySeparatorChar);
+    }
+
+    [WindowsOnlyFact]
+    public void A_foreign_posix_spelling_cannot_change_a_colliding_drive_rooted_file()
+    {
+        var previous = Environment.CurrentDirectory;
+        var actual = NewFile("foreign.txt");
+        try
+        {
+            Environment.CurrentDirectory = _dir;
+            var foreign = actual[2..].Replace('\\', '/');
+            var service = new WindowsVisibilityService(() => WindowsHideMode.HiddenOnly);
+            Assert.Equal(ActualState.Error, service.Inspect(foreign).ActualState);
+            Assert.Throws<ArgumentException>(() => service.Hide(foreign));
+            Assert.Throws<ArgumentException>(() => service.Show(foreign));
+            Assert.Throws<ArgumentException>(() => WindowsFileVisibility.Set(foreign, true, true));
+            Assert.Equal((FileAttributes)0, File.GetAttributes(actual) & (FileAttributes.Hidden | FileAttributes.System));
+        }
+        finally { Environment.CurrentDirectory = previous; }
     }
 }

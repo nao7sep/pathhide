@@ -40,7 +40,7 @@ public sealed class QuitTests
     {
         var vm = new MainWindowViewModel(
             new BoundedVisibility(_visibility), _paths, _settings, _settings.Load().Value,
-            state ?? new FakeJsonStore<AppState>(), new AppState())
+            state ?? new FakeJsonStore<AppState>(), new AppState(), _paths.Load().Value)
         {
             Clock = _clock,
             ShutdownBound = Bound,

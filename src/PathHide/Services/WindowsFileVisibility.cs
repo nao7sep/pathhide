@@ -53,6 +53,7 @@ public static class WindowsFileVisibility
     /// </remarks>
     public static void Set(string path, bool hide, bool system)
     {
+        path = PathNormalizer.RequireNativeAbsolutePath(path, windows: true);
         if (Change(File.GetAttributes(path), hide, system) is not { } updated)
             return;
 

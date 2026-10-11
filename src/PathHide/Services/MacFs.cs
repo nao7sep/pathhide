@@ -56,9 +56,8 @@ internal static partial class MacFs
         => followSymlinks ? chflags(path, flags) : lchflags(path, flags);
 
     /// <summary>
-    /// Resolves aliases in an existing directory path. Called only for the parent
-    /// of a path being added, never the item itself, which may be a link the user
-    /// means to hide.
+    /// Resolves aliases in an existing directory path. Also used for the managed data root;
+    /// entry identity calls it on a parent so a final symbolic link is never replaced by its target.
     /// </summary>
     public static bool TryRealPath(string path, out string resolved)
     {
@@ -79,6 +78,46 @@ internal static partial class MacFs
             free(pointer);
         }
     }
+
+    /// <summary>The actual entry spelling, resolving parents but preserving a final symlink.</summary>
+    internal static string? ResolveEntryPath(string path)
+    {
+        path = PathNormalizer.RequireNativeAbsolutePath(path, windows: false);
+        var name = System.IO.Path.GetFileName(path);
+        if (name is "" or "." or "..")
+            return TryRealPath(path, out var directory) ? directory : null;
+        var parent = System.IO.Path.GetDirectoryName(path)!;
+        if (!TryRealPath(parent, out var resolvedParent))
+            return null;
+        // Unknown/missing entries retain their spelling. A successful no-follow lookup supplies
+        // the actual leaf case on either kind of volume, including a broken symbolic link.
+        var actualName = TryGetName(path);
+        return System.IO.Path.Combine(resolvedParent, actualName ?? name);
+    }
+
+    private static string? TryGetName(string path)
+    {
+        const int capacity = 1040; // length + attrreference + NAME_MAX UTF-8 bytes and terminator
+        var buffer = Marshal.AllocHGlobal(capacity);
+        try
+        {
+            var list = new AttrList { bitmapcount = AttrBitMapCount, commonattr = 1 }; // ATTR_CMN_NAME
+            if (getattrlistName(path, ref list, buffer, capacity, FsOptNoFollow) != 0)
+                return null;
+            // The offset is relative to the attrreference, immediately after the length field.
+            var total = Marshal.ReadInt32(buffer);
+            var offset = Marshal.ReadInt32(buffer, 4);
+            var length = Marshal.ReadInt32(buffer, 8);
+            if (total > capacity || offset < 8 || length <= 1 || 4L + offset + length > total)
+                return null;
+            return Marshal.PtrToStringUTF8(buffer + 4 + offset, length - 1);
+        }
+        finally { Marshal.FreeHGlobal(buffer); }
+    }
+
+    [LibraryImport("libc", EntryPoint = "getattrlist", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
+    private static partial int getattrlistName(string path, ref AttrList attrList,
+        IntPtr buffer, nuint capacity, uint options);
 
     [LibraryImport("libc", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static partial int chflags(string path, uint flags);

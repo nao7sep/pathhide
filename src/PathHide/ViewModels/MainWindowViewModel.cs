@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -38,9 +40,13 @@ public partial class MainWindowViewModel : ObservableObject
 
     private List<PathEntry> _entries = [];
 
-    // Whether paths.json holds _entries. False only after a Reload found a file it cannot read and
-    // kept the entries on screen, so the next save writes them back even if nothing else changed.
+    // Whether paths.json holds _entries. False after rejected Reload or uncertain save settlement;
+    // a rejected Reload separately blocks saves until the repaired list is successfully read.
     private bool _entriesOnDisk = true;
+    // A rejected Reload must not let old rows overwrite an unreadable/ambiguous hand edit.
+    // The supported repair workflow is edit, then successfully Reload before another action.
+    private Exception? _pathListReadFailure;
+    internal TimeSpan IdentityWaitBound { get; init; } = TimeSpan.FromSeconds(2);
     // False after a Settings save failed or timed out: it may still have landed, so the settings held in
     // memory no longer prove what config.json holds, and the next Settings save writes whatever it holds.
     private bool _settingsOnDisk = true;
@@ -55,7 +61,6 @@ public partial class MainWindowViewModel : ObservableObject
     // scan is current, or Task.CompletedTask when none is running.
     internal Task ScanTask => _scanTask;
     private bool _initialized;
-    private bool _persistedStateLoaded;
 
     /// <summary>
     /// Set by the view to show a destructive-action confirmation dialog. Returns true if the
@@ -234,7 +239,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// <remarks>
     /// Construction is side-effect-free: no disk I/O and no scan happen here, so the
     /// type is safe to instantiate outside a running app. Call <see cref="Initialize"/>
-    /// once the view is ready to load entries and start scanning.
+    /// once the view is ready to start scanning; persisted values must already be prepared.
     /// </remarks>
     public MainWindowViewModel(
         BoundedVisibility visibility,
@@ -242,7 +247,8 @@ public partial class MainWindowViewModel : ObservableObject
         ISettingsStore settingsStore,
         AppSettings settings,
         IJsonStore<AppState> stateStore,
-        AppState state)
+        AppState state,
+        List<PathEntry> entries)
     {
         _visibility = visibility;
         _pathListStore = pathListStore;
@@ -250,15 +256,17 @@ public partial class MainWindowViewModel : ObservableObject
         _settings = settings;
         _stateStore = stateStore;
         _state = state;
+        _entries = entries;
         _scanner = new PathScanner(visibility);
         Rows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsPathListEmpty));
         ApplyUiFont();
+        SyncRowsWithEntries();
     }
 
     /// <summary>
-    /// Loads persisted path entries and starts the initial background scan. The view
+    /// Starts the initial background scan over the prepared entries. The view
     /// calls this once it is loaded. Idempotent — only the first call has any effect,
-    /// so a repeated Loaded event cannot trigger a second load or scan.
+    /// so a repeated Loaded event cannot trigger a second scan.
     /// </summary>
     public void Initialize()
     {
@@ -266,31 +274,36 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         _initialized = true;
 
-        LoadPersistedState();
         StartBackgroundScan();
     }
 
-    /// <summary>Loads the path registry once, before either startup reporting or scanning.</summary>
-    public void LoadPersistedState()
-    {
-        if (_persistedStateLoaded)
-            return;
-        _persistedStateLoaded = true;
+    internal Task ValidateLoadedPathsAsync() => ValidateLoadedPathsAsync(_entries, CancellationToken.None);
 
-        // An unreadable list throws UnreadableStoreException with the file left in place, which halts
-        // startup before anything is shown or applied: opening with an empty list would look exactly
-        // like losing it (store-recovery-conventions).
-        _entries = _pathListStore.Load().Value;
-        SyncRowsWithEntries();
-    }
-
-    internal void LoadPersistedState(List<PathEntry> entries)
+    private async Task ValidateLoadedPathsAsync(List<PathEntry> entries, CancellationToken token)
     {
-        if (_persistedStateLoaded)
-            return;
-        _persistedStateLoaded = true;
-        _entries = entries;
-        SyncRowsWithEntries();
+        // Native identities are optional evidence, independent of the required local-store worker.
+        // One overall budget stops a large/offline list from delaying startup or Reload indefinitely.
+        using var deadline = new CancellationTokenSource(IdentityWaitBound, Clock);
+        using var waiting = CancellationTokenSource.CreateLinkedTokenSource(token, deadline.Token);
+        var identities = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in entries)
+        {
+            token.ThrowIfCancellationRequested();
+            PathNormalizer.TryNormalize(entry.Path, out var normalized, out var family);
+            var identity = normalized!;
+            if (!deadline.IsCancellationRequested)
+            {
+                try { identity = await _visibility.ResolvePathAsync(identity, waiting.Token) ?? identity; }
+                catch (OperationCanceledException) when (deadline.IsCancellationRequested && !token.IsCancellationRequested)
+                {
+                    // The native read remains owned; its late result can never revise this admission.
+                }
+            }
+            if (!identities.Add(PathNormalizer.IdentityKey(identity, family)))
+                throw new UnreadableStoreException("paths", Path.Combine(StorageRoot.Directory, PathListStore.FileName),
+                    new JsonException("The path list holds aliases of the same local entry."));
+        }
+        token.ThrowIfCancellationRequested();
     }
 
     // --- The mutation protocol ---
@@ -399,9 +412,11 @@ public partial class MainWindowViewModel : ObservableObject
             accepted.Add(normalized);
         }
 
-        foreach (var candidate in await ResolveIdentitiesAsync(accepted, token))
+        var identities = await ResolveIdentitiesAsync(_entries.Select(entry => entry.Path).Concat(accepted).ToList(), token);
+        var existing = identities.Take(_entries.Count).ToList();
+        foreach (var candidate in identities.Skip(_entries.Count))
         {
-            if (updated.Any(e => PathNormalizer.AreEqual(e.Path, candidate)))
+            if (existing.Any(path => PathNormalizer.AreEqual(path, candidate)))
             {
                 duplicates++;
                 duplicatePaths.Add(candidate);
@@ -414,6 +429,7 @@ public partial class MainWindowViewModel : ObservableObject
                 DesiredVisibility = DesiredVisibility.Hidden,
             });
             addedPaths.Add(candidate);
+            existing.Add(candidate);
             added++;
         }
 
@@ -450,34 +466,32 @@ public partial class MainWindowViewModel : ObservableObject
     }));
 
     /// <summary>
-    /// Decides each new path's identity: its parent directory's aliases resolved, so two spellings of
-    /// one file become one entry. Done once, here, through the bounded owner, so every later
-    /// comparison is a pure string match. A parent that does not answer, cannot be resolved, or is
-    /// reached after a cancel keeps the spelling it was given.
+    /// Resolve incoming and existing references at Add's bounded native boundary. This recognizes
+    /// old alias spellings without rewriting stored entries, and distinguishes case-only Mac files.
+    /// Unknown identities retain their normalized spelling; later comparisons remain pure.
     /// </summary>
     private async Task<List<string>> ResolveIdentitiesAsync(List<string> paths, CancellationToken token)
     {
-        // One resolution per parent: a batch dropped from one folder asks once.
-        var resolvedParents = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var resolved = new Dictionary<string, string>(StringComparer.Ordinal);
         var identities = new List<string>(paths.Count);
         foreach (var path in paths)
         {
-            var parent = PathNormalizer.IdentityParent(path);
-            if (parent is not null && !resolvedParents.ContainsKey(parent) && !token.IsCancellationRequested)
+            PathNormalizer.TryNormalize(path, out var normalized, out _);
+            normalized ??= path;
+            if (!resolved.TryGetValue(normalized, out var identity))
             {
-                try
+                identity = normalized;
+                if (!token.IsCancellationRequested)
                 {
-                    resolvedParents[parent] = await _visibility.ResolveDirectoryAsync(parent, token);
+                    try { identity = await _visibility.ResolvePathAsync(normalized, token) ?? normalized; }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
+                    {
+                        Log.Info("add: cancelled while resolving paths");
+                    }
                 }
-                catch (OperationCanceledException) when (token.IsCancellationRequested)
-                {
-                    Log.Info("add: cancelled while resolving paths");
-                }
+                resolved[normalized] = identity;
             }
-
-            identities.Add(parent is not null && resolvedParents.GetValueOrDefault(parent) is { } resolved
-                ? PathNormalizer.Rebase(path, resolved)
-                : path);
+            identities.Add(identity);
         }
         return identities;
     }
@@ -566,37 +580,41 @@ public partial class MainWindowViewModel : ObservableObject
     /// left exactly as it is.
     /// </summary>
     [RelayCommand]
-    private Task RemoveSelectedAsync() => MutateAsync(async () =>
+    private Task RemoveSelectedAsync()
     {
-        var selected = Rows.Where(r => r.IsSelected).ToList();
-        if (selected.Count == 0)
-            return;
-
-        if (ConfirmDestructiveAsync is not null)
+        var paths = SelectedPaths();
+        return MutateAsync(async () =>
         {
-            var confirmed = await ConfirmDestructiveAsync(new ConfirmRequest(
-                Message.Of("remove.title"),
-                Message.Of("remove.message", ("count", selected.Count)),
-                "common.remove"));
-
-            if (!confirmed)
+            var selected = TrackedTargets(paths);
+            if (selected.Count == 0)
                 return;
-        }
 
-        var removing = new HashSet<PathEntry>(selected.Select(row => row.Entry));
-        var updated = _entries.Where(entry => !removing.Contains(entry)).ToList();
+            if (ConfirmDestructiveAsync is not null)
+            {
+                var confirmed = await ConfirmDestructiveAsync(new ConfirmRequest(
+                    Message.Of("remove.title"),
+                    Message.Of("remove.message", ("count", selected.Count)),
+                    "common.remove"));
 
-        Log.Info("remove paths", new { removed = selected.Count });
+                if (!confirmed)
+                    return;
+            }
 
-        var saveFailure = await TrySaveEntriesAsync(updated);
-        if (saveFailure is not null)
-        {
-            ShowOperationalResult(OperationalResultOwner.PathStore, saveFailure, error: true);
-            return;
-        }
+            var removing = new HashSet<PathEntry>(selected.Select(row => row.Entry));
+            var updated = _entries.Where(entry => !removing.Contains(entry)).ToList();
 
-        ResolveOperationalResult(OperationalResultOwner.PathStore);
-    });
+            Log.Info("remove paths", new { removed = selected.Count });
+
+            var saveFailure = await TrySaveEntriesAsync(updated);
+            if (saveFailure is not null)
+            {
+                ShowOperationalResult(OperationalResultOwner.PathStore, saveFailure, error: true);
+                return;
+            }
+
+            ResolveOperationalResult(OperationalResultOwner.PathStore);
+        });
+    }
 
     // --- Hide / Show ---
 
@@ -608,19 +626,18 @@ public partial class MainWindowViewModel : ObservableObject
     /// The four commands were four copies of this body differing only in which
     /// rows they took and which value they wrote, so any change to the mutation
     /// protocol had to land in all four and would be forgotten in one.
-    /// <para><paramref name="selectTargets"/> is a callback rather than a list
-    /// because the selection must be read AFTER the scan pause completes — the
-    /// pause awaits, and the rows can change across it.</para>
+    /// <para>Capture submitted path identities before waiting. Resolve their current rows under the
+    /// gate so selection changes cannot redirect the action and removed entries cannot return.</para>
     /// <para>Desired visibility in <c>paths.json</c> is authoritative; the rows show the actual attribute
     /// state. There is no transaction or rollback between the two: the save lands first, so an apply that
     /// fails, is cancelled or is cut short by a quit leaves desired state ahead of the attributes. The next
     /// scan shows the difference, and applying again repairs it.</para>
     /// </remarks>
     private Task SetVisibilityAsync(
-        Func<List<PathRowViewModel>> selectTargets,
+        IReadOnlySet<string> paths,
         DesiredVisibility desired) => MutateAsync(async () =>
     {
-        var targets = selectTargets();
+        var targets = TrackedTargets(paths);
 
         // An empty target set has nothing to persist. Like a full successful
         // visibility change, it is quiet and leaves the standing summary intact.
@@ -645,36 +662,44 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         var outcome = await ApplyDesiredStateAsync(targets);
-        ShowApplyOutcome(outcome);
+        ShowApplyOutcome(outcome, targets.Select(row => row.Path));
         if (!outcome.HasProblems)
             ClearPathAddResultIfResolvedBy(targets.Select(row => row.Path));
     });
 
-    private List<PathRowViewModel> SelectedRows() => Rows.Where(r => r.IsSelected).ToList();
+    private HashSet<string> SelectedPaths() => Rows.Where(row => row.IsSelected)
+        .Select(row => row.Path).ToHashSet(StringComparer.Ordinal);
 
-    private List<PathRowViewModel> AllRows() => Rows.ToList();
+    private HashSet<string> AllPaths() => Rows.Select(row => row.Path).ToHashSet(StringComparer.Ordinal);
 
-    [RelayCommand]
-    private Task HideSelectedAsync() => SetVisibilityAsync(SelectedRows, DesiredVisibility.Hidden);
-
-    [RelayCommand]
-    private Task ShowSelectedAsync() => SetVisibilityAsync(SelectedRows, DesiredVisibility.Shown);
+    private List<PathRowViewModel> TrackedTargets(IReadOnlySet<string> paths) =>
+        Rows.Where(row => paths.Contains(row.Path)).ToList();
 
     [RelayCommand]
-    private Task HideAllAsync() => SetVisibilityAsync(AllRows, DesiredVisibility.Hidden);
+    private Task HideSelectedAsync() => SetVisibilityAsync(SelectedPaths(), DesiredVisibility.Hidden);
 
     [RelayCommand]
-    private Task ShowAllAsync() => SetVisibilityAsync(AllRows, DesiredVisibility.Shown);
+    private Task ShowSelectedAsync() => SetVisibilityAsync(SelectedPaths(), DesiredVisibility.Shown);
 
     [RelayCommand]
-    private Task ReapplyAllAsync() => MutateAsync(async () =>
+    private Task HideAllAsync() => SetVisibilityAsync(AllPaths(), DesiredVisibility.Hidden);
+
+    [RelayCommand]
+    private Task ShowAllAsync() => SetVisibilityAsync(AllPaths(), DesiredVisibility.Shown);
+
+    [RelayCommand]
+    private Task ReapplyAllAsync()
     {
-        var targets = Rows.ToList();
-        var outcome = await ApplyDesiredStateAsync(targets);
-        ShowApplyOutcome(outcome);
-        if (!outcome.HasProblems)
-            ClearPathAddResultIfResolvedBy(targets.Select(row => row.Path));
-    });
+        var paths = AllPaths();
+        return MutateAsync(async () =>
+        {
+            var targets = TrackedTargets(paths);
+            var outcome = await ApplyDesiredStateAsync(targets);
+            ShowApplyOutcome(outcome, targets.Select(row => row.Path));
+            if (!outcome.HasProblems)
+                ClearPathAddResultIfResolvedBy(targets.Select(row => row.Path));
+        });
+    }
 
     [RelayCommand]
     // Reload takes the gate like every other mutating command, but not MutateAsync's
@@ -694,11 +719,13 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             reloaded = await _pathWork.RunAsync(_pathListStore.Load, StorageWaitBound, Clock, token);
+            await ValidateLoadedPathsAsync(reloaded.Value, token);
         }
         catch (Exception ex) when (ex is NewerFormatException or UnreadableStoreException)
         {
             // Mid-session there is nothing to halt: the rows on screen are the last good state. Keep
-            // them, say which file was left as it is, and let the store refuse every save over it.
+            // them and refuse saves until a successful Reload, including native alias ambiguity.
+            _pathListReadFailure = ex;
             _entriesOnDisk = false;
             if (ShowNoticeAsync is not null)
                 await ShowNoticeAsync(Message.Of("failure.pathListReloadTitle"), ex is NewerFormatException newer
@@ -722,6 +749,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         _entries = reloaded.Value;
+        _pathListReadFailure = null;
         _entriesOnDisk = true;
         lock (_userSavesGate)
             _unsavedAtQuit.Remove(UserStore.PathList);
@@ -1235,6 +1263,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// </remarks>
     private async Task<Message?> TrySaveEntriesAsync(List<PathEntry> updated)
     {
+        if (_pathListReadFailure is { } failure)
+            return FailurePresentation.PathListSave(failure);
+
         // Sort a snapshot so paths.json is diff-stable without imposing that order on the
         // live list. UI ordering is a separate concern handled by the DataGrid's own sort.
         var snapshot = SortedForDisk(updated);
@@ -1372,6 +1403,8 @@ public partial class MainWindowViewModel : ObservableObject
                 Rows.Insert(i, desiredRow);
         }
 
+        var tracked = _entries.Select(entry => entry.Path).ToHashSet(StringComparer.Ordinal);
+        ResolveVisibilityResults(path => !tracked.Contains(path));
         OnPropertyChanged(nameof(StatusBarText));
     }
 
@@ -1481,18 +1514,12 @@ public partial class MainWindowViewModel : ObservableObject
         Log.Info("apply: start", new { count = targets.Count });
 
         var applied = 0;
-        var unchanged = 0;
-        var missing = 0;
-        var errors = 0;
-        var unresponsive = 0;
-        var cancelled = 0;
-        var problemPaths = new List<string>();
+        var problems = new Dictionary<string, string>(StringComparer.Ordinal);
         var retryBucket = new List<PathRowViewModel>();
 
         void MarkUnresponsive(PathRowViewModel row)
         {
-            unresponsive++;
-            problemPaths.Add(row.Path);
+            problems[row.Path] = "apply.unresponsive";
             row.ActualState = ActualState.Unresponsive;
         }
 
@@ -1512,8 +1539,7 @@ public partial class MainWindowViewModel : ObservableObject
 
                 if (inspection.ActualState == ActualState.Missing)
                 {
-                    missing++;
-                    problemPaths.Add(row.Path);
+                    problems[row.Path] = "apply.missing";
                     row.ActualState = ActualState.Missing;
                     continue;
                 }
@@ -1533,8 +1559,7 @@ public partial class MainWindowViewModel : ObservableObject
 
                 if (inspection.ActualState is ActualState.AccessDenied or ActualState.Error)
                 {
-                    errors++;
-                    problemPaths.Add(row.Path);
+                    problems[row.Path] = "apply.errors";
                     row.ActualState = inspection.ActualState;
                     continue;
                 }
@@ -1566,8 +1591,7 @@ public partial class MainWindowViewModel : ObservableObject
                 }
                 else
                 {
-                    unchanged++;
-                    problemPaths.Add(row.Path);
+                    problems[row.Path] = "apply.unchanged";
                     Log.Info("apply: state unchanged", new
                     {
                         path = row.Path,
@@ -1584,8 +1608,8 @@ public partial class MainWindowViewModel : ObservableObject
                 if (written)
                     row.ActualState = ActualState.Unknown;
                 var skipped = targets.Skip(index).ToList();
-                cancelled += skipped.Count;
-                problemPaths.AddRange(skipped.Select(r => r.Path));
+                foreach (var skippedRow in skipped)
+                    problems[skippedRow.Path] = "apply.cancelled";
                 Log.Info("apply: cancelled", new { skipped = skipped.Count });
                 break;
             }
@@ -1602,8 +1626,7 @@ public partial class MainWindowViewModel : ObservableObject
             catch (Exception ex)
             {
                 Log.Error("apply: failed", ex, new { path = row.Path });
-                errors++;
-                problemPaths.Add(row.Path);
+                problems[row.Path] = "apply.errors";
                 // Not cancellable, so it cannot throw out of this handler; still bounded.
                 var recheck = await _visibility.InspectAsync(row.Path, CancellationToken.None);
                 row.ApplyScanResult(recheck, row.PathFamily);
@@ -1611,14 +1634,13 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         int? elevationExitCode = null;
-        var elevationBusy = 0;
 
         // A cancelled apply does not go on to raise an elevation prompt: the retry rows are
         // counted as cancelled, untouched.
         if (retryBucket.Count > 0 && token.IsCancellationRequested)
         {
-            cancelled += retryBucket.Count;
-            problemPaths.AddRange(retryBucket.Select(r => r.Path));
+            foreach (var row in retryBucket)
+                problems[row.Path] = "apply.cancelled";
         }
         else if (retryBucket.Count > 0 && ElevatedApplicator is { } elevated)
         {
@@ -1640,11 +1662,8 @@ public partial class MainWindowViewModel : ObservableObject
                 if (!reported && outcome.Status is ElevatedApplyStatus.Cancelled or ElevatedApplyStatus.TimedOut)
                 {
                     row.ActualState = ActualState.Unknown;
-                    if (outcome.Status == ElevatedApplyStatus.Cancelled)
-                        cancelled++;
-                    else
-                        unresponsive++;
-                    problemPaths.Add(row.Path);
+                    problems[row.Path] = outcome.Status == ElevatedApplyStatus.Cancelled
+                        ? "apply.cancelled" : "apply.unresponsive";
                     continue;
                 }
 
@@ -1660,8 +1679,7 @@ public partial class MainWindowViewModel : ObservableObject
                     if (ok) applied++;
                     else
                     {
-                        errors++;
-                        problemPaths.Add(row.Path);
+                        problems[row.Path] = "apply.errors";
                     }
                     continue;
                 }
@@ -1675,8 +1693,7 @@ public partial class MainWindowViewModel : ObservableObject
                 if (outcome.Status == ElevatedApplyStatus.Busy)
                 {
                     row.ApplyScanResult(recheck, row.PathFamily);
-                    elevationBusy++;
-                    problemPaths.Add(row.Path);
+                    problems[row.Path] = "apply.elevationBusy";
                     continue;
                 }
 
@@ -1687,57 +1704,36 @@ public partial class MainWindowViewModel : ObservableObject
                 if (wasApplied) applied++;
                 else
                 {
-                    errors++;
-                    problemPaths.Add(row.Path);
+                    problems[row.Path] = "apply.errors";
                 }
             }
         }
 
         // elevationExitCode is a coarse diagnostic kept in the structured log; the user-facing
         // tally below is built per-path, so the raw child exit code is not surfaced to the UI.
-        Log.Info("apply: done", new { applied, unchanged, missing, errors, unresponsive, cancelled, elevationBusy, elevationExitCode });
+        var result = new ApplyOutcome(applied, problems);
+        Log.Info("apply: done", new { applied, unchanged = result.Unchanged, missing = result.Missing,
+            errors = result.Errors, unresponsive = result.Unresponsive, cancelled = result.Cancelled,
+            elevationBusy = result.ElevationBusy, elevationExitCode });
         OnPropertyChanged(nameof(StatusBarText));
 
-        return new ApplyOutcome(applied, unchanged, missing, errors, unresponsive, cancelled, elevationBusy, problemPaths);
+        return result;
     }
 
-    private readonly record struct ApplyOutcome(
-        int Applied,
-        int Unchanged,
-        int Missing,
-        int Errors,
-        int Unresponsive,
-        int Cancelled,
-        int ElevationBusy,
-        IReadOnlyList<string> ProblemPaths)
+    private readonly record struct ApplyOutcome(int Applied, IReadOnlyDictionary<string, string> Problems)
     {
-        public static ApplyOutcome Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, []);
-
-        public bool HasProblems =>
-            Unchanged > 0 || Missing > 0 || Errors > 0 || Unresponsive > 0 || Cancelled > 0 || ElevationBusy > 0;
-
-        /// <summary>A path that failed or never answered; either is shown as an error.</summary>
+        public static ApplyOutcome Empty { get; } = new(0, new Dictionary<string, string>());
+        public IEnumerable<string> ProblemPaths => Problems.Keys;
+        public int Unchanged => Count("apply.unchanged");
+        public int Missing => Count("apply.missing");
+        public int Errors => Count("apply.errors");
+        public int Unresponsive => Count("apply.unresponsive");
+        public int Cancelled => Count("apply.cancelled");
+        public int ElevationBusy => Count("apply.elevationBusy");
+        private int Count(string key) => Problems.Values.Count(value => value == key);
+        public bool HasProblems => Problems.Count > 0;
         public bool HasFailures => Errors > 0 || Unresponsive > 0;
-
-        /// <summary>
-        /// The counts, each in its own sentence, joined as the language joins them. Only shown when
-        /// something went wrong (<see cref="ShowApplyOutcome"/>), so there is always a count to show.
-        /// </summary>
-        public Message Summary
-        {
-            get
-            {
-                var parts = new List<Message>();
-                if (Applied > 0) parts.Add(Message.Of("apply.applied", ("count", Applied)));
-                if (Unchanged > 0) parts.Add(Message.Of("apply.unchanged", ("count", Unchanged)));
-                if (Missing > 0) parts.Add(Message.Of("apply.missing", ("count", Missing)));
-                if (Errors > 0) parts.Add(Message.Of("apply.errors", ("count", Errors)));
-                if (Unresponsive > 0) parts.Add(Message.Of("apply.unresponsive", ("count", Unresponsive)));
-                if (Cancelled > 0) parts.Add(Message.Of("apply.cancelled", ("count", Cancelled)));
-                if (ElevationBusy > 0) parts.Add(Message.Of("apply.elevationBusy", ("count", ElevationBusy)));
-                return Message.Join("apply.join", parts);
-            }
-        }
+        public Message Summary => OperationalResultViewModel.VisibilitySummary(Problems, Applied);
     }
 
     /// <summary>
@@ -1774,21 +1770,37 @@ public partial class MainWindowViewModel : ObservableObject
         return (display, applied);
     }
 
-    private void ShowApplyOutcome(ApplyOutcome outcome)
+    private void ShowApplyOutcome(ApplyOutcome outcome, IEnumerable<string> attemptedPaths)
     {
-        if (outcome.HasFailures)
-        {
-            ShowOperationalResult(OperationalResultOwner.Visibility, outcome.Summary, error: true);
-            return;
-        }
+        var attempted = attemptedPaths.ToHashSet(StringComparer.Ordinal);
+        ResolveVisibilityResults(attempted.Contains);
 
         if (outcome.HasProblems)
         {
-            ShowOperationalResult(OperationalResultOwner.Visibility, outcome.Summary, error: false);
-            return;
+            var result = new OperationalResultViewModel(OperationalResultOwner.Visibility, outcome.Summary, outcome.HasFailures);
+            foreach (var (path, category) in outcome.Problems)
+                result.UnresolvedPaths.Add(path, category);
+            OperationalResults.Add(result);
+            Log.Info("visibility result", new { outcome.Summary });
         }
+        OnPropertyChanged(nameof(HasOperationalResults));
+    }
 
-        ResolveOperationalResult(OperationalResultOwner.Visibility);
+    private void ResolveVisibilityResults(Func<string, bool> resolved)
+    {
+        foreach (var result in OperationalResults.Where(item => item.Owner == OperationalResultOwner.Visibility).ToList())
+        {
+            var removing = result.UnresolvedPaths.Keys.Where(resolved).ToList();
+            if (removing.Count == 0)
+                continue;
+            foreach (var path in removing)
+                result.UnresolvedPaths.Remove(path);
+            if (result.UnresolvedPaths.Count == 0)
+                OperationalResults.Remove(result);
+            else
+                result.UpdateVisibilitySummary();
+        }
+        OnPropertyChanged(nameof(HasOperationalResults));
     }
 
     private void ShowOperationalResult(OperationalResultOwner owner, Message message, bool error)

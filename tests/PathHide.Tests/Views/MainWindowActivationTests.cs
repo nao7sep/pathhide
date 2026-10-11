@@ -26,7 +26,7 @@ public sealed class MainWindowActivationTests : WindowTest
         };
         var vm = new MainWindowViewModel(
             new BoundedVisibility(visibility), paths, settings, settings.Load().Value,
-            new FakeJsonStore<AppState>(), new AppState())
+            new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value)
         {
             Clock = clock,
         };

@@ -11,6 +11,7 @@ public sealed class MacVisibilityService : IVisibilityService
     {
         try
         {
+            path = PathNormalizer.RequireNativeAbsolutePath(path, windows: false);
             if (!Path.Exists(path))
             {
                 // Not directly statable — distinguish a genuinely missing path/ancestor
@@ -59,26 +60,20 @@ public sealed class MacVisibilityService : IVisibilityService
         SetHidden(path, hidden: false);
     }
 
-    /// <summary>
-    /// Resolves the directory's aliases — <c>/tmp</c> to <c>/private/tmp</c>, a firmlinked
-    /// <c>/Volumes/Macintosh HD/Users</c> to <c>/Users</c> — so two spellings of one parent name one
-    /// entry.
-    /// </summary>
-    public string? ResolveDirectory(string directory)
+    /// <summary>Resolve parent aliases and actual leaf case without following a final link.</summary>
+    public string? ResolvePath(string path)
     {
-        try
-        {
-            return MacFs.TryRealPath(directory, out var resolved) ? resolved : null;
-        }
+        try { return MacFs.ResolveEntryPath(path); }
         catch (Exception ex)
         {
-            Log.Debug("resolve directory: failed", ex, new { directory });
+            Log.Debug("resolve path: failed", ex, new { path });
             return null;
         }
     }
 
     private static void SetHidden(string path, bool hidden)
     {
+        path = PathNormalizer.RequireNativeAbsolutePath(path, windows: false);
         // Never follow a symlink. The user selected THIS path, so this path is
         // what gets hidden — and Inspect reads the same way, so the row always
         // reports the entry the user is looking at rather than something the

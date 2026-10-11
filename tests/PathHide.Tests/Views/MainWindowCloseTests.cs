@@ -25,7 +25,7 @@ public sealed class MainWindowCloseTests : WindowTest
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
-            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState())
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), [])
         {
             ElevatedApplicator = elevated,
         };
@@ -66,7 +66,7 @@ public sealed class MainWindowCloseTests : WindowTest
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), paths, settings,
-            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value);
         var main = Show(new MainWindow { DataContext = vm });
         vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
         var asked = 0;

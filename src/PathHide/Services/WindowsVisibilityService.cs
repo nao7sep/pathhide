@@ -17,6 +17,7 @@ public sealed class WindowsVisibilityService : IVisibilityService
     {
         try
         {
+            path = PathNormalizer.RequireNativeAbsolutePath(path, windows: true);
             // One stat for both the kind and the hidden flag. GetAttributes describes the
             // reparse point itself (it does not follow symlinks), matching what Hide/Show
             // modify. A missing or access-denied path throws a reason-bearing exception,
@@ -68,7 +69,7 @@ public sealed class WindowsVisibilityService : IVisibilityService
     /// Nothing to resolve: a drive or share path already compares case-insensitively, and the app
     /// operates on the path the user picked, reparse points included.
     /// </summary>
-    public string? ResolveDirectory(string directory) => null;
+    public string? ResolvePath(string path) => null;
 
     private static ItemKind DetectKind(FileAttributes attrs)
     {

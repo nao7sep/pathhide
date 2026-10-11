@@ -112,7 +112,7 @@ public sealed class FormatVersionTests : IDisposable
 
     [Theory]
     [InlineData("""{ "formatVersion": 1 }""")]
-    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a/", "desiredVisibility": "hidden" }, { "path": "/A", "desiredVisibility": "shown" } ] }""")]
+    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a/", "desiredVisibility": "hidden" }, { "path": "/a", "desiredVisibility": "shown" } ] }""")]
     [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "C:/a", "desiredVisibility": "hidden" }, { "path": "c:\\A\\", "desiredVisibility": "shown" } ] }""")]
     [InlineData("""[ { "path": "/a", "desiredVisibility": "hidden" } ]""")]
     [InlineData("""{ "formatVersion": 0, "paths": [] }""")]
@@ -158,27 +158,18 @@ public sealed class FormatVersionTests : IDisposable
     [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a", "desiredVisibility": "hidden" }, null ] }""")]
     [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "relative/a", "desiredVisibility": "hidden" } ] }""")]
     [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a", "desiredVisibility": 7 } ] }""")]
-    public void PathList_Unreadable_HaltsEveryLaunchWithoutTouchingTheFileOrAnyItem(string contents)
+    public void PathList_Unreadable_HaltsEveryLaunchWithoutTouchingTheFile(string contents)
     {
         var bytes = WriteNewer(PathListStore.FileName, contents);
-        var visibility = new FakeVisibilityService();
 
-        // Each launch builds a fresh view model over the real store; none may start, and none may
-        // move, rewrite or act on anything.
+        // Each launch uses the real startup gate; neither may create a shell or rewrite the list.
         for (var launch = 0; launch < 2; launch++)
         {
-            var settingsStore = new FakeSettingsStore();
-            var vm = new MainWindowViewModel(new BoundedVisibility(visibility), new PathListStore(), settingsStore,
-                settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
-            var halted = Assert.Throws<UnreadableStoreException>(vm.LoadPersistedState);
+            var halted = Assert.Throws<UnreadableStoreException>(() => App.ReadStartupStores());
             Assert.Equal(PathOf(PathListStore.FileName), halted.Path);
-            Assert.Empty(vm.Rows);
         }
 
         AssertLeftAsItWas(PathListStore.FileName, bytes);
-        Assert.Empty(visibility.Inspected);
-        Assert.Empty(visibility.Hidden);
-        Assert.Empty(visibility.Shown);
     }
 
     // --- config.json ---

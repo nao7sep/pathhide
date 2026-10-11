@@ -2,8 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <!-- Required by the LibraryImport source generator (see Services/MacFs.cs),
-         which emits unsafe marshalling stubs internally. No source files in this
-         project use unsafe blocks themselves. -->
+         which emits unsafe marshalling stubs internally. Windows directory identity also pins its native output buffer. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Windows: embeds icon.ico into the .exe. macOS uses macOS/icon.icns (classic,

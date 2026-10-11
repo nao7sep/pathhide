@@ -70,6 +70,28 @@ public sealed class ElevatedApplyFilesTests : IDisposable
     }
 
     [Fact]
+    public void An_iteration_failure_preserves_completed_cleanup_and_reports_the_failure()
+    {
+        var files = ElevatedApplyFiles.Create(_temp);
+        File.WriteAllText(files.RequestPath, "{}");
+        IEnumerable<string> Failing()
+        {
+            yield return files.RequestPath;
+            throw new IOException("iteration failure sentinel");
+        }
+        var sink = new CapturingSink();
+        Log.Start(sink, Path.Combine(_temp, "logs"));
+        try
+        {
+            Assert.Equal(1, ElevatedApplyFiles.SweepLeftovers(Failing, _ => false));
+            Assert.False(File.Exists(files.RequestPath));
+        }
+        finally { Log.Shutdown(); }
+        Assert.Contains(sink.Entries, entry => entry.Level == "warn"
+            && entry.Error?.ToJsonString().Contains("iteration failure sentinel", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
     public void ReadResults_SeesWhatAStillOpenWriterHasFlushed()
     {
         var files = ElevatedApplyFiles.Create(_temp);

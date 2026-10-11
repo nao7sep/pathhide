@@ -117,7 +117,7 @@ public sealed class SettingsDialogTests
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()),
             new FakeJsonStore<System.Collections.Generic.List<PathEntry>>(), settings, settings.Load().Value,
-            new FakeJsonStore<AppState>(), new AppState());
+            new FakeJsonStore<AppState>(), new AppState(), (new FakeJsonStore<System.Collections.Generic.List<PathEntry>>()).Load().Value);
         var owner = new Window();
         owner.Show();
         var dialog = new SettingsDialog(vm.Language, vm.UiFontFamily, vm.Theme, vm.IsHiddenAndSystem,

@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -187,7 +188,16 @@ internal sealed class SingleInstanceLease : IDisposable
     {
         var canonicalRoot = Path.GetFullPath(root);
         if (OperatingSystem.IsWindows())
-            canonicalRoot = canonicalRoot.ToUpperInvariant();
+            canonicalRoot = WindowsDirectoryIdentity.Resolve(canonicalRoot).TrimEnd('\\').ToUpperInvariant();
+        else if (OperatingSystem.IsMacOS())
+        {
+            if (!MacFs.TryRealPath(canonicalRoot, out var resolved))
+                throw new IOException("The data directory's identity could not be resolved: "
+                    + Marshal.GetPInvokeErrorMessage(Marshal.GetLastPInvokeError()));
+            canonicalRoot = resolved;
+        }
+        else
+            canonicalRoot = Path.TrimEndingDirectorySeparator(canonicalRoot);
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonicalRoot));
         return "PathHide-" + Convert.ToHexString(hash);
     }

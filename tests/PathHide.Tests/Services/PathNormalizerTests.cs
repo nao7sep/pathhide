@@ -89,17 +89,14 @@ public class PathNormalizerTests
         Assert.Null(normalized);
     }
 
-    // --- AreEqual: POSIX is case-insensitive too, because macOS is ---
+    // --- AreEqual: POSIX retains case; the native adapter resolves actual spellings ---
 
     [Fact]
-    public void AreEqual_Posix_IsCaseInsensitive()
+    public void AreEqual_Posix_KeepsDistinctCaseSensitiveNames()
     {
         Assert.True(PathNormalizer.AreEqual("/foo/bar", "/foo/bar/"));   // trailing-slash insensitive
-        // macOS is the only POSIX target and its default volume is
-        // case-insensitive, so these are one file. Treating them as two let a
-        // single file carry two entries with contradictory desired states.
-        Assert.True(PathNormalizer.AreEqual("/Foo", "/foo"));
-        Assert.True(PathNormalizer.AreEqual("/Users/x/Docs/Report.pdf", "/users/x/docs/report.pdf"));
+        Assert.False(PathNormalizer.AreEqual("/Foo", "/foo"));
+        Assert.False(PathNormalizer.AreEqual("/Users/x/Docs/Report.pdf", "/users/x/docs/report.pdf"));
         // Genuinely different paths still differ.
         Assert.False(PathNormalizer.AreEqual("/foo", "/bar"));
     }
@@ -110,28 +107,6 @@ public class PathNormalizerTests
         // Identity is decided when a path is added; comparing never touches the file system, so
         // an alias spelling and its resolved spelling are different strings here.
         Assert.False(PathNormalizer.AreEqual("/tmp/capture.txt", "/private/tmp/capture.txt"));
-    }
-
-    // --- IdentityParent / Rebase ---
-
-    [Theory]
-    [InlineData("/Users/x/Report.pdf", "/Users/x")]
-    [InlineData("/Users/x/Folder/", "/Users/x")]
-    [InlineData("/top", null)]
-    [InlineData("/", null)]
-    [InlineData(@"C:\Users\x\file", null)]
-    [InlineData(@"\\server\share\file", null)]
-    [InlineData("relative/file", null)]
-    public void IdentityParent_IsTheParentOfAPosixPathOnly(string path, string? expected)
-    {
-        Assert.Equal(expected, PathNormalizer.IdentityParent(path));
-    }
-
-    [Fact]
-    public void Rebase_KeepsTheItemAndReplacesItsParent()
-    {
-        Assert.Equal("/private/tmp/capture.txt", PathNormalizer.Rebase("/tmp/capture.txt", "/private/tmp"));
-        Assert.Equal("/capture.txt", PathNormalizer.Rebase("/link/capture.txt", "/"));
     }
 
     // --- AreEqual: Windows / UNC are case-insensitive ---

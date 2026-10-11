@@ -1,11 +1,22 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using PathHide.Models;
 
 namespace PathHide.Services;
 
 public static class PathNormalizer
 {
+    /// <summary>Validate at the native boundary: transported paths must never become relative I/O.</summary>
+    internal static string RequireNativeAbsolutePath(string path, bool windows)
+    {
+        if (!TryNormalize(path, out var normalized, out var family)
+            || (windows ? family == PathFamily.Posix : family != PathFamily.Posix)
+            || !Path.IsPathFullyQualified(normalized))
+            throw new ArgumentException("The path is not absolute for this platform.", nameof(path));
+        return normalized;
+    }
+
     public static bool TryNormalize(
         string input,
         [NotNullWhen(true)] out string? normalized,
@@ -99,10 +110,8 @@ public static class PathNormalizer
     }
 
     /// <summary>
-    /// Whether two stored paths name the same entry. Pure: a string comparison of the normalized
-    /// forms, so it is safe on the UI thread and in any loop. Aliases in a parent directory are
-    /// resolved once, when a path is added (<see cref="IdentityParent"/>, <see cref="Rebase"/>),
-    /// never here.
+    /// Compare normalized spellings without I/O. Native parent aliases and actual Mac leaf case
+    /// belong to IVisibilityService.ResolvePath at admission and Add; unavailable identities stay literal.
     /// </summary>
     public static bool AreEqual(string a, string b)
     {
@@ -114,47 +123,14 @@ public static class PathNormalizer
             if (familyA != familyB)
                 return false;
 
-            // Case-insensitive for every family, including POSIX.
-            //
-            // This comparison answers "are these the same file?", and its callers
-            // all use it for identity. macOS is PathHide's only POSIX target and
-            // its default APFS volume is case-insensitive, so comparing Ordinal
-            // there let two spellings of ONE file become two entries with
-            // independent desired states — the rows then contradict each other and
-            // whichever applies last silently flips the file, reverting what the
-            // user just asked for.
-            //
-            // A case-SENSITIVE APFS volume is opt-in and rare, and the failure
-            // there is the harmless direction: a second genuinely-distinct entry
-            // is refused as a duplicate, visibly and without touching anything.
-            // The default direction was the destructive one.
-            return string.Equals(normalizedA, normalizedB, StringComparison.OrdinalIgnoreCase);
+            return string.Equals(normalizedA, normalizedB,
+                familyA == PathFamily.Posix ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
         }
 
         return string.Equals(a, b, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// The directory whose aliases decide a normalized POSIX path's identity — its parent — or null
-    /// for a root-level item or a Windows or UNC path. Only the parent: the item itself may be a link,
-    /// and PathHide operates on that link rather than its target.
-    /// </summary>
-    public static string? IdentityParent(string normalized)
-    {
-        if (!TryNormalize(normalized, out var path, out var family) || family != PathFamily.Posix)
-            return null;
+    internal static string IdentityKey(string normalized, PathFamily family) =>
+        $"{family}:{(family == PathFamily.Posix ? normalized : normalized.ToUpperInvariant())}";
 
-        var slash = path.LastIndexOf('/');
-        return slash <= 0 ? null : path[..slash];
-    }
-
-    /// <summary>
-    /// <paramref name="normalized"/> moved under <paramref name="resolvedParent"/>, the resolved
-    /// spelling of its <see cref="IdentityParent"/>.
-    /// </summary>
-    public static string Rebase(string normalized, string resolvedParent)
-    {
-        var name = normalized[(normalized.LastIndexOf('/') + 1)..];
-        return resolvedParent.EndsWith('/') ? resolvedParent + name : resolvedParent + "/" + name;
-    }
 }

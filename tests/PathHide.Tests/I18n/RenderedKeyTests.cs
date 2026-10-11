@@ -71,7 +71,7 @@ public class RenderedKeyTests : WindowTest
         var settings = new FakeSettingsStore();
         var owner = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
-            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
         var window = Show(new RecordsWindow(records, owner));
         reader.LastPage.Answer(false);
         Dispatcher.UIThread.RunJobs();
@@ -102,7 +102,7 @@ public class RenderedKeyTests : WindowTest
         var settings = new FakeSettingsStore();
         var owner = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
-            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
         var window = Show(new RecordsWindow(records, owner));
 
         AssertNoKeys(window);

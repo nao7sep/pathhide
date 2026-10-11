@@ -65,34 +65,30 @@ public sealed record ElevatedApplyFiles(string RequestPath, string ResultsPath)
     /// </summary>
     /// <param name="isProcessRunning">Whether a process id is live; the real check by default.</param>
     /// <returns>How many files were deleted.</returns>
-    public static int SweepLeftovers(string directory, Func<int, bool>? isProcessRunning = null)
+    public static int SweepLeftovers(string directory, Func<int, bool>? isProcessRunning = null) =>
+        SweepLeftovers(() => Directory.EnumerateFiles(directory, Prefix + "*"), isProcessRunning ?? IsProcessRunning);
+
+    internal static int SweepLeftovers(Func<IEnumerable<string>> enumerate, Func<int, bool> isProcessRunning)
     {
-        isProcessRunning ??= IsProcessRunning;
         var deleted = 0;
-        IEnumerable<string> candidates;
         try
         {
-            candidates = Directory.EnumerateFiles(directory, Prefix + "*");
+            // EnumerateFiles is lazy: opening and every MoveNext belong to the same failure boundary.
+            foreach (var path in enumerate())
+            {
+                if (!TryReadOwner(Path.GetFileName(path), out var host, out var processId)
+                    || !string.Equals(host, Host(), StringComparison.OrdinalIgnoreCase)
+                    || isProcessRunning(processId))
+                    continue;
+
+                if (path.EndsWith(ResultsSuffix, StringComparison.Ordinal) ? TryRemoveResults(path) : TryDelete(path))
+                    deleted++;
+            }
         }
         catch (Exception ex)
         {
             Log.Warn("elevated apply: could not list leftover files", ex);
-            return 0;
         }
-
-        foreach (var path in candidates)
-        {
-            if (!TryReadOwner(Path.GetFileName(path), out var host, out var processId)
-                || !string.Equals(host, Host(), StringComparison.OrdinalIgnoreCase)
-                || isProcessRunning(processId))
-            {
-                continue;
-            }
-
-            if (path.EndsWith(ResultsSuffix, StringComparison.Ordinal) ? TryRemoveResults(path) : TryDelete(path))
-                deleted++;
-        }
-
         if (deleted > 0)
             Log.Info("elevated apply: removed files an earlier run left", new { deleted });
         return deleted;

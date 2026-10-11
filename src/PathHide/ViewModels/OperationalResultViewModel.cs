@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Automation;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PathHide.I18n;
@@ -23,9 +26,38 @@ public sealed partial class OperationalResultViewModel(
 {
     public OperationalResultOwner Owner { get; } = owner;
 
-    public Message Message { get; } = message;
+    private Message _message = message;
+    public Message Message => _message;
 
-    public bool IsError { get; } = isError;
+    private bool _isError = isError;
+    public bool IsError => _isError;
+
+    // Visibility reports outlive unrelated commands. Only their affected paths can resolve them.
+    internal Dictionary<string, string> UnresolvedPaths { get; } = new(StringComparer.Ordinal);
+
+    internal void UpdateVisibilitySummary()
+    {
+        _message = VisibilitySummary(UnresolvedPaths);
+        _isError = UnresolvedPaths.Values.Any(key => key is "apply.errors" or "apply.unresponsive");
+        OnPropertyChanged(nameof(Message));
+        OnPropertyChanged(nameof(Text));
+        OnPropertyChanged(nameof(IsError));
+        OnPropertyChanged(nameof(LiveSetting));
+    }
+
+    internal static Message VisibilitySummary(IReadOnlyDictionary<string, string> problems, int applied = 0)
+    {
+        var parts = new List<Message>();
+        if (applied > 0)
+            parts.Add(Message.Of("apply.applied", ("count", applied)));
+        foreach (var key in new[] { "apply.unchanged", "apply.missing", "apply.errors", "apply.unresponsive", "apply.cancelled", "apply.elevationBusy" })
+        {
+            var count = problems.Values.Count(value => value == key);
+            if (count > 0)
+                parts.Add(Message.Of(key, ("count", count)));
+        }
+        return Message.Join("apply.join", parts);
+    }
 
     public string Text => Localizer.Of(Message);
 

@@ -52,14 +52,14 @@ internal sealed class PathListDocument
         if (paths is null)
             throw new JsonException("The path list file holds null instead of its paths.");
 
-        var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var identities = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entry in paths)
         {
             if (entry?.Path is null
                 || !PathNormalizer.TryNormalize(entry.Path, out var normalized, out var family)
                 || !Enum.IsDefined(entry.DesiredVisibility))
                 throw new JsonException("The path list file holds an entry that is not an absolute path with a defined visibility.");
-            if (!identities.Add($"{family}:{normalized}"))
+            if (!identities.Add(PathNormalizer.IdentityKey(normalized, family)))
                 throw new JsonException("The path list file holds duplicate path identities.");
         }
 

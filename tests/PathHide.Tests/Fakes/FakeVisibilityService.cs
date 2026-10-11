@@ -54,14 +54,15 @@ public sealed class FakeVisibilityService : IVisibilityService
     /// <summary>Completes the first time <see cref="Hide"/> or <see cref="Show"/> is entered.</summary>
     public TaskCompletionSource WriteEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    /// <summary>Directory resolutions <see cref="ResolveDirectory"/> answers with; any other resolves to null.</summary>
+    /// <summary>Path resolutions <see cref="ResolvePath"/> answers with; any other resolves to null.</summary>
     public Dictionary<string, string> Aliases { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>Every directory <see cref="ResolveDirectory"/> was asked about.</summary>
+    /// <summary>Every path <see cref="ResolvePath"/> was asked about.</summary>
     public ConcurrentQueue<string> Resolved { get; } = new();
 
-    /// <summary>When set, <see cref="ResolveDirectory"/> blocks on this gate, like a realpath on a dead share.</summary>
+    /// <summary>When set, <see cref="ResolvePath"/> blocks on this gate, like a realpath on a dead share.</summary>
     public ManualResetEventSlim? ResolveGate { get; set; }
+    public TaskCompletionSource ResolveEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public void Set(string path, ActualState state, ItemKind kind = ItemKind.File)
         => _byPath[path] = new PathInspection(state, kind);
@@ -80,11 +81,16 @@ public sealed class FakeVisibilityService : IVisibilityService
         return _byPath.TryGetValue(path, out var inspection) ? inspection : Default;
     }
 
-    public string? ResolveDirectory(string directory)
+    public string? ResolvePath(string path)
     {
-        Resolved.Enqueue(directory);
+        Resolved.Enqueue(path);
+        ResolveEntered.TrySetResult();
         ResolveGate?.Wait();
-        return Aliases.TryGetValue(directory, out var resolved) ? resolved : null;
+        if (Aliases.TryGetValue(path, out var resolved))
+            return resolved;
+        var slash = path.LastIndexOf('/');
+        return slash > 0 && Aliases.TryGetValue(path[..slash], out resolved)
+            ? resolved.TrimEnd('/') + path[slash..] : null;
     }
 
     public void Hide(string path)

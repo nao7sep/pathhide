@@ -31,7 +31,7 @@ namespace PathHide.Tests.ViewModels;
 /// Orchestration tests for <see cref="MainWindowViewModel"/> through its public
 /// constructor, with in-memory fakes for the visibility service and both stores.
 /// Covers add/dedup, the commit-after-save contract, apply summary strings, the status-bar
-/// summary, the settings (Windows hide mode) flow, and the construct/initialize split.
+/// summary, the settings (Windows hide mode) flow, and the prepared-value construct/initialize split.
 /// </summary>
 public class MainWindowViewModelTests
 {
@@ -52,12 +52,147 @@ public class MainWindowViewModelTests
     {
         var settingsStore = settings ?? new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(visibility, responseTimeout), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState())
+            new BoundedVisibility(visibility, responseTimeout), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value)
         {
             Clock = clock ?? TimeProvider.System,
         };
         vm.Initialize();
         return vm;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Queued_selected_actions_keep_the_submitted_selection(bool remove)
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>> { Value = [Entry("/a"), Entry("/b")] };
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+        using var release = new ManualResetEventSlim();
+        visibility.WriteGate = release;
+        var hide = vm.HideAllCommand.ExecuteAsync(null);
+        Task? queued = null;
+        try
+        {
+            await visibility.WriteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            vm.Rows[0].IsSelected = true;
+            queued = remove ? vm.RemoveSelectedCommand.ExecuteAsync(null) : vm.ShowSelectedCommand.ExecuteAsync(null);
+            vm.Rows[0].IsSelected = false;
+            vm.Rows[1].IsSelected = true;
+        }
+        finally
+        {
+            release.Set();
+            await hide;
+            if (queued is not null)
+                await queued;
+        }
+        if (remove)
+            Assert.Equal("/b", Assert.Single(paths.Value).Path);
+        else
+            Assert.Equal(["/a"], visibility.Shown);
+    }
+
+    [Fact]
+    public async Task Queued_all_keeps_its_submitted_scope_when_an_earlier_add_lands()
+    {
+        var visibility = new FakeVisibilityService();
+        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [Entry("/a")] });
+        await vm.ScanTask;
+        using var release = new ManualResetEventSlim();
+        visibility.WriteGate = release;
+        var hide = vm.HideAllCommand.ExecuteAsync(null);
+        Task? add = null;
+        Task? show = null;
+        try
+        {
+            await visibility.WriteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            add = vm.AddPathsCommand.ExecuteAsync(new[] { "/b" });
+            show = vm.ShowAllCommand.ExecuteAsync(null);
+        }
+        finally
+        {
+            release.Set();
+            await hide;
+            if (add is not null) await add;
+            if (show is not null) await show;
+        }
+        Assert.Equal(["/a"], visibility.Shown);
+        Assert.Equal(DesiredVisibility.Hidden, vm.Rows.Single(row => row.Path == "/b").DesiredVisibility);
+    }
+
+    [Fact]
+    public async Task Queued_action_skips_an_entry_removed_before_execution()
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>> { Value = [Entry("/a"), Entry("/b")] };
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+        var confirm = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        vm.ConfirmDestructiveAsync = _ => confirm.Task;
+        vm.Rows[0].IsSelected = true;
+        var remove = vm.RemoveSelectedCommand.ExecuteAsync(null);
+        var show = vm.ShowSelectedCommand.ExecuteAsync(null);
+        vm.Rows[0].IsSelected = false;
+        vm.Rows[1].IsSelected = true;
+        confirm.SetResult(true);
+        await Task.WhenAll(remove, show);
+        Assert.Equal("/b", Assert.Single(paths.Value).Path);
+        Assert.Empty(visibility.Shown);
+    }
+
+    [Fact]
+    public async Task A_success_on_other_paths_does_not_clear_an_unresolved_visibility_failure()
+    {
+        var visibility = new FakeVisibilityService { OnHide = path => path == "/a" ? new IOException("denied sentinel") : null };
+        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [Entry("/a"), Entry("/b")] });
+        await vm.ScanTask;
+        vm.Rows[0].IsSelected = true;
+        await vm.HideSelectedCommand.ExecuteAsync(null);
+        var failure = Assert.Single(vm.OperationalResults);
+        vm.Rows[0].IsSelected = false;
+        vm.Rows[1].IsSelected = true;
+        await vm.HideSelectedCommand.ExecuteAsync(null);
+        Assert.Same(failure, Assert.Single(vm.OperationalResults));
+
+        visibility.OnHide = null;
+        vm.Rows[0].IsSelected = true;
+        await vm.HideSelectedCommand.ExecuteAsync(null);
+        Assert.Empty(vm.OperationalResults);
+    }
+
+    [Fact]
+    public async Task Partial_recovery_and_removal_update_the_remaining_failure_counts_and_severity()
+    {
+        var visibility = new FakeVisibilityService
+        {
+            OnHide = path => path is "/a" or "/b" ? new IOException("denied sentinel") : null,
+        };
+        visibility.Set("/c", ActualState.Missing);
+        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>>
+        {
+            Value = [Entry("/a"), Entry("/b"), Entry("/c")],
+        });
+        await vm.ScanTask;
+        await vm.HideAllCommand.ExecuteAsync(null);
+        var result = Assert.Single(vm.OperationalResults);
+        Assert.Equal("1 missing, 2 errors", English.Of(result.Message));
+
+        visibility.OnHide = null;
+        vm.Rows[0].IsSelected = true;
+        await vm.HideSelectedCommand.ExecuteAsync(null);
+        Assert.Same(result, Assert.Single(vm.OperationalResults));
+        Assert.Equal("1 missing, 1 error", English.Of(result.Message));
+        Assert.True(result.IsError);
+
+        vm.Rows[0].IsSelected = false;
+        vm.Rows[1].IsSelected = true;
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+        Assert.Same(result, Assert.Single(vm.OperationalResults));
+        Assert.Equal("1 missing", English.Of(result.Message));
+        Assert.False(result.IsError);
+        Assert.Equal(AutomationLiveSetting.Polite, result.LiveSetting);
     }
 
     [Fact]
@@ -95,12 +230,12 @@ public class MainWindowViewModelTests
 
         Assert.Equal(new[] { "/private/tmp/a", "/private/tmp/b" }, paths.Value.Select(e => e.Path));
         Assert.Equal("1 path is already in the list.", English.Of(vm.PathAddResult?.Message));
-        // One resolution per parent per add, and none for the saves, syncs and comparisons after it.
-        Assert.Equal(new[] { "/tmp", "/private/tmp" }, visibility.Resolved);
+        // Resolve each unique entry per Add, including existing references; later comparisons are pure.
+        Assert.Equal(new[] { "/tmp/a", "/tmp/b", "/private/tmp/a", "/private/tmp/b" }, visibility.Resolved);
     }
 
     [Fact]
-    public async Task Saves_and_reloads_never_resolve_paths_again()
+    public async Task Saves_do_not_resolve_paths_and_reload_resolves_them_outside_the_store()
     {
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>>
@@ -113,10 +248,11 @@ public class MainWindowViewModelTests
         foreach (var row in vm.Rows)
             row.IsSelected = true;
         await vm.ShowSelectedCommand.ExecuteAsync(null);
+        Assert.Empty(visibility.Resolved);
         await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
         await vm.ScanTask;
 
-        Assert.Empty(visibility.Resolved);
+        Assert.Equal(new[] { "/Volumes/NAS/a", "/Volumes/NAS/b" }, visibility.Resolved);
     }
 
     [Fact]
@@ -491,7 +627,7 @@ public class MainWindowViewModelTests
         var settingsStore = new FakeSettingsStore { SaveGate = gate };
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
 
         var save = vm.TryApplySettingsAsync(Languages.System, string.Empty, hiddenAndSystem: false, ThemePreference.Dark);
         var returnedWhileSaving = !gate.IsSet;
@@ -568,7 +704,7 @@ public class MainWindowViewModelTests
             settingsStore,
             settingsStore.Load().Value,
             new FakeJsonStore<AppState>(),
-            new AppState());
+            new AppState(), paths.Load().Value);
         var window = new MainWindow { DataContext = vm };
         var source = Path.GetTempFileName();
 
@@ -639,7 +775,7 @@ public class MainWindowViewModelTests
             settingsStore,
             settingsStore.Load().Value,
             new FakeJsonStore<AppState>(),
-            new AppState());
+            new AppState(), paths.Load().Value);
         var window = new MainWindow { DataContext = vm };
 
         try
@@ -689,28 +825,6 @@ public class MainWindowViewModelTests
         Assert.Contains("/x", visibility.Shown);
         Assert.Contains("1 visible", vm.StatusBarText);
         Assert.Empty(vm.OperationalResults);
-    }
-
-    [Fact]
-    public void LoadPersistedState_WhenThePathListIsUnreadable_HaltsRatherThanStartingEmpty()
-    {
-        // The path list is the user's work product, re-derivable from nothing
-        // else on disk. Opening with an empty list would look exactly like
-        // losing it, and the first add would then write a fresh file holding
-        // only that entry — the user working on top of an apparent loss.
-        var visibility = new FakeVisibilityService();
-        var paths = new FakeJsonStore<List<PathEntry>>
-        {
-            LoadException = new PathHide.Storage.UnreadableStoreException("paths", "/r/paths.json", new System.Text.Json.JsonException()),
-        };
-        var settingsStore = new FakeSettingsStore();
-        var vm = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
-
-        var halted = Assert.Throws<PathHide.Storage.UnreadableStoreException>(() => vm.LoadPersistedState());
-        Assert.Equal("/r/paths.json", halted.Path);
-        Assert.Empty(vm.Rows);
-        Assert.Equal(0, paths.SaveCount);
-        Assert.Empty(visibility.Inspected);
     }
 
     [Fact]
@@ -794,27 +908,26 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public async Task AfterAnUnreadableReload_TheNextCommandWritesTheKeptEntriesBack()
+    public async Task An_unreadable_reload_refuses_saves_until_a_successful_reload()
     {
         var visibility = new FakeVisibilityService();
         var paths = new FakeJsonStore<List<PathEntry>> { Value = [Entry("/x")] };
         var vm = CreateViewModel(visibility, paths);
         await vm.ScanTask;
-
-        // The reload finds a file it cannot read and keeps the entry on screen, so paths.json does
-        // not hold it, though nothing about the entry has changed. The user then repairs or moves
-        // the file, which the store then lets the next save replace.
         paths.LoadException = new PathHide.Storage.UnreadableStoreException("paths", "/r/paths.json", new System.Text.Json.JsonException());
-        await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
-        await vm.ScanTask;
+        await vm.ReloadCommand.ExecuteAsync(null);
+        vm.Rows.Single().IsSelected = true;
+        await vm.HideSelectedCommand.ExecuteAsync(null);
         Assert.Equal(0, paths.SaveCount);
+        Assert.Empty(visibility.Hidden);
         Assert.Equal("/x", Assert.Single(vm.Rows).Path);
 
-        vm.Rows.Single().IsSelected = true;
-        await ((IAsyncRelayCommand)vm.HideSelectedCommand).ExecuteAsync(null);
-
+        paths.LoadException = null;
+        await vm.ReloadCommand.ExecuteAsync(null);
+        await vm.ShowSelectedCommand.ExecuteAsync(null);
         Assert.Equal(1, paths.SaveCount);
-        Assert.Equal("/x", Assert.Single(paths.Value).Path);
+        Assert.Equal(DesiredVisibility.Shown, Assert.Single(paths.Value).DesiredVisibility);
+        Assert.Equal(["/x"], visibility.Shown);
     }
 
     [Fact]
@@ -921,17 +1034,18 @@ public class MainWindowViewModelTests
     // --- Construct / Initialize split (no I/O in the constructor) ---
 
     [Fact]
-    public void Constructor_DoesNotLoadEntries_UntilInitialize()
+    public void Constructor_UsesPreparedEntries_WithoutLoadingOrScanning()
     {
         var paths = new FakeJsonStore<List<PathEntry>>
         {
             Value = new List<PathEntry> { Entry("/a"), Entry("/b") },
         };
         var settingsStore = new FakeSettingsStore();
-        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Value);
 
-        // Construction is side-effect-free: the persisted entries are not read yet.
-        Assert.Empty(vm.Rows);
+        Assert.Equal(2, vm.Rows.Count);
+        Assert.Equal(0, paths.LoadCount);
+        Assert.True(vm.ScanTask.IsCompletedSuccessfully);
 
         vm.Initialize();
 
@@ -939,22 +1053,21 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void Initialize_IsIdempotent_SecondCallDoesNotReload()
+    public void Initialize_IsIdempotent_SecondCallDoesNotScanAgain()
     {
         var paths = new FakeJsonStore<List<PathEntry>>
         {
             Value = new List<PathEntry> { Entry("/a") },
         };
         var settingsStore = new FakeSettingsStore();
-        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState());
+        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value);
 
         vm.Initialize();
+        var initialScan = vm.ScanTask;
         vm.Initialize();
 
         Assert.Single(vm.Rows);
-        // Single(Rows) alone would pass even without the guard (SyncRowsWithEntries is
-        // itself idempotent), so assert the guard's real effect: the second call must not
-        // re-load the path list (which would also restart the scan).
+        Assert.Same(initialScan, vm.ScanTask);
         Assert.Equal(1, paths.LoadCount);
     }
 
@@ -968,7 +1081,7 @@ public class MainWindowViewModelTests
         var stateStore = new FakeJsonStore<AppState>();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings,
-            stateStore, new AppState { WindowPositionX = -1200, WindowWidth = 1100 });
+            stateStore, new AppState { WindowPositionX = -1200, WindowWidth = 1100 }, []);
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
@@ -996,7 +1109,7 @@ public class MainWindowViewModelTests
         var stateStore = new FakeJsonStore<AppState>();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value,
-            stateStore, new AppState());
+            stateStore, new AppState(), []);
 
         vm.SaveWindowPlacement(-900, 40, 1180.5, 700.25, maximized: true);
         vm.SaveWindowPlacement(-900, 40, 1180.5, 700.25, maximized: true);
@@ -1021,7 +1134,7 @@ public class MainWindowViewModelTests
         var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value,
-            new FakeJsonStore<AppState> { ThrowOnSave = true }, new AppState());
+            new FakeJsonStore<AppState> { ThrowOnSave = true }, new AppState(), []);
 
         Assert.Throws<IOException>(() => vm.SaveWindowPlacement(10, 20, 1000, 700, maximized: true));
 
@@ -1039,7 +1152,7 @@ public class MainWindowViewModelTests
         var settings = settingsStore.Load().Value;
         Assert.Equal(ThemePreference.System, settings.Theme);
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
@@ -1059,7 +1172,7 @@ public class MainWindowViewModelTests
         var settingsStore = new FakeSettingsStore();
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
 
         var failure = await vm.TryApplySettingsAsync(Languages.System, string.Empty, hiddenAndSystem: false, ThemePreference.System);
 
@@ -1073,7 +1186,7 @@ public class MainWindowViewModelTests
         var settingsStore = new FakeSettingsStore { ThrowOnSave = true };
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState());
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
 
         var failure = await vm.TryApplySettingsAsync(Languages.System, "Menlo", hiddenAndSystem: true, ThemePreference.Dark);
 

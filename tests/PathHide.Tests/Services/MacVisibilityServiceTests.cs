@@ -64,6 +64,24 @@ public sealed class MacVisibilityServiceTests : IDisposable
     }
 
     [MacOnlyFact]
+    public void Foreign_paths_cannot_inspect_or_change_a_colliding_relative_file()
+    {
+        var previous = Environment.CurrentDirectory;
+        try
+        {
+            Environment.CurrentDirectory = _dir;
+            const string foreign = @"C:\fixture.txt";
+            File.WriteAllText(foreign, "x");
+            var actual = Path.Combine(_dir, foreign);
+            Assert.Equal(ActualState.Error, _service.Inspect(foreign).ActualState);
+            Assert.Throws<ArgumentException>(() => _service.Hide(foreign));
+            Assert.Throws<ArgumentException>(() => _service.Show(foreign));
+            Assert.Equal(ActualState.Visible, _service.Inspect(actual).ActualState);
+        }
+        finally { Environment.CurrentDirectory = previous; }
+    }
+
+    [MacOnlyFact]
     public void Inspect_NewFile_IsVisibleFile()
     {
         var path = NewFile();
@@ -277,13 +295,13 @@ public sealed class MacVisibilityServiceTests : IDisposable
     }
 
     [MacOnlyFact]
-    public void ResolveDirectory_ResolvesAParentAlias()
+    public void ResolvePath_ResolvesAParentAlias()
     {
         var name = $"pathhide-resolve-{Guid.NewGuid().ToString("N")}";
         Directory.CreateDirectory(Path.Combine("/tmp", name));
         try
         {
-            Assert.Equal(Path.Combine("/private/tmp", name), _service.ResolveDirectory(Path.Combine("/tmp", name)));
+            Assert.Equal(Path.Combine("/private/tmp", name), _service.ResolvePath(Path.Combine("/tmp", name)));
         }
         finally
         {
@@ -292,8 +310,8 @@ public sealed class MacVisibilityServiceTests : IDisposable
     }
 
     [MacOnlyFact]
-    public void ResolveDirectory_HasNoAnswerForAMissingDirectory()
+    public void ResolvePath_HasNoAnswerForAMissingParent()
     {
-        Assert.Null(_service.ResolveDirectory(Path.Combine(_dir, "absent")));
+        Assert.Null(_service.ResolvePath(Path.Combine(_dir, "absent", "file")));
     }
 }

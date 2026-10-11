@@ -10,6 +10,42 @@ namespace PathHide.Tests.Services;
 
 public sealed class SingleInstanceLeaseTests
 {
+    [MacOnlyFact]
+    public void Directory_aliases_and_trailing_separators_cannot_claim_a_second_writer()
+    {
+        var parent = Directory.CreateTempSubdirectory("pathhide-instance-").FullName;
+        var root = Directory.CreateDirectory(Path.Combine(parent, "Root")).FullName;
+        var alias = Path.Combine(parent, "alias");
+        Directory.CreateSymbolicLink(alias, parent);
+        try
+        {
+            var throughParent = Path.Combine(alias, "Root");
+            Assert.Equal(SingleInstanceLease.MutexName(root), SingleInstanceLease.MutexName(root + "/"));
+            Assert.Equal(SingleInstanceLease.MutexName(root), SingleInstanceLease.MutexName(throughParent));
+            if (Directory.Exists(root.ToUpperInvariant()))
+                Assert.Equal(SingleInstanceLease.MutexName(root), SingleInstanceLease.MutexName(root.ToUpperInvariant()));
+            Assert.True(SingleInstanceLease.TryAcquire(root, out var owner));
+            using (owner)
+            {
+                SingleInstanceLease.RegisterOwnerActivationHandler(() => { });
+                Assert.False(SingleInstanceLease.TryAcquire(throughParent, out var duplicate));
+                Assert.Null(duplicate);
+            }
+        }
+        finally
+        {
+            Directory.Delete(alias);
+            Directory.Delete(parent, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_missing_root_never_acquires_a_claim()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), "pathhide-missing-" + Guid.NewGuid().ToString("N"));
+        Assert.ThrowsAny<IOException>(() => SingleInstanceLease.TryAcquire(missing, out _));
+    }
+
     [Fact]
     public void SecondClaimActivatesOwnerAndCannotOpenSameRoot()
     {

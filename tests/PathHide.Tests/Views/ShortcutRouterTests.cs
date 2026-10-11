@@ -20,7 +20,7 @@ public sealed class ShortcutRouterTests
             settingsStore,
             settingsStore.Load().Value,
             new FakeJsonStore<AppState>(),
-            new AppState());
+            new AppState(), []);
     }
 
     [Theory]

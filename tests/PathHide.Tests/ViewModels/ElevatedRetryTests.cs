@@ -56,7 +56,7 @@ public sealed class ElevatedRetryTests : IDisposable
         var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(_visibility), _paths, settingsStore, settingsStore.Load().Value,
-            new FakeJsonStore<AppState>(), new AppState())
+            new FakeJsonStore<AppState>(), new AppState(), _paths.Load().Value)
         {
             ElevatedApplicator = applicator,
             ShutdownBound = shutdownBound ?? Generous,

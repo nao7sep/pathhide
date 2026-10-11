@@ -81,7 +81,7 @@ public sealed class SettingsStoreTests : IDisposable
     [AvaloniaFact]
     public void Startup_WithNoConfig_WritesNothingAndUsesBuiltIns()
     {
-        var vm = App.CreateMainViewModel();
+        var vm = App.CreateMainViewModel(App.ReadStartupStores());
 
         Assert.Equal(Languages.System, vm.Language);
         Assert.Equal(string.Empty, vm.UiFontFamily);
@@ -96,7 +96,7 @@ public sealed class SettingsStoreTests : IDisposable
     public async Task DialogSave_ChangingThemeStoresExactlyTheme_AndDeletionRestoresBuiltIns()
     {
         using var restoreLanguage = Localizer.Speaking(Localizer.Language);
-        var vm = App.CreateMainViewModel();
+        var vm = App.CreateMainViewModel(App.ReadStartupStores());
 
         Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Dark));
 
@@ -104,7 +104,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal("theme", Assert.Single(StoredSets()).Key);
 
         File.Delete(ConfigPath);
-        var relaunched = App.CreateMainViewModel();
+        var relaunched = App.CreateMainViewModel(App.ReadStartupStores());
         Assert.Equal(Languages.System, relaunched.Language);
         Assert.Equal(string.Empty, relaunched.UiFontFamily);
         Assert.Equal(ThemePreference.System, relaunched.Theme);
@@ -115,7 +115,7 @@ public sealed class SettingsStoreTests : IDisposable
     [AvaloniaFact]
     public async Task DialogSave_UnchangedDraftLeavesConfigAbsent()
     {
-        var vm = App.CreateMainViewModel();
+        var vm = App.CreateMainViewModel(App.ReadStartupStores());
 
         Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, vm.Theme));
 
@@ -199,7 +199,7 @@ public sealed class SettingsStoreTests : IDisposable
         using var restoreLanguage = Localizer.Speaking(Localizer.Language);
         const string original = """{ "formatVersion": 1, "language": "future-language", "uiFontFamily": "  Inter  " }""";
         File.WriteAllText(ConfigPath, original);
-        var vm = App.CreateMainViewModel();
+        var vm = App.CreateMainViewModel(App.ReadStartupStores());
         Assert.Equal(Languages.System, vm.Language);
         Assert.Equal("Inter", vm.UiFontFamily);
         Assert.Equal(Languages.System, LanguageBootstrap.SavedPreference());
@@ -259,7 +259,7 @@ public sealed class SettingsStoreTests : IDisposable
         using var restoreLanguage = Localizer.Speaking(Localizer.Language);
         File.WriteAllText(ConfigPath, original);
 
-        var vm = App.CreateMainViewModel();
+        var vm = App.CreateMainViewModel(App.ReadStartupStores());
 
         Assert.Equal(ThemePreference.System, vm.Theme);
         Assert.Equal(original, File.ReadAllText(ConfigPath));
@@ -276,7 +276,7 @@ public sealed class SettingsStoreTests : IDisposable
         // The draft is compared with the settings held in memory: a config.json damaged after startup is
         // neither read nor set aside, and the save writes the session's settings over it.
         using var restoreLanguage = Localizer.Speaking(Localizer.Language);
-        var vm = App.CreateMainViewModel();
+        var vm = App.CreateMainViewModel(App.ReadStartupStores());
         var notices = new List<(Message Title, Message Body)>();
         vm.ShowNoticeAsync = (title, body) =>
         {
@@ -320,7 +320,7 @@ public sealed class SettingsStoreTests : IDisposable
         const string original = """{ "formatVersion": 1, "theme": "dark", "windowWidth": 1100, "windowMaximized": true }""";
         File.WriteAllText(ConfigPath, original);
 
-        var vm = App.CreateMainViewModel();
+        var vm = App.CreateMainViewModel(App.ReadStartupStores());
 
         Assert.Equal(ThemePreference.Dark, vm.Theme);
         Assert.Equal(original, File.ReadAllText(ConfigPath));

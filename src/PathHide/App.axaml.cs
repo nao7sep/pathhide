@@ -90,8 +90,8 @@ public partial class App : Application
                 base.OnFrameworkInitializationCompleted();
                 var loaded = await new BoundedStoreWork().RunAsync(ReadStartupStores,
                     BoundedStoreWork.DefaultBound, TimeProvider.System);
-                viewModel = CreateMainViewModel(loaded.Settings, loaded.State);
-                viewModel.LoadPersistedState(loaded.Paths);
+                viewModel = CreateMainViewModel(loaded);
+                await viewModel.ValidateLoadedPathsAsync();
             }
             catch (UnreadableStoreException unreadable)
             {
@@ -164,13 +164,9 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Composition root: builds persistence, the OS-appropriate visibility service,
-    /// and the view model. Settings are loaded here because the Windows service closes
-    /// over the loaded instance to read the current hide mode, and window state because the
-    /// window is placed before it is shown; path entries are loaded later, when the window
-    /// calls <see cref="MainWindowViewModel.Initialize"/>.
+    /// Prepare every persisted value on the bounded startup worker before the normal shell exists.
     /// </summary>
-    private static (AppSettings Settings, AppState State, List<PathEntry> Paths) ReadStartupStores() =>
+    internal static (AppSettings Settings, AppState State, List<PathEntry> Paths) ReadStartupStores() =>
         (new SettingsStore().Load().Value,
          CreateStateStore().Load().Value,
          new PathListStore().Load().Value);
@@ -182,19 +178,19 @@ public partial class App : Application
     private static JsonStore<AppState> CreateStateStore() =>
         new(AppState.FileName, "state", FormatVersions.State, recordBackup: false);
 
-    internal static MainWindowViewModel CreateMainViewModel() => CreateMainViewModel(null, null);
-
-    private static MainWindowViewModel CreateMainViewModel(AppSettings? loadedSettings, AppState? loadedState)
+    /// <summary>Compose the platform services and view model using only prepared persisted values.</summary>
+    internal static MainWindowViewModel CreateMainViewModel(
+        (AppSettings Settings, AppState State, List<PathEntry> Paths) loaded)
     {
         var pathListStore = new PathListStore();
         var settingsStore = new SettingsStore();
         // Settings are four harmless preferences, so an unusable config.json falls back to built-ins
         // for the session with a warning in the log, and stays untouched until the next Settings save
-        // replaces it. The path list does NOT — see LoadPersistedState.
-        var settings = loadedSettings ?? settingsStore.Load().Value;
+        // replaces it. The path list does NOT — ReadStartupStores must succeed before construction.
+        var settings = loaded.Settings;
 
         var stateStore = CreateStateStore();
-        var state = loadedState ?? stateStore.Load().Value;
+        var state = loaded.State;
 
         // Key effective configuration at startup (the conventions' baseline): every user-tunable
         // setting, not a subset. Logging only the hide mode meant a session log could not answer
@@ -217,7 +213,7 @@ public partial class App : Application
             ? new ElevatedApplicator(WindowsElevatedChild.LaunchAsync, System.IO.Path.GetTempPath(), StorageRoot.Directory)
             : null;
 
-        return new MainWindowViewModel(new BoundedVisibility(visibilityService), pathListStore, settingsStore, settings, stateStore, state)
+        return new MainWindowViewModel(new BoundedVisibility(visibilityService), pathListStore, settingsStore, settings, stateStore, state, loaded.Paths)
         {
             ComputerLanguages = ComputerLanguages,
             ElevatedApplicator = elevatedApplicator,

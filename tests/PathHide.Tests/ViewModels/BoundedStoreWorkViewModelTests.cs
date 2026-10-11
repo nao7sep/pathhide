@@ -15,7 +15,7 @@ public sealed class BoundedStoreWorkViewModelTests
 {
     private static MainWindowViewModel Create(FakeJsonStore<List<PathEntry>> paths, FakeSettingsStore settings) =>
         new(new BoundedVisibility(new FakeVisibilityService()), paths, settings, settings.Load().Value,
-            new FakeJsonStore<AppState>(), new AppState())
+            new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value)
         { StorageWaitBound = TimeSpan.FromMilliseconds(150), ShutdownBound = TimeSpan.FromMilliseconds(200) };
 
     [Fact]
@@ -24,7 +24,6 @@ public sealed class BoundedStoreWorkViewModelTests
         using var gate = new ManualResetEventSlim();
         var paths = new FakeJsonStore<List<PathEntry>> { Value = [new() { Path = "/original", DesiredVisibility = DesiredVisibility.Hidden }] };
         var vm = Create(paths, new FakeSettingsStore());
-        vm.LoadPersistedState();
         paths.LoadGate = gate;
         try
         {
@@ -53,7 +52,6 @@ public sealed class BoundedStoreWorkViewModelTests
             Value = [new() { Path = "/original", DesiredVisibility = DesiredVisibility.Hidden }],
         };
         var vm = Create(paths, new FakeSettingsStore());
-        vm.LoadPersistedState();
         paths.LoadGate = gate;
         try
         {
