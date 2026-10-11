@@ -946,10 +946,11 @@ public partial class MainWindowViewModel : ObservableObject
     private sealed record UnsavedChange(Message Failure, Func<Task> SaveAgain);
 
     /// <summary>
-    /// Whether closing has work to finish first: a scan or apply, a save of the user's, or an elevated
-    /// child still running.
+    /// Whether closing has work to finish first: a scan or apply, a save of the user's, pending backup
+    /// history, or an elevated child still running.
     /// </summary>
-    public bool HasWorkToFinish => IsBusy || UserSavesRunning || HasUnsavedChanges || ElevatedApplicator?.HasRunningChild == true;
+    public bool HasWorkToFinish => IsBusy || UserSavesRunning || HasUnsavedChanges
+        || BackupStore.HasPendingWrites || ElevatedApplicator?.HasRunningChild == true;
 
     private bool HasUnsavedChanges
     {

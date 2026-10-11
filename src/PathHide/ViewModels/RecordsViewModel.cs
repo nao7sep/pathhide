@@ -304,7 +304,7 @@ public sealed partial class RecordsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            if (generation != _generation || _closed)
+            if (generation != _generation || _closed || ListStatus == RecordsListStatus.Ready)
                 return;
             Fail("page", ex);
             ListStatus = RecordsListStatus.Failed;
@@ -313,10 +313,11 @@ public sealed partial class RecordsViewModel : ObservableObject
 
         if (generation != _generation || _closed)
             return;
+        // A live read may have installed a newer snapshot (and pagination) while this initial read
+        // waited. Keep it, including its selection, instead of replacing it with the older page.
+        if (ListStatus == RecordsListStatus.Ready)
+            return;
         _liveSuspended = false;
-        // A newest-page read of this same generation may have filled the list while this read ran;
-        // this first page replaces whatever it put there instead of adding the same records again.
-        Rows.Clear();
         foreach (var record in page.Records)
             Rows.Add(new RecordRowViewModel(record));
         HasMore = page.More;

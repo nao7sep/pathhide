@@ -78,7 +78,8 @@ public delegate Task<Task<int>?> ElevatedChildLauncher(IReadOnlyList<string> arg
 /// the same paths. This is accepted (developer decision): <c>paths.json</c> keeps the newer desired
 /// state, the next scan shows the difference, and applying again repairs it; no lock, IPC or child-side
 /// recheck is added for it.</para>
-/// <para>Every await here resumes on the thread pool: reading the results and removing the temp files
+/// <para>The first worker await always yields to the thread pool, even if it already completed;
+/// subsequent awaits do not capture the caller's context. Reading results and removing temp files
 /// touch the OS temp volume, which antivirus or a slow disk can stall, so none of it runs on the
 /// caller's UI thread.</para>
 /// </remarks>
@@ -135,7 +136,8 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         {
             // not recorded: a transient request for the elevated child in the OS temp directory,
             // removed on every outcome and never reloaded as managed state.
-            await Task.Run(() => File.WriteAllText(files.RequestPath, ElevatedApplyCommand.SerializeRequest(buckets))).ConfigureAwait(false);
+            await Task.Run(() => File.WriteAllText(files.RequestPath, ElevatedApplyCommand.SerializeRequest(buckets)))
+                .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         }
         catch (Exception ex)
         {

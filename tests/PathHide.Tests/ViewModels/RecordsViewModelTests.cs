@@ -221,8 +221,10 @@ public sealed class RecordsViewModelTests
         Assert.Null(vm.MoreNote);
     }
 
-    [AvaloniaFact]
-    public void A_newest_page_read_that_lands_before_a_filter_reload_leaves_each_record_listed_once()
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_late_filter_reload_keeps_the_newer_live_snapshot_and_selection(bool reloadFails)
     {
         var vm = Started();
         Answer(false, Record(1));
@@ -234,13 +236,21 @@ public sealed class RecordsViewModelTests
         ElapseLive();
         var newest = _reader.Unanswered.Single(page => page != reload);
 
-        // Both read the first page of the same filters; the newest-page read lands first.
-        newest.Answer(false, Record(3, level: "error"), Record(2, level: "error"));
+        // The live snapshot includes a record committed after the initial reload took its snapshot.
+        newest.Answer(true, Record(3, level: "error"), Record(2, level: "error"));
         Settle();
-        reload.Answer(false, Record(3, level: "error"), Record(2, level: "error"));
+        var selected = vm.Rows[0];
+        vm.SelectedRow = selected;
+        if (reloadFails)
+            reload.Fail();
+        else
+            reload.Answer(false, Record(2, level: "error"));
         Settle();
 
         Assert.Equal([3, 2], vm.Rows.Select(row => row.Id));
+        Assert.Same(selected, vm.SelectedRow);
+        Assert.True(vm.HasMore);
+        Assert.Equal(RecordsListStatus.Ready, vm.ListStatus);
     }
 
     [AvaloniaFact]

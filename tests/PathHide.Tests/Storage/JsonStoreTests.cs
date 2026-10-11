@@ -157,7 +157,7 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Save_AfterAnUnusableLoad_ReplacesTheFileWithoutReadingIt()
+    public void Save_AfterAnUnusableLoad_ReplacesInvalidContent()
     {
         var store = SettingsDocumentStore();
         File.WriteAllText(PathOf("config.json"), "{ not valid json");
@@ -167,6 +167,28 @@ public sealed class JsonStoreTests : IDisposable
 
         Assert.Equal(ThemePreference.Dark, store.Load().Value.Theme);
         Assert.Empty(Directory.EnumerateFiles(_root, "*.invalid"));
+    }
+
+    [MacOnlyFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public void Save_InaccessibleState_ReplacesItWhenTheDirectoryIsWritable()
+    {
+        var path = PathOf("state.json");
+        File.WriteAllText(path, "{\"formatVersion\":1,\"windowWidth\":700}");
+        var mode = File.GetUnixFileMode(path);
+        File.SetUnixFileMode(path, UnixFileMode.None);
+        var store = new JsonStore<AppState>("state.json", "state", FormatVersions.State, recordBackup: false);
+        try
+        {
+            Assert.Throws<UnauthorizedAccessException>(() => File.ReadAllBytes(path));
+            Assert.True(store.Load().WasUnreadable);
+            store.Save(new AppState { WindowWidth = 900 });
+        }
+        finally
+        {
+            File.SetUnixFileMode(path, mode);
+        }
+        Assert.Equal(900, store.Load().Value.WindowWidth);
     }
 
     [MacOnlyFact]

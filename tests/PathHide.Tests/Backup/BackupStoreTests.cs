@@ -15,6 +15,9 @@ using PathHide.Tests.Fakes;
 using PathHide.Tests.Storage;
 using PathHide.ViewModels;
 using Xunit;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using PathHide.Views;
 
 namespace PathHide.Tests.Backup;
 
@@ -392,6 +395,36 @@ public sealed class BackupStoreTests : IDisposable
         {
             Release(holder);
         }
+    }
+
+    [AvaloniaFact]
+    public async Task ClosingAnIdleWindow_WaitsForPendingHistory()
+    {
+        BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
+        BackupStore.Close();
+        var vm = QuittingViewModel();
+        var window = new MainWindow { DataContext = vm };
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        window.Closed += (_, _) => closed.TrySetResult();
+        window.Show();
+        await vm.ScanTask;
+        Assert.False(vm.HasWorkToFinish);
+        var holder = HoldWriteLock();
+        try
+        {
+            BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("second"));
+            Assert.False(vm.IsBusy);
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(closed.Task.IsCompleted);
+        }
+        finally
+        {
+            Release(holder);
+            window.Close();
+            await closed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        Assert.Equal("second", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
     }
 
     [Fact]

@@ -88,7 +88,11 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         }
     }
 
-    public void Save(T value)
+    public void Save(T value) => Save(value, compareExistingContent: true);
+
+    // Settings already compares its authoritative in-memory sets. Reading again would prevent a
+    // changed draft from replacing an unreadable config, and duplicate that owner's decision.
+    internal void Save(T value, bool compareExistingContent)
     {
         try
         {
@@ -106,7 +110,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             // backup store after the rename (no re-encode, no re-read). No BOM: File.WriteAllText/Encoding
             // .UTF8 without a preamble matches what the app writes and reads back.
             var bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
-            if (File.Exists(_filePath) && File.ReadAllBytes(_filePath).AsSpan().SequenceEqual(bytes))
+            if (compareExistingContent && HasIdenticalContent(bytes))
                 return;
             WriteAtomically(bytes);
             Log.Info("store: saved", new { label = _label, path = _filePath });
@@ -115,6 +119,20 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         {
             Log.Error("store: save failed", ex, new { label = _label, path = _filePath });
             throw;
+        }
+    }
+
+    private bool HasIdenticalContent(byte[] bytes)
+    {
+        try
+        {
+            return File.Exists(_filePath) && File.ReadAllBytes(_filePath).AsSpan().SequenceEqual(bytes);
+        }
+        catch (Exception ex) when (!_haltWhenUnreadable && ex is IOException or UnauthorizedAccessException)
+        {
+            // Unreadable disposable state can still be replaced when its directory is writable.
+            // Failure to compare must not turn its harmless load fallback into a save refusal.
+            return false;
         }
     }
 

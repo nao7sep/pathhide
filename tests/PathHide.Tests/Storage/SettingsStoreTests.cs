@@ -292,6 +292,28 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Empty(notices);
     }
 
+    [MacOnlyFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public void SaveChanges_ReplacesUnreadableConfigWithoutReadingItsContent()
+    {
+        File.WriteAllText(ConfigPath, "{\"formatVersion\":1,\"theme\":\"dark\"}");
+        var mode = File.GetUnixFileMode(ConfigPath);
+        File.SetUnixFileMode(ConfigPath, UnixFileMode.None);
+        try
+        {
+            Assert.Throws<UnauthorizedAccessException>(() => File.ReadAllBytes(ConfigPath));
+            var store = new SettingsStore();
+            var loaded = store.Load();
+            Assert.True(loaded.WasUnreadable);
+            Assert.True(store.SaveChanges(loaded.Value, new AppSettings { Theme = ThemePreference.Light }));
+        }
+        finally
+        {
+            File.SetUnixFileMode(ConfigPath, mode);
+        }
+        Assert.Equal("light", Assert.Single(StoredSets()).Value.GetString());
+    }
+
     [AvaloniaFact]
     public void Startup_LegacyGeometryStaysIgnoredWithoutWritingStateOrConfig()
     {

@@ -192,6 +192,33 @@ public sealed class ElevatedRetryTests : IDisposable
         Assert.Empty(TempFiles());
     }
 
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SynchronousLauncherCompletion_ContinuesOnAWorker(bool fail)
+    {
+        var uiThread = Environment.CurrentManagedThreadId;
+        var launchThread = uiThread;
+        var onWorker = false;
+        var applicator = new ElevatedApplicator(_ =>
+        {
+            launchThread = Environment.CurrentManagedThreadId;
+            onWorker = Thread.CurrentThread.IsThreadPoolThread;
+            return fail
+                ? Task.FromException<Task<int>?>(new IOException("launch failed"))
+                : Task.FromResult<Task<int>?>(Task.FromResult(0));
+        }, _temp, "/storage-root");
+        var buckets = ElevatedApplyCommand.Partition([("/a", DesiredVisibility.Hidden)], WindowsHideMode.HiddenOnly);
+
+        var apply = applicator.ApplyAsync(buckets, CancellationToken.None);
+
+        Assert.True(SpinWait.SpinUntil(() => apply.IsCompleted, TimeSpan.FromSeconds(5)));
+        Assert.NotEqual(uiThread, launchThread);
+        Assert.True(onWorker);
+        Assert.Equal(fail ? ElevatedApplyStatus.NotStarted : ElevatedApplyStatus.Completed, apply.Result.Status);
+        Assert.Empty(TempFiles());
+    }
+
     [Fact(Timeout = 10_000)]
     public async Task Cancel_WhileTheConsentPromptIsOpen_EndsTheWaitAtOnce()
     {

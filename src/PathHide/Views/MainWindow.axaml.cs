@@ -176,6 +176,7 @@ public partial class MainWindow : Window
         if (SessionEnd.Is(e.CloseReason))
             Log.EndingSession();
 
+        // HasWorkToFinish includes queued backup history even after the primary save completed.
         if (!_workFinishedForClose && DataContext is MainWindowViewModel vm
             && (_finishingWork is not null || vm.HasWorkToFinish))
         {

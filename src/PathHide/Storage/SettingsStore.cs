@@ -33,7 +33,7 @@ public sealed class SettingsStore : ISettingsStore
         if (previous is not null && SettingsSets.SameSets(SettingsSets.Differing(previous), sets))
             return false;
 
-        _store.Save(sets);
+        _store.Save(sets, compareExistingContent: false);
         return true;
     }
 }

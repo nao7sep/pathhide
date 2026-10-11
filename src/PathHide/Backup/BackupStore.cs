@@ -100,6 +100,16 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
         }
     }
 
+    /// <summary>Whether ordinary window close still owes the history writer its bounded wait.</summary>
+    public static bool HasPendingWrites
+    {
+        get
+        {
+            lock (PendingGate)
+                return !_writer.IsCompleted;
+        }
+    }
+
     /// <summary>
     /// Waits up to <paramref name="bound"/> for the pending writes, for an ordinary quit. Whatever is still
     /// pending at the bound is left to the exiting process, with one warning. Never throws.
