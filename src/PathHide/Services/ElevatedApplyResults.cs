@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -92,8 +93,10 @@ public static class ElevatedApplyResults
                 if (result is not null && !string.IsNullOrEmpty(result.Path))
                     results.Add(result);
             }
-            catch (JsonException ex)
+            catch (Exception ex) when (ex is JsonException or ArgumentException)
             {
+                // JsonObject materializes duplicate keys lazily and throws ArgumentException;
+                // that ambiguous line belongs to the same malformed-record boundary.
                 // Tolerate one malformed line; the rest of the file is still usable. The child is
                 // our own code writing well-formed JSONL, so a malformed line means it was cut off
                 // — killed mid-write, or a full disk. Without this line the parent silently

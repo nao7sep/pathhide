@@ -80,6 +80,20 @@ public sealed class ElevatedApplyResultsTests
         Assert.Empty(ElevatedApplyResults.Parse("{\"ok\":true}\n").Results);
     }
 
+    [Theory]
+    [InlineData("{\"path\":\"/wrong\",\"path\":\"/other\",\"ok\":true}")]
+    [InlineData("{\"path\":\"/wrong\",\"ok\":true,\"ok\":false}")]
+    [InlineData("{\"entry\":null,\"entry\":{}}")]
+    public void Ambiguous_duplicate_keys_are_skipped_without_losing_other_records(string malformed)
+    {
+        var before = new PathApplyResult("/before", Ok: false);
+        var after = new PathApplyResult("/after", Ok: true);
+        var text = ElevatedApplyResults.SerializeLine(before) + malformed + "\n"
+            + ElevatedApplyResults.SerializeLine(after);
+
+        Assert.Equal([before, after], ElevatedApplyResults.Parse(text).Results);
+    }
+
     [Fact]
     public void Parse_EmptyText_ReturnsEmpty()
     {

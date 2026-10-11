@@ -9,10 +9,10 @@ namespace PathHide.Services;
 /// <summary>How one elevated apply ended, as far as the caller is concerned.</summary>
 public enum ElevatedApplyStatus
 {
-    /// <summary>The child ran and exited; <see cref="ElevatedApplyOutcome.Results"/> is its full report.</summary>
+    /// <summary>The child ran and exited; <see cref="ElevatedApplyOutcome.Results"/> contains its available report.</summary>
     Completed,
 
-    /// <summary>No child ran: the consent prompt was declined, or the launch failed.</summary>
+    /// <summary>No child ran: preparation or launch failed, or the consent prompt was declined.</summary>
     NotStarted,
 
     /// <summary>The user cancelled the wait. The child, if it started, finishes on its own.</summary>
@@ -21,7 +21,7 @@ public enum ElevatedApplyStatus
     /// <summary>The child did not exit in time. It keeps running; unreported paths may still change.</summary>
     TimedOut,
 
-    /// <summary>Refused: a child from an earlier apply is still running and could overwrite this one.</summary>
+    /// <summary>Refused: an earlier apply still owns preparation, child execution or cleanup.</summary>
     Busy,
 }
 
@@ -38,12 +38,12 @@ public sealed record ElevatedApplyOutcome(
 /// <summary>Runs access-denied paths through one elevated child process.</summary>
 public interface IElevatedApplicator
 {
-    /// <summary>Whether a child launched earlier is still running after its caller stopped waiting.</summary>
+    /// <summary>Whether an earlier elevated operation still owns preparation, a child or file cleanup.</summary>
     bool HasRunningChild { get; }
 
     /// <summary>
     /// Applies <paramref name="buckets"/> through an elevated child, or refuses with
-    /// <see cref="ElevatedApplyStatus.Busy"/> while an earlier child still runs. Returns once; nothing
+    /// <see cref="ElevatedApplyStatus.Busy"/> while an earlier elevated operation still owns work. Returns once; nothing
     /// the child does after that reaches the caller.
     /// </summary>
     Task<ElevatedApplyOutcome> ApplyAsync(ElevatedApplyCommand.Buckets buckets, CancellationToken cancellationToken);
@@ -64,7 +64,7 @@ public delegate Task<Task<int>?> ElevatedChildLauncher(IReadOnlyList<string> arg
 
 /// <summary>
 /// The platform-neutral half of the elevated retry: writes the request, launches the child through an
-/// <see cref="ElevatedChildLauncher"/>, bounds and cancels the wait, reads the results, and owns the
+/// <see cref="ElevatedChildLauncher"/>, bounds foreground file/child waits, reads the results, and owns the
 /// temp files and the one child that may outlive a call.
 /// </summary>
 /// <remarks>
@@ -100,8 +100,13 @@ public sealed class ElevatedApplicator : IElevatedApplicator
     private readonly string _storageRoot;
     private readonly TimeSpan _childTimeout;
 
-    // The launch-to-cleanup lifetime of the newest child. Completed when none is outstanding. Read and
-    // replaced only by ApplyAsync, which its caller serializes.
+    internal TimeSpan FileWaitBound { get; init; } = BoundedStoreWork.DefaultBound;
+    internal Action<string, string> WriteRequest { get; init; } = File.WriteAllText;
+    internal Func<ElevatedApplyFiles, IReadOnlyDictionary<string, bool>> ReadResults { get; init; } = files => files.ReadResults();
+    internal Func<ElevatedApplyFiles, bool> DeleteFiles { get; init; } = files => files.TryDelete();
+
+    // The preparation-to-cleanup lifetime of the newest elevated operation. Completed when none
+    // is outstanding. Read and replaced only by ApplyAsync, which its caller serializes.
     private Task _outstanding = Task.CompletedTask;
 
     public ElevatedApplicator(
@@ -132,62 +137,100 @@ public sealed class ElevatedApplicator : IElevatedApplicator
 
         var totalPaths = buckets.ToHide.Count + buckets.ToHideWithSystem.Count + buckets.ToShow.Count;
         var files = ElevatedApplyFiles.Create(_tempDirectory);
+        var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _outstanding = settled.Task; // Claim preparation too, before the first wait.
+        var fileWork = new BoundedStoreWork();
+        Task fileTail = Task.CompletedTask;
+        Task<int?>? run = null;
+        var status = ElevatedApplyStatus.NotStarted;
         try
         {
-            // not recorded: a transient request for the elevated child in the OS temp directory,
-            // removed on every outcome and never reloaded as managed state.
-            await Task.Run(() => File.WriteAllText(files.RequestPath, ElevatedApplyCommand.SerializeRequest(buckets)))
-                .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
-        }
-        catch (Exception ex)
-        {
-            Log.Error("elevated apply: could not write the request file", ex);
-            files.TryDelete();
-            return new ElevatedApplyOutcome(ElevatedApplyStatus.NotStarted, null, EmptyResults);
-        }
-
-        Log.Info("elevated apply: launching", new
-        {
-            totalPaths,
-            hide = buckets.ToHide.Count,
-            system = buckets.ToHideWithSystem.Count,
-            show = buckets.ToShow.Count,
-        });
-
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var run = RunChildAsync(
-            ElevatedApplyCommand.BuildArguments(files.RequestPath, files.ResultsPath, _storageRoot), started);
-        _outstanding = run;
-
-        var status = await WaitAsync(run, started.Task, cancellationToken).ConfigureAwait(false);
-        var results = files.ReadResults();
-
-        if (status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted)
-        {
-            // The files name the user's paths; one that outlives the child is worth a line, and the
-            // next launch's sweep retries it.
-            if (!files.TryDelete())
-                Log.Warn("elevated apply: could not remove the finished child's files; the next launch retries");
-            var exitCode = await run.ConfigureAwait(false);
-            if (status == ElevatedApplyStatus.Completed)
-                Log.Info("elevated apply: exited", new { exitCode, reported = results.Count });
-            return new ElevatedApplyOutcome(status, exitCode, results);
-        }
-
-        if (status == ElevatedApplyStatus.Cancelled)
-            Log.Info("elevated apply: cancelled; the child finishes on its own", new { reported = results.Count, totalPaths });
-        else
-            Log.Error("elevated apply: child did not exit within the timeout", new
+            try
             {
-                timeoutSeconds = (int)_childTimeout.TotalSeconds,
-                reported = results.Count,
-                totalPaths,
-            });
+                // not recorded: transient IPC, never reloaded as managed state.
+                await fileWork.RunAsync(() =>
+                {
+                    WriteRequest(files.RequestPath, ElevatedApplyCommand.SerializeRequest(buckets));
+                    return true;
+                }, FileWaitBound, TimeProvider.System, cancellationToken, started: work => fileTail = work)
+                    .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                status = ElevatedApplyStatus.Cancelled;
+                return new ElevatedApplyOutcome(status, null, EmptyResults);
+            }
+            catch (Exception ex)
+            {
+                Log.Error("elevated apply: could not write the request file", ex);
+                return new ElevatedApplyOutcome(status, null, EmptyResults);
+            }
 
-        // The child keeps appending to the results file, so the files outlive this call: removed once
-        // it exits, by ReleaseAsync at quit, or by the next launch's sweep.
-        _outstanding = DeleteAfterExitAsync(run, files);
-        return new ElevatedApplyOutcome(status, null, results);
+            // A cancelled preparation must never raise consent later, even if its write just landed.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                status = ElevatedApplyStatus.Cancelled;
+                return new ElevatedApplyOutcome(status, null, EmptyResults);
+            }
+
+            Log.Info("elevated apply: launching", new
+            {
+                totalPaths,
+                hide = buckets.ToHide.Count,
+                system = buckets.ToHideWithSystem.Count,
+                show = buckets.ToShow.Count,
+            });
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            run = RunChildAsync(
+                ElevatedApplyCommand.BuildArguments(files.RequestPath, files.ResultsPath, _storageRoot), started);
+            status = await WaitAsync(run, started.Task, cancellationToken).ConfigureAwait(false);
+
+            IReadOnlyDictionary<string, bool> results;
+            try
+            {
+                // Cancel still collects already-flushed verdicts, within a separate file-read bound.
+                results = await fileWork.RunAsync(() => ReadResults(files), FileWaitBound, TimeProvider.System,
+                    started: work => fileTail = work).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("elevated apply: results unavailable within the file wait", ex);
+                results = EmptyResults;
+            }
+
+            if (status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted)
+            {
+                var exitCode = await run.ConfigureAwait(false);
+                if (status == ElevatedApplyStatus.Completed)
+                    Log.Info("elevated apply: exited", new { exitCode, reported = results.Count });
+                return new ElevatedApplyOutcome(status, exitCode, results);
+            }
+
+            if (status == ElevatedApplyStatus.Cancelled)
+                Log.Info("elevated apply: cancelled; the child finishes on its own", new { reported = results.Count, totalPaths });
+            else
+                Log.Error("elevated apply: child did not exit within the timeout", new
+                {
+                    timeoutSeconds = (int)_childTimeout.TotalSeconds,
+                    reported = results.Count,
+                    totalPaths,
+                });
+            return new ElevatedApplyOutcome(status, null, results);
+        }
+        finally
+        {
+            // Physical preparation/read, child exit and cleanup remain one lifetime. A timed-out
+            // file operation is joined before deleting its files; no late evidence reaches the UI.
+            var cleanup = DeleteAfterSettlementAsync(run, fileTail, files, settled);
+            if ((status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted) && fileTail.IsCompleted)
+            {
+                try { await cleanup.WaitAsync(FileWaitBound).ConfigureAwait(false); }
+                catch (TimeoutException)
+                {
+                    Log.Warn("elevated apply: cleanup still running; the outcome is already known");
+                }
+            }
+        }
     }
 
     public async Task ReleaseAsync(TimeSpan bound)
@@ -254,10 +297,22 @@ public sealed class ElevatedApplicator : IElevatedApplicator
              : ElevatedApplyStatus.TimedOut;
     }
 
-    private static async Task DeleteAfterExitAsync(Task<int?> run, ElevatedApplyFiles files)
+    private async Task DeleteAfterSettlementAsync(Task<int?>? run, Task fileTail,
+        ElevatedApplyFiles files, TaskCompletionSource settled)
     {
-        await run.ConfigureAwait(false);
-        if (!files.TryDelete())
-            Log.Warn("elevated apply: could not remove the finished child's files; the next launch retries");
+        try
+        {
+            if (run is not null)
+                await run.ConfigureAwait(false);
+            // Observe a failed physical operation too; cleanup starts only after it really ends.
+            await fileTail.ContinueWith(_ => { }, TaskScheduler.Default).ConfigureAwait(false);
+            if (!await Task.Run(() => DeleteFiles(files)).ConfigureAwait(false))
+                Log.Warn("elevated apply: could not remove the finished operation's files; the next launch retries");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("elevated apply: cleanup failed; the next launch retries", ex);
+        }
+        finally { settled.TrySetResult(); }
     }
 }

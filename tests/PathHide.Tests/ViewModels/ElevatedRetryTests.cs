@@ -82,6 +82,70 @@ public sealed class ElevatedRetryTests : IDisposable
     }
 
     [Fact(Timeout = 10_000)]
+    public async Task A_malformed_partial_report_preserves_valid_verdicts_and_late_cleanup()
+    {
+        _child.OnStart = run =>
+        {
+            File.AppendAllText(run.Invocation.ResultsPath!, "{\"path\":\"/wrong\",\"path\":\"/other\",\"ok\":true}\n");
+            run.Report("/a");
+        };
+        var applicator = Applicator(childTimeout: TimeSpan.Zero);
+        try
+        {
+            var outcome = await applicator.ApplyAsync(new ElevatedApplyCommand.Buckets(["/a"], [], []),
+                TestContext.Current.CancellationToken);
+            Assert.Equal(ElevatedApplyStatus.TimedOut, outcome.Status);
+            Assert.True(outcome.Results["/a"]);
+            Assert.True(applicator.HasRunningChild);
+        }
+        finally
+        {
+            foreach (var run in _child.Runs)
+                run.Exit();
+            await applicator.ReleaseAsync(Generous);
+        }
+        Assert.Empty(TempFiles());
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task Cancelled_preparation_releases_the_command_reservation_for_ordinary_Show()
+    {
+        using var release = new ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var applicator = new ElevatedApplicator(_child.LaunchAsync, _temp, "/storage-root")
+        {
+            WriteRequest = (path, text) =>
+            {
+                entered.SetResult();
+                release.Wait();
+                File.WriteAllText(path, text);
+            },
+        };
+        var vm = ViewModel(applicator, null, "/a");
+        await vm.ScanTask;
+        var hide = HideAll(vm);
+        try
+        {
+            await entered.Task.WaitAsync(Generous, TestContext.Current.CancellationToken);
+            vm.CancelCommand.Execute(null);
+            await hide.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+            Assert.True(applicator.HasRunningChild);
+            vm.Rows[0].IsSelected = true;
+            await vm.ShowSelectedCommand.ExecuteAsync(null).WaitAsync(Generous, TestContext.Current.CancellationToken);
+            Assert.Equal(["/a"], _visibility.Shown);
+            Assert.Equal(ActualState.Visible, vm.Rows[0].ActualState);
+        }
+        finally
+        {
+            release.Set();
+            await hide;
+            await applicator.ReleaseAsync(Generous);
+        }
+        Assert.Equal(0, _child.LaunchCount);
+        Assert.Empty(TempFiles());
+    }
+
+    [Fact(Timeout = 10_000)]
     public async Task AccessDeniedPaths_GoThroughOneChild_AndTakeItsVerdict()
     {
         _child.OnStart = run =>
