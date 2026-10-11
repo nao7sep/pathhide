@@ -43,6 +43,8 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     private readonly bool _recordBackup;
     private readonly bool _haltWhenUnreadable;
 
+    internal Action<string> DeleteScratch { get; init; } = File.Delete;
+
     /// <summary>
     /// Creates a store rooted at <see cref="StorageRoot.Directory"/>.
     /// </summary>
@@ -194,10 +196,13 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
                 File.Move(tempPath, _filePath);
             }
         }
-        finally
+        catch
         {
-            if (File.Exists(tempPath))
-                File.Delete(tempPath);
+            // Successful rename already consumed the scratch file: no post-publication I/O.
+            // Failed-write cleanup is best-effort and must preserve the primary failure.
+            try { DeleteScratch(tempPath); }
+            catch (Exception ex) { Log.Warn("store: could not remove failed-write scratch", ex, new { tempPath }); }
+            throw;
         }
 
         // Strictly AFTER the rename lands: the save is complete here. Hand over the exact bytes just

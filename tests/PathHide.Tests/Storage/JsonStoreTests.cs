@@ -360,6 +360,46 @@ public sealed class JsonStoreTests : IDisposable
         Assert.Empty(temps);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Successful_publication_never_enters_scratch_cleanup(bool replace)
+    {
+        if (replace)
+            new JsonStore<AppState>("state.json", "state", FormatVersions.State, recordBackup: false)
+                .Save(new AppState { WindowWidth = 700 });
+        var store = new JsonStore<AppState>("state.json", "state", FormatVersions.State, recordBackup: false)
+        {
+            DeleteScratch = _ => throw new IOException("scratch cleanup must not delay published success"),
+        };
+
+        store.Save(new AppState { WindowWidth = 900 });
+
+        Assert.Equal(900, store.Load().Value.WindowWidth);
+        Assert.Empty(Directory.GetFiles(_root, "*.tmp"));
+    }
+
+    [Fact]
+    public void Failed_publication_preserves_its_error_when_scratch_cleanup_also_fails()
+    {
+        Directory.CreateDirectory(PathOf("state.json")); // Rename cannot replace this directory.
+        var cleanupAttempts = 0;
+        var store = new JsonStore<AppState>("state.json", "state", FormatVersions.State, recordBackup: false)
+        {
+            DeleteScratch = _ =>
+            {
+                cleanupAttempts++;
+                throw new IOException("cleanup failure sentinel");
+            },
+        };
+
+        var failure = Assert.Throws<IOException>(() => store.Save(new AppState { WindowWidth = 900 }));
+
+        Assert.DoesNotContain("cleanup failure sentinel", failure.Message);
+        Assert.Equal(1, cleanupAttempts);
+        Assert.True(Directory.Exists(PathOf("state.json")));
+    }
+
     [Fact]
     public void TempPath_IsStemHyphenDiscriminatorDotTmp_InTheSameDirectory()
     {
