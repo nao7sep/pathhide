@@ -32,9 +32,10 @@ public sealed class BoundedVisibility
 
     private readonly IVisibilityService _service;
 
-    // Paths whose abandoned call has not returned yet, each with that call. Ordinal: every caller
-    // passes the entry's own normalized path string.
+    // Physical ownership survives removal/replacement of a row. Windows/UNC spelling is normalized;
+    // caller-observed native identities also join known Mac aliases without rewriting stored paths.
     private readonly ConcurrentDictionary<string, Task> _stuck = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, string> _identities = new(StringComparer.Ordinal);
 
     public BoundedVisibility(IVisibilityService service, TimeSpan? timeout = null)
     {
@@ -71,7 +72,11 @@ public sealed class BoundedVisibility
     {
         try
         {
-            return await RunAsync(path, () => _service.ResolvePath(path), cancellationToken).ConfigureAwait(false);
+            var resolved = await RunAsync(path, () => _service.ResolvePath(path), cancellationToken).ConfigureAwait(false);
+            // Only an observed result establishes identity. An abandoned resolver cannot publish late.
+            if (resolved is not null)
+                _identities[LiteralIdentity(path)] = LiteralIdentity(resolved);
+            return resolved;
         }
         catch (TimeoutException)
         {
@@ -97,12 +102,14 @@ public sealed class BoundedVisibility
     private async Task<T> RunAsync<T>(string path, Func<T> call, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var literal = LiteralIdentity(path);
+        var identity = _identities.TryGetValue(literal, out var known) ? known : literal;
 
         // One deadline for the whole call, the wait for an earlier stuck call included.
         using var bound = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         bound.CancelAfter(Timeout);
 
-        if (_stuck.TryGetValue(path, out var earlier) && !await EndsWithinAsync(earlier, bound.Token))
+        if (_stuck.TryGetValue(identity, out var earlier) && !await EndsWithinAsync(earlier, bound.Token))
         {
             cancellationToken.ThrowIfCancellationRequested();
             throw new TimeoutException($"An earlier call on this path has not returned: {path}");
@@ -113,7 +120,7 @@ public sealed class BoundedVisibility
         var work = Task.Run(call, CancellationToken.None);
         if (!await EndsWithinAsync(work, bound.Token))
         {
-            Abandon(path, work);
+            Abandon(path, identity, work);
             cancellationToken.ThrowIfCancellationRequested();
             throw new TimeoutException($"No answer within {Timeout.TotalSeconds:0} s: {path}");
         }
@@ -123,6 +130,10 @@ public sealed class BoundedVisibility
         cancellationToken.ThrowIfCancellationRequested();
         return await work.ConfigureAwait(false);
     }
+
+    private static string LiteralIdentity(string path) =>
+        PathNormalizer.TryNormalize(path, out var normalized, out var family)
+            ? PathNormalizer.IdentityKey(normalized, family) : path;
 
     /// <summary>Whether <paramref name="task"/> ends before <paramref name="bound"/> fires.</summary>
     private static async Task<bool> EndsWithinAsync(Task task, CancellationToken bound)
@@ -136,14 +147,14 @@ public sealed class BoundedVisibility
     /// Marks <paramref name="path"/> stuck until <paramref name="work"/> returns, and keeps the
     /// abandoned call's failure from surfacing as an unobserved exception.
     /// </summary>
-    private void Abandon(string path, Task work)
+    private void Abandon(string path, string identity, Task work)
     {
         Log.Warn("path did not answer; abandoned the wait", new { path });
-        _stuck[path] = work;
+        _stuck[identity] = work;
         _ = work.ContinueWith(
             finished =>
             {
-                _stuck.TryRemove(new(path, finished));
+                _stuck.TryRemove(new(identity, finished));
                 if (finished.IsFaulted)
                     Log.Warn("abandoned path call failed", (Exception)finished.Exception!, new { path });
                 else

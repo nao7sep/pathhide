@@ -15,6 +15,67 @@ public class BoundedVisibilityTests
 {
     private static readonly TimeSpan Short = TimeSpan.FromMilliseconds(200);
 
+    [Theory(Timeout = 10_000)]
+    [InlineData(@"C:\Temp\a", @"c:/TEMP/A/")]
+    [InlineData(@"\\server\share\a", @"\\SERVER\SHARE\A")]
+    [InlineData("/alias/a", "/real/a")]
+    public async Task Equivalent_replacements_wait_for_the_outstanding_physical_write(string oldPath, string replacement)
+    {
+        using var release = new ManualResetEventSlim();
+        var service = new FakeVisibilityService();
+        if (oldPath.StartsWith('/'))
+            service.Aliases[oldPath] = replacement;
+        var visibility = new BoundedVisibility(service, Short);
+        var token = TestContext.Current.CancellationToken;
+        await visibility.ResolvePathAsync(oldPath, token); // Caller-observed admission evidence.
+        service.WriteGate = release;
+        try
+        {
+            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync(oldPath, DesiredVisibility.Hidden, token));
+            service.WriteGate = null; // A bypass would now write immediately.
+            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync(replacement, DesiredVisibility.Shown, token));
+            Assert.Empty(service.Shown);
+        }
+        finally
+        {
+            release.Set();
+            await visibility.InspectAsync(oldPath, token); // Join before disposing the fixture.
+        }
+        await visibility.WriteAsync(replacement, DesiredVisibility.Shown, token);
+        Assert.Equal([replacement], service.Shown);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task Distinct_posix_case_and_final_link_identities_remain_independent()
+    {
+        using var release = new ManualResetEventSlim();
+        var service = new FakeVisibilityService();
+        service.Aliases["/link"] = "/link"; // A no-follow adapter retains the final link.
+        service.Aliases["/target"] = "/target";
+        var visibility = new BoundedVisibility(service, Short);
+        var token = TestContext.Current.CancellationToken;
+        await visibility.ResolvePathAsync("/link", token);
+        await visibility.ResolvePathAsync("/target", token);
+        service.WriteGate = release;
+        try
+        {
+            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync("/Foo", DesiredVisibility.Hidden, token));
+            service.WriteGate = null;
+            await visibility.WriteAsync("/foo", DesiredVisibility.Shown, token);
+            service.WriteGate = release;
+            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync("/link", DesiredVisibility.Hidden, token));
+            service.WriteGate = null;
+            await visibility.WriteAsync("/target", DesiredVisibility.Shown, token);
+            Assert.Equal(["/foo", "/target"], service.Shown);
+        }
+        finally
+        {
+            release.Set();
+            await visibility.InspectAsync("/Foo", token);
+            await visibility.InspectAsync("/link", token);
+        }
+    }
+
     [Fact(Timeout = 10_000)]
     public async Task Inspect_ThatNeverAnswers_IsReportedUnresponsive()
     {
