@@ -101,5 +101,5 @@ SkiaSharp, HarfBuzzSharp, and ANGLE
 ----------------------------------
 
 The packaged THIRD_PARTY_NOTICES.txt appends the exact third-party notice file
-supplied by SkiaSharp.NativeAssets 3.119.4. That upstream file covers the
+supplied by SkiaSharp.NativeAssets 4.153.1. That upstream file covers the
 SkiaSharp and HarfBuzzSharp native dependency boundary, including ANGLE.

@@ -39,15 +39,20 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.4" />
+    <!-- Avalonia 12.1 declares SkiaSharp 3.119 as its floor but supports SkiaSharp 4 when an app
+         references it directly; Avalonia 13 is expected to raise the floor. The direct reference brings
+         the current Skia engine and its macOS and Windows native assets. HarfBuzzSharp stays at
+         Avalonia's own version: upstream has not declared its new major compatible. -->
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <!-- SQLite binding for the write-through data-backup store (Backup/BackupStore.cs). The ADO.NET
          provider bundles SQLitePCLRaw's native library, so it needs no separate native rebuild and adds no
          packaging churn on a runtime bump (data-backup conventions: lowest-friction SQLite binding). -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
-    <!-- Microsoft.Data.Sqlite 10.0.9 still pulls SQLitePCLRaw 2.1.11 transitively, whose bundled native
-         e_sqlite3 carries a high-severity advisory (GHSA-2m69-gcr7-jv3q). A direct top-level reference to
-         the fixed 3.0.x bundle overrides that transitive pin (direct wins), so the app ships the patched
-         native SQLite. Drop this pin once Microsoft.Data.Sqlite's floor moves to SQLitePCLRaw 3.x. -->
+    <!-- Microsoft.Data.Sqlite's floor is still SQLitePCLRaw 2.1.x (2.1.12 at 10.0.12, past the 2.1.11
+         advisory GHSA-2m69-gcr7-jv3q). A direct top-level reference overrides it (direct wins) so the app
+         ships the current 3.x bundle and its newer native SQLite. Drop it once Microsoft.Data.Sqlite's
+         own floor reaches the current SQLitePCLRaw release. -->
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
     <PackageReference Include="System.CommandLine" Version="2.0.12" />
   </ItemGroup>
