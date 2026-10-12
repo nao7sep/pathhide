@@ -118,6 +118,8 @@
   "nativeMenu.undo": "Annulla",
   "nativeMenu.window": "Finestra",
   "nativeMenu.zoom": "Ridimensiona",
+  "picker.addDirectoriesTitle": "Aggiungi cartelle",
+  "picker.addFilesTitle": "Aggiungi file",
   "quit.quitAnyway": "Esci comunque",
   "quit.retry": "Riprova",
   "quit.stillSaving": "L’ultima modifica è ancora in corso di salvataggio.",
@@ -264,15 +266,15 @@
     "many": "{count} di problemi",
     "other": "{count} problemi"
   },
-  "status.scanning": "Scansione in corso: {done} / {total}",
+  "status.scanning": "Scansione in corso: {done} / {total}…",
   "status.visible": {
     "one": "{count} visibile",
     "many": "{count} visibili",
     "other": "{count} visibili"
   },
   "toolbar.actions": "Azioni",
-  "toolbar.addDirectories": "Aggiungi cartelle",
-  "toolbar.addFiles": "Aggiungi file",
+  "toolbar.addDirectories": "Aggiungi cartelle…",
+  "toolbar.addFiles": "Aggiungi file…",
   "toolbar.hideAll": "Nascondi tutto",
   "toolbar.hideSelected": "Nascondi",
   "toolbar.reapplyAll": "Riapplica tutto",

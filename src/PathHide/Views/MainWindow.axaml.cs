@@ -443,7 +443,7 @@ public partial class MainWindow : Window
         {
             files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = Localizer.T("toolbar.addFiles"),
+                Title = Localizer.T("picker.addFilesTitle"),
                 AllowMultiple = true,
             });
             ViewModel.ResolvePathPickerFailure();
@@ -481,7 +481,7 @@ public partial class MainWindow : Window
         {
             folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
             {
-                Title = Localizer.T("toolbar.addDirectories"),
+                Title = Localizer.T("picker.addDirectoriesTitle"),
                 AllowMultiple = true,
             });
             ViewModel.ResolvePathPickerFailure();

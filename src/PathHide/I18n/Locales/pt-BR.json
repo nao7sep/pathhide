@@ -118,6 +118,8 @@
   "nativeMenu.undo": "Desfazer",
   "nativeMenu.window": "Janela",
   "nativeMenu.zoom": "Zoom",
+  "picker.addDirectoriesTitle": "Adicionar pastas",
+  "picker.addFilesTitle": "Adicionar arquivos",
   "quit.quitAnyway": "Encerrar mesmo assim",
   "quit.retry": "Tentar novamente",
   "quit.stillSaving": "Sua última alteração ainda está sendo salva.",
@@ -264,15 +266,15 @@
     "many": "{count} de problemas",
     "other": "{count} problemas"
   },
-  "status.scanning": "Verificando {done} / {total}",
+  "status.scanning": "Verificando {done} / {total}…",
   "status.visible": {
     "one": "{count} visível",
     "many": "{count} de entradas visíveis",
     "other": "{count} visíveis"
   },
   "toolbar.actions": "Ações",
-  "toolbar.addDirectories": "Adicionar pastas",
-  "toolbar.addFiles": "Adicionar arquivos",
+  "toolbar.addDirectories": "Adicionar pastas…",
+  "toolbar.addFiles": "Adicionar arquivos…",
   "toolbar.hideAll": "Ocultar tudo",
   "toolbar.hideSelected": "Ocultar",
   "toolbar.reapplyAll": "Reaplicar tudo",

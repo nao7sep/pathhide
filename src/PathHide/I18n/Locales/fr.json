@@ -118,6 +118,8 @@
   "nativeMenu.undo": "Annuler",
   "nativeMenu.window": "Fenêtre",
   "nativeMenu.zoom": "Réduire/agrandir",
+  "picker.addDirectoriesTitle": "Ajouter des dossiers",
+  "picker.addFilesTitle": "Ajouter des fichiers",
   "quit.quitAnyway": "Quitter quand même",
   "quit.retry": "Réessayer",
   "quit.stillSaving": "Votre dernière modification est encore en cours d’enregistrement.",
@@ -264,15 +266,15 @@
     "many": "{count} de problèmes",
     "other": "{count} problèmes"
   },
-  "status.scanning": "Analyse en cours\u00a0: {done} sur {total}",
+  "status.scanning": "Analyse en cours\u00a0: {done} sur {total}…",
   "status.visible": {
     "one": "{count} visible",
     "many": "{count} visibles",
     "other": "{count} visibles"
   },
   "toolbar.actions": "Actions",
-  "toolbar.addDirectories": "Ajouter des dossiers",
-  "toolbar.addFiles": "Ajouter des fichiers",
+  "toolbar.addDirectories": "Ajouter des dossiers…",
+  "toolbar.addFiles": "Ajouter des fichiers…",
   "toolbar.hideAll": "Tout masquer",
   "toolbar.hideSelected": "Masquer",
   "toolbar.reapplyAll": "Tout réappliquer",

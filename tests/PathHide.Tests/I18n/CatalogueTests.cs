@@ -12,8 +12,8 @@ namespace PathHide.Tests.I18n;
 
 /// <summary>
 /// The catalogue gate (localization conventions): English defines the key set, every language has
-/// exactly it, placeholders and plural forms match, nothing is left in English by accident, and no
-/// file carries a character a reader cannot see.
+/// exactly it, placeholders and plural forms match, ellipses follow English, nothing is left in English
+/// by accident, and no file carries a character a reader cannot see.
 ///
 /// These read the files in the repository rather than the embedded copies, because two of the checks —
 /// the hidden characters and the trailing newline — are about the file itself, which parsing erases.
@@ -132,6 +132,41 @@ public class CatalogueTests
                 foreach (var (form, text) in Forms(entry))
                 {
                     Assert.Equal(expected, PlaceholdersIn(text));
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void every_ellipsis_is_the_character_and_follows_english()
+    {
+        // An ellipsis carries meaning (a command that asks for input next, an operation still running),
+        // so a translation has one exactly when English does. German spaces it with a no-break space,
+        // so it never wraps alone; every other language attaches it to the word.
+        var english = Read("en");
+        foreach (var tag in Tags)
+        {
+            foreach (var (key, entry) in Read(tag))
+            {
+                foreach (var (form, text) in Forms(entry))
+                {
+                    var where = $"{tag} {key}{form}";
+                    Assert.False(text.Contains("..."), $"{where} uses three periods instead of '…'.");
+                    // A plural form English lacks (Russian "few", for instance) follows English "other".
+                    var englishText = FormOf(english[key], form) ?? FormOf(english[key], " [other]")!;
+                    Assert.True(
+                        text.Contains('…') == englishText.Contains('…'),
+                        $"{where} must have an ellipsis exactly when English does.");
+
+                    for (var index = text.IndexOf('…'); index >= 0; index = text.IndexOf('…', index + 1))
+                    {
+                        var before = index > 0 ? text[index - 1] : '\0';
+                        Assert.False(before == ' ', $"{where} has an ordinary space before '…'.");
+                        if (tag == "de")
+                            Assert.True(before == ' ', $"{where} needs a no-break space before '…'.");
+                        else
+                            Assert.False(char.IsWhiteSpace(before), $"{where} attaches '…' to the word.");
+                    }
                 }
             }
         }

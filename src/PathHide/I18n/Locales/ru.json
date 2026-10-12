@@ -125,6 +125,8 @@
   "nativeMenu.undo": "Отменить",
   "nativeMenu.window": "Окно",
   "nativeMenu.zoom": "Изменить масштаб",
+  "picker.addDirectoriesTitle": "Добавить папки",
+  "picker.addFilesTitle": "Добавить файлы",
   "quit.quitAnyway": "Всё равно завершить",
   "quit.retry": "Повторить",
   "quit.stillSaving": "Последнее изменение ещё сохраняется.",
@@ -287,7 +289,7 @@
     "many": "{count} проблем",
     "other": "{count} проблемы"
   },
-  "status.scanning": "Сканирование: {done} из {total}",
+  "status.scanning": "Сканирование: {done} из {total}…",
   "status.visible": {
     "one": "{count} видимый",
     "few": "{count} видимых",
@@ -295,8 +297,8 @@
     "other": "{count} видимого"
   },
   "toolbar.actions": "Действия",
-  "toolbar.addDirectories": "Добавить папки",
-  "toolbar.addFiles": "Добавить файлы",
+  "toolbar.addDirectories": "Добавить папки…",
+  "toolbar.addFiles": "Добавить файлы…",
   "toolbar.hideAll": "Скрыть все",
   "toolbar.hideSelected": "Скрыть",
   "toolbar.reapplyAll": "Применить все заново",

@@ -104,6 +104,8 @@
   "nativeMenu.undo": "撤销",
   "nativeMenu.window": "窗口",
   "nativeMenu.zoom": "缩放",
+  "picker.addDirectoriesTitle": "添加文件夹",
+  "picker.addFilesTitle": "添加文件",
   "quit.quitAnyway": "仍然退出",
   "quit.retry": "重试",
   "quit.stillSaving": "你的最新更改仍在保存中。",
@@ -218,13 +220,13 @@
   "status.problems": {
     "other": "{count} 个问题"
   },
-  "status.scanning": "正在扫描 {done} / {total}",
+  "status.scanning": "正在扫描 {done} / {total}…",
   "status.visible": {
     "other": "{count} 个可见"
   },
   "toolbar.actions": "操作",
-  "toolbar.addDirectories": "添加文件夹",
-  "toolbar.addFiles": "添加文件",
+  "toolbar.addDirectories": "添加文件夹…",
+  "toolbar.addFiles": "添加文件…",
   "toolbar.hideAll": "全部隐藏",
   "toolbar.hideSelected": "隐藏",
   "toolbar.reapplyAll": "全部重新应用",

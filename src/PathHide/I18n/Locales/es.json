@@ -118,6 +118,8 @@
   "nativeMenu.undo": "Deshacer",
   "nativeMenu.window": "Ventana",
   "nativeMenu.zoom": "Zoom",
+  "picker.addDirectoriesTitle": "Agregar carpetas",
+  "picker.addFilesTitle": "Agregar archivos",
   "quit.quitAnyway": "Salir de todos modos",
   "quit.retry": "Reintentar",
   "quit.stillSaving": "Tu último cambio todavía se está guardando.",
@@ -264,15 +266,15 @@
     "many": "{count} de problemas",
     "other": "{count} problemas"
   },
-  "status.scanning": "Comprobando {done} / {total}",
+  "status.scanning": "Comprobando {done} / {total}…",
   "status.visible": {
     "one": "{count} visible",
     "many": "{count} de visibles",
     "other": "{count} visibles"
   },
   "toolbar.actions": "Acciones",
-  "toolbar.addDirectories": "Agregar carpetas",
-  "toolbar.addFiles": "Agregar archivos",
+  "toolbar.addDirectories": "Agregar carpetas…",
+  "toolbar.addFiles": "Agregar archivos…",
   "toolbar.hideAll": "Ocultar todo",
   "toolbar.hideSelected": "Ocultar",
   "toolbar.reapplyAll": "Volver a aplicar todo",

@@ -111,6 +111,8 @@
   "nativeMenu.undo": "Undo",
   "nativeMenu.window": "Window",
   "nativeMenu.zoom": "Zoom",
+  "picker.addDirectoriesTitle": "Add Directories",
+  "picker.addFilesTitle": "Add Files",
   "quit.quitAnyway": "Quit anyway",
   "quit.retry": "Retry",
   "quit.stillSaving": "Your latest change is still being saved.",
@@ -241,14 +243,14 @@
     "one": "{count} problem",
     "other": "{count} problems"
   },
-  "status.scanning": "Scanning {done} / {total}",
+  "status.scanning": "Scanning {done} / {total}…",
   "status.visible": {
     "one": "{count} visible",
     "other": "{count} visible"
   },
   "toolbar.actions": "Actions",
-  "toolbar.addDirectories": "Add Directories",
-  "toolbar.addFiles": "Add Files",
+  "toolbar.addDirectories": "Add Directories…",
+  "toolbar.addFiles": "Add Files…",
   "toolbar.hideAll": "Hide All",
   "toolbar.hideSelected": "Hide",
   "toolbar.reapplyAll": "Reapply All",

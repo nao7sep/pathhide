@@ -104,6 +104,8 @@
   "nativeMenu.undo": "取り消す",
   "nativeMenu.window": "ウインドウ",
   "nativeMenu.zoom": "拡大/縮小",
+  "picker.addDirectoriesTitle": "フォルダを追加",
+  "picker.addFilesTitle": "ファイルを追加",
   "quit.quitAnyway": "保存せずに終了",
   "quit.retry": "再試行",
   "quit.stillSaving": "最後の変更をまだ保存しています。",
@@ -218,13 +220,13 @@
   "status.problems": {
     "other": "問題 {count} 件"
   },
-  "status.scanning": "スキャン中 {done} / {total}",
+  "status.scanning": "スキャン中 {done} / {total}…",
   "status.visible": {
     "other": "表示 {count} 件"
   },
   "toolbar.actions": "操作",
-  "toolbar.addDirectories": "フォルダを追加",
-  "toolbar.addFiles": "ファイルを追加",
+  "toolbar.addDirectories": "フォルダを追加…",
+  "toolbar.addFiles": "ファイルを追加…",
   "toolbar.hideAll": "すべて非表示",
   "toolbar.hideSelected": "非表示",
   "toolbar.reapplyAll": "すべて再適用",
