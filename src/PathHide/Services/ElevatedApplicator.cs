@@ -72,12 +72,10 @@ public delegate Task<Task<int>?> ElevatedChildLauncher(IReadOnlyList<string> arg
 /// so a cancel or a timeout only ends the wait. At most one child runs: while one is outstanding, a new
 /// apply is refused instead of launched, because two children writing the same paths let the older
 /// one's late write undo the newer one (hide a path the user has just shown) behind the list's back.</para>
-/// <para>That refusal covers one GUI only. The child holds no lease and applies the absolute states of its
-/// request snapshot without reading <c>paths.json</c>, and a quit waits for it only within the shutdown
-/// bound. So a child still running after a quit can undo what a restarted PathHide has since applied to
-/// the same paths. This is accepted (developer decision): <c>paths.json</c> keeps the newer desired
-/// state, the next scan shows the difference, and applying again repairs it; no lock, IPC or child-side
-/// recheck is added for it.</para>
+/// <para>Across a GUI restart, the shared Windows writer reserves each submitted path through the
+/// actual attribute write. The child checks its original GUI process after acquiring that reservation:
+/// it finishes an already admitted write before the restarted GUI can enter, and refuses later writes
+/// once its GUI has exited. This needs no persistent job state or change to the consent flow.</para>
 /// <para>The first worker await always yields to the thread pool, even if it already completed;
 /// subsequent awaits do not capture the caller's context. Reading results and removing temp files
 /// touch the OS temp volume, which antivirus or a slow disk can stall, so none of it runs on the
@@ -181,8 +179,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
                 show = buckets.ToShow.Count,
             });
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            run = RunChildAsync(
-                ElevatedApplyCommand.BuildArguments(files.RequestPath, files.ResultsPath, _storageRoot), started);
+            run = RunChildAsync(files, started);
             status = await WaitAsync(run, started.Task, cancellationToken).ConfigureAwait(false);
 
             IReadOnlyDictionary<string, bool> results;
@@ -244,12 +241,13 @@ public sealed class ElevatedApplicator : IElevatedApplicator
     }
 
     /// <summary>Launches the child and waits for it to exit. Null exit code: it never ran, or the wait failed.</summary>
-    private async Task<int?> RunChildAsync(IReadOnlyList<string> arguments, TaskCompletionSource started)
+    private async Task<int?> RunChildAsync(ElevatedApplyFiles files, TaskCompletionSource started)
     {
         Task<int>? child;
         try
         {
-            child = await _launch(arguments).ConfigureAwait(false);
+            child = await _launch(ElevatedApplyCommand.BuildArguments(files.RequestPath, files.ResultsPath,
+                _storageRoot, ElevatedApplyCommand.Parent.Current)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

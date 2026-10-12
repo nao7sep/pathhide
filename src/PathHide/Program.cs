@@ -216,13 +216,14 @@ sealed class Program
             }
 
             var request = ElevatedApplyCommand.ParseRequest(File.ReadAllText(invocation.RequestPath));
+            using var parent = invocation.Parent is { } identity ? new ApplyParentProcess(identity) : null;
 
             // Each result is written and flushed the moment its path is done, so when the parent stops
             // waiting on a child stalled inside SetAttributes on a share that stopped answering, every
             // path already changed is still reported.
-            var failed = ApplyFileAttributes(request.ToHide, hide: true, system: false, results)
-                | ApplyFileAttributes(request.ToHideWithSystem, hide: true, system: true, results)
-                | ApplyFileAttributes(request.ToShow, hide: false, system: false, results);
+            var failed = ApplyFileAttributes(request.ToHide, hide: true, system: false, results, parent)
+                | ApplyFileAttributes(request.ToHideWithSystem, hide: true, system: true, results, parent)
+                | ApplyFileAttributes(request.ToShow, hide: false, system: false, results, parent);
 
             // The per-path file is the authoritative channel; the exit code stays a coarse
             // 0 = all ok / 1 = some failed signal for callers and logs.
@@ -247,7 +248,7 @@ sealed class Program
     /// remarks say why that matters for this elevated write.
     /// </remarks>
     private static bool ApplyFileAttributes(
-        IReadOnlyList<string> paths, bool hide, bool system, ElevatedResultsWriter? results)
+        IReadOnlyList<string> paths, bool hide, bool system, ElevatedResultsWriter? results, ApplyParentProcess? parent)
     {
         if (paths.Count == 0)
             return false;
@@ -261,7 +262,7 @@ sealed class Program
         {
             try
             {
-                WindowsFileVisibility.Set(path, hide, system);
+                WindowsFileVisibility.Set(path, hide, system, parent);
                 WriteResult(results, new PathApplyResult(path, Ok: true));
             }
             catch (Exception ex)

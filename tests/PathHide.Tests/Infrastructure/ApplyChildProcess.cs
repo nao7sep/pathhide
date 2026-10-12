@@ -9,12 +9,12 @@ namespace PathHide.Tests.Infrastructure;
 /// <summary>Runs only the app's non-GUI apply mode and owns the process through exit, even on failure.</summary>
 internal static class ApplyChildProcess
 {
-    internal static int Run(string request, string results, string root)
+    internal static int Run(string request, string results, string root, ElevatedApplyCommand.Parent? parent = null)
     {
         var start = new ProcessStartInfo("dotnet") { UseShellExecute = false, CreateNoWindow = true };
         start.Environment[StorageRoot.DataDirEnvironmentVariable] = root;
         start.ArgumentList.Add(typeof(App).Assembly.Location);
-        foreach (var argument in ElevatedApplyCommand.BuildArguments(request, results, root))
+        foreach (var argument in ElevatedApplyCommand.BuildArguments(request, results, root, parent))
             start.ArgumentList.Add(argument);
         using var child = Process.Start(start)!;
         try

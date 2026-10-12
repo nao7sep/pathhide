@@ -454,7 +454,7 @@ public sealed class ElevatedRetryTests : IDisposable
 
         Assert.Equal(ElevatedApplyStatus.Completed, outcome.Status);
         var run = Assert.Single(_child.Runs);
-        Assert.Equal(7, run.Arguments.Count);
+        Assert.True(string.Join(" ", run.Arguments).Length < 32_767);
         Assert.Equal(paths, run.Request.ToHide);
         Assert.Empty(TempFiles());
     }

@@ -55,4 +55,23 @@ public sealed class ApplyModeProcessTests : IDisposable
         Assert.False(File.Exists(Path.Combine(root, "records.sqlite3")));
         Assert.NotEmpty(Directory.GetFiles(Path.Combine(root, "logs")));
     }
+
+    [Fact]
+    public void A_replaced_parent_identity_fails_before_the_child_changes_any_target()
+    {
+        var target = Path.Combine(_dir, "target.txt");
+        File.WriteAllText(target, "keep");
+        var attributes = File.GetAttributes(target);
+        var request = Path.Combine(_dir, "request.json");
+        var results = Path.Combine(_dir, "results.jsonl");
+        File.WriteAllText(request, ElevatedApplyCommand.SerializeRequest(new([target], [], [])));
+        var parent = ElevatedApplyCommand.Parent.Current;
+        Assert.Equal(3, ApplyChildProcess.Run(request, results, Path.Combine(_dir, "root"), parent with
+        {
+            StartTimeUtcTicks = parent.StartTimeUtcTicks - 1,
+        }));
+        Assert.Empty(ElevatedApplyResults.Parse(File.ReadAllText(results)).Results);
+        Assert.Equal(attributes, File.GetAttributes(target));
+        Assert.Equal("keep", File.ReadAllText(target));
+    }
 }

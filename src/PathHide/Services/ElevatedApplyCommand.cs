@@ -1,5 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.CommandLine;
+using System.Diagnostics;
+using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using PathHide.Models;
@@ -23,6 +26,22 @@ public static class ElevatedApplyCommand
     public const string Subcommand = "apply";
     public const string RequestOption = "--request";
     public const string ResultsOption = "--results";
+    public const string ParentOption = "--parent";
+
+    /// <summary>PID plus UTC creation time distinguishes the GUI from a recycled process id.</summary>
+    public sealed record Parent(int Id, long StartTimeUtcTicks)
+    {
+        public static Parent Current
+        {
+            get
+            {
+                using var process = Process.GetCurrentProcess();
+                return new(process.Id, process.StartTime.ToUniversalTime().Ticks);
+            }
+        }
+
+        public override string ToString() => FormattableString.Invariant($"{Id}:{StartTimeUtcTicks}");
+    }
 
     /// <summary>
     /// The storage root the parent resolved, so a fallback log file the child writes lands in the
@@ -78,11 +97,18 @@ public static class ElevatedApplyCommand
     /// Builds the argument list that launches the elevated apply pass. Its length does not grow with
     /// the batch: the paths are in the request file.
     /// </summary>
-    public static IReadOnlyList<string> BuildArguments(string requestPath, string resultsPath, string storageRoot) =>
-        [Subcommand, RequestOption, requestPath, ResultsOption, resultsPath, HomeOption, storageRoot];
+    public static IReadOnlyList<string> BuildArguments(string requestPath, string resultsPath, string storageRoot,
+        Parent? parent = null)
+    {
+        var arguments = new List<string> { Subcommand, RequestOption, requestPath, ResultsOption, resultsPath,
+            HomeOption, storageRoot };
+        if (parent is not null)
+            arguments.AddRange([ParentOption, parent.ToString()]);
+        return arguments;
+    }
 
     /// <summary>What the elevated child was asked to do, as parsed from its command line.</summary>
-    public sealed record Invocation(string RequestPath, string? ResultsPath, string? StorageRoot);
+    public sealed record Invocation(string RequestPath, string? ResultsPath, string? StorageRoot, Parent? Parent = null);
 
     /// <summary>
     /// Parses the child's command line, or returns null when it is not a valid apply invocation. The
@@ -93,7 +119,8 @@ public static class ElevatedApplyCommand
         var requestOpt = new Option<string>(RequestOption) { Required = true };
         var resultsOpt = new Option<string?>(ResultsOption);
         var homeOpt = new Option<string?>(HomeOption);
-        var applyCmd = new Command(Subcommand, "Apply file attributes in batch") { requestOpt, resultsOpt, homeOpt };
+        var parentOpt = new Option<string?>(ParentOption);
+        var applyCmd = new Command(Subcommand, "Apply file attributes in batch") { requestOpt, resultsOpt, homeOpt, parentOpt };
         var root = new RootCommand("PathHide apply mode") { applyCmd };
 
         var result = root.Parse(args);
@@ -101,9 +128,20 @@ public static class ElevatedApplyCommand
             return null;
 
         var request = result.GetValue(requestOpt);
+        Parent? parent = null;
+        if (result.GetValue(parentOpt) is { } parentText)
+        {
+            var parts = parentText.Split(':');
+            if (parts.Length != 2
+                || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var id) || id <= 0
+                || !long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var ticks)
+                || ticks <= 0 || ticks > DateTime.MaxValue.Ticks)
+                return null;
+            parent = new(id, ticks);
+        }
         return string.IsNullOrEmpty(request)
             ? null
-            : new Invocation(request, result.GetValue(resultsOpt), result.GetValue(homeOpt));
+            : new Invocation(request, result.GetValue(resultsOpt), result.GetValue(homeOpt), parent);
     }
 
     private static readonly JsonSerializerOptions RequestOptions = new()

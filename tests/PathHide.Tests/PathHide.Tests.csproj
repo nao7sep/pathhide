@@ -32,5 +32,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PathHide\PathHide.csproj" />
+    <ProjectReference Include="..\PathHide.OrderingProbe\PathHide.OrderingProbe.csproj" />
   </ItemGroup>
 </Project>

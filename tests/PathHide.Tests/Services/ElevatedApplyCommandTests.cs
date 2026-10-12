@@ -94,6 +94,26 @@ public sealed class ElevatedApplyCommandTests
         Assert.Equal(new ElevatedApplyCommand.Invocation("/r.json", null, null), invocation);
     }
 
+    [Fact]
+    public void Gui_process_identity_round_trips_without_locale_dependent_formatting()
+    {
+        var parent = ElevatedApplyCommand.Parent.Current;
+        var invocation = ElevatedApplyCommand.ParseArguments(
+            ElevatedApplyCommand.BuildArguments("/request", "/results", StorageRootArg, parent));
+        Assert.Equal(parent, invocation!.Parent);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("1")]
+    [InlineData("0:1")]
+    [InlineData("1:0")]
+    [InlineData("1:9999999999999999999")]
+    [InlineData("1:1:1")]
+    [InlineData("not-a-process")]
+    public void Malformed_parent_never_falls_back_to_standalone_apply(string parent) =>
+        Assert.Null(ElevatedApplyCommand.ParseArguments(["apply", "--request", "/r.json", "--parent", parent]));
+
     [Theory]
     [InlineData("")]
     [InlineData("apply")]

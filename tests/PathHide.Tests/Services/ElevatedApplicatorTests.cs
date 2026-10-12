@@ -17,6 +17,20 @@ public sealed class ElevatedApplicatorTests : IDisposable
 
     public void Dispose() => Directory.Delete(_temp, recursive: true);
 
+    [Fact]
+    public async Task A_GUI_launch_always_carries_its_process_identity()
+    {
+        ElevatedApplyCommand.Invocation? invocation = null;
+        var applicator = new ElevatedApplicator(arguments =>
+        {
+            invocation = ElevatedApplyCommand.ParseArguments(arguments);
+            return Task.FromResult<Task<int>?>(Task.FromResult(0));
+        }, _temp, "/storage-root");
+        Assert.Equal(ElevatedApplyStatus.Completed,
+            (await applicator.ApplyAsync(Buckets, CancellationToken.None)).Status);
+        Assert.Equal(ElevatedApplyCommand.Parent.Current, invocation!.Parent);
+    }
+
     [Theory(Timeout = 10_000)]
     [InlineData(false)]
     [InlineData(true)]

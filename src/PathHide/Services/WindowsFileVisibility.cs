@@ -52,13 +52,19 @@ public static class WindowsFileVisibility
     /// machinery to "harden" a hazard that cannot occur.
     /// </remarks>
     public static void Set(string path, bool hide, bool system)
+        => Set(path, hide, system, parent: null);
+
+    internal static void Set(string path, bool hide, bool system, ApplyParentProcess? parent)
     {
         path = PathNormalizer.RequireNativeAbsolutePath(path, windows: true);
-        if (Change(File.GetAttributes(path), hide, system) is not { } updated)
-            return;
+        AttributeWriteReservation.Run(path, () =>
+        {
+            if (Change(File.GetAttributes(path), hide, system) is not { } updated)
+                return;
 
-        // not recorded: this changes only external filesystem metadata; paths.json
-        // records the user's desired visibility and tracked-path identity.
-        File.SetAttributes(path, updated);
+            // not recorded: this changes only external filesystem metadata; paths.json
+            // records the user's desired visibility and tracked-path identity.
+            File.SetAttributes(path, updated);
+        }, parent);
     }
 }
