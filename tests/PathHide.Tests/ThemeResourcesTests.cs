@@ -64,25 +64,18 @@ public sealed class ThemeResourcesTests
         }
     }
 
-    // The dialog shell's header/footer line (DialogBase's FooterSeparator) must read at least as
-    // clearly against the surface as the app's own control borders — its buttons and fields both use
-    // ControlEdgeBrush (modal-dialog conventions).
-    [Theory]
-    [InlineData("Light")]
-    [InlineData("Dark")]
-    public void TheDialogSeparatorIsAtLeastAsVisibleAsAControlBorder(string theme)
+    // The dialog shell's footer line (DialogBase's FooterSeparator) is a band edge like every other
+    // band line (modal-dialog conventions), so it takes BorderBrush, whose range is checked below in
+    // both themes.
+    [Fact]
+    public void TheDialogSeparatorIsABandEdge()
     {
-        var b = ThemeBrushes(theme);
         var separatorKey = DialogBaseXaml().Descendants()
             .Single(element => element.Name.LocalName == "Border" && (string?)element.Attribute(X + "Name") == "FooterSeparator")
             .Attribute("Background")!.Value
             .Trim('{', '}').Replace("DynamicResource ", "").Replace("StaticResource ", "");
 
-        var controlContrast = Contrast(b["ControlEdgeBrush"], b["AppBackgroundBrush"]);
-        var separatorContrast = Contrast(b[separatorKey], b["AppBackgroundBrush"]);
-        Assert.True(
-            separatorContrast >= controlContrast - 0.01,
-            $"{theme}: dialog separator ({separatorKey}) contrast {separatorContrast:F2} is fainter than the control border's {controlContrast:F2}");
+        Assert.Equal("BorderBrush", separatorKey);
     }
 
     // Each line kind's contrast target, against the colours each is painted beside, in both themes

@@ -66,6 +66,33 @@ public sealed class PopupSelectionTests : WindowTest
         Assert.False(box.IsDropDownOpen);
     }
 
+    // Records' launch filter gains launches while it may be open; Enter still picks what was highlighted
+    // (composite-control conventions).
+    [AvaloniaFact]
+    public void An_item_inserted_above_the_keyboard_target_while_open_leaves_Enter_on_that_target()
+    {
+        var items = new System.Collections.ObjectModel.ObservableCollection<string> { "All", "Newest", "Older" };
+        var box = new ComboBox { ItemsSource = items, SelectedIndex = 0, Width = 200 };
+        var window = Show(new Window { Width = 400, Height = 300, Content = box });
+        box.Focus(NavigationMethod.Tab);
+        Press(window, Key.F4);
+        var popup = box.GetVisualDescendants().OfType<Popup>().Single();
+        var root = TopLevel.GetTopLevel(popup.Child!)!;
+        Press(root, Key.Down);
+        Press(root, Key.Down);
+        Assert.Same("Older", box.ContainerFromIndex(2)!.DataContext);
+        Assert.True(box.ContainerFromIndex(2)!.IsFocused);
+
+        items.Insert(1, "Inserted");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(box.ContainerFromIndex(3)!.IsFocused);
+        Assert.Equal(0, box.SelectedIndex);
+
+        Press(root, Key.Enter);
+        Assert.Equal("Older", box.SelectedItem);
+        Assert.False(box.IsDropDownOpen);
+    }
+
     [AvaloniaFact]
     public void Popup_click_commits_the_clicked_item_instead_of_the_keyboard_target()
     {

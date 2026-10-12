@@ -60,6 +60,33 @@ public sealed class GridInteractionTests : WindowTest
         Assert.DoesNotContain(removed, viewModel.Rows);
     }
 
+    // An entry added above the keyboard target in the sorted list leaves the next arrow on the entry the
+    // user was on, not on its old position (composite-control conventions).
+    [AvaloniaFact]
+    public async System.Threading.Tasks.Task An_entry_sorted_in_above_the_keyboard_target_leaves_the_next_arrow_on_that_entry()
+    {
+        var (window, viewModel) = PopulatedMainWindow.Create();
+        Show(window);
+        await viewModel.ScanTask;
+        var grid = window.FindControl<DataGrid>("PathGrid")!;
+        var view = grid.CollectionView.Cast<PathHide.ViewModels.PathRowViewModel>().ToList();
+        var targetIndex = view.FindIndex(row => row.Path == "/missing");
+        var target = view[targetIndex];
+        var next = view[targetIndex + 1];
+        grid.SelectedItem = target;
+        grid.Focus(NavigationMethod.Tab);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(target, CurrentRow(grid).DataContext);
+
+        await viewModel.AddPathsCommand.ExecuteAsync(new[] { "/aaa-sorts-first" });
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(target, grid.CollectionView.Cast<object>().ElementAt(targetIndex + 1));
+        Assert.Same(target, CurrentRow(grid).DataContext);
+
+        Press(window, Key.Down);
+        Assert.Same(next, grid.SelectedItem);
+    }
+
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]

@@ -347,6 +347,34 @@ public sealed class RecordsWindowTests : WindowTest
         Assert.Same(records.Rows[0], records.SelectedRow);
     }
 
+    // Newer records join above the keyboard target while the user reads; the next arrow moves from the
+    // record they were on, not from its old position (composite-control conventions).
+    [AvaloniaFact]
+    public void Records_arriving_above_the_keyboard_target_leave_the_next_arrow_on_that_record()
+    {
+        var (window, records) = ShowRecords(Owner());
+        _reader.Unanswered.Single().Answer(false, Record(3), Record(2), Record(1));
+        Settle(window);
+        var list = window.FindControl<ListBox>("RecordList")!;
+        list.SelectedIndex = 1;
+        list.ContainerFromIndex(1)!.Focus(NavigationMethod.Tab);
+        var target = records.SelectedRow!;
+
+        records.OnRecordStored();
+        _delays.Elapse(RecordsViewModel.LiveInterval);
+        Settle(window);
+        _reader.Unanswered.Single().Answer(false, Record(5), Record(4), Record(3), Record(2), Record(1));
+        Settle(window);
+        Assert.Equal(5, records.Rows.Count);
+        Assert.Same(target, records.SelectedRow);
+        Assert.True(list.ContainerFromItem(target)!.IsFocused);
+
+        window.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.None, null);
+        window.KeyRelease(Key.Down, RawInputModifiers.None, PhysicalKey.None, null);
+        Settle(window);
+        Assert.Equal(1, records.SelectedRow!.Id);
+    }
+
     [AvaloniaTheory]
     [MemberData(nameof(PathHide.Tests.I18n.LabelFitTests.Tags), MemberType = typeof(PathHide.Tests.I18n.LabelFitTests))]
     public async Task A_filter_trimmed_when_closed_shows_every_label_whole_once_opened_by_keyboard(string tag)
