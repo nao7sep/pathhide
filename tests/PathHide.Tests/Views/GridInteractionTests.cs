@@ -34,6 +34,32 @@ public sealed class GridInteractionTests : WindowTest
     private static Point Center(Control control, Window window) =>
         control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)!.Value;
 
+    [AvaloniaFact]
+    public async System.Threading.Tasks.Task Delete_pressed_in_the_focused_grid_removes_the_selected_entry()
+    {
+        // A real key press through the grid, not a call to the handler: a control on the way that marks
+        // the key handled (as ListBoxItem does with Enter) would stop a plain KeyDown subscriber.
+        var (window, viewModel) = PopulatedMainWindow.Create();
+        Show(window);
+        await viewModel.ScanTask;
+        viewModel.ConfirmDestructiveAsync = _ => System.Threading.Tasks.Task.FromResult(true);
+        var grid = window.FindControl<DataGrid>("PathGrid")!;
+        var count = viewModel.Rows.Count;
+        grid.SelectedIndex = 0;
+        var removed = (PathHide.ViewModels.PathRowViewModel)grid.SelectedItem!;
+        grid.Focus(NavigationMethod.Tab);
+
+        Press(window, Key.Delete);
+        for (var turn = 0; turn < 100 && viewModel.Rows.Count == count; turn++)
+        {
+            await System.Threading.Tasks.Task.Delay(10);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Assert.Equal(count - 1, viewModel.Rows.Count);
+        Assert.DoesNotContain(removed, viewModel.Rows);
+    }
+
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
