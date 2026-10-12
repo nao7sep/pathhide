@@ -60,11 +60,11 @@ public sealed class MacMenuBarTests
         Assert.Equal(
             new[]
             {
-                "About PathHide", "—", "Settings…", "—", "Services", "—",
+                "About PathHide", "—", "Settings", "—", "Services", "—",
                 "Hide PathHide", "Hide Others", "Show All", "—", "Quit PathHide",
             },
             Titles(Menu("PathHide")));
-        Assert.Equal((",", Cmd), KeyOf(Menu("PathHide"), "Settings…"));
+        Assert.Equal((",", Cmd), KeyOf(Menu("PathHide"), "Settings"));
         Assert.Equal(("q", Cmd), KeyOf(Menu("PathHide"), "Quit PathHide"));
     }
 
