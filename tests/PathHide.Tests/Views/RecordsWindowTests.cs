@@ -12,7 +12,9 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using PathHide.I18n;
 using PathHide.Models;
 using PathHide.Services;
@@ -343,6 +345,40 @@ public sealed class RecordsWindowTests : WindowTest
         window.MouseDown(point, MouseButton.Left);
         window.MouseUp(point, MouseButton.Left);
         Assert.Same(records.Rows[0], records.SelectedRow);
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(PathHide.Tests.I18n.LabelFitTests.Tags), MemberType = typeof(PathHide.Tests.I18n.LabelFitTests))]
+    public async Task A_filter_trimmed_when_closed_shows_every_label_whole_once_opened_by_keyboard(string tag)
+    {
+        // The closed filters may trim their choice with one drawn marker; opening one from the keyboard
+        // (or by a tap) is the direct path to the complete labels (text-cleanup conventions, rule 4).
+        using var speaking = Localizer.Speaking(tag);
+        _reader.Sessions = [ThisLaunch, "2026-10-03T21:45:10.000Z"];
+        var (window, records) = ShowRecords(Owner());
+        window.Width = RecordsLayout.MinWidth;
+        Settle(window);
+        await Task.Yield();
+        Settle(window);
+        Assert.Equal(3, records.LaunchOptions.Count);
+
+        foreach (var combo in window.GetLogicalDescendants().OfType<ComboBox>())
+        {
+            combo.Focus(NavigationMethod.Tab);
+            window.KeyPress(Key.Down, RawInputModifiers.Alt, PhysicalKey.None, null);
+            window.KeyRelease(Key.Down, RawInputModifiers.Alt, PhysicalKey.None, null);
+            Settle(window);
+            Assert.True(combo.IsDropDownOpen);
+
+            var labels = combo.GetLogicalDescendants().OfType<ComboBoxItem>()
+                .SelectMany(item => item.GetVisualDescendants().OfType<TextBlock>())
+                .Where(text => !string.IsNullOrEmpty(text.Text)).ToList();
+            Assert.Equal(combo.ItemCount, labels.Count);
+            Assert.All(labels, text => Assert.DoesNotContain(text.TextLayout.TextLines, line => line.HasCollapsed));
+
+            combo.IsDropDownOpen = false;
+            Settle(window);
+        }
     }
 
     private sealed class NullSink : ILogSink
