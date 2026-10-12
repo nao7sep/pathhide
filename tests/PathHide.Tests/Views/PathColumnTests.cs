@@ -61,6 +61,34 @@ public sealed class PathColumnTests : WindowTest
         Assert.True(longText.Bounds.Height >= longText.TextLayout.Height - 0.5);
     }
 
+    // A hand-edited list can hold any string. Avalonia lays out one huge line for seconds or minutes,
+    // so the list shows a shortened copy with one marker while the entry keeps the whole path.
+    [AvaloniaFact]
+    public async Task A_path_too_long_to_lay_out_shows_a_marked_copy_and_keeps_its_whole_value()
+    {
+        var huge = @"C:" + string.Concat(Enumerable.Repeat(@"\segment", 6_000));
+        var visibility = new FakeVisibilityService();
+        visibility.Set(huge, ActualState.Missing, ItemKind.Unknown);
+        var paths = new FakeJsonStore<List<PathEntry>>
+        {
+            Value = [new PathEntry { Path = huge, DesiredVisibility = DesiredVisibility.Hidden }],
+        };
+        var settings = new FakeSettingsStore();
+        var viewModel = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settings,
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value);
+        var window = Show(new MainWindow { DataContext = viewModel, Width = 900, Height = 500 });
+        await viewModel.ScanTask;
+        Dispatcher.UIThread.RunJobs();
+
+        var row = viewModel.Rows.Single();
+        PathText(window, row.DisplayPath);
+        Assert.Equal(huge, row.Path);
+        Assert.Equal(huge, row.Entry.Path);
+        Assert.EndsWith("…", row.DisplayPath);
+        Assert.Equal(PathHide.Text.DisplayText.LineLimit + 1, row.DisplayPath.Length);
+        Assert.StartsWith(row.DisplayPath[..^1], huge);
+    }
+
     private static TextBlock PathText(Window window, string path) =>
         window.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == path);
 }

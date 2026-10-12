@@ -212,7 +212,7 @@
                              header keeps for its sort arrow (LabelFitTests measures every one).
                              The path is the list's main content, so a long one wraps onto more lines
                              rather than being cut short. -->
-                        <DataGridTextColumn Binding="{Binding Path}" SortMemberPath="Path" Width="*" MinWidth="240" CellStyleClasses="wrap"/>
+                        <DataGridTextColumn Binding="{Binding DisplayPath}" SortMemberPath="Path" Width="*" MinWidth="240" CellStyleClasses="wrap"/>
                         <DataGridTextColumn Binding="{Binding PathFamilyText}" SortMemberPath="PathFamily" Width="100" MinWidth="100"/>
                         <DataGridTextColumn Binding="{Binding DesiredVisibilityText}" SortMemberPath="DesiredVisibility" Width="110" MinWidth="110"/>
                         <DataGridTextColumn Binding="{Binding ActualStateText}" SortMemberPath="ActualState" Width="155" MinWidth="155"/>

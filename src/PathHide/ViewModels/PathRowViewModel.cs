@@ -11,6 +11,9 @@ public partial class PathRowViewModel : ObservableObject
 
     public string Path => Entry.Path;
 
+    /// <summary>The path as the list shows it; only a pathologically long one is shortened.</summary>
+    public string DisplayPath => Text.DisplayText.CapLines(Entry.Path);
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PathFamilyText))]
     private PathFamily _pathFamily;
@@ -81,7 +84,10 @@ public partial class PathRowViewModel : ObservableObject
         Entry = entry;
 
         if (!string.Equals(previousPath, entry.Path, StringComparison.Ordinal))
+        {
             OnPropertyChanged(nameof(Path));
+            OnPropertyChanged(nameof(DisplayPath));
+        }
 
         DesiredVisibility = entry.DesiredVisibility;
     }

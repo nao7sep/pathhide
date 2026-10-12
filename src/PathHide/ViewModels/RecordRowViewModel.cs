@@ -31,7 +31,7 @@ public sealed class RecordRowViewModel(RecordSummary record) : ObservableObject
 
     public long Id => Record.Id;
 
-    public string Message => Record.Message;
+    public string Message => Text.DisplayText.CapLines(Record.Message);
 
     public string TimeText => RecordFormat.ListTime(Record.Time, Localizer.Current.Culture, TimeZoneInfo.Local);
 
@@ -84,7 +84,9 @@ public sealed class RecordDetailViewModel(RecordDetail record, string currentSes
 {
     public RecordDetail Record { get; } = record;
 
-    public string Message => Record.Message;
+    // What the detail pane shows. Each line past the display limit is shortened in this copy only;
+    // the stored record stays whole.
+    public string Message => Text.DisplayText.CapLines(Record.Message);
 
     public string LevelText => RecordLevels.Text(Record.Level);
 
@@ -96,11 +98,11 @@ public sealed class RecordDetailViewModel(RecordDetail record, string currentSes
 
     public string LaunchText => RecordsViewModel.LaunchLabel(Record.Session, currentSession);
 
-    public string? FieldsText { get; } = record.Fields is null ? null : RecordFormat.PrettyJson(record.Fields);
+    public string? FieldsText { get; } = record.Fields is null ? null : Text.DisplayText.CapLines(RecordFormat.PrettyJson(record.Fields));
 
     public bool HasFields => FieldsText is not null;
 
-    public string? ErrorText { get; } = record.Error is null ? null : RecordFormat.PrettyJson(record.Error);
+    public string? ErrorText { get; } = record.Error is null ? null : Text.DisplayText.CapLines(RecordFormat.PrettyJson(record.Error));
 
     public bool HasError => ErrorText is not null;
 
