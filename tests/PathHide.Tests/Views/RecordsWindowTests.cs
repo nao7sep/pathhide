@@ -5,10 +5,13 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using PathHide.I18n;
 using PathHide.Models;
@@ -310,6 +313,36 @@ public sealed class RecordsWindowTests : WindowTest
             Dispatcher.UIThread.RunJobs();
             Thread.Sleep(10);
         }
+    }
+
+    [AvaloniaFact]
+    public void Hover_keeps_the_records_keyboard_target_and_click_selects_its_own_record()
+    {
+        var (window, records) = ShowRecords(Owner());
+        _reader.Unanswered.Single().Answer(false, Record(3), Record(2), Record(1));
+        Settle(window);
+        var list = window.FindControl<ListBox>("RecordList")!;
+        list.SelectedIndex = 1;
+        list.ContainerFromIndex(1)!.Focus(NavigationMethod.Tab);
+        window.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.None, null);
+        window.KeyRelease(Key.Down, RawInputModifiers.None, PhysicalKey.None, null);
+        Settle(window);
+        Assert.Same(records.Rows[2], records.SelectedRow);
+        var earlier = list.ContainerFromIndex(0)!;
+        var point = earlier.TranslatePoint(new Point(earlier.Bounds.Width / 2, earlier.Bounds.Height / 2), window)!.Value;
+        window.MouseMove(point);
+        Assert.True(earlier.IsPointerOver);
+        Assert.Same(records.Rows[2], records.SelectedRow);
+        var target = list.ContainerFromIndex(2)!;
+        Assert.True(target.IsFocused);
+        Assert.NotNull(target.FocusAdorner);
+        window.KeyPress(Key.Up, RawInputModifiers.None, PhysicalKey.None, null);
+        window.KeyRelease(Key.Up, RawInputModifiers.None, PhysicalKey.None, null);
+        Settle(window);
+        Assert.Same(records.Rows[1], records.SelectedRow);
+        window.MouseDown(point, MouseButton.Left);
+        window.MouseUp(point, MouseButton.Left);
+        Assert.Same(records.Rows[0], records.SelectedRow);
     }
 
     private sealed class NullSink : ILogSink

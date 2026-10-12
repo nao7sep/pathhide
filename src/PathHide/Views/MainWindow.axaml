@@ -3,6 +3,7 @@
         xmlns:vm="using:PathHide.ViewModels"
         xmlns:i18n="using:PathHide.I18n"
         xmlns:views="using:PathHide.Views"
+        xmlns:controls="using:PathHide.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="720"
@@ -185,7 +186,7 @@
                 </Border>
                 <Grid>
                 <!-- Inset from the frame so each row's rounded fill reads as an item inside it. -->
-                <DataGrid x:Name="PathGrid"
+                <controls:PathDataGrid x:Name="PathGrid"
                           Margin="6,0,6,6"
                           i18n:Localized.AutomationName="grid.name"
                           ItemsSource="{Binding Rows}"
@@ -215,7 +216,7 @@
                         <DataGridTextColumn Binding="{Binding ActualStateText}" SortMemberPath="ActualState" Width="155" MinWidth="155"/>
                         <DataGridTextColumn Binding="{Binding ItemKindText}" SortMemberPath="ItemKind" Width="160" MinWidth="160"/>
                     </DataGrid.Columns>
-                </DataGrid>
+                </controls:PathDataGrid>
                 <TextBlock i18n:Localized.Text="grid.empty"
                            IsVisible="{Binding IsPathListEmpty}" IsHitTestVisible="False"
                            Margin="24,48,24,24" TextAlignment="Center" TextWrapping="Wrap"

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Input;
 using Avalonia.Automation;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
@@ -70,9 +71,9 @@ public sealed class SettingsDialog : DialogBase
         };
         Localized.SetAutomationName(_languageBox, "settings.language");
 
-        // The platform radio group: one tab stop, arrow keys move and select (composite-control
-        // conventions). App-wide, applied on Save like every other field here. The buttons group by
-        // their shared parent rather than a GroupName, which Avalonia tracks across every dialog not
+        // Native radios retain their selection and focus visuals. Their parent supplies one Tab stop
+        // and arrow selection, which Avalonia does not supply for a radio group. Changes apply on Save.
+        // The buttons group by their shared parent rather than a GroupName, tracked across every dialog not
         // yet in a window, so one Settings dialog's radios could uncheck another's.
         _themeButtons = ThemeChoices
             .Select(choice =>
@@ -85,6 +86,9 @@ public sealed class SettingsDialog : DialogBase
         var themeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 20 };
         foreach (var button in _themeButtons)
             themeRow.Children.Add(button);
+        KeyboardNavigation.SetTabNavigation(themeRow, KeyboardNavigationMode.Once);
+        KeyboardNavigation.SetTabOnceActiveElement(themeRow, _themeButtons.First(button => button.IsChecked == true));
+        themeRow.KeyDown += OnThemeKeyDown;
         Localized.SetAutomationName(themeRow, "settings.theme");
         var themeHint = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap };
         Localized.SetText(themeHint, "settings.themeHint");
@@ -153,7 +157,12 @@ public sealed class SettingsDialog : DialogBase
         _uiFontBox.TextChanged += (_, _) => UpdateSaveState();
         _hiddenAndSystemCheckBox.IsCheckedChanged += (_, _) => UpdateSaveState();
         foreach (var button in _themeButtons)
-            button.IsCheckedChanged += (_, _) => UpdateSaveState();
+            button.IsCheckedChanged += (_, _) =>
+            {
+                if (button.IsChecked == true)
+                    KeyboardNavigation.SetTabOnceActiveElement(themeRow, button);
+                UpdateSaveState();
+            };
         UpdateSaveState();
     }
 
@@ -194,6 +203,30 @@ public sealed class SettingsDialog : DialogBase
     }
 
     private void UpdateSaveState() => _saveButton.IsEnabled = HasUnsavedChanges;
+
+    private void OnThemeKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyModifiers != KeyModifiers.None)
+            return;
+        var step = e.Key switch
+        {
+            Key.Left or Key.Up => -1,
+            Key.Right or Key.Down => 1,
+            _ => 0,
+        };
+        if (step == 0)
+            return;
+        for (var index = 0; index < _themeButtons.Count; index++)
+        {
+            if (!_themeButtons[index].IsFocused)
+                continue;
+            var target = _themeButtons[(index + step + _themeButtons.Count) % _themeButtons.Count];
+            target.IsChecked = true;
+            target.Focus(NavigationMethod.Directional);
+            e.Handled = true;
+            return;
+        }
+    }
 
     private static StackPanel Section(string headerKey, params Control[] children)
     {

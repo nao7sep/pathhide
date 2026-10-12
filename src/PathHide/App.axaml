@@ -598,7 +598,10 @@
             <Setter Property="Background" Value="{DynamicResource RowHoverBrush}"/>
         </Style>
         <Style Selector="MenuFlyoutPresenter MenuItem:selected /template/ Border#PART_LayoutRoot">
-            <Setter Property="Background" Value="{DynamicResource RowHoverBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource RowSelectedBrush}"/>
+        </Style>
+        <Style Selector="MenuFlyoutPresenter MenuItem:selected:pointerover /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource RowSelectedHoverBrush}"/>
         </Style>
         <Style Selector="MenuFlyoutPresenter MenuItem:pressed /template/ Border#PART_LayoutRoot">
             <Setter Property="Background" Value="{DynamicResource RowPressedBrush}"/>
@@ -643,6 +646,15 @@
         <Style Selector="DataGridRow:selected:pointerover /template/ Rectangle#BackgroundRectangle">
             <Setter Property="Fill" Value="{DynamicResource RowSelectedHoverBrush}"/>
             <Setter Property="Opacity" Value="1"/>
+        </Style>
+
+        <!-- The native current cell still navigates; its whole row carries the focus mark. -->
+        <Style Selector="DataGrid:focus-within DataGridRow.keyboardTarget /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Stroke" Value="{DynamicResource FocusRingBrush}"/>
+            <Setter Property="StrokeThickness" Value="2"/>
+        </Style>
+        <Style Selector="Window.windowInactive DataGrid:focus-within DataGridRow.keyboardTarget /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Stroke" Value="{DynamicResource FocusRingInactiveBrush}"/>
         </Style>
 
         <!-- Keep DataGrid cell navigation active without drawing a harsh current-cell box. Fluent

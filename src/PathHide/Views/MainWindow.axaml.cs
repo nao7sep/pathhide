@@ -69,6 +69,14 @@ public partial class MainWindow : Window
         AboutMenuItem.Click += OnAboutClick;
         ShortcutsMenuItem.Click += OnShortcutsClick;
 
+        // Avalonia's command menu normally moves its navigation selection on hover. Consume only
+        // those menu-specific events: pointer styling, native keys and clicked-item activation stay.
+        foreach (var item in ((MenuFlyout)MenuButton.Flyout!).Items.OfType<MenuItem>())
+        {
+            item.PointerEnteredItem += KeepMenuKeyboardTarget;
+            item.PointerExitedItem += KeepMenuKeyboardTarget;
+        }
+
         // The app's inactive-window treatments (the quieter focus ring) key on this class, as in
         // DialogBase.
         Activated += (_, _) => Classes.Set("windowInactive", false);
@@ -121,6 +129,8 @@ public partial class MainWindow : Window
         // OnLoaded repeats the measurement after the visual tree has completed layout.
         ApplyWindowMinimums();
     }
+
+    private static void KeepMenuKeyboardTarget(object? sender, RoutedEventArgs e) => e.Handled = true;
 
     private void OnScreensChanged(object? sender, EventArgs e) => ApplyNativeMinimum();
 
