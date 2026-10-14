@@ -187,7 +187,8 @@ public partial class DialogBase : Window
         // Escape is just another dismiss path — routed through the close guard rather than
         // closing directly, so a dirty dialog still gets its discard confirmation — while a key
         // the input method already consumed belongs to the composition and is left alone.
-        if (DialogCloseGuard.ShouldDismissOnKey(e.Key))
+        // Cmd/Ctrl+W is the same dismiss as the close button (keyboard-shortcut conventions).
+        if (DialogCloseGuard.ShouldDismissOnKey(e.Key) || ShortcutCatalog.CloseWindowGesture(this).Matches(e))
             Close();
     }
 

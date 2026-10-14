@@ -103,8 +103,11 @@ internal static class MacMenuBar
                 new(t.T("nativeMenu.paste"), "paste:", "v"),
                 new(t.T("nativeMenu.selectAll"), "selectAll:", "a"),
             ]),
+            // Close Window sends AppKit's own performClose: to the key window, exactly as its close button
+            // does, so each window runs its own close; it owns Cmd+W on the Mac, as the bar owns Cmd+,.
             (MenuRole.Window, t.T("nativeMenu.window"),
             [
+                new(t.T("nativeMenu.closeWindow"), "performClose:", "w"),
                 new(t.T("nativeMenu.minimize"), "performMiniaturize:", "m"),
                 new(t.T("nativeMenu.zoom"), "performZoom:"),
                 null,

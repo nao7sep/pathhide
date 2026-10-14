@@ -400,10 +400,16 @@ public partial class MainWindow : Window
 
         var window = new RecordsWindow(new RecordsViewModel(RecordsReader(), Log.Session), ViewModel);
         _recordsWindow = window;
+        // Closing Records while it is in front hands the focus back to this window, which it was opened
+        // from, rather than to whatever the system picks next (window-conventions).
+        var inFrontWhenClosed = false;
+        window.Closing += (_, _) => inFrontWhenClosed = window.IsActive;
         window.Closed += (_, _) =>
         {
             if (_recordsWindow == window)
                 _recordsWindow = null;
+            if (inFrontWhenClosed && IsVisible && WindowState != WindowState.Minimized)
+                Activate();
         };
         window.Show();
         return window;
@@ -587,8 +593,16 @@ public partial class MainWindow : Window
         ShortcutAction.AddDirectories => Run(AddFoldersAsync),
         ShortcutAction.OpenSettings => Run(OpenSettingsAsync),
         ShortcutAction.ShowShortcuts => Run(ShowShortcutsAsync),
+        // The same close as the window's close button, so it runs the app's quit (OnClosing).
+        ShortcutAction.CloseWindow => CloseFromShortcut(),
         _ => false,
     };
+
+    private bool CloseFromShortcut()
+    {
+        Close();
+        return true;
+    }
 
     // Fires an async window action (a picker or dialog) and reports the gesture as handled. The task
     // is intentionally not awaited — the key handler is synchronous and the action runs to completion

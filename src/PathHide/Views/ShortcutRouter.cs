@@ -33,7 +33,8 @@ public static class ShortcutRouter
         ShortcutAction.AddFiles
             or ShortcutAction.AddDirectories
             or ShortcutAction.OpenSettings
-            or ShortcutAction.ShowShortcuts => true,
+            or ShortcutAction.ShowShortcuts
+            or ShortcutAction.CloseWindow => true,
         _ => false,
     };
 }

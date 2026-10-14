@@ -77,10 +77,11 @@ public sealed class MacMenuBarTests
             new[] { ("z", Cmd), ("Z", Cmd), ("x", Cmd), ("c", Cmd), ("v", Cmd), ("a", Cmd) },
             Menu("Edit").OfType<Item>().Select(item => (item.Key, item.Modifiers)));
 
-        Assert.Equal(new[] { "Minimize", "Zoom", "—", "Bring All to Front" }, Titles(Menu("Window")));
+        Assert.Equal(new[] { "Close Window", "Minimize", "Zoom", "—", "Bring All to Front" }, Titles(Menu("Window")));
         Assert.Equal(
-            new[] { "performMiniaturize:", "performZoom:", "arrangeInFront:" },
+            new[] { "performClose:", "performMiniaturize:", "performZoom:", "arrangeInFront:" },
             Menu("Window").OfType<Item>().Select(item => item.Action));
+        Assert.Equal(("w", Cmd), KeyOf(Menu("Window"), "Close Window"));
         Assert.Equal(("m", Cmd), KeyOf(Menu("Window"), "Minimize"));
     }
 
@@ -244,7 +245,7 @@ public sealed class MacMenuBarTests
     }
 
     [AvaloniaFact]
-    public void PathHides_own_window_shortcuts_get_past_the_native_bar_except_Settings()
+    public void PathHides_own_window_shortcuts_get_past_the_native_bar_except_Settings_and_Close_Window()
     {
         Assert.SkipUnless(OperatingSystem.IsMacOS(), "Runs on macOS only.");
         LoadAppKit();
@@ -255,7 +256,7 @@ public sealed class MacMenuBarTests
         // The characters each catalog key types; a new shortcut key needs its entry here.
         var typed = new Dictionary<Key, string>
         {
-            [Key.O] = "o", [Key.H] = "h", [Key.S] = "s", [Key.R] = "r", [Key.OemComma] = ",", [Key.OemQuestion] = "/",
+            [Key.O] = "o", [Key.H] = "h", [Key.S] = "s", [Key.R] = "r", [Key.OemComma] = ",", [Key.OemQuestion] = "/", [Key.W] = "w",
         };
         var command = ShortcutCatalog.CommandModifier(window);
         foreach (var shortcut in ShortcutCatalog.Build(window).Where(item => item.Gesture is not null))
@@ -269,8 +270,8 @@ public sealed class MacMenuBarTests
             var characters = shift ? typed[gesture.Key].ToUpperInvariant() : typed[gesture.Key];
             var taken = PerformsKeyEquivalent(bar.Bar, characters, shift ? Cmd | Modifiers.Shift : Cmd);
 
-            // Settings is the one shortcut the bar owns; its item runs the same command.
-            Assert.Equal(shortcut.Action == ShortcutAction.OpenSettings, taken);
+            // Settings and Close Window are the shortcuts the bar owns; their items do the same thing.
+            Assert.Equal(shortcut.Action is ShortcutAction.OpenSettings or ShortcutAction.CloseWindow, taken);
         }
 
         window.Close();

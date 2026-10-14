@@ -129,6 +129,26 @@ public sealed class SettingsDialogTests
     }
 
     [AvaloniaFact]
+    public void CloseWindowShortcutOnADirtyDraftAsksLikeTheCloseButton()
+    {
+        using var speaking = Localizer.Speaking("en");
+        var (_, settings, owner, dialog) = OpenDirtySettings();
+        try
+        {
+            CloseWindowShortcutTests.PressCloseWindow(dialog);
+
+            Assert.Equal("Discard changes?", dialog.OwnedWindows.OfType<ConfirmDialog>().Single().Title);
+            Assert.True(dialog.IsVisible);
+            Assert.Equal(0, settings.SaveCount);
+        }
+        finally
+        {
+            owner.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
+    [AvaloniaFact]
     public async Task KeepEditingRetainsTheDraftAndDiscardClosesWithoutSaving()
     {
         using var speaking = Localizer.Speaking("en");

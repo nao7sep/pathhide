@@ -80,6 +80,15 @@ public partial class RecordsWindow : Window
         Splitter.DragCompleted += (_, _) => CommitListWidth();
         // handledEventsToo: the splitter handles its own arrow steps (KeyboardIncrement) before a bubbling
         // handler would see them.
+        // Cmd/Ctrl+W closes Records the way its close button does (keyboard-shortcut conventions).
+        KeyDown += (_, e) =>
+        {
+            if (!e.Handled && ShortcutCatalog.CloseWindowGesture(this).Matches(e))
+            {
+                e.Handled = true;
+                Close();
+            }
+        };
         Splitter.AddHandler(KeyDownEvent, OnSplitterKeyDown, handledEventsToo: true);
         Splitter.KeyUp += OnSplitterKeyUp;
         Splitter.LostFocus += (_, _) =>

@@ -32,6 +32,7 @@ public enum ShortcutAction
     Cancel,
     OpenSettings,
     ShowShortcuts,
+    CloseWindow,
 }
 
 /// <summary>
@@ -110,6 +111,12 @@ public static class ShortcutCatalog
     public static string CommandModifierLabel(TopLevel top) =>
         CommandModifier(top) == KeyModifiers.Meta ? "Cmd" : "Ctrl";
 
+    /// <summary>
+    /// Cmd/Ctrl+W, which closes the window it is pressed in the way its close button would. The main
+    /// window binds it through the catalog; Records and the dialogs bind it themselves.
+    /// </summary>
+    public static KeyGesture CloseWindowGesture(TopLevel top) => new(Key.W, CommandModifier(top));
+
     /// <summary>Builds the ordered catalog.</summary>
     public static IReadOnlyList<ShortcutItem> Build(TopLevel top)
     {
@@ -145,6 +152,9 @@ public static class ShortcutCatalog
             // and it gates a section INSIDE the dialog rather than the dialog itself.
             Command(ShortcutGroup.App, "shortcuts.settings", cmd, cmdLabel, shift: false, Key.OemComma, "Comma", ShortcutAction.OpenSettings),
             Command(ShortcutGroup.App, "shortcuts.shortcuts", cmd, cmdLabel, shift: false, Key.OemQuestion, "Slash", ShortcutAction.ShowShortcuts),
+            // Every window closes this way (keyboard-shortcut conventions, Closing a window); the main
+            // window lists it because its dialog is the app's one shortcuts surface.
+            Command(ShortcutGroup.App, "shortcuts.closeWindow", cmd, cmdLabel, shift: false, Key.W, "W", ShortcutAction.CloseWindow),
         };
 
         return items;
