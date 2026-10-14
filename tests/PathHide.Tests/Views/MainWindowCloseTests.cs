@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
@@ -99,6 +101,132 @@ public sealed class MainWindowCloseTests : WindowTest
         Assert.Equal(1, asked);
     }
 
+    // The operating system ending the session: these deliver its close into the window's own handlers,
+    // as the platform does at logout, restart or shutdown, without logging out for real.
+
+    [AvaloniaFact]
+    public void The_session_ending_closes_the_window_within_the_bound_without_asking_while_a_save_stalls()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var (vm, paths) = CreateWithOnePath(TimeSpan.FromMilliseconds(300));
+        var main = Show(new MainWindow { DataContext = vm });
+        vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
+        var asked = 0;
+        vm.AskUnsavedAtQuitAsync = _ =>
+        {
+            asked++;
+            return Task.FromResult(UnsavedQuitChoice.KeepOpen);
+        };
+        var closed = false;
+        main.Closed += (_, _) => closed = true;
+        WaitFor(() => vm.ScanTask.IsCompleted);
+
+        // A Remove whose save never lands while the session ends.
+        paths.SaveGate = gate;
+        vm.Rows[0].IsSelected = true;
+        _ = ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
+        Assert.True(vm.HasWorkToFinish);
+
+        var clock = Stopwatch.StartNew();
+        EndSession(main);
+
+        // The close answers the system itself: it is not cancelled to wait elsewhere, and it is over
+        // within the quit's bound plus the placement save's.
+        Assert.True(closed);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"The session-end close took {clock.Elapsed}.");
+        Assert.Equal(0, asked);
+        gate.Set();
+    }
+
+    [AvaloniaFact]
+    public void The_session_ending_while_the_unsaved_question_is_open_closes_the_window_and_asks_no_more()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var (vm, paths) = CreateWithOnePath(TimeSpan.FromMilliseconds(300));
+        var main = Show(new MainWindow { DataContext = vm });
+        vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
+        var question = new TaskCompletionSource<UnsavedQuitChoice>();
+        var asked = 0;
+        vm.AskUnsavedAtQuitAsync = _ =>
+        {
+            asked++;
+            return question.Task;
+        };
+        var closed = 0;
+        main.Closed += (_, _) => closed++;
+        WaitFor(() => vm.ScanTask.IsCompleted);
+
+        // A Remove whose save fails, so the user's quit stops and asks.
+        paths.SaveGate = gate;
+        paths.ThrowOnSave = true;
+        vm.Rows[0].IsSelected = true;
+        _ = ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
+        main.Close();
+        gate.Set();
+        WaitFor(() => asked == 1);
+        Assert.Equal(0, closed);
+
+        EndSession(main);
+        Assert.Equal(1, closed);
+
+        // The question's late answer neither asks again nor closes the window a second time.
+        question.SetResult(UnsavedQuitChoice.Retry);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, asked);
+        Assert.Equal(1, closed);
+    }
+
+    [AvaloniaFact]
+    public void The_session_ending_gives_a_stalled_elevated_child_only_the_bound()
+    {
+        var elevated = new HeldApplicator { HasRunningChild = true, Bounded = true };
+        var settings = new FakeSettingsStore();
+        var vm = new MainWindowViewModel(
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), [])
+        {
+            ElevatedApplicator = elevated,
+            ShutdownBound = TimeSpan.FromMilliseconds(300),
+        };
+        var main = Show(new MainWindow { DataContext = vm });
+        var closed = false;
+        main.Closed += (_, _) => closed = true;
+
+        var clock = Stopwatch.StartNew();
+        EndSession(main);
+
+        Assert.True(closed);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"The session-end close took {clock.Elapsed}.");
+        Assert.Equal(1, elevated.Releases);
+        elevated.Release.SetResult();
+    }
+
+    private static (MainWindowViewModel Vm, FakeJsonStore<List<PathEntry>> Paths) CreateWithOnePath(TimeSpan shutdownBound)
+    {
+        var paths = new FakeJsonStore<List<PathEntry>>
+        {
+            Value = [new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }],
+        };
+        var settings = new FakeSettingsStore();
+        var vm = new MainWindowViewModel(
+            new BoundedVisibility(new FakeVisibilityService()), paths, settings,
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value)
+        {
+            ShutdownBound = shutdownBound,
+        };
+        return (vm, paths);
+    }
+
+    // The close Avalonia makes when the operating system ends the session, through its own close path
+    // (internal, so reached by reflection), so every closing handler runs as it would at logout.
+    private static void EndSession(Window window)
+    {
+        var closeCore = typeof(Window).GetMethod(
+            "CloseCore", BindingFlags.Instance | BindingFlags.NonPublic, [typeof(WindowCloseReason), typeof(bool), typeof(bool)]);
+        Assert.NotNull(closeCore);
+        closeCore.Invoke(window, [WindowCloseReason.OSShutdown, false, false]);
+    }
+
     private static void WaitFor(Func<bool> condition)
     {
         var clock = Stopwatch.StartNew();
@@ -118,13 +246,16 @@ public sealed class MainWindowCloseTests : WindowTest
 
         public int Releases { get; private set; }
 
+        // Whether the release keeps to its bound, as ElevatedApplicator's does, or holds until Release.
+        public bool Bounded { get; init; }
+
         public Task<ElevatedApplyOutcome> ApplyAsync(ElevatedApplyCommand.Buckets buckets, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         public Task ReleaseAsync(TimeSpan bound)
         {
             Releases++;
-            return Release.Task;
+            return Bounded ? Task.WhenAny(Release.Task, Task.Delay(bound)) : Release.Task;
         }
     }
 }

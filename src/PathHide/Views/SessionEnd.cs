@@ -38,9 +38,7 @@ internal static class SessionEnd
         try
         {
             var manager = ObjC.Send(ObjC.Class("NSAppleEventManager"), "sharedAppleEventManager");
-            var quitEvent = ObjC.Send(manager, "currentAppleEvent");
-            return quitEvent != IntPtr.Zero
-                && ObjC.SendWithCode(quitEvent, "attributeDescriptorForKeyword:", QuitReasonKeyword) != IntPtr.Zero;
+            return QuitEventCarriesReason(ObjC.Send(manager, "currentAppleEvent"));
         }
         catch (Exception ex)
         {
@@ -48,4 +46,9 @@ internal static class SessionEnd
             return false;
         }
     }
+
+    /// <summary>Whether an Apple event (an NSAppleEventDescriptor, or none) carries a quit reason.</summary>
+    internal static bool QuitEventCarriesReason(IntPtr quitEvent) =>
+        quitEvent != IntPtr.Zero
+        && ObjC.SendWithCode(quitEvent, "attributeDescriptorForKeyword:", QuitReasonKeyword) != IntPtr.Zero;
 }

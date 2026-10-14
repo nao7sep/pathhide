@@ -1,3 +1,5 @@
+using System;
+using System.Runtime.InteropServices;
 using Avalonia.Controls;
 using PathHide.Views;
 using Xunit;
@@ -34,4 +36,48 @@ public sealed class SessionEndTests
         SessionEnd.Is(WindowCloseReason.OSShutdown, windows: false, () => { read++; return true; });
         Assert.Equal(0, read);
     }
+
+    // macOS: loginwindow's quit event at logout, restart or shutdown carries keyAEQuitReason; a quit from
+    // the Dock or another app carries none. Both are built here as AppKit receives them.
+    [MacOnlyFact]
+    public void On_macOS_a_quit_event_with_a_reason_is_a_session_end_and_one_without_is_not()
+    {
+        NativeLibrary.Load("/System/Library/Frameworks/Foundation.framework/Foundation");
+        var dockQuit = QuitEvent();
+        var logoutQuit = QuitEvent();
+        try
+        {
+            var logOut = ObjC.SendWithCode(ObjC.Class("NSAppleEventDescriptor"), "descriptorWithEnumCode:", Code("logo"));
+            SetAttribute(logoutQuit, ObjC.Sel("setAttributeDescriptor:forKeyword:"), logOut, Code("why?"));
+
+            Assert.False(SessionEnd.QuitEventCarriesReason(IntPtr.Zero));
+            Assert.False(SessionEnd.QuitEventCarriesReason(dockQuit));
+            Assert.True(SessionEnd.QuitEventCarriesReason(logoutQuit));
+        }
+        finally
+        {
+            ObjC.Send(dockQuit, "release");
+            ObjC.Send(logoutQuit, "release");
+        }
+    }
+
+    private static uint Code(string fourChars) =>
+        (uint)(fourChars[0] << 24 | fourChars[1] << 16 | fourChars[2] << 8 | fourChars[3]);
+
+    // A kCoreEventClass/kAEQuitApplication event with no target, an automatic return ID and any transaction.
+    private static IntPtr QuitEvent()
+    {
+        var allocated = ObjC.Send(ObjC.Class("NSAppleEventDescriptor"), "alloc");
+        var quit = InitEvent(allocated, ObjC.Sel("initWithEventClass:eventID:targetDescriptor:returnID:transactionID:"),
+            Code("aevt"), Code("quit"), IntPtr.Zero, -1, 0);
+        Assert.NotEqual(IntPtr.Zero, quit);
+        return quit;
+    }
+
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static extern IntPtr InitEvent(IntPtr receiver, IntPtr selector, uint eventClass, uint eventId,
+        IntPtr target, short returnId, int transactionId);
+
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
+    private static extern void SetAttribute(IntPtr receiver, IntPtr selector, IntPtr descriptor, uint keyword);
 }
