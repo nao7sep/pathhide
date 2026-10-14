@@ -124,6 +124,40 @@ public class LabelFitTests : WindowTest
 
     [AvaloniaTheory]
     [MemberData(nameof(Tags))]
+    public void every_command_menu_item_fits_the_popup_cap_whole(string tag)
+    {
+        // The menu grows with its items up to a cap, past which an item would end in an ellipsis
+        // (composite-control conventions); every command must stay below it in every language.
+        using var speaking = Localizer.Speaking(tag);
+        var window = Show(PopulatedMainWindow.Empty());
+        var flyout = (MenuFlyout)window.FindControl<Button>("MenuButton")!.Flyout!;
+        flyout.ShowAt(window.FindControl<Button>("MenuButton")!);
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var items = flyout.Items.OfType<MenuItem>().ToArray();
+            var presenter = items[0].FindAncestorOfType<MenuFlyoutPresenter>()!;
+            var cap = (double)Application.Current!.FindResource("AppPopupMaxWidth")!;
+            Assert.Equal(cap, presenter.MaxWidth);
+            var frame = presenter.Padding.Left + presenter.Padding.Right
+                + presenter.BorderThickness.Left + presenter.BorderThickness.Right;
+
+            foreach (var item in items)
+            {
+                item.Measure(Size.Infinity);
+                Assert.True(item.DesiredSize.Width + frame <= cap,
+                    $"{tag}: “{item.Header}” needs {item.DesiredSize.Width + frame:0} px, past the {cap:0} px cap.");
+            }
+        }
+        finally
+        {
+            flyout.Hide();
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(Tags))]
     public void the_toolbar_fits_the_windows_default_width(string tag)
     {
         using var speaking = Localizer.Speaking(tag);

@@ -163,6 +163,10 @@
             <CornerRadius x:Key="AppSurfaceRadius">10</CornerRadius>
             <CornerRadius x:Key="AppControlFocusRadius">11</CornerRadius>
             <Thickness x:Key="AppFocusRingMargin">-3</Thickness>
+            <!-- How wide a menu or dropdown list may grow with its items, in every interface language,
+                 before an item ends with an ellipsis; only a name or path could reach it
+                 (composite-control conventions). -->
+            <x:Double x:Key="AppPopupMaxWidth">360</x:Double>
 
             <!-- The app-wide UI (chrome) font. The default is the bundled Inter; the view model overrides
                  this resource at runtime from the configured UI font, and the Window style below binds it
@@ -574,6 +578,9 @@
         <Style Selector="Window.windowInactive ComboBox:focus-visible /template/ Border#HighlightBackground">
             <Setter Property="BorderBrush" Value="{DynamicResource FocusRingInactiveBrush}"/>
         </Style>
+        <Style Selector="ComboBox /template/ Border#PopupBorder">
+            <Setter Property="MaxWidth" Value="{StaticResource AppPopupMaxWidth}"/>
+        </Style>
         <Style Selector="ComboBox /template/ PathIcon#DropDownGlyph">
             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
         </Style>
@@ -586,6 +593,7 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CornerRadius" Value="{StaticResource AppSurfaceRadius}"/>
             <Setter Property="Padding" Value="4"/>
+            <Setter Property="MaxWidth" Value="{StaticResource AppPopupMaxWidth}"/>
         </Style>
         <Style Selector="MenuFlyoutPresenter MenuItem">
             <Setter Property="MinHeight" Value="{StaticResource AppControlHeight}"/>

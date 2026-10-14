@@ -211,11 +211,14 @@
             <Panel>
                 <TextBlock Classes="recordsNote" Classes.failed="{Binding IsDetailFailed}"
                            Text="{Binding DetailNote}" IsVisible="{Binding HasDetailNote}"/>
-                <DockPanel IsVisible="{Binding HasDetail}">
-                    <Border DockPanel.Dock="Top" Padding="16,12"
-                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                <!-- The message is text to be read, so it wraps whole at the top of the detail's one
+                     scrolling area rather than in a header that would grow with it (interface-styling
+                     conventions, Labels). -->
+                <ScrollViewer x:Name="DetailBody" IsVisible="{Binding HasDetail}" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="16" Spacing="16">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                            <SelectableTextBlock Text="{Binding Detail.Message, FallbackValue={x:Null}}"
+                            <SelectableTextBlock x:Name="DetailMessage"
+                                                 Text="{Binding Detail.Message, FallbackValue={x:Null}}"
                                                  FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
                             <Border Grid.Column="1" Classes="levelMark" VerticalAlignment="Top"
                                     Classes.error="{Binding Detail.IsError, FallbackValue=False}"
@@ -223,31 +226,27 @@
                                 <TextBlock Text="{Binding Detail.LevelText, FallbackValue={x:Null}}"/>
                             </Border>
                         </Grid>
-                    </Border>
-                    <ScrollViewer x:Name="DetailBody" HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel Margin="16" Spacing="16">
-                            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto"
-                                  ColumnSpacing="16" RowSpacing="8">
-                                <TextBlock Grid.Row="0" Grid.Column="0" Classes="fieldLabel"
-                                           i18n:Localized.Text="records.time"/>
-                                <SelectableTextBlock Grid.Row="0" Grid.Column="1" TextWrapping="Wrap"
-                                                     Text="{Binding Detail.TimeText, FallbackValue={x:Null}}"/>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Classes="fieldLabel"
-                                           i18n:Localized.Text="records.launch"/>
-                                <SelectableTextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap"
-                                                     Text="{Binding Detail.LaunchText, FallbackValue={x:Null}}"/>
-                            </Grid>
-                            <StackPanel Spacing="6" IsVisible="{Binding Detail.HasFields, FallbackValue=False}">
-                                <TextBlock Classes="fieldLabel" i18n:Localized.Text="records.details"/>
-                                <SelectableTextBlock Classes="json" Text="{Binding Detail.FieldsText, FallbackValue={x:Null}}"/>
-                            </StackPanel>
-                            <StackPanel Spacing="6" IsVisible="{Binding Detail.HasError, FallbackValue=False}">
-                                <TextBlock Classes="fieldLabel" i18n:Localized.Text="records.error"/>
-                                <SelectableTextBlock Classes="json" Text="{Binding Detail.ErrorText, FallbackValue={x:Null}}"/>
-                            </StackPanel>
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto"
+                              ColumnSpacing="16" RowSpacing="8">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Classes="fieldLabel"
+                                       i18n:Localized.Text="records.time"/>
+                            <SelectableTextBlock Grid.Row="0" Grid.Column="1" TextWrapping="Wrap"
+                                                 Text="{Binding Detail.TimeText, FallbackValue={x:Null}}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Classes="fieldLabel"
+                                       i18n:Localized.Text="records.launch"/>
+                            <SelectableTextBlock Grid.Row="1" Grid.Column="1" TextWrapping="Wrap"
+                                                 Text="{Binding Detail.LaunchText, FallbackValue={x:Null}}"/>
+                        </Grid>
+                        <StackPanel Spacing="6" IsVisible="{Binding Detail.HasFields, FallbackValue=False}">
+                            <TextBlock Classes="fieldLabel" i18n:Localized.Text="records.details"/>
+                            <SelectableTextBlock Classes="json" Text="{Binding Detail.FieldsText, FallbackValue={x:Null}}"/>
                         </StackPanel>
-                    </ScrollViewer>
-                </DockPanel>
+                        <StackPanel Spacing="6" IsVisible="{Binding Detail.HasError, FallbackValue=False}">
+                            <TextBlock Classes="fieldLabel" i18n:Localized.Text="records.error"/>
+                            <SelectableTextBlock Classes="json" Text="{Binding Detail.ErrorText, FallbackValue={x:Null}}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
             </Panel>
         </Border>
     </Grid>

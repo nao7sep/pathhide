@@ -403,10 +403,37 @@ public sealed class RecordsWindowTests : WindowTest
                 .Where(text => !string.IsNullOrEmpty(text.Text)).ToList();
             Assert.Equal(combo.ItemCount, labels.Count);
             Assert.All(labels, text => Assert.DoesNotContain(text.TextLayout.TextLines, line => line.HasCollapsed));
+            // The list grows with its labels only up to the app's popup cap (composite-control conventions).
+            var list = Assert.IsType<Border>(combo.GetVisualDescendants().OfType<Popup>().Single().Child);
+            Assert.Equal("PopupBorder", list.Name);
+            Assert.True(list.Bounds.Width <= (double)Application.Current!.FindResource("AppPopupMaxWidth")!);
 
             combo.IsDropDownOpen = false;
             Settle(window);
         }
+    }
+
+    [AvaloniaFact]
+    public void A_long_message_wraps_whole_inside_the_details_scrolling_area_without_growing_the_pane()
+    {
+        // The message is text to be read: never shortened, and never a header that grows with it
+        // (interface-styling conventions, Labels).
+        var message = string.Join(' ', Enumerable.Repeat("apply: failed to set attributes on a path", 400));
+        _reader.Details[1] = new RecordDetail(1, ThisLaunch, Record(1).Time, "error", message, null, null);
+        var (window, records) = ShowRecords(Owner());
+        _reader.Unanswered.Single().Answer(false, Record(1, session: ThisLaunch, level: "error"));
+        Settle(window);
+        records.SelectedRow = records.Rows.Single();
+        Settle(window);
+        Assert.True(records.HasDetail);
+
+        var body = window.FindControl<ScrollViewer>("DetailBody")!;
+        var shown = window.FindControl<SelectableTextBlock>("DetailMessage")!;
+        Assert.Same(body, shown.FindAncestorOfType<ScrollViewer>());
+        Assert.Equal(message, shown.Text);
+        Assert.DoesNotContain(shown.TextLayout.TextLines, line => line.HasCollapsed);
+        Assert.True(body.Extent.Height > body.Viewport.Height, "The long message should scroll, not size the pane.");
+        Assert.True(body.Bounds.Height <= window.Bounds.Height);
     }
 
     private sealed class NullSink : ILogSink
