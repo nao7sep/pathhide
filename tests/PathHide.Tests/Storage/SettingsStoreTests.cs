@@ -128,6 +128,7 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("uiFontFamily", "\"Menlo\"")]
     [InlineData("theme", "\"dark\"")]
     [InlineData("windowsHideMode", "\"hidden_and_system\"")]
+    [InlineData("displayTimeZone", "\"Asia/Tokyo\"")]
     public void SaveChanges_ChangingOneSetStoresOnlyItsKey(string key, string json)
     {
         var store = new SettingsStore();
@@ -158,6 +159,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(Languages.System, loaded.Value.Language);
         Assert.Equal(string.Empty, loaded.Value.UiFontFamily);
         Assert.Equal(WindowsHideMode.HiddenOnly, loaded.Value.WindowsHideMode);
+        Assert.Equal(DisplayZone.System, loaded.Value.DisplayTimeZone);
         Assert.Equal(original, File.ReadAllText(ConfigPath));
     }
 
@@ -174,6 +176,10 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("language", "[]")]
     [InlineData("uiFontFamily", "{}")]
     [InlineData("uiFontFamily", "false")]
+    // A zone is chosen from the platform's IANA list, so a name not on it is not a zone.
+    [InlineData("displayTimeZone", "\"Mars/Olympus\"")]
+    [InlineData("displayTimeZone", "\"Tokyo Standard Time\"")]
+    [InlineData("displayTimeZone", "9")]
     public void Load_InvalidSetUsesBuiltIn_LogsItsKey_AndKeepsTheFile(string key, string value)
     {
         var original = "{ \"formatVersion\": 1, \"theme\": \"dark\", \"language\": \"ja\", \"" + key + "\": " + value + " }";
@@ -188,6 +194,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(key == "language" ? Languages.System : "ja", loaded.Value.Language);
         Assert.Equal(string.Empty, loaded.Value.UiFontFamily);
         Assert.Equal(WindowsHideMode.HiddenOnly, loaded.Value.WindowsHideMode);
+        Assert.Equal(DisplayZone.System, loaded.Value.DisplayTimeZone);
         Assert.Equal(original, File.ReadAllText(ConfigPath));
         Assert.Empty(Directory.GetFiles(_root, "config-*.invalid"));
         Assert.Equal(key, JsonSerializer.Deserialize<JsonElement>(Assert.Single(WarningFields())).GetProperty("key").GetString());

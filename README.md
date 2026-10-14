@@ -15,6 +15,7 @@ Hide chosen files and folders in one step, show them again when you need them, a
 - Add paths via pickers or by dropping them into the path list
 - Light and dark themes that follow the system by default; pick Light or Dark in Settings
 - Ten interface languages — English, German, Spanish, French, Italian, Brazilian Portuguese, Russian, Japanese, Korean and Simplified Chinese — following the system language by default; pick another in Settings
+- Records shows times in the computer's time zone by default; pick another zone in Settings
 - Windows: optional stronger hiding (HIDDEN + SYSTEM), with automatic UAC elevation for access-protected paths
 - macOS: hiding anything in Desktop, Documents, Downloads, or on a removable or network volume asks for the system's Files and Folders permission the first time
 

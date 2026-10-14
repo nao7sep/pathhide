@@ -101,7 +101,7 @@ public class LanguageChangeTests : WindowTest
     {
         var dialog = Show(new SettingsDialog(
             Languages.System, string.Empty, ThemePreference.System,
-            isHiddenAndSystem: false, showWindowsHideMode: true, (_, _, _, _) => Task.FromResult<Message?>(null)));
+            isHiddenAndSystem: false, showWindowsHideMode: true, DisplayZone.System, (_, _, _, _, _) => Task.FromResult<Message?>(null)));
 
         var theme = dialog.GetVisualDescendants().OfType<TextBlock>()
             .Single(text => text.Text == English.Of("settings.theme"));
@@ -148,7 +148,8 @@ public class LanguageChangeTests : WindowTest
 
         // System first, then the ten languages.
         Assert.Equal(Languages.System, options[0].Value);
-        Assert.Equal(English.Of("settings.languageSystem"), options[0].Name);
+        // System names the language it resolves to on this computer.
+        Assert.Equal(English.Of("settings.languageSystem", ("language", Languages.NameOf(Localizer.SystemLanguage))), options[0].Name);
         Assert.Equal(Languages.Tags, options.Skip(1).Select(option => option.Value));
 
         // Each name is the language's own, not a translation of it.
@@ -163,9 +164,10 @@ public class LanguageChangeTests : WindowTest
     {
         var dialog = Show(new SettingsDialog(
             Languages.System, string.Empty, ThemePreference.System,
-            isHiddenAndSystem: false, showWindowsHideMode: false, (_, _, _, _) => Task.FromResult<Message?>(null)));
+            isHiddenAndSystem: false, showWindowsHideMode: false, DisplayZone.System, (_, _, _, _, _) => Task.FromResult<Message?>(null)));
         var save = Button(dialog, English.Of("common.save"));
-        var languages = dialog.GetVisualDescendants().OfType<ComboBox>().Single();
+        // The language list leads the dialog; the time-zone list follows it.
+        var languages = dialog.GetVisualDescendants().OfType<ComboBox>().First();
         Assert.False(save.IsEnabled);
 
         languages.SelectedItem = languages.Items.OfType<LanguageOption>().Single(option => option.Value == "fr");

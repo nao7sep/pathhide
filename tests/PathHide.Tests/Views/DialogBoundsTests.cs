@@ -37,7 +37,7 @@ public sealed class DialogBoundsTests : IDisposable
         return owner;
     }
 
-    private SettingsDialog Settings() => new SettingsDialog(Languages.System, "Inter", ThemePreference.System, false, true, (_, _, _, _) => Task.FromResult<Message?>(null));
+    private SettingsDialog Settings() => new SettingsDialog(Languages.System, "Inter", ThemePreference.System, false, true, DisplayZone.System, (_, _, _, _, _) => Task.FromResult<Message?>(null));
 
     private SettingsDialog OpenSettings(Window owner)
     {
@@ -182,7 +182,7 @@ public sealed class DialogBoundsTests : IDisposable
 
         foreach (var dialog in new Window[]
         {
-            new SettingsDialog(Languages.System, "Inter", ThemePreference.System, false, true, (_, _, _, _) => Task.FromResult<Message?>(null)),
+            new SettingsDialog(Languages.System, "Inter", ThemePreference.System, false, true, DisplayZone.System, (_, _, _, _, _) => Task.FromResult<Message?>(null)),
             new AboutDialog(_ => true),
             new ShortcutsDialog(ShortcutCatalog.Build(owner)),
         })

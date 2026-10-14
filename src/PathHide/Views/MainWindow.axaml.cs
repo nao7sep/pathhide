@@ -426,6 +426,7 @@ public partial class MainWindow : Window
             ViewModel.Theme,
             ViewModel.IsHiddenAndSystem,
             ViewModel.HasWindowsHideMode,
+            ViewModel.DisplayTimeZone,
             ViewModel.TryApplySettingsAsync);
         await dialog.ShowBoundedAsync(this);
 

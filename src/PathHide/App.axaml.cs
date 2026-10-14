@@ -183,7 +183,7 @@ public partial class App : Application
     {
         var pathListStore = new PathListStore();
         var settingsStore = new SettingsStore();
-        // Settings are four harmless preferences, so an unusable config.json falls back to built-ins
+        // Settings are five harmless preferences, so an unusable config.json falls back to built-ins
         // for the session with a warning in the log, and stays untouched until the next Settings save
         // replaces it. The path list does NOT — ReadStartupStores must succeed before construction.
         var settings = loaded.Settings;

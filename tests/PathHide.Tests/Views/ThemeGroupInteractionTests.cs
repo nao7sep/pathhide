@@ -21,11 +21,12 @@ public sealed class ThemeGroupInteractionTests : WindowTest
     public void Hover_keeps_the_radio_keyboard_target_and_next_arrow_and_click_use_their_own_items()
     {
         var dialog = Show(new SettingsDialog(Languages.System, "Inter", ThemePreference.Light, false, false,
-            (_, _, _, _) => Task.FromResult<Message?>(null)));
+            DisplayZone.System, (_, _, _, _, _) => Task.FromResult<Message?>(null)));
         var radios = dialog.GetLogicalDescendants().OfType<RadioButton>().ToArray();
         try
         {
-            dialog.GetLogicalDescendants().OfType<ComboBox>().Single().Focus(NavigationMethod.Tab);
+            // The time-zone list sits just above the theme group.
+            dialog.GetLogicalDescendants().OfType<ComboBox>().Last().Focus(NavigationMethod.Tab);
             Press(dialog, Key.Tab);
             Assert.True(radios[1].IsFocused);
             Press(dialog, Key.Right);

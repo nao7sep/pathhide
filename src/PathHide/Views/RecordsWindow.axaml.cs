@@ -100,17 +100,20 @@ public partial class RecordsWindow : Window
         RecordList.TemplateApplied += OnListTemplateApplied;
         records.PageApplied += OnPageApplied;
 
-        // Signals and language changes only while open, so a closed window is never written to.
+        // Signals, language and display-zone changes only while open, so a closed window is never
+        // written to. A zone change redraws the times as a language change redraws the words.
         Opened += (_, _) =>
         {
             Log.RecordStored += OnRecordStored;
             Localizer.Changed += records.Retranslate;
+            DisplayZone.Changed += records.Retranslate;
             records.Start();
         };
         Closed += (_, _) =>
         {
             Log.RecordStored -= OnRecordStored;
             Localizer.Changed -= records.Retranslate;
+            DisplayZone.Changed -= records.Retranslate;
             records.PageApplied -= OnPageApplied;
             records.Close();
         };

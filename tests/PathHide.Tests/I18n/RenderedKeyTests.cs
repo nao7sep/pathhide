@@ -136,7 +136,7 @@ public class RenderedKeyTests : WindowTest
         var dialog = Show(new SettingsDialog(
             Languages.System, string.Empty, ThemePreference.System,
             isHiddenAndSystem: false, showWindowsHideMode: true,
-            (_, _, _, _) => Task.FromResult<Message?>(Message.Of("failure.settingsSave"))));
+            DisplayZone.System, (_, _, _, _, _) => Task.FromResult<Message?>(Message.Of("failure.settingsSave"))));
 
         AssertNoKeys(dialog);
     }

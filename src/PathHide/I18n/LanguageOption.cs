@@ -8,14 +8,15 @@ namespace PathHide.I18n;
 ///
 /// Every language is named in its own words, so a reader finds theirs whatever language is showing;
 /// only System is translated, because only System is a sentence about the computer rather than a
-/// language's own name.
+/// language's own name. It names the language it resolves to now, as every System choice does
+/// (app-chrome conventions).
 /// </summary>
 public sealed record LanguageOption(string Value, string Name)
 {
     /// <summary>System first, then each language by its own name.</summary>
     internal static IReadOnlyList<LanguageOption> All() =>
     [
-        new(Languages.System, Localizer.T("settings.languageSystem")),
+        new(Languages.System, Localizer.T("settings.languageSystem", ("language", Languages.NameOf(Localizer.SystemLanguage)))),
         .. Languages.All.Select(language => new LanguageOption(language.Tag, language.Name)),
     ];
 

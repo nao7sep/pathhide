@@ -138,6 +138,9 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>The saved theme, used to seed the settings dialog.</summary>
     public ThemePreference Theme => _settings.Theme;
 
+    /// <summary>The saved display zone: <see cref="DisplayZone.System"/> or an IANA zone.</summary>
+    public string DisplayTimeZone => _settings.DisplayTimeZone;
+
     /// <summary>The saved language preference — a tag or System — used to seed the settings dialog.</summary>
     public string Language => Languages.NormalizePreference(_settings.Language);
 
@@ -258,6 +261,7 @@ public partial class MainWindowViewModel : ObservableObject
         _state = state;
         _entries = entries;
         _scanner = new PathScanner(visibility);
+        DisplayZone.Use(settings.DisplayTimeZone);
         Rows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsPathListEmpty));
         ApplyUiFont();
         SyncRowsWithEntries();
@@ -802,9 +806,10 @@ public partial class MainWindowViewModel : ObservableObject
     /// outcome is unknown; <c>config.json</c> is not read.
     /// </summary>
     public async Task<Message?> TryApplySettingsAsync(
-        string language, string family, bool hiddenAndSystem, ThemePreference theme)
+        string language, string family, bool hiddenAndSystem, ThemePreference theme, string? timeZone = null)
     {
         language = Languages.NormalizePreference(language);
+        timeZone = timeZone is null ? _settings.DisplayTimeZone : DisplayZone.NormalizePreference(timeZone);
         family = UiFontFamilyValue.Normalize(family);
         var newMode = hiddenAndSystem ? WindowsHideMode.HiddenAndSystem : WindowsHideMode.HiddenOnly;
 
@@ -814,6 +819,7 @@ public partial class MainWindowViewModel : ObservableObject
         candidate.UiFontFamily = family;
         candidate.WindowsHideMode = newMode;
         candidate.Theme = theme;
+        candidate.DisplayTimeZone = timeZone;
         bool changed;
         try
         {
@@ -821,7 +827,7 @@ public partial class MainWindowViewModel : ObservableObject
                 UserStore.Settings,
                 () => _settingsStore.SaveChanges(_settingsOnDisk ? previous : null, candidate),
                 FailurePresentation.SettingsSave,
-                () => TryApplySettingsAsync(language, family, hiddenAndSystem, theme));
+                () => TryApplySettingsAsync(language, family, hiddenAndSystem, theme, timeZone));
         }
         catch (Exception ex)
         {
@@ -834,13 +840,15 @@ public partial class MainWindowViewModel : ObservableObject
         if (!changed && previous.Language == candidate.Language
             && previous.UiFontFamily == candidate.UiFontFamily
             && previous.WindowsHideMode == candidate.WindowsHideMode
-            && previous.Theme == candidate.Theme)
+            && previous.Theme == candidate.Theme
+            && previous.DisplayTimeZone == candidate.DisplayTimeZone)
             return null;
 
         _settings.Language = candidate.Language;
         _settings.UiFontFamily = candidate.UiFontFamily;
         _settings.WindowsHideMode = candidate.WindowsHideMode;
         _settings.Theme = candidate.Theme;
+        _settings.DisplayTimeZone = candidate.DisplayTimeZone;
 
         if (previous.UiFontFamily != family)
         {
@@ -851,10 +859,13 @@ public partial class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(IsHiddenAndSystem));
         if (previous.Theme != theme)
             OnPropertyChanged(nameof(Theme));
+        if (previous.DisplayTimeZone != timeZone)
+            OnPropertyChanged(nameof(DisplayTimeZone));
         OnPropertyChanged(nameof(Language));
-        Log.Info("settings: changed", new { language, family, mode = newMode, theme });
+        Log.Info("settings: changed", new { language, family, mode = newMode, theme, timeZone });
 
-        // Last, once disk agrees: a language change redraws everything already on screen.
+        // Last, once disk agrees: a language or zone change redraws everything already on screen.
+        DisplayZone.Use(timeZone);
         Localizer.Use(language, ComputerLanguages);
         return null;
     }
@@ -927,6 +938,7 @@ public partial class MainWindowViewModel : ObservableObject
         UiFontFamily = _settings.UiFontFamily,
         Theme = _settings.Theme,
         WindowsHideMode = _settings.WindowsHideMode,
+        DisplayTimeZone = _settings.DisplayTimeZone,
     };
 
     /// <summary>

@@ -33,7 +33,7 @@ public sealed class RecordRowViewModel(RecordSummary record) : ObservableObject
 
     public string Message => Record.Message;
 
-    public string TimeText => RecordFormat.ListTime(Record.Time, Localizer.Current.Culture, TimeZoneInfo.Local);
+    public string TimeText => RecordFormat.ListTime(Record.Time, Localizer.Current.Culture, DisplayZone.Current);
 
     public string LevelText => RecordLevels.Text(Record.Level);
 
@@ -92,7 +92,7 @@ public sealed class RecordDetailViewModel(RecordDetail record, string currentSes
 
     public bool IsWarning => Record.Level == "warn";
 
-    public string TimeText => RecordFormat.DetailTime(Record.Time, Localizer.Current.Culture, TimeZoneInfo.Local);
+    public string TimeText => RecordFormat.DetailTime(Record.Time, Localizer.Current.Culture, DisplayZone.Current);
 
     public string LaunchText => RecordsViewModel.LaunchLabel(Record.Session, currentSession);
 

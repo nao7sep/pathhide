@@ -10,7 +10,7 @@ namespace PathHide.Storage;
 
 /// <summary>The config set keys, how each is read, and how each is written (config-sets-conventions).</summary>
 /// <remarks>
-/// Retirement policy: all four sets are harmless preferences. An invalid value falls back to its
+/// Retirement policy: all five sets are harmless preferences. An invalid value falls back to its
 /// built-in and is normalized at the next Settings save that changes something; a key PathHide does not
 /// know (only possible from a newer build or a hand edit) is dropped at that save, because the file is
 /// written from <see cref="Differing"/> alone.
@@ -21,6 +21,7 @@ internal static class SettingsSets
     internal const string UiFontFamily = "uiFontFamily";
     internal const string Theme = "theme";
     internal const string WindowsHideMode = "windowsHideMode";
+    internal const string DisplayTimeZone = "displayTimeZone";
 
     // Settings only: the shared options also read paths.json, whose enums keep their own reading.
     private static readonly JsonSerializerOptions Options = new()
@@ -38,6 +39,7 @@ internal static class SettingsSets
             UiFontFamily = ReadText(UiFontFamily, UiFontFamilyValue.Normalize) ?? defaults.UiFontFamily,
             Theme = ReadEnum(Theme, defaults.Theme),
             WindowsHideMode = ReadEnum(WindowsHideMode, defaults.WindowsHideMode),
+            DisplayTimeZone = ReadText(DisplayTimeZone, DisplayZone.ParsePreference) ?? defaults.DisplayTimeZone,
         };
         invalidKeys = invalid;
         return settings;
@@ -81,6 +83,7 @@ internal static class SettingsSets
         Add(UiFontFamily, UiFontFamilyValue.Normalize(settings.UiFontFamily), builtIn.UiFontFamily);
         Add(Theme, settings.Theme, builtIn.Theme);
         Add(WindowsHideMode, settings.WindowsHideMode, builtIn.WindowsHideMode);
+        Add(DisplayTimeZone, DisplayZone.NormalizePreference(settings.DisplayTimeZone), builtIn.DisplayTimeZone);
         return sets;
 
         void Add<T>(string key, T value, T builtInValue)

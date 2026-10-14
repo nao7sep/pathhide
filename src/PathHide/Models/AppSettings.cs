@@ -57,4 +57,10 @@ public sealed class AppSettings
     public ThemePreference Theme { get; set; } = ThemePreference.System;
 
     public WindowsHideMode WindowsHideMode { get; set; } = WindowsHideMode.HiddenOnly;
+
+    /// <summary>
+    /// The zone Records shows times in: <c>system</c> to follow the computer's zone at each launch, or
+    /// an IANA zone from the platform's list (<c>I18n/DisplayZone.cs</c>).
+    /// </summary>
+    public string DisplayTimeZone { get; set; } = I18n.DisplayZone.System;
 }

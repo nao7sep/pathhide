@@ -24,6 +24,7 @@ public sealed class SettingsDialog : DialogBase
     ];
 
     private readonly ComboBox _languageBox;
+    private readonly ComboBox _timeZoneBox;
     private readonly ImeTextBox _uiFontBox;
     private readonly CheckBox _hiddenAndSystemCheckBox;
     private readonly IReadOnlyList<RadioButton> _themeButtons;
@@ -31,9 +32,10 @@ public sealed class SettingsDialog : DialogBase
     private string _originalUiFont;
     private bool _originalIsHiddenAndSystem;
     private ThemePreference _originalTheme;
+    private string _originalTimeZone;
     private readonly Button _saveButton;
     private readonly TextBlock _saveError;
-    private readonly Func<string, string, bool, ThemePreference, Task<Message?>> _trySave;
+    private readonly Func<string, string, bool, ThemePreference, string, Task<Message?>> _trySave;
 
     public bool Accepted => ResultTag == "save";
     public string SelectedLanguage => ((LanguageOption)_languageBox.SelectedItem!).Value;
@@ -41,6 +43,10 @@ public sealed class SettingsDialog : DialogBase
     public string UiFontFamily => UiFontFamilyValue.Normalize(_uiFontBox.Text);
     public ThemePreference SelectedTheme =>
         _themeButtons.Zip(ThemeChoices).First(pair => pair.First.IsChecked == true).Second.Value;
+    public string SelectedTimeZone => ((ZoneOption)_timeZoneBox.SelectedItem!).Value;
+
+    /// <summary>A line in the time-zone list: the value saved, and the name shown for it.</summary>
+    public sealed record ZoneOption(string Value, string Name);
 
     public SettingsDialog(
         string language,
@@ -48,13 +54,15 @@ public sealed class SettingsDialog : DialogBase
         ThemePreference theme,
         bool isHiddenAndSystem,
         bool showWindowsHideMode,
-        Func<string, string, bool, ThemePreference, Task<Message?>> trySave)
+        string timeZone,
+        Func<string, string, bool, ThemePreference, string, Task<Message?>> trySave)
     {
         _trySave = trySave;
         _originalLanguage = Languages.NormalizePreference(language);
         _originalUiFont = UiFontFamilyValue.Normalize(uiFontFamily);
         _originalIsHiddenAndSystem = isHiddenAndSystem;
         _originalTheme = theme;
+        _originalTimeZone = DisplayZone.NormalizePreference(timeZone);
         Width = 500;
         Localized.SetTitle(this, "settings.title");
 
@@ -71,6 +79,26 @@ public sealed class SettingsDialog : DialogBase
         };
         Localized.SetAutomationName(_languageBox, "settings.language");
 
+        // System first, named with the zone it resolves to now, then the platform's IANA zones; chosen,
+        // never typed (timestamp-conventions, Time zones). Applied on Save like every other field here.
+        IReadOnlyList<ZoneOption> zones =
+        [
+            new(DisplayZone.System, Localizer.T("settings.timeZoneSystem", ("zone", DisplayZone.SystemZoneName()))),
+            .. DisplayZone.Zones.Select(zone => new ZoneOption(zone, zone)),
+        ];
+        _timeZoneBox = new ComboBox
+        {
+            ItemsSource = zones,
+            SelectedItem = zones.FirstOrDefault(zone => zone.Value == _originalTimeZone) ?? zones[0],
+            DisplayMemberBinding = new Avalonia.Data.Binding(nameof(ZoneOption.Name)),
+            MinWidth = 200,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        Localized.SetAutomationName(_timeZoneBox, "settings.timeZone");
+        var timeZoneHint = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap };
+        Localized.SetText(timeZoneHint, "settings.timeZoneHint");
+        timeZoneHint[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("TextSecondaryBrush");
+
         // Native radios retain their selection and focus visuals. Their parent supplies one Tab stop
         // and arrow selection, which Avalonia does not supply for a radio group. Changes apply on Save.
         // The buttons group by their shared parent rather than a GroupName, tracked across every dialog not
@@ -79,10 +107,19 @@ public sealed class SettingsDialog : DialogBase
             .Select(choice =>
             {
                 var button = new RadioButton { IsChecked = choice.Value == theme };
-                Localized.SetContent(button, choice.LabelKey);
+                if (choice.Value != ThemePreference.System)
+                    Localized.SetContent(button, choice.LabelKey);
                 return button;
             })
             .ToList();
+        // System names the appearance it resolves to now, and follows the computer while the dialog is
+        // open (app-chrome conventions, Theme).
+        ShowSystemTheme();
+        if (Avalonia.Application.Current?.PlatformSettings is { } platform)
+        {
+            platform.ColorValuesChanged += OnColorValuesChanged;
+            Closed += (_, _) => platform.ColorValuesChanged -= OnColorValuesChanged;
+        }
         var themeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 20 };
         foreach (var button in _themeButtons)
             themeRow.Children.Add(button);
@@ -123,6 +160,7 @@ public sealed class SettingsDialog : DialogBase
             Children =
             {
                 Section("settings.language", _languageBox),
+                Section("settings.timeZone", _timeZoneBox, timeZoneHint),
                 Section("settings.theme", themeRow, themeHint),
                 Section("settings.uiFont", _uiFontBox, fontHint),
             },
@@ -154,6 +192,7 @@ public sealed class SettingsDialog : DialogBase
         // Wire change handlers only after _saveButton exists, so a change raised during setup can never
         // run UpdateSaveState against a null button. Then seed the state.
         _languageBox.SelectionChanged += (_, _) => UpdateSaveState();
+        _timeZoneBox.SelectionChanged += (_, _) => UpdateSaveState();
         _uiFontBox.TextChanged += (_, _) => UpdateSaveState();
         _hiddenAndSystemCheckBox.IsCheckedChanged += (_, _) => UpdateSaveState();
         foreach (var button in _themeButtons)
@@ -173,7 +212,8 @@ public sealed class SettingsDialog : DialogBase
         SelectedLanguage != _originalLanguage
         || UiFontFamily != _originalUiFont
         || IsHiddenAndSystem != _originalIsHiddenAndSystem
-        || SelectedTheme != _originalTheme;
+        || SelectedTheme != _originalTheme
+        || SelectedTimeZone != _originalTimeZone;
 
     protected override async Task<bool> TryCommitAsync(string tag)
     {
@@ -186,13 +226,15 @@ public sealed class SettingsDialog : DialogBase
         var font = UiFontFamily;
         var hiddenAndSystem = IsHiddenAndSystem;
         var theme = SelectedTheme;
-        var failure = await _trySave(language, font, hiddenAndSystem, theme);
+        var timeZone = SelectedTimeZone;
+        var failure = await _trySave(language, font, hiddenAndSystem, theme, timeZone);
         if (failure is null)
         {
             _originalLanguage = language;
             _originalUiFont = font;
             _originalIsHiddenAndSystem = hiddenAndSystem;
             _originalTheme = theme;
+            _originalTimeZone = timeZone;
             UpdateSaveState();
             return !HasUnsavedChanges;
         }
@@ -203,6 +245,20 @@ public sealed class SettingsDialog : DialogBase
     }
 
     private void UpdateSaveState() => _saveButton.IsEnabled = HasUnsavedChanges;
+
+    private void OnColorValuesChanged(object? sender, Avalonia.Platform.PlatformColorValues e) => ShowSystemTheme();
+
+    /// <summary>"System (Dark)": the System choice with the computer's appearance now.</summary>
+    internal static string SystemThemeLabel(Avalonia.Platform.PlatformThemeVariant appearance) =>
+        Localizer.T("settings.themeSystem",
+            ("theme", Localizer.T(appearance == Avalonia.Platform.PlatformThemeVariant.Dark ? "settings.themeDark" : "settings.themeLight")));
+
+    private void ShowSystemTheme()
+    {
+        var appearance = Avalonia.Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant
+            ?? Avalonia.Platform.PlatformThemeVariant.Light;
+        _themeButtons[0].Content = SystemThemeLabel(appearance);
+    }
 
     private void OnThemeKeyDown(object? sender, KeyEventArgs e)
     {

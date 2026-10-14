@@ -31,7 +31,8 @@ public sealed class SettingsDialogTests
             ThemePreference.System,
             isHiddenAndSystem: false,
             showWindowsHideMode: false,
-            (_, _, _, _) => Task.FromResult<Message?>(FailurePresentation.SettingsSave(new System.IO.IOException("Access to /private/test/config.tmp is denied."))));
+            DisplayZone.System,
+            (_, _, _, _, _) => Task.FromResult<Message?>(FailurePresentation.SettingsSave(new System.IO.IOException("Access to /private/test/config.tmp is denied."))));
         var font = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
         font.Text = "Menlo";
         var save = dialog.GetLogicalDescendants().OfType<Button>()
@@ -62,7 +63,7 @@ public sealed class SettingsDialogTests
     {
         var pending = new TaskCompletionSource<Message?>();
         var dialog = new SettingsDialog(Languages.System, "Inter", ThemePreference.System,
-            false, false, (_, _, _, _) => pending.Task);
+            false, false, DisplayZone.System, (_, _, _, _, _) => pending.Task);
         var font = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
         var save = dialog.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "save"));
         font.Text = "Menlo";
@@ -89,7 +90,8 @@ public sealed class SettingsDialogTests
             ThemePreference.Light,
             isHiddenAndSystem: false,
             showWindowsHideMode: false,
-            (_, _, _, theme) =>
+            DisplayZone.System,
+            (_, _, _, theme, _) =>
             {
                 saved = theme;
                 return Task.FromResult<Message?>(null);
@@ -98,7 +100,9 @@ public sealed class SettingsDialogTests
         var save = dialog.GetLogicalDescendants().OfType<Button>()
             .Single(button => Equals(button.Tag, "save"));
 
-        Assert.Equal(new[] { "System", "Light", "Dark" }, radios.Select(radio => radio.Content as string));
+        // System names the computer's appearance now (app-chrome conventions, Theme).
+        var appearance = Avalonia.Application.Current!.PlatformSettings!.GetColorValues().ThemeVariant;
+        Assert.Equal(new[] { SettingsDialog.SystemThemeLabel(appearance), "Light", "Dark" }, radios.Select(radio => radio.Content as string));
         Assert.Single(radios.Select(radio => radio.Parent).Distinct());
         Assert.Equal("Light", radios.Single(radio => radio.IsChecked == true).Content);
         Assert.False(save.IsEnabled);
@@ -121,11 +125,41 @@ public sealed class SettingsDialogTests
         var owner = new Window();
         owner.Show();
         var dialog = new SettingsDialog(vm.Language, vm.UiFontFamily, vm.Theme, vm.IsHiddenAndSystem,
-            showWindowsHideMode: false, vm.TryApplySettingsAsync);
+            showWindowsHideMode: false, vm.DisplayTimeZone, vm.TryApplySettingsAsync);
         _ = dialog.ShowDialog(owner);
         dialog.GetLogicalDescendants().OfType<TextBox>().Single().Text = "Menlo";
         Dispatcher.UIThread.RunJobs();
         return (vm, settings, owner, dialog);
+    }
+
+    [AvaloniaFact]
+    public async Task TheTimeZoneListStartsWithSystemNamingItsZoneAndAChoiceIsSaved()
+    {
+        string? saved = null;
+        var dialog = new SettingsDialog(Languages.System, "Inter", ThemePreference.System, false, false,
+            DisplayZone.System,
+            (_, _, _, _, timeZone) =>
+            {
+                saved = timeZone;
+                return Task.FromResult<Message?>(null);
+            });
+        var zones = dialog.GetLogicalDescendants().OfType<ComboBox>().Last();
+        var options = zones.Items.OfType<SettingsDialog.ZoneOption>().ToList();
+        var save = dialog.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "save"));
+
+        Assert.Equal(DisplayZone.System, options[0].Value);
+        Assert.Equal(Localizer.T("settings.timeZoneSystem", ("zone", DisplayZone.SystemZoneName())), options[0].Name);
+        Assert.Equal(DisplayZone.Zones, options.Skip(1).Select(option => option.Value));
+        Assert.Same(options[0], zones.SelectedItem);
+        Assert.False(save.IsEnabled);
+
+        zones.SelectedItem = options.Single(option => option.Value == "Asia/Tokyo");
+        Assert.True(save.IsEnabled);
+        save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await Task.Yield();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Asia/Tokyo", saved);
     }
 
     [AvaloniaFact]

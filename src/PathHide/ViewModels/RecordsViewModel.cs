@@ -164,7 +164,7 @@ public sealed partial class RecordsViewModel : ObservableObject
     /// <summary>A launch as the filter and the detail name it: its start, and whether it is this launch.</summary>
     internal static string LaunchLabel(string session, string currentSession)
     {
-        var time = RecordFormat.ListTime(session, Localizer.Current.Culture, TimeZoneInfo.Local);
+        var time = RecordFormat.ListTime(session, Localizer.Current.Culture, DisplayZone.Current);
         return session == currentSession ? Localizer.T("records.thisLaunch", ("time", time)) : time;
     }
 
