@@ -56,6 +56,30 @@ public sealed class AttributeWriteReservationTests : IDisposable
     }
 
     [Fact]
+    public void A_reservation_whose_owner_ended_without_releasing_it_is_taken_and_the_write_runs()
+    {
+        // A writer that ended mid-write leaves the reservation abandoned; ownership still passes (WAIT_ABANDONED
+        // on Windows, AbandonedMutexException elsewhere) and no saved value is trusted.
+        var path = Path.Combine(_dir, "target");
+        Mutex? abandoned = null;
+        var owner = new Thread(() =>
+        {
+            abandoned = new Mutex(false, AttributeWriteReservation.Name(path));
+            Assert.True(abandoned.WaitOne(TimeSpan.FromSeconds(5)));
+        });
+        owner.Start();
+        Assert.True(owner.Join(TimeSpan.FromSeconds(10)));
+
+        try
+        {
+            var wrote = false;
+            AttributeWriteReservation.Run(path, () => wrote = true, bound: TimeSpan.FromSeconds(5));
+            Assert.True(wrote);
+        }
+        finally { abandoned?.Dispose(); }
+    }
+
+    [Fact]
     public async Task Old_child_waiting_before_admission_cannot_reverse_a_restarted_GUI_write()
     {
         var path = Path.Combine(_dir, "target");

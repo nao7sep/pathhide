@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 namespace PathHide.Services;
 
 /// <summary>The Windows <see cref="ElevatedChildLauncher"/>: this executable, run through the UAC prompt.</summary>
-[SupportedOSPlatform("windows")]
 public static class WindowsElevatedChild
 {
+    [SupportedOSPlatform("windows")]
     public static async Task<Task<int>?> LaunchAsync(IReadOnlyList<string> arguments)
     {
         var exePath = Environment.ProcessPath;
@@ -20,15 +20,7 @@ public static class WindowsElevatedChild
             return null;
         }
 
-        var psi = new ProcessStartInfo(exePath)
-        {
-            // The runas shell verb is what raises the UAC prompt. It forces UseShellExecute, so the
-            // child's output cannot be redirected: results come back through a file instead.
-            Verb = "runas",
-            UseShellExecute = true,
-        };
-        foreach (var argument in arguments)
-            psi.ArgumentList.Add(argument);
+        var psi = CreateStartInfo(exePath, arguments);
 
         Process? process;
         try
@@ -38,7 +30,7 @@ public static class WindowsElevatedChild
             // repainting and be marked "(Not Responding)".
             process = await Task.Run(() => Process.Start(psi));
         }
-        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        catch (Exception ex) when (IsDeclined(ex))
         {
             Log.Info("elevated apply: UAC cancelled by user");
             return null;
@@ -57,6 +49,27 @@ public static class WindowsElevatedChild
 
         return WaitForExitAsync(process);
     }
+
+    /// <summary>
+    /// The child's start: the runas shell verb is what raises the UAC prompt. It forces UseShellExecute,
+    /// so the child's output cannot be redirected and results come back through a file instead. Each
+    /// argument is passed whole, so a path with spaces stays one argument.
+    /// </summary>
+    internal static ProcessStartInfo CreateStartInfo(string exePath, IReadOnlyList<string> arguments)
+    {
+        var psi = new ProcessStartInfo(exePath)
+        {
+            Verb = "runas",
+            UseShellExecute = true,
+        };
+        foreach (var argument in arguments)
+            psi.ArgumentList.Add(argument);
+        return psi;
+    }
+
+    /// <summary>Whether the start failed because the user declined the UAC prompt (ERROR_CANCELLED).</summary>
+    internal static bool IsDeclined(Exception exception) =>
+        exception is Win32Exception { NativeErrorCode: 1223 };
 
     private static async Task<int> WaitForExitAsync(Process process)
     {

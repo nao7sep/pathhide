@@ -52,7 +52,7 @@ internal static class ComputerLanguages
         return preferred;
     }
 
-    private static IReadOnlyList<string> WindowsPreferred()
+    internal static IReadOnlyList<string> WindowsPreferred()
     {
         const uint byName = 0x8; // MUI_LANGUAGE_NAME
 
@@ -65,8 +65,16 @@ internal static class ComputerLanguages
         if (!GetUserPreferredUILanguages(byName, out languages, buffer, ref length))
             return [];
 
-        // A double-null-terminated block of names.
-        var preferred = new List<string>((int)languages);
+        return ParseNameBlock(buffer);
+    }
+
+    /// <summary>
+    /// The names in a double-null-terminated block, as <c>GetUserPreferredUILanguages</c> returns them;
+    /// the first empty name ends the list, as does the end of the buffer.
+    /// </summary>
+    internal static IReadOnlyList<string> ParseNameBlock(ReadOnlySpan<char> buffer)
+    {
+        var preferred = new List<string>();
         var name = new StringBuilder();
         foreach (var character in buffer)
         {

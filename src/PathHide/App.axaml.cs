@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -204,14 +203,8 @@ public partial class App : Application
             uiFontFamily = settings.UiFontFamily,
         });
 
-        IVisibilityService visibilityService = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? new WindowsVisibilityService(() => settings.WindowsHideMode)
-            : new MacVisibilityService();
-
-        // Only Windows has an elevation step for access-denied paths.
-        IElevatedApplicator? elevatedApplicator = OperatingSystem.IsWindows()
-            ? new ElevatedApplicator(WindowsElevatedChild.LaunchAsync, System.IO.Path.GetTempPath(), StorageRoot.Directory)
-            : null;
+        var (visibilityService, elevatedApplicator) =
+            CreatePlatformServices(OperatingSystem.IsWindows(), () => settings.WindowsHideMode);
 
         return new MainWindowViewModel(new BoundedVisibility(visibilityService), pathListStore, settingsStore, settings, stateStore, state, loaded.Paths)
         {
@@ -219,4 +212,18 @@ public partial class App : Application
             ElevatedApplicator = elevatedApplicator,
         };
     }
+
+    /// <summary>
+    /// The file-visibility writer for this system, and the elevation step for access-denied paths, which
+    /// only Windows has.
+    /// </summary>
+    internal static (IVisibilityService Visibility, IElevatedApplicator? Elevated) CreatePlatformServices(
+        bool windows, Func<WindowsHideMode> hideMode) =>
+        windows
+            ? (new WindowsVisibilityService(hideMode),
+                new ElevatedApplicator(LaunchElevatedAsync, System.IO.Path.GetTempPath(), StorageRoot.Directory))
+            : (new MacVisibilityService(), null);
+
+    private static Task<Task<int>?> LaunchElevatedAsync(IReadOnlyList<string> arguments) =>
+        OperatingSystem.IsWindows() ? WindowsElevatedChild.LaunchAsync(arguments) : Task.FromResult<Task<int>?>(null);
 }

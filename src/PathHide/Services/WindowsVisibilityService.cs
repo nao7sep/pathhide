@@ -22,10 +22,7 @@ public sealed class WindowsVisibilityService : IVisibilityService
             // reparse point itself (it does not follow symlinks), matching what Hide/Show
             // modify. A missing or access-denied path throws a reason-bearing exception,
             // sorted out below.
-            var attrs = File.GetAttributes(path);
-            var hidden = attrs.HasFlag(FileAttributes.Hidden);
-            var state = hidden ? ActualState.Hidden : ActualState.Visible;
-            return new PathInspection(state, DetectKind(attrs));
+            return Classify(File.GetAttributes(path));
         }
         catch (UnauthorizedAccessException)
         {
@@ -70,6 +67,13 @@ public sealed class WindowsVisibilityService : IVisibilityService
     /// operates on the path the user picked, reparse points included.
     /// </summary>
     public string? ResolvePath(string path) => null;
+
+    /// <summary>
+    /// What one attribute read says: Hidden alone decides visibility, System never does, and a reparse
+    /// point (symlink or junction) counts as a link whatever it points to.
+    /// </summary>
+    internal static PathInspection Classify(FileAttributes attrs) =>
+        new(attrs.HasFlag(FileAttributes.Hidden) ? ActualState.Hidden : ActualState.Visible, DetectKind(attrs));
 
     private static ItemKind DetectKind(FileAttributes attrs)
     {

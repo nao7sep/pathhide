@@ -74,7 +74,7 @@ internal sealed class WindowPlacement
         if (_window.WindowState is WindowState.Normal or WindowState.Maximized && _normal is { } normal)
         {
             return (normal.X, normal.Y, normal.Width, normal.Height,
-                OperatingSystem.IsWindows() && _window.WindowState == WindowState.Maximized);
+                WindowMetrics.SavesMaximized(_window.WindowState, OperatingSystem.IsWindows()));
         }
 
         return null;

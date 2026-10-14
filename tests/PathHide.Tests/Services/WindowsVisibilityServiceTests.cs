@@ -32,6 +32,19 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
 
     private WindowsVisibilityService Service() => new(() => _mode);
 
+    // How one attribute read is classified runs anywhere; only reading the attributes needs Windows.
+    [Theory]
+    [InlineData(FileAttributes.Normal, ActualState.Visible, ItemKind.File)]
+    [InlineData(FileAttributes.Hidden | FileAttributes.Archive, ActualState.Hidden, ItemKind.File)]
+    [InlineData(FileAttributes.System, ActualState.Visible, ItemKind.File)]
+    [InlineData(FileAttributes.Hidden | FileAttributes.System, ActualState.Hidden, ItemKind.File)]
+    [InlineData(FileAttributes.Directory, ActualState.Visible, ItemKind.Directory)]
+    [InlineData(FileAttributes.Directory | FileAttributes.Hidden, ActualState.Hidden, ItemKind.Directory)]
+    [InlineData(FileAttributes.Directory | FileAttributes.ReparsePoint, ActualState.Visible, ItemKind.Symlink)]
+    [InlineData(FileAttributes.ReparsePoint | FileAttributes.Hidden, ActualState.Hidden, ItemKind.Symlink)]
+    public void Attributes_classify_into_visibility_and_kind(FileAttributes attributes, ActualState state, ItemKind kind) =>
+        Assert.Equal(new PathInspection(state, kind), WindowsVisibilityService.Classify(attributes));
+
     private string NewFile()
     {
         var path = Path.Combine(_dir, "file.txt");

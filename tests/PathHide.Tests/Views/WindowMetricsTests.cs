@@ -32,6 +32,17 @@ public sealed class WindowMetricsTests
         Assert.Equal(expected, WindowMetrics.RestoredWindowState(maximized, isWindows));
     }
 
+    [Theory]
+    [InlineData(Avalonia.Controls.WindowState.Maximized, true, true)]
+    [InlineData(Avalonia.Controls.WindowState.Maximized, false, false)]
+    [InlineData(Avalonia.Controls.WindowState.Normal, true, false)]
+    [InlineData(Avalonia.Controls.WindowState.Normal, false, false)]
+    public void A_closing_window_saves_maximized_only_on_Windows(
+        Avalonia.Controls.WindowState state, bool isWindows, bool expected)
+    {
+        Assert.Equal(expected, WindowMetrics.SavesMaximized(state, isWindows));
+    }
+
     private static bool OnAnyScreen(int? x, int? y, double? width, double? height, double scale = 1) =>
         new Avalonia.PixelRect[] { new(-1920, -1080, 1920, 1080), new(0, 0, 2560, 1440) }
             .Any(area => WindowMetrics.CanRestoreWindowGeometry(x, y, width, height, area, scale));

@@ -118,10 +118,7 @@ public sealed class ImeTextBoxTests : WindowTest
     [AvaloniaFact]
     public void MacOs_input_client_preserves_preedit_and_cursor_notifications()
     {
-        if (!OperatingSystem.IsMacOS())
-        {
-            return;
-        }
+        Assert.SkipUnless(OperatingSystem.IsMacOS(), "Runs on macOS only.");
 
         var box = Host(new ImeTextBox { Text = "abc" });
         var presenter = Presenter(box);
@@ -143,10 +140,7 @@ public sealed class ImeTextBoxTests : WindowTest
     [AvaloniaFact]
     public void MacOs_input_client_refreshes_its_cursor_rectangle_when_the_text_box_scrolls()
     {
-        if (!OperatingSystem.IsMacOS())
-        {
-            return;
-        }
+        Assert.SkipUnless(OperatingSystem.IsMacOS(), "Runs on macOS only.");
 
         var box = Host(new ImeTextBox
         {

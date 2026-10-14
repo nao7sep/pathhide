@@ -11,11 +11,7 @@ internal static partial class WindowsDirectoryIdentity
 {
     internal static unsafe string Resolve(string root)
     {
-        var path = Path.GetFullPath(root);
-        // Match managed long-path I/O. The returned NT path is an identity, never a storage path.
-        if (!path.StartsWith(@"\\?\", StringComparison.Ordinal))
-            path = path.StartsWith(@"\\", StringComparison.Ordinal)
-                ? @"\\?\UNC\" + path[2..] : @"\\?\" + path;
+        var path = ToExtendedPath(Path.GetFullPath(root));
         using var handle = CreateFileW(path, 0, 7, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero);
         if (handle.IsInvalid)
             throw Failure();
@@ -32,6 +28,20 @@ internal static partial class WindowsDirectoryIdentity
                 return new string(buffer, 0, (int)size);
             buffer = new char[checked((int)size + 1)];
         }
+    }
+
+    /// <summary>
+    /// The extended-length spelling of a full Windows path, matching managed long-path I/O: a drive path
+    /// gains <c>\\?\</c>, a share <c>\\?\UNC\</c>, and a <c>\\.\</c> device path becomes its
+    /// <c>\\?\</c> form rather than a share. The resolved NT path is an identity, never a storage path.
+    /// </summary>
+    internal static string ToExtendedPath(string fullPath)
+    {
+        if (fullPath.StartsWith(@"\\?\", StringComparison.Ordinal))
+            return fullPath;
+        if (fullPath.StartsWith(@"\\.\", StringComparison.Ordinal))
+            return @"\\?\" + fullPath[4..];
+        return fullPath.StartsWith(@"\\", StringComparison.Ordinal) ? @"\\?\UNC\" + fullPath[2..] : @"\\?\" + fullPath;
     }
 
     private static IOException Failure() => new("The data directory's identity could not be resolved.",

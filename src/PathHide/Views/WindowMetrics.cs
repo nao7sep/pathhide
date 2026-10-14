@@ -24,6 +24,13 @@ public static class WindowMetrics
             ? Avalonia.Controls.WindowState.Maximized
             : Avalonia.Controls.WindowState.Normal;
 
+    /// <summary>
+    /// Whether a closing window's placement records it as maximized: only on Windows, the one system
+    /// where <see cref="RestoredWindowState"/> brings that state back.
+    /// </summary>
+    public static bool SavesMaximized(Avalonia.Controls.WindowState state, bool isWindows) =>
+        isWindows && state == Avalonia.Controls.WindowState.Maximized;
+
     // What "usable or recoverable" means for a restored window (window-conventions, Placement): its title
     // bar can be grabbed and dragged with ordinary window interaction. So the band where the native
     // title bar is drawn on both platforms (about 28 pt on macOS, 31 px at 100 % on Windows) must lie
