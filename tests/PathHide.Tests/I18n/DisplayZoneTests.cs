@@ -60,13 +60,34 @@ public sealed class DisplayZonePreferenceTests
     }
 
     [Fact]
-    public void System_is_named_by_the_computers_IANA_zone()
+    public void System_is_named_by_a_canonical_IANA_zone()
     {
         var name = DisplayZone.SystemZoneName();
 
         Assert.False(string.IsNullOrWhiteSpace(name));
-        Assert.Equal(DisplayZone.IanaName(TimeZoneInfo.Local) ?? TimeZoneInfo.Local.Id, name);
+        if (!OperatingSystem.IsMacOS())
+            Assert.Equal(DisplayZone.IanaName(TimeZoneInfo.Local) ?? TimeZoneInfo.Local.Id, name);
     }
+
+    // macOS answers with the canonical name its own time-zone API gives, never a legacy alias .NET
+    // may report for the same data.
+    [MacOnlyFact]
+    public void On_macOS_System_is_named_as_macOS_names_the_computers_zone()
+    {
+        var systemZone = PathHide.Views.ObjC.Send(PathHide.Views.ObjC.Class("NSTimeZone"), "systemTimeZone");
+
+        Assert.Equal(PathHide.Views.ObjC.String(PathHide.Views.ObjC.Send(systemZone, "name")), DisplayZone.SystemZoneName());
+    }
+
+    [Theory]
+    [InlineData("/var/db/timezone/zoneinfo/Asia/Tokyo", "Asia/Tokyo")]
+    [InlineData("/usr/share/zoneinfo/America/Argentina/Buenos_Aires", "America/Argentina/Buenos_Aires")]
+    [InlineData("../usr/share/zoneinfo/UTC", "UTC")]
+    [InlineData("/usr/share/zoneinfo/", null)]
+    [InlineData("/etc/somewhere/else", null)]
+    [InlineData(null, null)]
+    public void The_zone_is_what_follows_zoneinfo_in_the_localtime_link(string? target, string? zone) =>
+        Assert.Equal(zone, DisplayZone.ZoneFromLink(target));
 }
 
 [Collection(DisplayZoneCollection.Name)]

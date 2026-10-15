@@ -59,8 +59,40 @@ internal static class DisplayZone
             ? zone
             : TimeZoneInfo.Local;
 
-    /// <summary>The IANA name of the zone System resolves to now, as its list entry shows it.</summary>
-    internal static string SystemZoneName() => IanaName(TimeZoneInfo.Local) ?? TimeZoneInfo.Local.Id;
+    /// <summary>
+    /// The canonical IANA name of the zone System resolves to now, as its list entry shows it. On macOS
+    /// it is read from the system's own setting, since .NET can name the same zone by a legacy alias.
+    /// </summary>
+    internal static string SystemZoneName() =>
+        (OperatingSystem.IsMacOS() ? ZoneFromLink(LocaltimeLink()) : null)
+        ?? IanaName(TimeZoneInfo.Local)
+        ?? TimeZoneInfo.Local.Id;
+
+    /// <summary>
+    /// The zone named by a <c>/etc/localtime</c> link target: what follows its last <c>zoneinfo/</c>,
+    /// as macOS's own time-zone API reads it. .NET instead matches the zone data, and reports a legacy
+    /// alias such as "Japan" when the link points outside <c>/usr/share/zoneinfo</c>, as macOS's does
+    /// (<c>/var/db/timezone/zoneinfo/Asia/Tokyo</c>).
+    /// </summary>
+    internal static string? ZoneFromLink(string? target)
+    {
+        const string marker = "zoneinfo/";
+        var at = target?.LastIndexOf(marker, StringComparison.Ordinal) ?? -1;
+        return at < 0 || at + marker.Length >= target!.Length ? null : target[(at + marker.Length)..];
+    }
+
+    private static string? LocaltimeLink()
+    {
+        try
+        {
+            return new System.IO.FileInfo("/etc/localtime").LinkTarget;
+        }
+        catch (Exception)
+        {
+            // Unreadable: the name .NET reports stands in.
+            return null;
+        }
+    }
 
     internal static string? IanaName(TimeZoneInfo zone) =>
         zone.HasIanaId ? zone.Id
