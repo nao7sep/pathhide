@@ -9,7 +9,7 @@ namespace PathHide.I18n;
 /// Every language is named in its own words, so a reader finds theirs whatever language is showing;
 /// only System is translated, because only System is a sentence about the computer rather than a
 /// language's own name. It names the language it resolves to now, in the interface language, as every
-/// System choice does: "System (Japanese)", "システム (日本語)" (localization conventions, Translation).
+/// System choice does: "System (Japanese)", "システム（日本語）" (localization conventions, Translation).
 /// </summary>
 public sealed record LanguageOption(string Value, string Name)
 {

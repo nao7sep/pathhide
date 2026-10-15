@@ -155,9 +155,9 @@ public class LanguageChangeTests : WindowTest
         }
         using (Localizer.Speaking("ja"))
         {
-            Assert.Equal("システム (日本語)", LanguageOption.All("ja")[0].Name);
-            Assert.Equal("システム (ダーク)", SettingsDialog.SystemThemeLabel(PlatformThemeVariant.Dark));
-            Assert.Equal("システム (Asia/Tokyo)", Localizer.T("settings.timeZoneSystem", ("zone", "Asia/Tokyo")));
+            Assert.Equal("システム（日本語）", LanguageOption.All("ja")[0].Name);
+            Assert.Equal("システム（ダーク）", SettingsDialog.SystemThemeLabel(PlatformThemeVariant.Dark));
+            Assert.Equal("システム（Asia/Tokyo）", Localizer.T("settings.timeZoneSystem", ("zone", "Asia/Tokyo")));
         }
     }
 
