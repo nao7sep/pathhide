@@ -356,12 +356,9 @@ public partial class MainWindow : Window
         // and every action, each as wide as the row's StackPanel let it ask for. Measuring the live
         // toolbar here instead left Avalonia's layout stale after a language change (German, then
         // Japanese, kept German button slots until a resize).
-        var toolbarWidth = Toolbar.Padding.Left + Toolbar.Padding.Right
-            + Toolbar.BorderThickness.Left + Toolbar.BorderThickness.Right
-            + MenuButton.DesiredSize.Width + WindowMetrics.RowWidth(ActionButtons);
         var minWidth = Math.Max(
             WindowMetrics.MinWidthFor(PathGrid.Columns.Select(c => c.MinWidth), VerticalScrollBarGutter()),
-            toolbarWidth);
+            ToolbarWidth);
         var minHeight = WindowMetrics.MinHeightFor(Toolbar.DesiredSize.Height, StatusBar.DesiredSize.Height);
         if (minWidth == LayoutRoot.MinWidth && minHeight == LayoutRoot.MinHeight)
             return;
@@ -370,6 +367,12 @@ public partial class MainWindow : Window
         LayoutRoot.MinHeight = minHeight;
         ApplyNativeMinimum();
     }
+
+    /// <summary>The toolbar's one row as the last layout pass left it, before the columns' floor.</summary>
+    internal double ToolbarWidth =>
+        Toolbar.Padding.Left + Toolbar.Padding.Right
+        + Toolbar.BorderThickness.Left + Toolbar.BorderThickness.Right
+        + MenuButton.DesiredSize.Width + WindowMetrics.RowWidth(ActionButtons);
 
     private double VerticalScrollBarGutter()
     {

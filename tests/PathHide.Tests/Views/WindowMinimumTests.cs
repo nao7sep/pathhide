@@ -81,12 +81,16 @@ public sealed class WindowMinimumTests : WindowTest
         var window = Show(PopulatedMainWindow.Empty());
         Settle(window);
         var minimum = window.FindControl<Control>("LayoutRoot")!.MinWidth;
+        var derived = window.ToolbarWidth;
 
         var toolbar = window.FindControl<Border>("Toolbar")!;
         toolbar.Measure(Size.Infinity);
 
         Assert.True(minimum >= toolbar.DesiredSize.Width - 0.5,
             $"{tag}: the minimum {minimum:0} px is narrower than the toolbar's {toolbar.DesiredSize.Width:0} px.");
+        // Before the columns' floor, which in a language whose toolbar is narrower could hide a term the
+        // arithmetic leaves out.
+        Assert.Equal(toolbar.DesiredSize.Width, derived, 0.5);
     }
 
     [AvaloniaFact]
