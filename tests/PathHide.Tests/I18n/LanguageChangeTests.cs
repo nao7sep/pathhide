@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Platform;
 using Avalonia.Data;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -142,14 +143,51 @@ public class LanguageChangeTests : WindowTest
     }
 
     [AvaloniaFact]
+    public void System_entries_name_what_they_resolve_to_in_the_interface_language()
+    {
+        // Localization conventions, Translation: the word and the value both in the interface language;
+        // a time-zone name appears as is.
+        using (Localizer.Speaking("en"))
+        {
+            Assert.Equal("System (Japanese)", LanguageOption.All("ja")[0].Name);
+            Assert.Equal("System (Dark)", SettingsDialog.SystemThemeLabel(PlatformThemeVariant.Dark));
+            Assert.Equal("System (Asia/Tokyo)", Localizer.T("settings.timeZoneSystem", ("zone", "Asia/Tokyo")));
+        }
+        using (Localizer.Speaking("ja"))
+        {
+            Assert.Equal("システム (日本語)", LanguageOption.All("ja")[0].Name);
+            Assert.Equal("システム (ダーク)", SettingsDialog.SystemThemeLabel(PlatformThemeVariant.Dark));
+            Assert.Equal("システム (Asia/Tokyo)", Localizer.T("settings.timeZoneSystem", ("zone", "Asia/Tokyo")));
+        }
+    }
+
+    [AvaloniaTheory]
+    [MemberData(nameof(LabelFitTests.Tags), MemberType = typeof(LabelFitTests))]
+    public void Every_interface_language_names_every_language_for_the_System_entry(string tag)
+    {
+        using var speaking = Localizer.Speaking(tag);
+        foreach (var language in Languages.Tags)
+        {
+            var name = Localizer.T(LanguageOption.NameKey(language));
+            Assert.False(string.IsNullOrWhiteSpace(name));
+            Assert.NotEqual(LanguageOption.NameKey(language), name);
+            Assert.Equal(Localizer.T("settings.languageSystem", ("language", name)), LanguageOption.All(language)[0].Name);
+        }
+        // Ten different names, so no entry was left as a copy of another.
+        Assert.Equal(Languages.Tags.Count, Languages.Tags.Select(language => Localizer.T(LanguageOption.NameKey(language))).Distinct().Count());
+    }
+
+    [AvaloniaFact]
     public void the_language_list_names_every_language_in_its_own_words()
     {
         var options = LanguageOption.All();
 
         // System first, then the ten languages.
         Assert.Equal(Languages.System, options[0].Value);
-        // System names the language it resolves to on this computer.
-        Assert.Equal(English.Of("settings.languageSystem", ("language", Languages.NameOf(Localizer.SystemLanguage))), options[0].Name);
+        // System names the language it resolves to on this computer, in the interface language.
+        Assert.Equal(
+            English.Of("settings.languageSystem", ("language", English.Of(LanguageOption.NameKey(Localizer.SystemLanguage)))),
+            options[0].Name);
         Assert.Equal(Languages.Tags, options.Skip(1).Select(option => option.Value));
 
         // Each name is the language's own, not a translation of it.
