@@ -56,7 +56,7 @@
             <DockPanel>
                 <!-- Hamburger menu (right-aligned) -->
                 <Button DockPanel.Dock="Right"
-                        Classes="utility icon"
+                        Classes="ghost icon"
                         x:Name="MenuButton"
                         i18n:Localized.AutomationName="menu.button"
                         i18n:Localized.ToolTip="menu.button">

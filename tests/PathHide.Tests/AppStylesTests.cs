@@ -31,6 +31,7 @@ public sealed class AppStylesTests
     [InlineData("utility", "UtilityPressedBrush")]
     [InlineData("accent", "ReloadPressedBrush")]
     [InlineData("secondary", "ControlPressedBrush")]
+    [InlineData("ghost", "ControlPressedBrush")]
     public void A_pressed_button_is_a_step_of_its_own_fill(string variant, string pressedBrush)
     {
         var resting = Classed(variant);
@@ -49,6 +50,35 @@ public sealed class AppStylesTests
             Assert.Equal(Color(Brush(pressedBrush)), Fill(pressed));
             Assert.NotEqual(Fill(resting), Fill(pressed));
             Assert.NotEqual(Fill(hovered), Fill(pressed));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // The menu button is a bare icon at rest, as in DayNote: no fill and no edge until the pointer is
+    // over it or its menu is open, when it takes the soft control fill.
+    [AvaloniaFact]
+    public void A_ghost_button_has_no_surface_until_hovered_or_its_menu_is_open()
+    {
+        var resting = Classed("ghost");
+        var hovered = Classed("ghost");
+        var open = Classed("ghost");
+        var window = new Window { Content = new StackPanel { Children = { resting, hovered, open } } };
+
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            ((IPseudoClasses)hovered.Classes).Set(":pointerover", true);
+            ((IPseudoClasses)open.Classes).Set(":flyout-open", true);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(Colors.Transparent.ToString(), Fill(resting));
+            Assert.Equal(new Thickness(0), resting.BorderThickness);
+            Assert.Equal(Color(Brush("ControlHoverBrush")), Fill(hovered));
+            Assert.Equal(Color(Brush("ControlHoverBrush")), Fill(open));
         }
         finally
         {

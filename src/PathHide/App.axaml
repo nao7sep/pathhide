@@ -423,7 +423,7 @@
         </Style>
 
         <!-- Utility buttons: a dark-gray neutral (clearly not black) with a white icon/label — a
-             deliberate dark control, without the near-black weight the hamburger originally had -->
+             deliberate dark control (About's links) -->
         <Style Selector="Button.utility">
             <Setter Property="Background" Value="{StaticResource UtilityBrush}"/>
             <Setter Property="Foreground" Value="White"/>
@@ -440,6 +440,27 @@
         <Style Selector="Button.utility:disabled /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource UtilityBrush}"/>
             <Setter Property="Foreground" Value="White"/>
+        </Style>
+
+        <!-- A toolbar icon button with no resting surface, as DayNote's menu button: a bare icon until
+             the pointer arrives, then the soft control fill, a step deeper on press, and kept while the
+             menu it opened is open. Keyboard focus still draws the app's ring. -->
+        <Style Selector="Button.ghost">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="Button.ghost /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="Button.ghost:pointerover /template/ ContentPresenter, Button.ghost:flyout-open /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource ControlHoverBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+        </Style>
+        <Style Selector="Button.ghost:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource ControlPressedBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
 
         <!-- The dialog's secondary action (Cancel, Close beside a commit): the app's own neutral
