@@ -15,6 +15,15 @@
         Background="{DynamicResource AppBackgroundBrush}">
 
     <Window.Styles>
+        <!-- A path identifies its row, so it takes one line and, when it is wider than its column,
+             keeps its final name and loses its middle behind one ellipsis (interface-styling
+             conventions, Labels); the tooltip shows it whole. -->
+        <Style Selector="DataGridCell.path" x:DataType="vm:PathRowViewModel">
+            <Setter Property="ToolTip.Tip" Value="{Binding Path}"/>
+        </Style>
+        <Style Selector="DataGridCell.path TextBlock">
+            <Setter Property="TextTrimming" Value="PathSegmentEllipsis"/>
+        </Style>
         <Style Selector="Border.pathReceiver.dropActive">
             <Setter Property="BorderBrush" Value="{StaticResource ReloadBrush}"/>
             <Setter Property="BorderThickness" Value="3"/>
@@ -210,9 +219,8 @@
                              its order whatever language is showing. The state columns are as wide
                              as their longest word in any interface language needs, with the room a
                              header keeps for its sort arrow (LabelFitTests measures every one).
-                             The path is the list's main content, so a long one wraps onto more lines
-                             rather than being cut short. -->
-                        <DataGridTextColumn Binding="{Binding Path}" SortMemberPath="Path" Width="*" MinWidth="240" CellStyleClasses="wrap"/>
+                             A long path takes one line and keeps its final name (DataGridCell.path above). -->
+                        <DataGridTextColumn Binding="{Binding Path}" SortMemberPath="Path" Width="*" MinWidth="240" CellStyleClasses="path"/>
                         <DataGridTextColumn Binding="{Binding PathFamilyText}" SortMemberPath="PathFamily" Width="100" MinWidth="100"/>
                         <DataGridTextColumn Binding="{Binding DesiredVisibilityText}" SortMemberPath="DesiredVisibility" Width="110" MinWidth="110"/>
                         <DataGridTextColumn Binding="{Binding ActualStateText}" SortMemberPath="ActualState" Width="155" MinWidth="155"/>

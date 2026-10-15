@@ -671,15 +671,6 @@
         <Style Selector="DataGridCell">
             <Setter Property="FocusAdorner" Value="{x:Null}"/>
         </Style>
-        <!-- A column whose whole value must stay visible wraps instead of clipping; Wrap also breaks
-             a run with no break opportunity, such as a long file name (text-cleanup conventions:
-             nothing is cut short without a marker and a path to the full value). The padding keeps a
-             wrapped value as far from its row's edges as one line sits in the row's minimum height,
-             and leaves single-line rows at that height. -->
-        <Style Selector="DataGridCell.wrap TextBlock">
-            <Setter Property="TextWrapping" Value="Wrap"/>
-            <Setter Property="Padding" Value="0,6"/>
-        </Style>
         <Style Selector="DataGridCell:current /template/ Rectangle#CurrencyVisual">
             <Setter Property="IsVisible" Value="False"/>
         </Style>
