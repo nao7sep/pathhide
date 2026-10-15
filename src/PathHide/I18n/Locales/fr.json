@@ -1,7 +1,7 @@
 {
   "about.description": "Masquez les fichiers et dossiers choisis en une seule étape, affichez-les à nouveau quand vous en avez besoin, et réappliquez la visibilité que vous avez définie.",
   "about.github": "GitHub",
-  "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 ou version ultérieure",
+  "about.licence": "© 2026 Yoshinao Inoguchi · GNU GPL v3 ou version ultérieure",
   "about.openGitHubFailed": "Impossible d’ouvrir GitHub. Ouvrez «\u00a0Journal\u00a0» depuis le menu pour en connaître la raison, puis réessayez.",
   "about.openIssuesFailed": "Impossible d’ouvrir l’outil de suivi des problèmes. Ouvrez «\u00a0Journal\u00a0» depuis le menu pour en connaître la raison, puis réessayez.",
   "about.reportIssue": "Signaler un problème",

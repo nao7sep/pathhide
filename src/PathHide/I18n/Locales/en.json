@@ -1,7 +1,7 @@
 {
   "about.description": "Hide chosen files and folders in one step, show them again when you need them, and reapply the visibility you set.",
   "about.github": "GitHub",
-  "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 or later",
+  "about.licence": "© 2026 Yoshinao Inoguchi · GNU GPL v3 or later",
   "about.openGitHubFailed": "Couldn’t open GitHub. Open Records from the menu to see why, then try again.",
   "about.openIssuesFailed": "Couldn’t open the issue tracker. Open Records from the menu to see why, then try again.",
   "about.reportIssue": "Report Issue",

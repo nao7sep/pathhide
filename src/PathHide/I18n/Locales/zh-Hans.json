@@ -1,7 +1,7 @@
 {
   "about.description": "一步隐藏选中的文件和文件夹，需要时再次显示它们，并重新应用你设置的可见性。",
   "about.github": "GitHub",
-  "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 或更高版本",
+  "about.licence": "© 2026 Yoshinao Inoguchi · GNU GPL v3 或更高版本",
   "about.openGitHubFailed": "无法打开 GitHub。请从菜单打开“日志”查看原因，然后重试。",
   "about.openIssuesFailed": "无法打开问题跟踪器。请从菜单打开“日志”查看原因，然后重试。",
   "about.reportIssue": "报告问题",

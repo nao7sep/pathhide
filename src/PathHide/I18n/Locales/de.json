@@ -1,7 +1,7 @@
 {
   "about.description": "Verstecken Sie ausgewählte Dateien und Ordner in einem Schritt, zeigen Sie sie bei Bedarf wieder an, und wenden Sie die von Ihnen festgelegte Sichtbarkeit erneut an.",
   "about.github": "GitHub",
-  "about.licence": "© 2026 Yoshinao Inoguchi – GNU GPL v3 oder später",
+  "about.licence": "© 2026 Yoshinao Inoguchi · GNU GPL v3 oder später",
   "about.openGitHubFailed": "GitHub konnte nicht geöffnet werden. Öffnen Sie im Menü „Protokoll“, um den Grund zu sehen, und versuchen Sie es dann erneut.",
   "about.openIssuesFailed": "Die Seite für Problemmeldungen konnte nicht geöffnet werden. Öffnen Sie im Menü „Protokoll“, um den Grund zu sehen, und versuchen Sie es dann erneut.",
   "about.reportIssue": "Problem melden",

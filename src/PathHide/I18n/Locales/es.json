@@ -1,7 +1,7 @@
 {
   "about.description": "Oculta los archivos y carpetas que elijas en un solo paso, muéstralos de nuevo cuando los necesites y vuelve a aplicar la visibilidad que definiste.",
   "about.github": "GitHub",
-  "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 o posterior",
+  "about.licence": "© 2026 Yoshinao Inoguchi · GNU GPL v3 o posterior",
   "about.openGitHubFailed": "No se pudo abrir GitHub. Abre Registros desde el menú para ver el motivo y vuelve a intentarlo.",
   "about.openIssuesFailed": "No se pudo abrir el rastreador de problemas. Abre Registros desde el menú para ver el motivo y vuelve a intentarlo.",
   "about.reportIssue": "Notificar un problema",

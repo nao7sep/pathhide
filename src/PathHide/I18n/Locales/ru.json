@@ -1,7 +1,7 @@
 {
   "about.description": "Скройте выбранные файлы и папки за один шаг, покажите их снова, когда понадобится, и заново примените заданную видимость.",
   "about.github": "GitHub",
-  "about.licence": "© 2026 Yoshinao Inoguchi\u00a0— GNU GPL v3 или новее",
+  "about.licence": "© 2026 Yoshinao Inoguchi · GNU GPL v3 или новее",
   "about.openGitHubFailed": "Не удалось открыть GitHub. Откройте «Журнал» в меню, чтобы узнать причину, и повторите попытку.",
   "about.openIssuesFailed": "Не удалось открыть трекер проблем. Откройте «Журнал» в меню, чтобы узнать причину, и повторите попытку.",
   "about.reportIssue": "Сообщить о проблеме",

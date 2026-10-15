@@ -1,7 +1,7 @@
 {
   "about.description": "選んだファイルやフォルダをワンステップで非表示にし、必要になったら表示し直し、設定した表示状態を再適用しましょう。",
   "about.github": "GitHub",
-  "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 以降",
+  "about.licence": "© 2026 Yoshinao Inoguchi · GNU GPL v3 以降",
   "about.openGitHubFailed": "GitHub を開けませんでした。メニューの「ログ」で原因を確認して、もう一度お試しください。",
   "about.openIssuesFailed": "問題の報告ページを開けませんでした。メニューの「ログ」で原因を確認して、もう一度お試しください。",
   "about.reportIssue": "問題を報告",

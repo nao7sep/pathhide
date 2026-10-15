@@ -1,7 +1,7 @@
 {
   "about.description": "선택한 파일과 폴더를 한 번에 숨기고, 필요할 때 다시 표시하고, 설정한 표시 상태를 다시 적용하세요.",
   "about.github": "GitHub",
-  "about.licence": "© 2026 Yoshinao Inoguchi — GNU GPL v3 이상",
+  "about.licence": "© 2026 Yoshinao Inoguchi · GNU GPL v3 이상",
   "about.openGitHubFailed": "GitHub을 열지 못했습니다. 메뉴의 ‘로그’에서 원인을 확인한 뒤 다시 시도하십시오.",
   "about.openIssuesFailed": "이슈 트래커를 열지 못했습니다. 메뉴의 ‘로그’에서 원인을 확인한 뒤 다시 시도하십시오.",
   "about.reportIssue": "문제 보고",
