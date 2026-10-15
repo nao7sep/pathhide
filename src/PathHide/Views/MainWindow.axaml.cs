@@ -128,9 +128,9 @@ public partial class MainWindow : Window
         Screens.Changed += OnScreensChanged;
         Closed += (_, _) => Screens.Changed -= OnScreensChanged;
 
-        // Establish the content-derived minimum before the first native window is shown.
-        // OnLoaded repeats the measurement after the visual tree has completed layout.
-        ApplyWindowMinimums();
+        // The minimum follows the chrome as each layout pass leaves it: new labels or a new UI font
+        // move it with no measuring of its own (window-conventions).
+        LayoutUpdated += (_, _) => ApplyWindowMinimums();
     }
 
     private static void KeepMenuKeyboardTarget(object? sender, RoutedEventArgs e) => e.Handled = true;
@@ -142,10 +142,6 @@ public partial class MainWindow : Window
         ApplyColumnHeaders();
         if (DataContext is MainWindowViewModel vm)
             vm.Retranslate();
-
-        // The toolbar never wraps and the window's minimum width is the toolbar's, so new labels move
-        // the minimum, as a new font does. Measured after the layout pass has taken the new words.
-        Dispatcher.UIThread.Post(ApplyWindowMinimums, DispatcherPriority.Loaded);
     }
 
     /// <summary>
@@ -303,8 +299,6 @@ public partial class MainWindow : Window
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        ApplyWindowMinimums();
-
         // Build the catalog now that PlatformSettings (the platform command key) and the view model
         // are both available, then point the accelerator-bearing menu items at the live gestures so
         // their visible hint always matches what OnKeyDown actually binds.
@@ -358,17 +352,22 @@ public partial class MainWindow : Window
         if (_closed)
             return;
 
-        Toolbar.Measure(Size.Infinity);
-        StatusBar.Measure(Size.Infinity);
+        // The toolbar never wraps, so the window is never narrower than its one row: the menu button
+        // and every action, each as wide as the row's StackPanel let it ask for. Measuring the live
+        // toolbar here instead left Avalonia's layout stale after a language change (German, then
+        // Japanese, kept German button slots until a resize).
+        var toolbarWidth = Toolbar.Padding.Left + Toolbar.Padding.Right
+            + Toolbar.BorderThickness.Left + Toolbar.BorderThickness.Right
+            + MenuButton.DesiredSize.Width + WindowMetrics.RowWidth(ActionButtons);
+        var minWidth = Math.Max(
+            WindowMetrics.MinWidthFor(PathGrid.Columns.Select(c => c.MinWidth), VerticalScrollBarGutter()),
+            toolbarWidth);
+        var minHeight = WindowMetrics.MinHeightFor(Toolbar.DesiredSize.Height, StatusBar.DesiredSize.Height);
+        if (minWidth == LayoutRoot.MinWidth && minHeight == LayoutRoot.MinHeight)
+            return;
 
-        LayoutRoot.MinWidth = Math.Max(
-            WindowMetrics.MinWidthFor(
-                PathGrid.Columns.Select(c => c.MinWidth),
-                VerticalScrollBarGutter()),
-            Toolbar.DesiredSize.Width);
-        LayoutRoot.MinHeight = WindowMetrics.MinHeightFor(
-            Toolbar.DesiredSize.Height,
-            StatusBar.DesiredSize.Height);
+        LayoutRoot.MinWidth = minWidth;
+        LayoutRoot.MinHeight = minHeight;
         ApplyNativeMinimum();
     }
 
@@ -439,9 +438,6 @@ public partial class MainWindow : Window
         {
             // The theme is app-wide: every window, dialog, and title bar follows the variant.
             AppTheme.Apply(ViewModel.Theme);
-            // The font applies live through a DynamicResource, so the chrome's natural size
-            // changes with it. Re-derive after the layout pass has taken the new family.
-            Dispatcher.UIThread.Post(ApplyWindowMinimums, DispatcherPriority.Loaded);
         }
     }
 

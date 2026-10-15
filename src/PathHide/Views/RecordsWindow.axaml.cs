@@ -67,7 +67,6 @@ public partial class RecordsWindow : Window
         Width = RecordsLayout.DefaultWidth;
         Height = RecordsLayout.DefaultHeight;
         MinWidth = RecordsLayout.MinWidth;
-        ApplyMinimumHeight();
         _placement = new WindowPlacement(this, "records");
         _placement.Restore(state.RecordsWindowPositionX, state.RecordsWindowPositionY,
             state.RecordsWindowWidth, state.RecordsWindowHeight, state.RecordsWindowMaximized);
@@ -75,7 +74,8 @@ public partial class RecordsWindow : Window
         ApplyListWidth();
 
         Shell.SizeChanged += (_, _) => ApplyListWidth();
-        // The filters' height follows the UI font, which Settings can change while this is open.
+        // The minimum height follows the filters as layout leaves them, measured by nothing of its own
+        // (window-conventions); their height follows the UI font, which Settings can change while open.
         FiltersBand.SizeChanged += (_, e) => MinHeight = RecordsLayout.MinHeightFor(e.NewSize.Height);
         Splitter.DragCompleted += (_, _) => CommitListWidth();
         // handledEventsToo: the splitter handles its own arrow steps (KeyboardIncrement) before a bubbling
@@ -140,13 +140,6 @@ public partial class RecordsWindow : Window
 
     // The logger's writer thread calls this; the window answers on the UI thread.
     private void OnRecordStored() => Dispatcher.UIThread.Post(_records.OnRecordStored);
-
-    // Before the first layout, from the filter band's own measure.
-    private void ApplyMinimumHeight()
-    {
-        FiltersBand.Measure(Size.Infinity);
-        MinHeight = RecordsLayout.MinHeightFor(FiltersBand.DesiredSize.Height);
-    }
 
     // The shown width is re-derived from the intent on every resize, and the detail column takes the
     // rest again, so a narrow window narrows the list without changing what is saved.

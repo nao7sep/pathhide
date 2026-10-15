@@ -19,6 +19,20 @@ public static class WindowMetrics
     // Native frame rounding and decoration measurements can differ from the working area slightly.
     private const double MaximizedSizeTolerance = 8;
 
+    /// <summary>
+    /// The width a one-row strip needs whatever room it has now: what each shown child of a horizontal
+    /// StackPanel asked for, which the panel measured at an unlimited width, with the gaps between them
+    /// and the panel's margin. Read after a layout pass, never by measuring the live strip
+    /// (window-conventions).
+    /// </summary>
+    public static double RowWidth(Avalonia.Controls.StackPanel row)
+    {
+        var shown = row.Children.Where(child => child.IsVisible).ToList();
+        return shown.Sum(child => child.DesiredSize.Width)
+            + row.Spacing * System.Math.Max(0, shown.Count - 1)
+            + row.Margin.Left + row.Margin.Right;
+    }
+
     public static Avalonia.Controls.WindowState RestoredWindowState(bool maximized, bool isWindows) =>
         maximized && isWindows
             ? Avalonia.Controls.WindowState.Maximized
