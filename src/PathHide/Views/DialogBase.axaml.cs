@@ -136,8 +136,29 @@ public partial class DialogBase : Window
     /// </summary>
     public Task ShowBoundedAsync(Window owner)
     {
+        if (!ShowsOver(owner))
+            return ShowAloneAsync(owner);
         BoundHeight(owner.Screens.ScreenFromWindow(owner) ?? owner.Screens.Primary);
         return ShowDialog(owner);
+    }
+
+    /// <summary>
+    /// Whether a dialog can open over <paramref name="owner"/>: only while it is showing. A question
+    /// raised while it is minimized or hidden, as a Dock Quit can, never brings it back to get an
+    /// owner (window-conventions, Background visibility and activation).
+    /// </summary>
+    internal static bool ShowsOver(Window owner) => owner.IsVisible && owner.WindowState != WindowState.Minimized;
+
+    // A standalone dialog in the middle of the screen, carrying only the decision, with no window of
+    // the app behind it.
+    private Task ShowAloneAsync(Window owner)
+    {
+        var closed = new TaskCompletionSource();
+        Closed += (_, _) => closed.TrySetResult();
+        BoundHeight(owner.Screens.Primary);
+        ShowAsOnlyWindow(this);
+        Show();
+        return closed.Task;
     }
 
     /// <summary>

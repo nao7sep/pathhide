@@ -119,6 +119,9 @@ public partial class MainWindow : Window
         {
             _closed = true;
             Localizer.Changed -= OnLanguageChanged;
+            // Closing this window ends the app, and every other window goes with it
+            // (window-conventions); Records goes here rather than waiting on the lifetime's shutdown.
+            _recordsWindow?.Close();
         };
         PositionChanged += (_, _) => ApplyNativeMinimum();
         ScalingChanged += (_, _) => ApplyNativeMinimum();
@@ -310,6 +313,8 @@ public partial class MainWindow : Window
             ConfirmDialog.ConfirmDestructiveAsync(this, request.Title, request.Message, request.ConfirmLabelKey);
         ViewModel.ShowNoticeAsync = (title, body) => NoticeDialog.ShowAsync(this, title, body);
         ViewModel.AskUnsavedAtQuitAsync = lines => UnsavedQuitDialog.AskAsync(this, lines);
+        ViewModel.ConfirmStopAtQuitAsync = () => ConfirmDialog.ConfirmDestructiveAsync(
+            this, Message.Of("quit.stopTitle"), Message.Of("quit.stopMessage"), "quit.stopAndQuit");
         ViewModel.Initialize();
         PathGrid.Columns.First(c => c.SortMemberPath == nameof(PathRowViewModel.Path))
             .Sort(ListSortDirection.Ascending);

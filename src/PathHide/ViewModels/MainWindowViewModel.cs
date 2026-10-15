@@ -76,6 +76,12 @@ public partial class MainWindowViewModel : ObservableObject
     public Func<Message, Message, Task>? ShowNoticeAsync { get; set; }
 
     /// <summary>
+    /// Asks whether a quit the user started may stop the Hide/Show still running; true stops it and
+    /// quits. Null where nothing can ask, as in tests that do not set it.
+    /// </summary>
+    public Func<Task<bool>>? ConfirmStopAtQuitAsync { get; set; }
+
+    /// <summary>
     /// Set by the view to ask, as a quit the user started stops, whether to save again or quit with
     /// the lines' changes unsaved. Left null in headless contexts (tests), where the quit goes on.
     /// </summary>
@@ -1025,6 +1031,33 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public async Task<bool> QuitAsync()
     {
+        // A running Hide/Show is the app's own work on the user's files, so a quit the user started asks
+        // before stopping it (unsaved-edits-conventions, Window-owned and app-owned work). A scan only
+        // refreshes what the window shows, so it ends with the window unasked. Once the quit's waits
+        // have begun, the work is already being stopped and a joining close asks nothing.
+        if (_shutdown is null && IsApplying && !_sessionEnding && ConfirmStopAtQuitAsync is { } confirmStop)
+        {
+            bool stop;
+            try
+            {
+                stop = await confirmStop();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("quit: stop question failed; keeping the app open", ex);
+                CallOffQuit();
+                return false;
+            }
+            if (_sessionEnding)
+                return false;
+            if (!stop)
+            {
+                CallOffQuit();
+                return false;
+            }
+            Log.Info("quit: stopping the running visibility change");
+        }
+
         while (!await ShutdownAsync())
         {
             // Once the session is ending, its own quit has taken over.

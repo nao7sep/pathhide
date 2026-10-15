@@ -101,6 +101,49 @@ public sealed class MainWindowCloseTests : WindowTest
         Assert.Equal(1, asked);
     }
 
+    [AvaloniaFact]
+    public void Closing_the_main_window_closes_Records_with_it()
+    {
+        var settings = new FakeSettingsStore();
+        var vm = new MainWindowViewModel(
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
+        var main = Show(new MainWindow { DataContext = vm });
+        main.RecordsReader = () => new FakeRecordsReader();
+        var records = Track(main.OpenRecords());
+        Dispatcher.UIThread.RunJobs();
+
+        main.Close();
+        WaitFor(() => !main.IsVisible);
+
+        Assert.False(records.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void A_question_raised_while_the_main_window_is_minimized_stands_alone_and_leaves_it_minimized()
+    {
+        var settings = new FakeSettingsStore();
+        var vm = new MainWindowViewModel(
+            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
+        var main = Show(new MainWindow { DataContext = vm });
+        main.WindowState = WindowState.Minimized;
+        Dispatcher.UIThread.RunJobs();
+
+        // Every dialog opens through ShowBoundedAsync, so any one stands for the quit's questions.
+        var question = new AboutDialog(_ => true);
+        var shown = question.ShowBoundedAsync(main);
+        Track(question);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(question.IsVisible);
+        Assert.Null(question.Owner);
+        Assert.Equal(WindowState.Minimized, main.WindowState);
+        question.Close();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shown.IsCompleted);
+    }
+
     // The operating system ending the session: these deliver its close into the window's own handlers,
     // as the platform does at logout, restart or shutdown, without logging out for real.
 

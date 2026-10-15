@@ -246,6 +246,83 @@ public sealed class QuitTests
         await remove;
     }
 
+    // Starts Reapply All and returns once its write is running, held by the visibility gate.
+    private async Task<Task> StartReapplyAsync(MainWindowViewModel vm, ManualResetEventSlim gate)
+    {
+        await vm.ScanTask;
+        _visibility.WriteGate = gate;
+        var reapply = ((IAsyncRelayCommand)vm.ReapplyAllCommand).ExecuteAsync(null);
+        await _visibility.WriteEntered.Task.WaitAsync(Guard, TestContext.Current.CancellationToken);
+        Assert.True(vm.IsApplying);
+        return reapply;
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task A_quit_while_hide_or_show_runs_asks_and_Cancel_leaves_it_running()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var vm = CreateViewModel();
+        var asked = 0;
+        vm.ConfirmStopAtQuitAsync = () =>
+        {
+            asked++;
+            return Task.FromResult(false);
+        };
+        var reapply = await StartReapplyAsync(vm, gate);
+
+        Assert.False(await vm.QuitAsync());
+
+        Assert.Equal(1, asked);
+        Assert.True(vm.IsApplying);
+        gate.Set();
+        await reapply;
+        Assert.Equal("/a", Assert.Single(_visibility.Hidden));
+        Assert.Empty(_asked);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task Choosing_Stop_and_quit_stops_the_running_hide_or_show_and_quits()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var vm = CreateViewModel();
+        var asked = 0;
+        vm.ConfirmStopAtQuitAsync = () =>
+        {
+            asked++;
+            return Task.FromResult(true);
+        };
+        var reapply = await StartReapplyAsync(vm, gate);
+
+        var quit = vm.QuitAsync();
+        gate.Set();
+
+        Assert.True(await quit.WaitAsync(Guard, TestContext.Current.CancellationToken));
+        Assert.Equal(1, asked);
+        await reapply;
+        Assert.False(vm.IsApplying);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task The_session_ending_stops_a_running_hide_or_show_without_asking()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var vm = CreateViewModel();
+        var asked = 0;
+        vm.ConfirmStopAtQuitAsync = () =>
+        {
+            asked++;
+            return Task.FromResult(false);
+        };
+        var reapply = await StartReapplyAsync(vm, gate);
+
+        var end = vm.EndSessionAsync();
+        gate.Set();
+        await end.WaitAsync(Guard, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, asked);
+        await reapply;
+    }
+
     [Fact(Timeout = 10_000)]
     public async Task An_apply_after_a_save_the_quit_waited_for_does_not_run()
     {
