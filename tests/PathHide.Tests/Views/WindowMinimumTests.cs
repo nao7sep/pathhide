@@ -71,6 +71,24 @@ public sealed class WindowMinimumTests : WindowTest
         AssertButtonsSitInTheirOwnSlots(window);
     }
 
+    // An independent check on the window's own arithmetic: the toolbar measured whole, here in a test,
+    // with nothing limiting it. A control added to the toolbar that the minimum leaves out fails this.
+    [AvaloniaTheory]
+    [MemberData(nameof(LabelFitTests.Tags), MemberType = typeof(LabelFitTests))]
+    public void The_minimum_covers_the_whole_toolbar_measured_independently(string tag)
+    {
+        using var language = Localizer.Speaking(tag);
+        var window = Show(PopulatedMainWindow.Empty());
+        Settle(window);
+        var minimum = window.FindControl<Control>("LayoutRoot")!.MinWidth;
+
+        var toolbar = window.FindControl<Border>("Toolbar")!;
+        toolbar.Measure(Size.Infinity);
+
+        Assert.True(minimum >= toolbar.DesiredSize.Width - 0.5,
+            $"{tag}: the minimum {minimum:0} px is narrower than the toolbar's {toolbar.DesiredSize.Width:0} px.");
+    }
+
     [AvaloniaFact]
     public void A_row_needs_its_shown_children_its_gaps_and_its_margin()
     {
