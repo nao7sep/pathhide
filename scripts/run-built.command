@@ -8,8 +8,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-APP_BUNDLE="$REPO_DIR/publish/PathHide.app"
-APP_EXECUTABLE="$APP_BUNDLE/Contents/MacOS/PathHide"
+# The app name as Directory.Build.props states it, read as plain text so launching stays instant.
+APP_NAME="$(sed -n 's:.*<Product>\(.*\)</Product>.*:\1:p' "$REPO_DIR/Directory.Build.props")"
+APP_BUNDLE="$REPO_DIR/publish/$APP_NAME.app"
+APP_EXECUTABLE="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 RUNTIME_TOKEN="run-built-$$-$(date +%s)-$RANDOM"
 source "$SCRIPT_DIR/launcher-runtime.sh"
 
@@ -21,7 +23,7 @@ pause_on_failure() {
   local status="$1"
   if [[ "$status" -ne 0 && ( "$status" -lt 128 || "$status" -gt 143 ) ]]; then
     echo
-    echo "pathhide run-built failed with exit code $status."
+    echo "$APP_NAME run-built failed with exit code $status."
     read -r -p "Press Enter to close..."
   fi
 }
@@ -42,11 +44,11 @@ fi
 # the .app dir's own mtime — stat'ing the bundle root would report a stale date.
 built_at="$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S %Z' "$APP_BUNDLE/Contents/MacOS" 2>/dev/null || echo 'unknown')"
 claim_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
-stop_owned_runtime "PathHide" "$REPO_DIR" "$REPO_DIR/src/PathHide/PathHide.csproj" "PathHide" "$APP_EXECUTABLE"
+stop_owned_runtime "$APP_NAME" "$REPO_DIR" "$REPO_DIR/src/PathHide/PathHide.csproj" "$APP_NAME" "$APP_EXECUTABLE"
 log_step "Launching the existing build (built: $built_at)"
 echo "If you changed source since then, run rebuild instead."
 
 # `open` routes through Launch Services, which registers the bundle identity with
 # TCC and triggers permission prompts on first access.
 open -n "$APP_BUNDLE"
-wait_for_owned_runtime "PathHide" "$REPO_DIR" "$REPO_DIR/src/PathHide/PathHide.csproj" "PathHide" "$APP_EXECUTABLE" 30
+wait_for_owned_runtime "$APP_NAME" "$REPO_DIR" "$REPO_DIR/src/PathHide/PathHide.csproj" "$APP_NAME" "$APP_EXECUTABLE" 30

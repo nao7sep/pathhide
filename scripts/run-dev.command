@@ -12,8 +12,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# The app name as Directory.Build.props states it, read as plain text so launching stays instant.
+APP_NAME="$(sed -n 's:.*<Product>\(.*\)</Product>.*:\1:p' "$REPO_DIR/Directory.Build.props")"
 PROJECT_FILE="$REPO_DIR/src/PathHide/PathHide.csproj"
-APP_EXECUTABLE="$REPO_DIR/publish/PathHide.app/Contents/MacOS/PathHide"
+APP_EXECUTABLE="$REPO_DIR/publish/$APP_NAME.app/Contents/MacOS/$APP_NAME"
 RUNTIME_TOKEN="run-dev-$$-$(date +%s)-$RANDOM"
 source "$SCRIPT_DIR/launcher-runtime.sh"
 
@@ -32,7 +34,7 @@ pause_on_failure() {
   local status="$1"
   if [[ "$status" -ne 0 && ( "$status" -lt 128 || "$status" -gt 143 ) ]]; then
     echo
-    echo "pathhide run-dev failed with exit code $status."
+    echo "$APP_NAME run-dev failed with exit code $status."
     read -r -p "Press Enter to close..."
   fi
 }
@@ -41,7 +43,7 @@ cleanup() {
   local status="$?"
   trap - EXIT
   if is_launcher_runtime_owner "$RUNTIME_TOKEN" "$REPO_DIR"; then
-    stop_owned_runtime "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE" >/dev/null 2>&1 || true
+    stop_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE" >/dev/null 2>&1 || true
     release_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
   fi
   pause_on_failure "$status"
@@ -54,16 +56,16 @@ require_command dotnet
 
 cd "$REPO_DIR"
 
-log_step "Replacing any existing PathHide runtime"
+log_step "Replacing any existing $APP_NAME runtime"
 claim_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
-stop_owned_runtime "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE"
+stop_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE"
 
 log_step "Restoring packages required for launch"
 dotnet restore "$PROJECT_FILE"
 
-log_step "Starting PathHide (Debug, from source)"
+log_step "Starting $APP_NAME (Debug, from source)"
 dotnet run --project "$PROJECT_FILE" &
 DEV_PID=$!
-wait_for_owned_runtime "PathHide" "$REPO_DIR" "" "PathHide" "$APP_EXECUTABLE" 120
-log_step "PathHide is ready"
+wait_for_owned_runtime "$APP_NAME" "$REPO_DIR" "" "$APP_NAME" "$APP_EXECUTABLE" 120
+log_step "$APP_NAME is ready"
 wait "$DEV_PID"

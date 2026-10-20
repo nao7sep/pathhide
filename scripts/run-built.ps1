@@ -25,7 +25,9 @@ function Write-Step {
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
-$exePath = Join-Path $repoDir "publish-win/PathHide.exe"
+# The app name as Directory.Build.props states it, read as plain text so launching stays instant.
+$appName = ([regex]::Match((Get-Content -LiteralPath (Join-Path $repoDir "Directory.Build.props") -Raw), '<Product>(.*?)</Product>')).Groups[1].Value
+$exePath = Join-Path $repoDir "publish-win/$appName.exe"
 $projectFile = Join-Path $repoDir "src/PathHide/PathHide.csproj"
 $runtimeToken = [guid]::NewGuid().ToString("N")
 
@@ -44,17 +46,17 @@ try {
 
     $builtAt = (Get-Item $exePath).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
     Claim-LauncherRuntime -Token $runtimeToken -RepoDir $repoDir
-    Stop-OwnedRuntime -Label "PathHide" -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName "PathHide" -BuiltExecutable $exePath
+    Stop-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName $appName -BuiltExecutable $exePath
     Write-Step "Launching the existing build (built: $builtAt)"
     Write-Host "If you changed source since then, run rebuild instead."
 
     # GUI app: launch non-blocking via Start-Process.
     Start-Process -FilePath $exePath | Out-Null
-    Wait-OwnedRuntime -Label "PathHide" -RepoDir $repoDir -ProjectFile "" -ExecutableName "PathHide" -BuiltExecutable $exePath -TimeoutSeconds 30
+    Wait-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile "" -ExecutableName $appName -BuiltExecutable $exePath -TimeoutSeconds 30
 }
 catch {
     Write-Host ""
-    Write-Host "pathhide run-built failed: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "$appName run-built failed: $($_.Exception.Message)" -ForegroundColor Red
     $scriptExitCode = 1
 }
 finally {

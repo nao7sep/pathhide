@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <!-- The executable and bundle take the product's name, which the launchers read from
+         Directory.Build.props. -->
+    <AssemblyName>$(Product)</AssemblyName>
     <!-- Required by the LibraryImport source generator (see Services/MacFs.cs),
          which emits unsafe marshalling stubs internally. Windows directory identity also pins its native output buffer. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>

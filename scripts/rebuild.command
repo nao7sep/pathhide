@@ -9,9 +9,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# The app name as Directory.Build.props states it, read as plain text so launching stays instant.
+APP_NAME="$(sed -n 's:.*<Product>\(.*\)</Product>.*:\1:p' "$REPO_DIR/Directory.Build.props")"
 PROJECT_FILE="$REPO_DIR/src/PathHide/PathHide.csproj"
-APP_BUNDLE="$REPO_DIR/publish/PathHide.app"
-APP_EXECUTABLE="$APP_BUNDLE/Contents/MacOS/PathHide"
+APP_BUNDLE="$REPO_DIR/publish/$APP_NAME.app"
+APP_EXECUTABLE="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 RUNTIME_TOKEN="rebuild-$$-$(date +%s)-$RANDOM"
 source "$SCRIPT_DIR/launcher-runtime.sh"
 
@@ -21,7 +23,7 @@ source "$SCRIPT_DIR/launcher-runtime.sh"
 # outright rather than quietly handed a different product.
 ARCH="$(uname -m)"
 if [[ "$ARCH" != "arm64" ]]; then
-  echo "PathHide builds for Apple Silicon only; this host is $ARCH." >&2
+  echo "$APP_NAME builds for Apple Silicon only; this host is $ARCH." >&2
   exit 1
 fi
 # The macOS runtime identifier the project declares.
@@ -42,7 +44,7 @@ pause_on_failure() {
   local status="$1"
   if [[ "$status" -ne 0 && ( "$status" -lt 128 || "$status" -gt 143 ) ]]; then
     echo
-    echo "pathhide rebuild failed with exit code $status."
+    echo "$APP_NAME rebuild failed with exit code $status."
     read -r -p "Press Enter to close..."
   fi
 }
@@ -58,11 +60,11 @@ require_command dotnet
 log_step "Clearing the previous build"
 rm -rf "$REPO_DIR/publish"
 
-log_step "Publishing PathHide ($RID, Release, self-contained)"
+log_step "Publishing $APP_NAME ($RID, Release, self-contained)"
 dotnet publish "$PROJECT_FILE" -c Release -r "$RID" --self-contained true -o "$REPO_DIR/publish"
 
 log_step "Launching the rebuilt app"
 claim_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
-stop_owned_runtime "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE"
+stop_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE"
 open -n "$APP_BUNDLE"
-wait_for_owned_runtime "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE" 30
+wait_for_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE" 30
