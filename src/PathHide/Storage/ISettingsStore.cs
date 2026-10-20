@@ -2,7 +2,10 @@ using PathHide.Models;
 
 namespace PathHide.Storage;
 
-/// <summary>Settings are read and written by set (config-sets-conventions).</summary>
+/// <summary>
+/// Settings are read and written by set, so a save writes only the sets that differ from their
+/// built-ins.
+/// </summary>
 public interface ISettingsStore
 {
     LoadedStore<AppSettings> Load();

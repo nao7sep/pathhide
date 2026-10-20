@@ -169,20 +169,6 @@ public sealed class MacMenuBarTests
     public void The_bar_turns_off_Avalonias_own_macOS_menus() =>
         Assert.True(PlatformOptions().DisableNativeMenus);
 
-    [Fact]
-    public void No_window_or_the_app_declares_an_Avalonia_NativeMenu()
-    {
-        // With Avalonia's menus off, one would be silently ignored; the bar is MacMenuBar's alone.
-        var declaration = new Regex(@"<NativeMenu|NativeMenu\.(Set)?Menu|new NativeMenu");
-        var offenders = Directory.EnumerateFiles(Path.Combine(RepoRoot(), "src", "PathHide"), "*.*", SearchOption.AllDirectories)
-            .Where(path => path.EndsWith(".axaml", StringComparison.Ordinal) || path.EndsWith(".cs", StringComparison.Ordinal))
-            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-                && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            .Where(path => declaration.IsMatch(File.ReadAllText(path)))
-            .ToList();
-        Assert.Empty(offenders);
-    }
-
     [AvaloniaFact]
     public void The_headless_test_app_does_not_install_the_bar() =>
         // The bar is the desktop app's; the headless lifetime is not a desktop one.

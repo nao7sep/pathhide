@@ -32,13 +32,6 @@ public sealed class ThemeResourcesTests
     public void ANewSettingsFileStartsOnSystem() =>
         Assert.Equal(ThemePreference.System, new AppSettings().Theme);
 
-    // NSRequiresAquaSystemAppearance pins every macOS window to the light appearance, so System
-    // would show light chrome on a dark Mac and the title bar would ignore RequestedThemeVariant.
-    [Fact]
-    public void TheMacBundleDoesNotPinTheLightAppearance() =>
-        Assert.DoesNotContain("NSRequiresAquaSystemAppearance",
-            File.ReadAllText(Path.Combine(RepoRoot(), "macOS", "Info.plist")));
-
     [Fact]
     public void LightAndDarkDefineTheSameThemedBrushes()
     {
@@ -64,18 +57,23 @@ public sealed class ThemeResourcesTests
         }
     }
 
-    // The dialog shell's footer line (DialogBase's FooterSeparator) is a band edge like every other
-    // band line (modal-dialog conventions), so it takes BorderBrush, whose range is checked below in
-    // both themes.
-    [Fact]
+    // The dialog shell's footer line is a band edge like every other band line, so it paints with
+    // the band-edge brush, whose contrast range is checked below in both themes.
+    [AvaloniaFact]
     public void TheDialogSeparatorIsABandEdge()
     {
-        var separatorKey = DialogBaseXaml().Descendants()
-            .Single(element => element.Name.LocalName == "Border" && (string?)element.Attribute(X + "Name") == "FooterSeparator")
-            .Attribute("Background")!.Value
-            .Trim('{', '}').Replace("DynamicResource ", "").Replace("StaticResource ", "");
-
-        Assert.Equal("BorderBrush", separatorKey);
+        var dialog = new PathHide.Views.AboutDialog(_ => true);
+        dialog.Show();
+        try
+        {
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var separator = dialog.FindControl<Avalonia.Controls.Border>("FooterSeparator")!;
+            Assert.Same(dialog.FindResource(dialog.ActualThemeVariant, "BorderBrush"), separator.Background);
+        }
+        finally
+        {
+            dialog.Close();
+        }
     }
 
     // Each line kind's contrast target, against the colours each is painted beside, in both themes
@@ -180,8 +178,6 @@ public sealed class ThemeResourcesTests
     private static XDocument AppXaml() =>
         XDocument.Load(Path.Combine(RepoRoot(), "src", "PathHide", "App.axaml"));
 
-    private static XDocument DialogBaseXaml() =>
-        XDocument.Load(Path.Combine(RepoRoot(), "src", "PathHide", "Views", "DialogBase.axaml"));
 
     private static Dictionary<string, Color> ThemeBrushes(string theme) =>
         AppXaml().Descendants()

@@ -4,7 +4,8 @@ using System.Threading.Tasks;
 
 namespace PathHide.Services;
 
-// Transaction-and-external-effect-conventions: the physical tail remains owned after a wait ends.
+// A caller's wait may end before the store work does; the work keeps running to its end and the
+// next work waits behind it, so a timed-out save can never be overtaken by a later one.
 internal sealed class BoundedStoreWork
 {
     internal static readonly TimeSpan DefaultBound = TimeSpan.FromSeconds(10);

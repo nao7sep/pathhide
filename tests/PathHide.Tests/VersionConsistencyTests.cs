@@ -14,8 +14,7 @@ namespace PathHide.Tests;
 /// that reads them cannot be pointed back at the SSOT, so those copies must be kept in lock-step by hand:
 /// <c>macOS/Info.plist</c>'s <c>CFBundleVersion</c> and <c>CFBundleShortVersionString</c>, and
 /// <c>src/PathHide/app.manifest</c>'s four-part <c>assemblyIdentity/@version</c> (the trailing part is
-/// always <c>.0</c>). This reads every live file (located via <see cref="CallerFilePathAttribute"/>,
-/// mirroring <c>WindowMetricsTests</c>' pattern) and fails, naming the drifted file, the moment a version
+/// always <c>.0</c>). This reads every live file and fails, naming the drifted file, the moment a version
 /// bump misses one of them.
 /// </summary>
 public sealed class VersionConsistencyTests
@@ -120,5 +119,66 @@ public sealed class VersionConsistencyTests
             $"{plistPath}'s '{key}' entry is not followed by a <string> value.");
 
         return valueElement!.Value;
+    }
+}
+
+/// <summary>
+/// macOS reads the bundle's identity from <c>macOS/Info.plist</c>, which cannot point back at the
+/// project, so each value it repeats is checked against what the build produces: the executable and
+/// name against the app assembly, and the icons against the files the bundle is given.
+/// </summary>
+public sealed class MacBundleIdentityTests
+{
+    private static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string callerPath = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(callerPath)!, "..", ".."));
+
+    private static string Plist(string key)
+    {
+        var dict = XDocument.Load(Path.Combine(RepoRoot(), "macOS", "Info.plist")).Descendants("dict").First();
+        var keyElement = dict.Elements("key").Single(element => element.Value == key);
+        return ((XElement)keyElement.NextNode!).Value;
+    }
+
+    [Fact]
+    public void The_bundle_executable_is_the_app_assembly() =>
+        Assert.Equal(typeof(PathHide.App).Assembly.GetName().Name, Plist("CFBundleExecutable"));
+
+    [Fact]
+    public void The_bundle_name_is_the_product()
+    {
+        var product = typeof(PathHide.App).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyProductAttribute), false)
+            .OfType<System.Reflection.AssemblyProductAttribute>().Single().Product;
+        Assert.Equal(product, Plist("CFBundleName"));
+    }
+
+    [Fact]
+    public void The_Windows_manifest_names_the_app_assembly()
+    {
+        var manifest = XDocument.Load(Path.Combine(RepoRoot(), "src", "PathHide", "app.manifest"));
+        var identity = manifest.Descendants().Single(element => element.Name.LocalName == "assemblyIdentity");
+        Assert.Equal(typeof(PathHide.App).Assembly.GetName().Name, (string?)identity.Attribute("name"));
+    }
+
+    [Fact]
+    public void The_classic_icon_file_exists() =>
+        Assert.True(File.Exists(Path.Combine(RepoRoot(), "macOS", Plist("CFBundleIconFile") + ".icns")));
+
+    // macOS 26 draws the icon the asset catalogue holds under this name.
+    [MacOnlyFact]
+    public void The_asset_catalogue_holds_the_named_icon()
+    {
+        using var assetutil = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "/usr/bin/xcrun", ["assetutil", "--info", Path.Combine(RepoRoot(), "macOS", "Assets.car")])
+        {
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        })!;
+        var info = assetutil.StandardOutput.ReadToEnd();
+        Assert.True(assetutil.WaitForExit(TimeSpan.FromSeconds(30)), "assetutil did not answer.");
+
+        var names = System.Text.Json.JsonDocument.Parse(info).RootElement.EnumerateArray()
+            .Select(asset => asset.TryGetProperty("Name", out var name) ? name.GetString() : null);
+        Assert.Contains(Plist("CFBundleIconName"), names);
     }
 }

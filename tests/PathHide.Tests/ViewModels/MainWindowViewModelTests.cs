@@ -885,7 +885,7 @@ public class MainWindowViewModelTests
         Assert.Empty(paths.Value);
         Assert.Empty(vm.Rows);
         Assert.True(vm.IsPathListEmpty);
-        Assert.Equal("No entries — drop files or folders here to get started", vm.StatusBarText);
+        Assert.Equal(English.Of("status.empty"), vm.StatusBarText);
         Assert.Empty(vm.OperationalResults);
     }
 
@@ -970,10 +970,10 @@ public class MainWindowViewModelTests
         await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
 
         Assert.NotNull(captured);
-        // The destructive action must carry a specific, danger-styled label — never a generic
-        // "Yes"/"OK" — and count-aware singular/plural copy (the modal-conventions fix).
+        // The destructive action carries a specific, danger-styled label, never a generic "Yes" or
+        // "OK", so the user knows what they confirm, and count-aware singular/plural copy.
         Assert.Equal("common.remove", captured!.ConfirmLabelKey);
-        Assert.Equal("Remove entries", English.Of(captured.Title));
+        Assert.Equal(English.Of("remove.title"), English.Of(captured.Title));
         Assert.Equal(expectedMessage, English.Of(captured.Message));
         // Declined: every row is still present.
         Assert.Equal(count, vm.Rows.Count);
@@ -1028,7 +1028,7 @@ public class MainWindowViewModelTests
     {
         var vm = CreateViewModel(new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>());
 
-        Assert.Equal("No entries — drop files or folders here to get started", vm.StatusBarText);
+        Assert.Equal(English.Of("status.empty"), vm.StatusBarText);
     }
 
     // --- Construct / Initialize split (no I/O in the constructor) ---

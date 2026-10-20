@@ -6,18 +6,17 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <!-- Measured 2026-08-15: a clean build of every project in this solution
-         emits zero warnings, so this costs nothing today and is here to keep it
-         that way — a warning introduced later fails the build instead of
-         scrolling past. The gate is on the shipping path (release.yml builds
-         with it), per the app-release-conventions. -->
+    <!-- Every project builds without warnings, so a warning introduced later fails the build,
+         the release build included, instead of scrolling past. -->
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
     <Authors>Yoshinao Inoguchi</Authors>
-    <Company>Yoshinao Inoguchi</Company>
+    <Company>$(Authors)</Company>
     <Product>PathHide</Product>
-    <Copyright>Copyright © 2026 Yoshinao Inoguchi</Copyright>
+    <Copyright>Copyright © 2026 $(Authors)</Copyright>
     <Version>0.1.0</Version>
+    <!-- One Avalonia release for the app and its headless tests; DataGrid ships on its own schedule. -->
+    <AvaloniaVersion>12.1.4</AvaloniaVersion>
   </PropertyGroup>
 
 </Project>

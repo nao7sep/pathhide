@@ -56,7 +56,7 @@ public sealed class BackupStoreTests : IDisposable
         Directory.Delete(_root, recursive: true);
     }
 
-    private string StoreFile => Path.Combine(_root, "backups.sqlite3");
+    private string StoreFile => Path.Combine(_root, BackupStore.FileName);
 
     /// <summary>A managed file path under the throwaway root. The store records the FULL absolute path,
     /// internal or external, so any absolute path is a valid subject.</summary>

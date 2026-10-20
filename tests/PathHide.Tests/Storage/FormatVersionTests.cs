@@ -369,7 +369,7 @@ public sealed class FormatVersionTests : IDisposable
 
     // --- backups.sqlite3 ---
 
-    private string BackupsPath => PathOf("backups.sqlite3");
+    private string BackupsPath => PathOf(BackupStore.FileName);
 
     private long BackupRows()
     {

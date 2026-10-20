@@ -7,8 +7,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Windows: embeds icon.ico into the .exe. macOS uses macOS/icon.icns (classic,
          CFBundleIconFile) and macOS/Assets.car (Liquid Glass, CFBundleIconName) instead;
-         staged into the .app by the AssembleMacAppBundle target in Directory.Build.targets.
-         Icon provenance: company/assets/pathhide/icons. -->
+         staged into the .app by the AssembleMacAppBundle target. -->
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyTitle>PathHide</AssemblyTitle>
@@ -33,12 +32,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.1.4" />
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
     <!-- DataGrid is published separately; 12.1.2 is its latest release. -->
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
     <!-- Avalonia 12.1 declares SkiaSharp 3.119 as its floor but supports SkiaSharp 4 when an app
          references it directly; Avalonia 13 is expected to raise the floor. The direct reference brings
          the current Skia engine and its macOS and Windows native assets. HarfBuzzSharp stays at

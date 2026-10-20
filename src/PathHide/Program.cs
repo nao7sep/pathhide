@@ -253,8 +253,8 @@ sealed class Program
         if (paths.Count == 0)
             return false;
 
-        // Loop coverage per the conventions: one info line for the intent, one for the
-        // outcome, and one error per failure — never one line per successful item.
+        // One info line for the intent, one for the outcome, and one error per failure, never one
+        // line per successful item, so a large apply stays readable in the records.
         Log.Info("apply: start", new { count = paths.Count, hide, system });
 
         var failed = 0;

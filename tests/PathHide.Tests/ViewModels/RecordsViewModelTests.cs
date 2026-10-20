@@ -8,6 +8,7 @@ using PathHide.Services;
 using PathHide.Storage;
 using PathHide.Tests.Fakes;
 using PathHide.ViewModels;
+using PathHide.Tests.I18n;
 using Xunit;
 using static PathHide.Tests.ViewModels.RecordFormatTests;
 
@@ -129,7 +130,7 @@ public sealed class RecordsViewModelTests
         var vm = Started();
 
         Assert.Equal(RecordsListStatus.Loading, vm.ListStatus);
-        Assert.Equal("Loading records…", vm.ListNote);
+        Assert.Equal(English.Of("records.loading"), vm.ListNote);
         Assert.Empty(vm.Rows);
 
         Answer(false, Record(3), Record(2), Record(1));
@@ -138,7 +139,7 @@ public sealed class RecordsViewModelTests
         Assert.Null(vm.ListNote);
         Assert.Equal([3, 2, 1], vm.Rows.Select(row => row.Id));
         Assert.Null(vm.SelectedRow);
-        Assert.Equal("Select a record to see everything it holds.", vm.DetailNote);
+        Assert.Equal(English.Of("records.noSelection"), vm.DetailNote);
     }
 
     [AvaloniaFact]
@@ -162,7 +163,7 @@ public sealed class RecordsViewModelTests
         var vm = Started();
 
         Assert.Equal([null, ThisLaunch, "2026-10-03T08:00:00.000Z"], vm.LaunchOptions.Select(option => option.Session));
-        Assert.Equal("All launches", vm.LaunchOptions[0].Label);
+        Assert.Equal(English.Of("records.allLaunches"), vm.LaunchOptions[0].Label);
         Assert.EndsWith("(this launch)", vm.LaunchOptions[1].Label, StringComparison.Ordinal);
         Assert.DoesNotContain("this launch", vm.LaunchOptions[2].Label, StringComparison.Ordinal);
     }
@@ -208,7 +209,7 @@ public sealed class RecordsViewModelTests
         Settle();
         Answer(false);
         Assert.Empty(vm.Rows);
-        Assert.Equal("No records match these filters.", vm.ListNote);
+        Assert.Equal(English.Of("records.empty"), vm.ListNote);
 
         Signal(vm);
         ElapseLive();
@@ -232,7 +233,7 @@ public sealed class RecordsViewModelTests
         var next = Assert.Single(_reader.Unanswered);
         Assert.Equal(new RecordCursor(Record(201).Time, 201), next.Query.After);
         Assert.True(vm.IsLoadingMore);
-        Assert.Equal("Loading records…", vm.MoreNote);
+        Assert.Equal(English.Of("records.loading"), vm.MoreNote);
 
         Answer(false, Newest(200, 3));
 
@@ -272,7 +273,7 @@ public sealed class RecordsViewModelTests
         Settle();
 
         Assert.True(vm.MoreFailed);
-        Assert.Equal("The records could not be read.", vm.MoreNote);
+        Assert.Equal(English.Of("records.loadFailed"), vm.MoreNote);
         Assert.Equal(RecordsReader.PageSize, vm.Rows.Count);
 
         // A page laid out after the failure does not retry by itself; reaching the end does.
@@ -423,7 +424,7 @@ public sealed class RecordsViewModelTests
         Settle();
 
         Assert.True(vm.IsListFailed);
-        Assert.Equal("The records could not be read.", vm.ListNote);
+        Assert.Equal(English.Of("records.loadFailed"), vm.ListNote);
         Assert.DoesNotContain("SQLite", vm.ListNote, StringComparison.Ordinal);
     }
 
@@ -437,7 +438,7 @@ public sealed class RecordsViewModelTests
         vm.SelectedRow = vm.Rows[0];
         Settle();
         Assert.Equal(RecordDetailStatus.Failed, vm.DetailStatus);
-        Assert.Equal("This record could not be read.", vm.DetailNote);
+        Assert.Equal(English.Of("records.detailFailed"), vm.DetailNote);
 
         vm.SelectedRow = vm.Rows[1];
         Settle();

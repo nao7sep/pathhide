@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# run-dev: run the app from source with live reload, in its loosest configuration.
+# run-dev: run the app from source with dotnet run (Debug, incremental), in its loosest configuration.
 # For active coding and debugging. The strict, production-faithful launchers are
 # run-built (launch the existing packaged app bundle without rebuilding) and
 # rebuild (build and package a fresh bundle, then launch).

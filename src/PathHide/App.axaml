@@ -1,7 +1,6 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="PathHide.App"
-             Name="PathHide"
              RequestedThemeVariant="Default">
 
     <Application.Resources>
@@ -442,7 +441,7 @@
             <Setter Property="Foreground" Value="White"/>
         </Style>
 
-        <!-- A toolbar icon button with no resting surface, as DayNote's menu button: a bare icon until
+        <!-- A toolbar icon button with no resting surface, so the toolbar shows a bare icon until
              the pointer arrives, then the soft control fill, a step deeper on press, and kept while the
              menu it opened is open. Keyboard focus still draws the app's ring. -->
         <Style Selector="Button.ghost">
@@ -561,8 +560,9 @@
             <Setter Property="BorderBrush" Value="{DynamicResource FocusRingBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
         </Style>
-        <!-- The field's own focus edge softens while the window is inactive too (interface-styling
-             conventions); DialogBase and MainWindow both own the windowInactive class. -->
+        <!-- The field's own focus edge softens while the window is inactive too, so it does not
+             compete with the window that has the keyboard; DialogBase and MainWindow both own the
+             windowInactive class. -->
         <Style Selector="Window.windowInactive :is(TextBox):focus /template/ Border#PART_BorderElement">
             <Setter Property="BorderBrush" Value="{DynamicResource FocusRingInactiveBrush}"/>
         </Style>
@@ -594,8 +594,7 @@
         <Style Selector="ComboBox:focus-visible /template/ ContentControl#ContentPresenter">
             <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
         </Style>
-        <!-- The select's own focus edge softens while the window is inactive too (interface-styling
-             conventions). -->
+        <!-- The select's own focus edge softens while the window is inactive too, like the fields'. -->
         <Style Selector="Window.windowInactive ComboBox:focus-visible /template/ Border#HighlightBackground">
             <Setter Property="BorderBrush" Value="{DynamicResource FocusRingInactiveBrush}"/>
         </Style>

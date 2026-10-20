@@ -30,10 +30,8 @@ public class LabelFitTests : WindowTest
     // Avalonia's arrangement round differently, and a fraction of a pixel is not a defect.
     private const double Tolerance = 1.0;
 
-    // The main window's designed default width (MainWindow.axaml).
-    private const double DefaultWindowWidth = 1280;
 
-    public static TheoryData<string> Tags() => new() { "en", "de", "es", "fr", "it", "pt-BR", "ru", "ja", "ko", "zh-Hans" };
+    public static TheoryData<string> Tags() => new(Languages.Tags);
 
     [AvaloniaTheory]
     [MemberData(nameof(Tags))]
@@ -179,8 +177,8 @@ public class LabelFitTests : WindowTest
         // than the toolbar would cut its last buttons off. 1280 logical pixels is also a common
         // Windows laptop's whole screen: 1920 by 1080 at 150 per cent.
         Assert.True(
-            toolbar.DesiredSize.Width <= DefaultWindowWidth,
-            $"{tag}: the toolbar needs {toolbar.DesiredSize.Width:0} px, wider than the {DefaultWindowWidth:0} px default window.");
+            toolbar.DesiredSize.Width <= window.Width,
+            $"{tag}: the toolbar needs {toolbar.DesiredSize.Width:0} px, wider than the {window.Width:0} px default window.");
     }
 
     private static void AssertNothingClipped(Visual root, string tag, int atLeast)

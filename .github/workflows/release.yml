@@ -23,13 +23,24 @@ permissions:
   contents: read
 
 jobs:
+  # The SDK band comes from the target framework in Directory.Build.props, so a framework bump
+  # moves CI with it; both jobs below read it from here.
+  toolchain:
+    runs-on: ubuntu-latest
+    outputs:
+      dotnet: ${{ steps.read.outputs.dotnet }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: read
+        run: echo "dotnet=$(sed -n 's|.*<TargetFramework>net\([0-9.]*\)</TargetFramework>.*|\1|p' Directory.Build.props).x" >> "$GITHUB_OUTPUT"
+
   # Gate: a failing test suite means no release is built.
   #
-  # On BOTH platforms, because the suite is platform-gated. The seven Windows
-  # HIDDEN/SYSTEM attribute tests - the core of the Windows product - and the
-  # non-macOS branch of the IME test report *skipped* anywhere else, so a
-  # macOS-only gate exited 0 while never executing them, and read as coverage.
+  # On both platforms, because the suite is platform-gated: the Windows-only tests, the core of the
+  # Windows product among them, report skipped on macOS, and the macOS-only ones on Windows, so a
+  # one-platform gate would pass without running them.
   test:
+    needs: toolchain
     strategy:
       fail-fast: false # see both platforms' results, not just the first failure
       matrix:
@@ -37,15 +48,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      # The SDK band comes from the target framework in Directory.Build.props, so a
-      # framework bump moves CI with it.
-      - name: Read the target .NET version
-        id: dotnet
-        shell: bash
-        run: echo "version=$(sed -n 's|.*<TargetFramework>net\([0-9.]*\)</TargetFramework>.*|\1|p' Directory.Build.props).x" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: ${{ steps.dotnet.outputs.version }}
+          dotnet-version: ${{ needs.toolchain.outputs.dotnet }}
       # The tag names the release, the SSOT (Directory.Build.props) names every
       # artifact: a mismatch stops here, before anything is built.
       - name: Verify tag matches project version
@@ -62,7 +67,7 @@ jobs:
       - run: dotnet test -c Release
 
   build:
-    needs: test
+    needs: [toolchain, test]
     permissions:
       contents: write
     strategy:
@@ -76,15 +81,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      # The SDK band comes from the target framework in Directory.Build.props, so a
-      # framework bump moves CI with it.
-      - name: Read the target .NET version
-        id: dotnet
-        shell: bash
-        run: echo "version=$(sed -n 's|.*<TargetFramework>net\([0-9.]*\)</TargetFramework>.*|\1|p' Directory.Build.props).x" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: ${{ steps.dotnet.outputs.version }}
+          dotnet-version: ${{ needs.toolchain.outputs.dotnet }}
 
       # One command per OS — emits the installer + portable into dist/.
       - name: Package (host OS)

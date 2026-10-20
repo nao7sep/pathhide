@@ -1,16 +1,13 @@
 ; Inno Setup script — builds dist\PathHide-<version>-setup.exe from the
-; self-contained win-x64 publish in publish-win\. The version is passed in by
-; scripts/package.ps1 via /DMyAppVersion. iscc is pre-installed on windows-latest.
+; self-contained Windows publish in publish-win\. scripts/package.ps1 passes the version,
+; product name, executable and publisher from the project. iscc is pre-installed on windows-latest.
 
-#define MyAppName "PathHide"
-#define MyAppPublisher "Yoshinao Inoguchi"
-#define MyAppExe "PathHide.exe"
-#ifndef MyAppVersion
-  #error MyAppVersion is not defined - pass it via  iscc /DMyAppVersion=x.y.z
+#if !defined(MyAppVersion) || !defined(MyAppName) || !defined(MyAppExe) || !defined(MyAppPublisher)
+  #error Run scripts/package.ps1, which passes MyAppVersion, MyAppName, MyAppExe and MyAppPublisher.
 #endif
 
 [Setup]
-; This .iss lives in scripts/, but the win-x64 publish output and the dist/ output
+; This .iss lives in scripts/, but the Windows publish output and the dist/ output
 ; folder are at the repo root — so resolve all source/output paths one level up.
 SourceDir=..
 AppName={#MyAppName}

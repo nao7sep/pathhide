@@ -35,6 +35,11 @@ public class TranslatorTests
     public void a_computer_language_resolves_to_the_variety_the_app_ships(string computer, string expected) =>
         Assert.Equal(expected, Languages.Match([computer]));
 
+    // A language added to the set is picked by System on a computer that prefers it.
+    [Fact]
+    public void every_interface_language_is_picked_for_a_computer_that_prefers_it() =>
+        Assert.All(Languages.Tags, tag => Assert.Equal(tag, Languages.Match([tag])));
+
     [Fact]
     public void system_takes_the_first_language_in_the_set()
     {

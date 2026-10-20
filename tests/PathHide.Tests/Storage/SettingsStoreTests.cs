@@ -89,7 +89,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.False(vm.IsHiddenAndSystem);
         Assert.False(File.Exists(ConfigPath));
         Assert.False(File.Exists(Path.Combine(_root, AppState.FileName)));
-        Assert.False(File.Exists(Path.Combine(_root, "backups.sqlite3")));
+        Assert.False(File.Exists(Path.Combine(_root, BackupStore.FileName)));
     }
 
     [AvaloniaFact]
@@ -120,7 +120,7 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, vm.Theme));
 
         Assert.False(File.Exists(ConfigPath));
-        Assert.False(File.Exists(Path.Combine(_root, "backups.sqlite3")));
+        Assert.False(File.Exists(Path.Combine(_root, BackupStore.FileName)));
     }
 
     [Theory]
@@ -343,7 +343,7 @@ public sealed class SettingsStoreTests : IDisposable
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
             new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
             {
-                DataSource = Path.Combine(_root, "backups.sqlite3"),
+                DataSource = Path.Combine(_root, BackupStore.FileName),
                 Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly,
             }.ToString());
         connection.Open();

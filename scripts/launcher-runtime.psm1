@@ -1,3 +1,7 @@
+# Shared by the Windows launchers (run-dev, run-built, rebuild): one PathHide runtime per repository.
+# A launcher claims ownership, stops any PathHide it or another launcher started, waits for the new one
+# to appear, and releases ownership only if no later launcher has claimed it since.
+
 function Get-LauncherOwnerFile {
     param([Parameter(Mandatory = $true)][string]$RepoDir)
     return Join-Path (Join-Path $RepoDir '.git') 'launcher-runtime-owner'

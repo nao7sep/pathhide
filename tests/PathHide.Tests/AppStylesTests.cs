@@ -57,8 +57,8 @@ public sealed class AppStylesTests
         }
     }
 
-    // The menu button is a bare icon at rest, as in DayNote: no fill and no edge until the pointer is
-    // over it or its menu is open, when it takes the soft control fill.
+    // The menu button is a bare icon at rest: no fill and no edge until the pointer is over it or its
+    // menu is open, when it takes the soft control fill.
     [AvaloniaFact]
     public void A_ghost_button_has_no_surface_until_hovered_or_its_menu_is_open()
     {

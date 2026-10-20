@@ -186,7 +186,8 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             // the file.
             if (File.Exists(_filePath))
             {
-                // Keep ordinary permission bits through the runtime (content-lifecycle-conventions).
+                // The replacement takes the old file's permission bits, so an atomic save never widens or
+                // narrows who can read the user's file.
                 if (OperatingSystem.IsMacOS())
                     File.SetUnixFileMode(tempPath, File.GetUnixFileMode(_filePath));
                 File.Replace(tempPath, _filePath, null, ignoreMetadataErrors: true);

@@ -104,7 +104,7 @@ public sealed class SettingsDialogTests
         var appearance = Avalonia.Application.Current!.PlatformSettings!.GetColorValues().ThemeVariant;
         Assert.Equal(new[] { SettingsDialog.SystemThemeLabel(appearance), "Light", "Dark" }, radios.Select(radio => radio.Content as string));
         Assert.Single(radios.Select(radio => radio.Parent).Distinct());
-        Assert.Equal("Light", radios.Single(radio => radio.IsChecked == true).Content);
+        Assert.Equal(English.Of("settings.themeLight"), radios.Single(radio => radio.IsChecked == true).Content);
         Assert.False(save.IsEnabled);
 
         radios[2].IsChecked = true;
@@ -171,7 +171,7 @@ public sealed class SettingsDialogTests
         {
             CloseWindowShortcutTests.PressCloseWindow(dialog);
 
-            Assert.Equal("Discard changes?", dialog.OwnedWindows.OfType<ConfirmDialog>().Single().Title);
+            Assert.Equal(English.Of("dialog.discardTitle"), dialog.OwnedWindows.OfType<ConfirmDialog>().Single().Title);
             Assert.True(dialog.IsVisible);
             Assert.Equal(0, settings.SaveCount);
         }
@@ -192,10 +192,10 @@ public sealed class SettingsDialogTests
             dialog.Close();
             Dispatcher.UIThread.RunJobs();
             var question = dialog.OwnedWindows.OfType<ConfirmDialog>().Single();
-            Assert.Equal("Discard changes?", question.Title);
+            Assert.Equal(English.Of("dialog.discardTitle"), question.Title);
             var keep = question.GetLogicalDescendants().OfType<Button>()
                 .Single(button => Equals(button.Tag, "cancel"));
-            Assert.Equal("Keep editing", keep.Content);
+            Assert.Equal(English.Of("dialog.keepEditing"), keep.Content);
             Assert.True(keep.IsDefault);
             Assert.True(keep.IsFocused);
             keep.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

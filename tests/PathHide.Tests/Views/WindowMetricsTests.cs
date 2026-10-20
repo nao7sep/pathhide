@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Styling;
 using PathHide.Views;
@@ -125,10 +126,8 @@ public sealed class WindowMetricsTests
             floor, new Avalonia.PixelRect(0, 0, 3840, 2160), 2, new Avalonia.Size(8, 30)));
     }
 
-    // Mirrors the per-column minimums declared in Views/MainWindow.axaml. Kept here so the
-    // derivation assertion reads against a concrete, known set; the separate axaml guard below
-    // is what catches drift between this list and the actual XAML.
-    private static readonly double[] ColumnMinWidths = [240, 100, 110, 155, 160];
+    // Sample column minimums for the arithmetic; the window passes its live columns'.
+    private static readonly double[] ColumnMinWidths = [240, 100, 150];
 
     // The list Border's 12px margin plus the grid's 6px inset inside it, on each side, is the only
     // fixed chrome in WindowMetrics. The scrollbar gutter comes from the live Fluent theme and is
@@ -186,38 +185,21 @@ public sealed class WindowMetricsTests
         Assert.Equal(withSmallChrome + 31, withLargeChrome);
     }
 
-    [Fact]
-    public void EveryDataGridColumn_DeclaresANonZeroMinWidth()
+    [AvaloniaFact]
+    public void EveryPathListColumn_DeclaresANonZeroMinWidth()
     {
-        // Guard against a column being added without a MinWidth: such a column would contribute
-        // 0 to the derived window minimum and could be squeezed to invisibility. Read the live
-        // XAML so this fails the moment a real column is added without a minimum.
-        var minWidths = DataGridColumnMinWidths(ReadMainWindowAxaml());
-
-        Assert.NotEmpty(minWidths);
-        Assert.All(minWidths, m => Assert.True(m > 0, "A DataGrid column is missing a non-zero MinWidth."));
-    }
-
-    [Fact]
-    public void DerivedMinWidth_MatchesTheLiveColumnMinimums()
-    {
-        // The mirrored ColumnMinWidths used above must stay equal to what the XAML actually
-        // declares, so the derivation test cannot pass against a stale list.
-        var fromXaml = DataGridColumnMinWidths(ReadMainWindowAxaml());
-        Assert.Equal(ColumnMinWidths, fromXaml);
-    }
-
-    private static IReadOnlyList<double> DataGridColumnMinWidths(string axaml) =>
-        Regex.Matches(axaml, "<DataGridTextColumn\\b[^>]*?MinWidth=\"(?<min>\\d+(?:\\.\\d+)?)\"")
-            .Select(m => double.Parse(m.Groups["min"].Value, System.Globalization.CultureInfo.InvariantCulture))
-            .ToList();
-
-    private static string ReadMainWindowAxaml([CallerFilePath] string callerPath = "")
-    {
-        // This file: <repo>/tests/PathHide.Tests/Views/WindowMetricsTests.cs
-        // Target:    <repo>/src/PathHide/Views/MainWindow.axaml
-        var testsViewsDir = Path.GetDirectoryName(callerPath)!;
-        var repoRoot = Path.GetFullPath(Path.Combine(testsViewsDir, "..", "..", ".."));
-        return File.ReadAllText(Path.Combine(repoRoot, "src", "PathHide", "Views", "MainWindow.axaml"));
+        // A column without a minimum would add nothing to the derived window minimum and could be
+        // squeezed to invisibility.
+        var window = PathHide.Tests.I18n.PopulatedMainWindow.Empty();
+        try
+        {
+            var columns = window.FindControl<DataGrid>("PathGrid")!.Columns;
+            Assert.NotEmpty(columns);
+            Assert.All(columns, column => Assert.True(column.MinWidth > 0, $"Column {column.SortMemberPath} has no minimum width."));
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 }

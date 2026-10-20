@@ -10,8 +10,11 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO"
 
-APP_NAME="PathHide"
 PROJECT="src/PathHide/PathHide.csproj"
+# The bundle and archives take the assembly's name, and the build its macOS runtime identifier,
+# from the project.
+APP_NAME="$(dotnet msbuild "$PROJECT" -getProperty:AssemblyName)"
+RID="$(dotnet msbuild "$PROJECT" -getProperty:RuntimeIdentifiers | tr ';' '\n' | grep -m1 '^osx-')"
 VERSION="$(grep -m1 '<Version>' Directory.Build.props | sed -E 's/.*<Version>(.*)<\/Version>.*/\1/')"
 
 rm -rf publish dist
@@ -19,7 +22,7 @@ mkdir -p dist
 
 # Self-contained arm64 publish. The AssembleMacAppBundle target (Directory.Build.targets)
 # assembles and ad-hoc-signs publish/PathHide.app as part of the publish.
-dotnet publish "$PROJECT" -c Release -r osx-arm64 --self-contained true -o publish
+dotnet publish "$PROJECT" -c Release -r "$RID" --self-contained true -o publish
 
 APP="publish/$APP_NAME.app"
 [ -d "$APP" ] || { echo "expected $APP was not produced by publish" >&2; exit 1; }

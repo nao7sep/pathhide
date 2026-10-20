@@ -53,9 +53,6 @@ public class CatalogueTests
     // three path families the list tells apart, which are named for the systems that define them.
     private static readonly string[] BrandKeys = ["about.github", "family.posix", "family.windows", "family.unc"];
 
-    private static readonly string[] Tags =
-        ["en", "de", "es", "fr", "it", "pt-BR", "ru", "ja", "ko", "zh-Hans"];
-
     [Fact]
     public void the_set_is_exactly_the_ten_interface_languages()
     {
@@ -64,15 +61,14 @@ public class CatalogueTests
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(Tags.OrderBy(tag => tag, StringComparer.Ordinal).ToArray(), files);
-        Assert.Equal(Tags.OrderBy(tag => tag, StringComparer.Ordinal), Languages.Tags.OrderBy(tag => tag, StringComparer.Ordinal));
+        Assert.Equal(Languages.Tags.OrderBy(tag => tag, StringComparer.Ordinal).ToArray(), files);
     }
 
     [Fact]
     public void every_language_has_exactly_english_keys()
     {
         var english = Read("en").Keys.OrderBy(key => key, StringComparer.Ordinal).ToArray();
-        foreach (var tag in Tags)
+        foreach (var tag in Languages.Tags)
         {
             var keys = Read(tag).Keys.OrderBy(key => key, StringComparer.Ordinal).ToArray();
             Assert.Equal(english, keys);
@@ -82,7 +78,7 @@ public class CatalogueTests
     [Fact]
     public void every_value_is_present_and_trimmed()
     {
-        foreach (var tag in Tags)
+        foreach (var tag in Languages.Tags)
         {
             foreach (var (key, entry) in Read(tag))
             {
@@ -99,7 +95,7 @@ public class CatalogueTests
     public void plural_entries_use_exactly_their_language_categories()
     {
         var english = Read("en");
-        foreach (var tag in Tags)
+        foreach (var tag in Languages.Tags)
         {
             var expected = Plural.CategoriesOf(tag).OrderBy(form => form, StringComparer.Ordinal).ToArray();
             foreach (var (key, entry) in Read(tag))
@@ -124,7 +120,7 @@ public class CatalogueTests
     public void every_form_keeps_english_placeholders()
     {
         var english = Read("en");
-        foreach (var tag in Tags.Where(tag => tag != "en"))
+        foreach (var tag in Languages.Tags.Where(tag => tag != "en"))
         {
             foreach (var (key, entry) in Read(tag))
             {
@@ -144,7 +140,7 @@ public class CatalogueTests
         // so a translation has one exactly when English does. German spaces it with a no-break space,
         // so it never wraps alone; every other language attaches it to the word.
         var english = Read("en");
-        foreach (var tag in Tags)
+        foreach (var tag in Languages.Tags)
         {
             foreach (var (key, entry) in Read(tag))
             {
@@ -176,7 +172,7 @@ public class CatalogueTests
     public void no_language_copies_english()
     {
         var english = Read("en");
-        foreach (var tag in Tags.Where(tag => tag != "en"))
+        foreach (var tag in Languages.Tags.Where(tag => tag != "en"))
         {
             var allowed = SameAsEnglish[tag];
             var matched = new List<string>();
@@ -217,7 +213,7 @@ public class CatalogueTests
         var hidden = new Regex(
             @"[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u00A0\u00AD\u2007\u200B-\u200F\u2028\u2029\u202A-\u202F\u2060\u2066-\u2069\uFEFF]");
 
-        foreach (var tag in Tags)
+        foreach (var tag in Languages.Tags)
         {
             var path = Path.Combine(LocalesDirectory(), tag + ".json");
             var text = File.ReadAllText(path);
@@ -243,7 +239,7 @@ public class CatalogueTests
             .Select(match => match.Groups[1].Value)
             .OrderBy(tag => tag, StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(Tags.OrderBy(tag => tag, StringComparer.Ordinal).ToArray(), listed);
+        Assert.Equal(Languages.Tags.OrderBy(tag => tag, StringComparer.Ordinal).ToArray(), listed);
     }
 
     // Every control that opens About — the in-window menu item — reads exactly like the macOS
@@ -253,7 +249,7 @@ public class CatalogueTests
     public void every_about_opening_key_matches_the_macos_about_item()
     {
         var failures = new List<string>();
-        foreach (var tag in Tags)
+        foreach (var tag in Languages.Tags)
         {
             var catalogue = Read(tag);
             var native = catalogue["nativeMenu.about"].GetString()!.Replace("{app}", "PathHide");
@@ -282,10 +278,10 @@ public class CatalogueTests
         var folders = Directory.GetDirectories(Path.Combine(RepoRoot(), "macOS"), "*.lproj")
             .Select(Path.GetFileNameWithoutExtension)
             .OrderBy(name => name, StringComparer.Ordinal);
-        Assert.Equal(Tags.OrderBy(tag => tag, StringComparer.Ordinal), folders);
+        Assert.Equal(Languages.Tags.OrderBy(tag => tag, StringComparer.Ordinal), folders);
 
         var hidden = new Regex(@"[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u00A0\u00AD\u2007\u200B-\u200F\u2028\u2029\u202A-\u202F\u2060\u2066-\u2069\uFEFF]");
-        foreach (var tag in Tags)
+        foreach (var tag in Languages.Tags)
         {
             var path = Path.Combine(RepoRoot(), "macOS", tag + ".lproj", "InfoPlist.strings");
             var text = File.ReadAllText(path);

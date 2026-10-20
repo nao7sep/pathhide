@@ -25,7 +25,7 @@ function Write-Step {
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
-$exePath = Join-Path $repoDir "bin/Release/net10.0/win-x64/publish/PathHide.exe"
+$exePath = Join-Path $repoDir "publish-win/PathHide.exe"
 $projectFile = Join-Path $repoDir "src/PathHide/PathHide.csproj"
 $runtimeToken = [guid]::NewGuid().ToString("N")
 

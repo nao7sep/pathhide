@@ -52,6 +52,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Title = AppIdentity.Name;
         _placement = new WindowPlacement(this, "main");
 
         if (OperatingSystem.IsWindows())

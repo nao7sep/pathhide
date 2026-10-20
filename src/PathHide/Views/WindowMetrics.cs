@@ -22,8 +22,8 @@ public static class WindowMetrics
     /// <summary>
     /// The width a one-row strip needs whatever room it has now: what each shown child of a horizontal
     /// StackPanel asked for, which the panel measured at an unlimited width, with the gaps between them
-    /// and the panel's margin. Read after a layout pass, never by measuring the live strip
-    /// (window-conventions).
+    /// and the panel's margin. Read after a layout pass, never by measuring the live strip, which can
+    /// leave Avalonia's cached layout stale.
     /// </summary>
     public static double RowWidth(Avalonia.Controls.StackPanel row)
     {

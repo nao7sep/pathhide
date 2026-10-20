@@ -24,7 +24,8 @@ public sealed class ShortcutsDialogTests : WindowTest
         var dialog = Show(new ShortcutsDialog(ShortcutCatalog.Build(owner)));
         dialog.UpdateLayout();
 
-        // The main window opens at 1280×720; the shortcuts should be readable without scrolling there.
-        Assert.True(dialog.DesiredSize.Height < 720, $"The dialog wants {dialog.DesiredSize.Height:0} px.");
+        // The shortcuts should be readable without scrolling at the main window's designed height.
+        var designed = Show(PathHide.Tests.I18n.PopulatedMainWindow.Empty()).Height;
+        Assert.True(dialog.DesiredSize.Height < designed, $"The dialog wants {dialog.DesiredSize.Height:0} px of {designed:0}.");
     }
 }

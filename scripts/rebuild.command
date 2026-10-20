@@ -24,7 +24,8 @@ if [[ "$ARCH" != "arm64" ]]; then
   echo "PathHide builds for Apple Silicon only; this host is $ARCH." >&2
   exit 1
 fi
-RID="osx-arm64"
+# The macOS runtime identifier the project declares.
+RID="$(dotnet msbuild "$PROJECT_FILE" -getProperty:RuntimeIdentifiers | tr ';' '\n' | grep -m1 '^osx-')"
 
 log_step() {
   printf '\n==> %s\n' "$1"

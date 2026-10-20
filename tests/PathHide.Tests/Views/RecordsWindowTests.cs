@@ -30,10 +30,6 @@ namespace PathHide.Tests.Views;
 public sealed class RecordsLayoutTests
 {
     [Fact]
-    public void The_window_minimum_is_both_pane_minimums_the_splitter_and_the_margins() =>
-        Assert.Equal(16 + 320 + 16 + 420 + 16, RecordsLayout.MinWidth);
-
-    [Fact]
     public void A_drag_saves_a_whole_pixel_width_inside_the_lists_bounds()
     {
         Assert.Equal(320, RecordsLayout.Intent(100));
@@ -83,6 +79,18 @@ public sealed class RecordsWindowTests : WindowTest
         Dispatcher.UIThread.RunJobs();
         window.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
+    }
+
+    [AvaloniaFact]
+    public void The_window_minimum_is_its_two_pane_minimums_the_splitter_and_the_margins()
+    {
+        var (window, _) = ShowRecords(Owner());
+        var shell = window.FindControl<Grid>("Shell")!;
+        var columns = shell.ColumnDefinitions;
+
+        Assert.Equal(
+            shell.Margin.Left + shell.Margin.Right + columns[0].MinWidth + columns[1].Width.Value + columns[2].MinWidth,
+            window.MinWidth);
     }
 
     [AvaloniaFact]

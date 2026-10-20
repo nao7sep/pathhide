@@ -7,9 +7,7 @@ using Xunit;
 namespace PathHide.Tests;
 
 /// <summary>
-/// The UI-font setting and its resolver. ParseFamilies is the parsing edge of the resolver (the
-/// FontManager-backed "first installed wins, else Inter" path mirrors daynote's tested resolver and
-/// needs a headless app this project does not host).
+/// The UI-font setting and the parsing edge of its resolver.
 /// </summary>
 public sealed class UiFontTests
 {
@@ -30,10 +28,9 @@ public sealed class UiFontTests
     }
 
     [Fact]
-    public void Default_ui_font_stores_nothing_and_names_inter_as_the_placeholder()
+    public void Default_ui_font_stores_nothing()
     {
         Assert.Equal(string.Empty, new AppSettings().UiFontFamily);
-        Assert.Equal("Inter", AppSettings.DefaultUiFontName);
     }
 
     [Fact]

@@ -102,7 +102,7 @@ public sealed class AboutDialog : DialogBase
             {
                 new TextBlock
                 {
-                    Text = "PathHide",
+                    Text = AppIdentity.Name,
                     FontSize = 20,
                     FontWeight = FontWeight.Bold,
                     Margin = new Avalonia.Thickness(0, 0, 0, 4),

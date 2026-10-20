@@ -123,12 +123,13 @@
     </Window.Styles>
 
     <!-- The list pane at its pixel width, the splitter's column, and the detail pane taking the rest.
-         RecordsLayout holds these sizes; the list's width is set in code from the saved intent. -->
-    <Grid x:Name="Shell" Margin="16">
+         Their sizes and the margin come from RecordsLayout, set in code, so the window's minimum and the
+         panes are one set of numbers. -->
+    <Grid x:Name="Shell">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="380" MinWidth="320" MaxWidth="640"/>
-            <ColumnDefinition Width="16"/>
-            <ColumnDefinition Width="*" MinWidth="420"/>
+            <ColumnDefinition/>
+            <ColumnDefinition/>
+            <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0" Classes="recordsPane">

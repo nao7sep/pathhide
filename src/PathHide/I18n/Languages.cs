@@ -100,20 +100,9 @@ internal static class Languages
         if (parts.Length == 0)
             return null;
 
-        return parts[0].ToLowerInvariant() switch
-        {
-            "zh" => "zh-Hans",
-            "pt" => "pt-BR",
-            "es" => "es",
-            "de" => "de",
-            "en" => "en",
-            "fr" => "fr",
-            "it" => "it",
-            "ru" => "ru",
-            "ja" => "ja",
-            "ko" => "ko",
-            _ => null,
-        };
+        // The set holds one variety per language, so the primary subtag names it.
+        var primary = parts[0].ToLowerInvariant();
+        return Tags.FirstOrDefault(tag => tag.Split('-')[0] == primary);
     }
 
     /// <summary>

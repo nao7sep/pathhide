@@ -4,8 +4,8 @@ namespace PathHide.Views;
 
 /// <summary>
 /// The records window's pane sizes (window conventions, Content-based minimum size): a list pane the
-/// user sizes with the splitter, beside the detail pane, which takes the rest. The values mirror the
-/// margins and columns in RecordsWindow.axaml.
+/// user sizes with the splitter, beside the detail pane, which takes the rest. The window applies these
+/// to its margin and columns, so its minimum and its panes cannot disagree.
 /// </summary>
 internal static class RecordsLayout
 {

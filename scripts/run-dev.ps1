@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $scriptExitCode = 0
 
-# run-dev: run the app from source with live reload, in its loosest configuration.
+# run-dev: run the app from source with dotnet run (Debug, incremental), in its loosest configuration.
 # For active coding and debugging. The strict, production-faithful launchers are
 # run-built (launch the existing packaged app bundle without rebuilding) and
 # rebuild (build and package a fresh bundle, then launch).
@@ -48,7 +48,7 @@ function Invoke-Native {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
 $projectFile = Join-Path $repoDir "src/PathHide/PathHide.csproj"
-$builtExecutable = Join-Path $repoDir "bin/Release/net10.0/win-x64/publish/PathHide.exe"
+$builtExecutable = Join-Path $repoDir "publish-win/PathHide.exe"
 $runtimeToken = [guid]::NewGuid().ToString("N")
 
 try {

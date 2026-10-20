@@ -78,7 +78,8 @@ internal static class SettingsSets
     {
         var builtIn = new AppSettings();
         var sets = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
-        // Text sets compare after their cleanup (text-cleanup-conventions).
+        // Text sets compare after their cleanup, so stray spaces or case never make a set differ from
+        // its built-in and land in config.json.
         Add(Language, Languages.NormalizePreference(settings.Language), builtIn.Language);
         Add(UiFontFamily, UiFontFamilyValue.Normalize(settings.UiFontFamily), builtIn.UiFontFamily);
         Add(Theme, settings.Theme, builtIn.Theme);

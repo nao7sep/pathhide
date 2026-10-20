@@ -28,7 +28,7 @@ public sealed class ApplyModeProcessTests : IDisposable
         var report = ElevatedApplyResults.Parse(File.ReadAllText(results));
         Assert.Empty(report.Results);
         Assert.Contains(report.Entries, entry => entry.Level == "error");
-        Assert.False(File.Exists(Path.Combine(root, "records.sqlite3")));
+        Assert.False(File.Exists(Path.Combine(root, PathHide.Storage.RecordsStore.FileName)));
         if (malformed)
             Assert.Equal("{ invalid json", File.ReadAllText(request));
         else
@@ -52,7 +52,7 @@ public sealed class ApplyModeProcessTests : IDisposable
         Assert.Equal("existing result", File.ReadAllText(results));
         Assert.Equal(attributes, File.GetAttributes(target));
         Assert.Equal("keep", File.ReadAllText(target));
-        Assert.False(File.Exists(Path.Combine(root, "records.sqlite3")));
+        Assert.False(File.Exists(Path.Combine(root, PathHide.Storage.RecordsStore.FileName)));
         Assert.NotEmpty(Directory.GetFiles(Path.Combine(root, "logs")));
     }
 

@@ -67,6 +67,11 @@ public partial class RecordsWindow : Window
         Width = RecordsLayout.DefaultWidth;
         Height = RecordsLayout.DefaultHeight;
         MinWidth = RecordsLayout.MinWidth;
+        Shell.Margin = new Thickness(RecordsLayout.Padding);
+        ListColumn.MinWidth = RecordsLayout.ListMin;
+        ListColumn.MaxWidth = RecordsLayout.ListMax;
+        Shell.ColumnDefinitions[1].Width = new GridLength(RecordsLayout.Gap);
+        DetailColumn.MinWidth = RecordsLayout.DetailMin;
         _placement = new WindowPlacement(this, "records");
         _placement.Restore(state.RecordsWindowPositionX, state.RecordsWindowPositionY,
             state.RecordsWindowWidth, state.RecordsWindowHeight, state.RecordsWindowMaximized);

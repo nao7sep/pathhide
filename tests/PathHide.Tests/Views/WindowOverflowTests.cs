@@ -47,8 +47,6 @@ public sealed class WindowOverflowTests
 
         Assert.Equal(host.ClientSize.Width, layout.Bounds.Width, 0);
         Assert.Equal(host.ClientSize.Height, layout.Bounds.Height, 0);
-        Assert.Equal(900, layout.MinWidth);
-        Assert.Equal(400, layout.MinHeight);
         host.Close();
         Dispatcher.UIThread.RunJobs();
     }

@@ -80,7 +80,10 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
     /// field at type-load) so <c>PATHHIDE_DATA_DIR</c> is read after the environment is set, per the
     /// storage-path conventions' caution against import-time resolution — and so a test that relocates the
     /// root sees the new location.</summary>
-    private static string StoreFile() => Path.Combine(StorageRoot.Directory, "backups.sqlite3");
+    private static string StoreFile() => Path.Combine(StorageRoot.Directory, FileName);
+
+    /// <summary>The history database's file name under the storage root.</summary>
+    internal const string FileName = "backups.sqlite3";
 
     /// <summary>
     /// Queue one managed-text write: <paramref name="absolutePath"/> is the FULL absolute path of the file

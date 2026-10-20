@@ -206,8 +206,8 @@ public sealed class SettingsDialog : DialogBase
     }
 
     // Save commits a draft, so the shell's dirty guard prompts on dismiss and Save stays disabled until
-    // the draft actually differs from the persisted values (the conventions' dirty gate for explicit
-    // commit buttons). Every field is always valid, so dirtiness alone gates the commit.
+    // the draft actually differs from the saved values: a Save that would change nothing is not
+    // offered. Every field is always valid, so dirtiness alone gates the commit.
     protected override bool HasUnsavedChanges =>
         SelectedLanguage != _originalLanguage
         || UiFontFamily != _originalUiFont

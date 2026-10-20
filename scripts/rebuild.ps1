@@ -47,7 +47,7 @@ function Invoke-Native {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoDir = Split-Path -Parent $scriptDir
 $projectFile = Join-Path $repoDir "src/PathHide/PathHide.csproj"
-$publishDir = Join-Path $repoDir "bin/Release/net10.0/win-x64/publish"
+$publishDir = Join-Path $repoDir "publish-win"
 $exePath = Join-Path $publishDir "PathHide.exe"
 $runtimeToken = [guid]::NewGuid().ToString("N")
 
@@ -71,11 +71,14 @@ try {
         Remove-Item -Recurse -Force $publishDir
     }
 
-    Write-Step "Publishing self-contained win-x64 build"
+    # The Windows runtime identifier the project declares.
+    $rid = ((& dotnet msbuild $projectFile -getProperty:RuntimeIdentifiers) -split ';' | Where-Object { $_ -like 'win-*' } | Select-Object -First 1)
+    if (-not $rid) { throw "The project declares no Windows runtime identifier." }
+    Write-Step "Publishing self-contained $rid build"
     Invoke-Native -FilePath "dotnet" -ArgumentList @(
         "publish", $projectFile,
         "-c", "Release",
-        "-r", "win-x64",
+        "-r", $rid,
         "--self-contained", "true",
         "-o", $publishDir
     )

@@ -15,9 +15,8 @@ namespace PathHide.Tests.Storage;
 /// directory redirected via the <c>PATHHIDE_DATA_DIR</c> environment variable — the one
 /// relocation seam, used the same way in tests and production. These touch the
 /// disk on purpose: the atomic write is the behaviour that protects the user's
-/// saved data, and a fake filesystem would not exercise it. There is no longer a
-/// <c>.bak</c> sidecar (retired per the data-backup conventions); several tests
-/// assert that no such file is ever created.
+/// saved data, and a fake filesystem would not exercise it. History lives in the backup
+/// database, so a save leaves nothing beside the live document.
 /// </summary>
 /// <remarks>
 /// Every real <see cref="JsonStore{T}.Save"/> here also queues a write for the
@@ -295,9 +294,8 @@ public sealed class JsonStoreTests : IDisposable
 
         store.Save(new TestDocument());
 
-        Assert.True(File.Exists(PathOf("config.json")));
-        // The .bak sidecar is retired: a first save writes exactly the live file.
-        Assert.False(File.Exists(PathOf("config.json.bak")));
+        // A first save writes exactly the live document.
+        Assert.Equal(["config.json"], DocumentFiles());
     }
 
     [Fact]
@@ -343,9 +341,9 @@ public sealed class JsonStoreTests : IDisposable
 
         var liveJson = File.ReadAllText(PathOf("config.json"));
 
-        // The second save atomically replaces the live file with no last-good copy left beside it.
+        // The second save atomically replaces the live file with no copy left beside it.
         Assert.Contains("hidden_and_system", liveJson);
-        Assert.False(File.Exists(PathOf("config.json.bak")));
+        Assert.Equal(["config.json"], DocumentFiles());
     }
 
     [Fact]
@@ -438,24 +436,24 @@ public sealed class JsonStoreTests : IDisposable
         settingsStore.Save(new TestDocument { WindowsHideMode = WindowsHideMode.HiddenAndSystem });
         pathListStore.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
 
-        Assert.True(File.Exists(PathOf("config.json")));
-        Assert.True(File.Exists(PathOf("paths.json")));
-
-        // The .bak sidecar is retired: neither store leaves one behind.
-        Assert.False(File.Exists(PathOf("config.json.bak")));
-        Assert.False(File.Exists(PathOf("paths.json.bak")));
-
-        // No stale settings.json is produced by the settings store any longer.
-        Assert.False(File.Exists(PathOf("settings.json")));
-        Assert.False(File.Exists(PathOf("settings.json.bak")));
+        // Each store writes its own document and nothing beside it.
+        Assert.Equal(["config.json", "paths.json"], DocumentFiles());
 
         // Each store round-trips only its own document; the roles do not bleed together.
         Assert.Equal(WindowsHideMode.HiddenAndSystem, settingsStore.Load().Value.WindowsHideMode);
         Assert.Single(pathListStore.Load().Value);
     }
 
-    // --- Write-through data-backup hook (STEP 3): the record fires from this one choke point, after the
-    // rename, for both managed files, byte-identically to what landed on disk, keyed by the FINAL path. ---
+    // --- Write-through backup history: the record fires from this one choke point, after the rename,
+    // for both managed files, byte-identically to what landed on disk, keyed by the final path. ---
+
+    // The files a save can leave in the storage root, apart from the history and records databases.
+    private string[] DocumentFiles() =>
+        Directory.GetFiles(_root)
+            .Select(Path.GetFileName)
+            .Where(name => !name!.EndsWith(".sqlite3", StringComparison.Ordinal) && !name.Contains(".sqlite3-", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray()!;
 
     /// <summary>Reads the recorded content blob(s) for a path from the throwaway root's backups.sqlite3,
     /// opening a private read-only connection once the pending writes have landed.</summary>
@@ -466,7 +464,7 @@ public sealed class JsonStoreTests : IDisposable
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
             new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
             {
-                DataSource = PathOf("backups.sqlite3"),
+                DataSource = PathOf(BackupStore.FileName),
                 Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly,
             }.ToString());
         connection.Open();
@@ -492,7 +490,7 @@ public sealed class JsonStoreTests : IDisposable
         using var connection = new Microsoft.Data.Sqlite.SqliteConnection(
             new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
             {
-                DataSource = PathOf("backups.sqlite3"),
+                DataSource = PathOf(BackupStore.FileName),
                 Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadOnly,
             }.ToString());
         connection.Open();
@@ -564,7 +562,7 @@ public sealed class JsonStoreTests : IDisposable
         // The save must still fully succeed (file on disk, round-trips) — the backup is best-effort and can
         // never break a save that already landed.
         BackupStore.Close();
-        File.WriteAllText(PathOf("backups.sqlite3"), "not a database");
+        File.WriteAllText(PathOf(BackupStore.FileName), "not a database");
 
         var store = new JsonStore<TestDocument>("config.json", "settings", FormatVersions.Settings);
         var exception = Xunit.Record.Exception(() =>

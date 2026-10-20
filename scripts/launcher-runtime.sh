@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
+# Shared by the macOS launchers (run-dev, run-built, rebuild): one PathHide runtime per repository.
+# A launcher claims ownership, stops any PathHide it or another launcher started, waits for the new one
+# to appear, and releases ownership only if no later launcher has claimed it since.
+
+launcher_owner_file() {
+  printf '%s/.git/launcher-runtime-owner' "$1"
+}
 
 claim_launcher_runtime() {
   local token="$1" repo_dir="$2"
-  local owner_file="$repo_dir/.git/launcher-runtime-owner"
+  local owner_file
+  owner_file="$(launcher_owner_file "$repo_dir")"
   local temporary_file="${owner_file}.$$.$RANDOM"
   printf '%s\n' "$token" > "$temporary_file"
   mv -f "$temporary_file" "$owner_file"
@@ -10,13 +18,15 @@ claim_launcher_runtime() {
 
 is_launcher_runtime_owner() {
   local token="$1" repo_dir="$2"
-  local owner_file="$repo_dir/.git/launcher-runtime-owner"
+  local owner_file
+  owner_file="$(launcher_owner_file "$repo_dir")"
   [[ -f "$owner_file" && "$(tr -d '\r\n' < "$owner_file")" == "$token" ]]
 }
 
 release_launcher_runtime() {
   local token="$1" repo_dir="$2"
-  local owner_file="$repo_dir/.git/launcher-runtime-owner"
+  local owner_file
+  owner_file="$(launcher_owner_file "$repo_dir")"
   if is_launcher_runtime_owner "$token" "$repo_dir"; then
     rm -f "$owner_file"
   fi

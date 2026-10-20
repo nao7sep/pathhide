@@ -90,30 +90,4 @@ internal sealed class Catalogue
             forms[form.Name] = form.Value.GetString() ?? "";
         return forms;
     }
-
-    /// <summary>Every catalogue in the set, for the gates.</summary>
-    internal static IEnumerable<Catalogue> All()
-    {
-        foreach (var tag in Languages.Tags)
-            yield return For(tag);
-    }
-
-    /// <summary>
-    /// The catalogue files as they sit in the repository, for the gates that must read the file rather
-    /// than its parsed form, such as the hidden-character check. Null when the sources are not beside
-    /// the test run, which only happens off a working tree.
-    /// </summary>
-    internal static string? SourceDirectory(string? startingAt = null)
-    {
-        var directory = new DirectoryInfo(startingAt ?? AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var locales = Path.Combine(directory.FullName, "src", "PathHide", "I18n", "Locales");
-            if (Directory.Exists(locales))
-                return locales;
-            directory = directory.Parent;
-        }
-
-        return null;
-    }
 }

@@ -9,7 +9,6 @@
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="720"
         x:Class="PathHide.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="PathHide"
         Icon="/Assets/icon.png"
         Width="1280" Height="720"
         Background="{DynamicResource AppBackgroundBrush}">

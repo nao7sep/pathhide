@@ -5,15 +5,20 @@ $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
 Set-Location $Repo
 
-$AppName = "PathHide"
 $Project = "src/PathHide/PathHide.csproj"
+# The installer's names and the build's Windows runtime identifier come from the project.
+function Get-ProjectProperty([string]$Name) { (& dotnet msbuild $Project "-getProperty:$Name").Trim() }
+$AppName = Get-ProjectProperty AssemblyName
+$Product = Get-ProjectProperty Product
+$Publisher = Get-ProjectProperty Company
+$Rid = (Get-ProjectProperty RuntimeIdentifiers) -split ';' | Where-Object { $_ -like 'win-*' } | Select-Object -First 1
 $Version = ([regex]::Match((Get-Content Directory.Build.props -Raw), '<Version>(.*?)</Version>')).Groups[1].Value
 
 Remove-Item -Recurse -Force publish-win, dist -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path dist | Out-Null
 
 # Self-contained win-x64 publish -> a folder of PathHide.exe + its runtime.
-dotnet publish $Project -c Release -r win-x64 --self-contained true -o publish-win
+dotnet publish $Project -c Release -r $Rid --self-contained true -o publish-win
 
 # Debug symbols are useful to developers but add about 105 MB of uncompressed
 # payload. Keep them in build outputs, not in the user-facing package.
@@ -41,6 +46,6 @@ if (-not $iscc) {
 if (-not $iscc) {
     throw "Inno Setup compiler not found. Install Inno Setup 6 for the current user or machine, or add ISCC.exe to PATH."
 }
-& $iscc "/DMyAppVersion=$Version" scripts/pathhide.iss
+& $iscc "/DMyAppVersion=$Version" "/DMyAppName=$Product" "/DMyAppExe=$AppName.exe" "/DMyAppPublisher=$Publisher" scripts/pathhide.iss
 
 Get-ChildItem dist
