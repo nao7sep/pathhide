@@ -62,6 +62,6 @@ dotnet publish "$PROJECT_FILE" -c Release -r "$RID" --self-contained true -o "$R
 
 log_step "Launching the rebuilt app"
 claim_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
-stop_owned_runtime dotnet "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE"
+stop_owned_runtime "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE"
 open -n "$APP_BUNDLE"
-wait_for_owned_runtime dotnet "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE" 30
+wait_for_owned_runtime "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE" 30

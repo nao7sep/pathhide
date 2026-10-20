@@ -62,7 +62,7 @@ try {
     # happen before removing the publish directory.
     Write-Step "Replacing any existing PathHide runtime"
     Claim-LauncherRuntime -Token $runtimeToken -RepoDir $repoDir
-    Stop-OwnedRuntime -Kind dotnet -Label "PathHide" -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName "PathHide" -BuiltExecutable $exePath
+    Stop-OwnedRuntime -Label "PathHide" -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName "PathHide" -BuiltExecutable $exePath
 
     Write-Step "Removing stale publish output"
     # Clear the publish dir first so a build that fails to emit a file cannot be
@@ -84,7 +84,7 @@ try {
     # GUI app: launch non-blocking via Start-Process (the Windows counterpart to
     # macOS `open`), so the console does not wait on the app's lifetime.
     Start-Process -FilePath $exePath | Out-Null
-    Wait-OwnedRuntime -Kind dotnet -Label "PathHide" -RepoDir $repoDir -ProjectFile "" -ExecutableName "PathHide" -BuiltExecutable $exePath -TimeoutSeconds 30
+    Wait-OwnedRuntime -Label "PathHide" -RepoDir $repoDir -ProjectFile "" -ExecutableName "PathHide" -BuiltExecutable $exePath -TimeoutSeconds 30
 }
 catch {
     Write-Host ""

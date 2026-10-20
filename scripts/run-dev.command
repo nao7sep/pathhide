@@ -41,7 +41,7 @@ cleanup() {
   local status="$?"
   trap - EXIT
   if is_launcher_runtime_owner "$RUNTIME_TOKEN" "$REPO_DIR"; then
-    stop_owned_runtime dotnet "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE" >/dev/null 2>&1 || true
+    stop_owned_runtime "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE" >/dev/null 2>&1 || true
     release_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
   fi
   pause_on_failure "$status"
@@ -56,7 +56,7 @@ cd "$REPO_DIR"
 
 log_step "Replacing any existing PathHide runtime"
 claim_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
-stop_owned_runtime dotnet "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE"
+stop_owned_runtime "PathHide" "$REPO_DIR" "$PROJECT_FILE" "PathHide" "$APP_EXECUTABLE"
 
 log_step "Restoring packages required for launch"
 dotnet restore "$PROJECT_FILE"
@@ -64,6 +64,6 @@ dotnet restore "$PROJECT_FILE"
 log_step "Starting PathHide (Debug, from source)"
 dotnet run --project "$PROJECT_FILE" &
 DEV_PID=$!
-wait_for_owned_runtime dotnet "PathHide" "$REPO_DIR" "" "PathHide" "$APP_EXECUTABLE" 120
+wait_for_owned_runtime "PathHide" "$REPO_DIR" "" "PathHide" "$APP_EXECUTABLE" 120
 log_step "PathHide is ready"
 wait "$DEV_PID"

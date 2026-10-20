@@ -1,5 +1,10 @@
-# Run the complete ordinary suite once and retain a shareable result bundle.
-# Requires the .NET SDK; does not launch the GUI or request administrator rights.
+# Run the complete ordinary suite once on Windows and keep a shareable result bundle (the TRX
+# result and the SDK information) under TestResults/. Run it from PowerShell:
+#   powershell -NoProfile -File .\scripts\test-windows.ps1
+# Requires the .NET SDK. Enable Windows Developer Mode first: the symbolic-link test needs it and
+# fails rather than passing silently without it. It launches no GUI and requests no administrator
+# rights, so real UAC consent, antivirus delays, disconnected shares, input methods and multiple
+# displays stay outside what it checks.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {

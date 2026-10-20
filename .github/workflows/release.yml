@@ -37,9 +37,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+      # The SDK band comes from the target framework in Directory.Build.props, so a
+      # framework bump moves CI with it.
+      - name: Read the target .NET version
+        id: dotnet
+        shell: bash
+        run: echo "version=$(sed -n 's|.*<TargetFramework>net\([0-9.]*\)</TargetFramework>.*|\1|p' Directory.Build.props).x" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: ${{ steps.dotnet.outputs.version }}
       # The tag names the release, the SSOT (Directory.Build.props) names every
       # artifact: a mismatch stops here, before anything is built.
       - name: Verify tag matches project version
@@ -70,9 +76,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+      # The SDK band comes from the target framework in Directory.Build.props, so a
+      # framework bump moves CI with it.
+      - name: Read the target .NET version
+        id: dotnet
+        shell: bash
+        run: echo "version=$(sed -n 's|.*<TargetFramework>net\([0-9.]*\)</TargetFramework>.*|\1|p' Directory.Build.props).x" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: ${{ steps.dotnet.outputs.version }}
 
       # One command per OS — emits the installer + portable into dist/.
       - name: Package (host OS)
