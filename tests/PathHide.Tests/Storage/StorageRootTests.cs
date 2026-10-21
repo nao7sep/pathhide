@@ -76,6 +76,28 @@ public sealed class StorageRootTests : IDisposable
         Assert.Equal(Path.GetFullPath(home), Path.GetFullPath(StorageRoot.Directory));
     }
 
+    [WindowsOnlyFact]
+    public void Windows_partial_roots_resolve_from_home_without_a_working_directory()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var root = Path.GetPathRoot(home)!;
+        var leaf = "pathhide-root-probe-" + Guid.NewGuid().ToString("N");
+
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, @"\" + leaf);
+        Assert.Equal(Path.Combine(root, leaf), StorageRoot.Directory);
+
+        var homeDrive = root.Length == 3 && root[1] == ':' ? root[..2] : null;
+        if (homeDrive is not null)
+        {
+            Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, homeDrive + leaf);
+            Assert.Equal(Path.Combine(home, leaf), StorageRoot.Directory);
+        }
+
+        var otherDrive = string.Equals(homeDrive, "D:", StringComparison.OrdinalIgnoreCase) ? "E:" : "D:";
+        Environment.SetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable, otherDrive + leaf);
+        Assert.Equal(otherDrive + @"\" + leaf, StorageRoot.Directory);
+    }
+
     [Fact]
     public void Tilde_Slash_Override_Expands_Against_Home()
     {

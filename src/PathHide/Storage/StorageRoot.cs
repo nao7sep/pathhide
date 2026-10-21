@@ -161,10 +161,9 @@ public static class StorageRoot
             value = Path.Combine(home, value[2..]);
         }
 
-        // A relative override is resolved against the home directory, not the working directory.
-        return Path.IsPathRooted(value)
-            ? Path.GetFullPath(value)
-            : Path.GetFullPath(Path.Combine(home, value));
+        // The explicit base also handles Windows drive-relative and root-relative spellings:
+        // IsPathRooted accepts both, but GetFullPath(value) would consult the working directory.
+        return Path.GetFullPath(value, home);
     }
 
     private static string HomeDirectory()
