@@ -433,6 +433,8 @@ public partial class MainWindowViewModel : ObservableObject
                 continue;
             }
 
+            // Keep the physical parent so Show still reaches the entry hidden by Add if a
+            // parent alias is retargeted. The final link remains the entry, never its target.
             updated.Add(new PathEntry
             {
                 Path = candidate,

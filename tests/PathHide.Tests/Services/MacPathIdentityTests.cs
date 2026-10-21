@@ -107,6 +107,52 @@ public sealed class MacPathIdentityTests : IDisposable
             Assert.Equal(service.ResolvePath(broken), service.ResolvePath(broken.ToLowerInvariant()));
     }
 
+    [MacOnlyFact]
+    public async Task Show_after_parent_alias_retarget_and_reload_restores_the_original_link_only()
+    {
+        var original = Directory.CreateDirectory(Path.Combine(_root, "original")).FullName;
+        var replacement = Directory.CreateDirectory(Path.Combine(_root, "replacement")).FullName;
+        var target = Path.Combine(_root, "target");
+        File.WriteAllText(target, "target sentinel");
+        var originalLink = Path.Combine(original, "Link");
+        var replacementLink = Path.Combine(replacement, "Link");
+        File.CreateSymbolicLink(originalLink, target);
+        File.CreateSymbolicLink(replacementLink, target);
+        var alias = Path.Combine(_root, "parent-alias");
+        Directory.CreateSymbolicLink(alias, original);
+        var service = new MacVisibilityService();
+        var store = new PathListStore();
+        var vm = new MainWindowViewModel(new BoundedVisibility(service), store,
+            new FakeSettingsStore(), new AppSettings(), new FakeJsonStore<AppState>(), new AppState(), []);
+        try
+        {
+            await vm.AddPathsCommand.ExecuteAsync([Path.Combine(alias, "Link")]);
+            var stored = Assert.Single(store.Load().Value).Path;
+            Assert.Equal(service.ResolvePath(originalLink), stored);
+            Assert.Equal(ActualState.Hidden, service.Inspect(originalLink).ActualState);
+            Assert.Equal(ActualState.Visible, service.Inspect(target).ActualState);
+            await vm.AddPathsCommand.ExecuteAsync([originalLink]);
+            Assert.Single(vm.Rows);
+
+            Directory.Delete(alias);
+            Directory.CreateSymbolicLink(alias, replacement);
+            // Keep the replacement hidden: accidentally showing through the alias must fail this test.
+            service.Hide(replacementLink);
+            await vm.ReloadCommand.ExecuteAsync(null);
+            await vm.ShowAllCommand.ExecuteAsync(null);
+
+            Assert.Equal(stored, Assert.Single(store.Load().Value).Path);
+            Assert.Equal(ActualState.Visible, service.Inspect(originalLink).ActualState);
+            Assert.Equal(ActualState.Hidden, service.Inspect(replacementLink).ActualState);
+            Assert.Equal(ActualState.Visible, service.Inspect(target).ActualState);
+        }
+        finally
+        {
+            await vm.ScanTask;
+            Directory.Delete(alias);
+        }
+    }
+
     private static void DiskImage(params string[] arguments)
     {
         var start = new ProcessStartInfo("/usr/bin/hdiutil") { UseShellExecute = false,
