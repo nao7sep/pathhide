@@ -592,69 +592,81 @@ public class MainWindowViewModelTests
         stalled.Set();
     }
 
-    // The save must not run on the thread that issued the command (the UI thread, live): each
-    // test holds the store's write and checks the command handed control back while it was held.
-    // A synchronous save would block right here until the release below, and return after it.
-    private static ManualResetEventSlim ReleasedLater(out Task release)
+    // Observe the real UI caller from a worker so even a synchronous storage regression can be
+    // released in finally. A dispatcher callback after storage entry proves responsiveness even
+    // when the command yielded earlier; the bound only fails missing acknowledgements.
+    private static Task RemainsResponsiveWhileStorageIsHeldAsync(
+        Func<Task> invoke, Task entered, ManualResetEventSlim gate) => Task.Run(async () =>
     {
-        var gate = new ManualResetEventSlim(false);
-        release = Task.Delay(TimeSpan.FromSeconds(2)).ContinueWith(_ => gate.Set(), TaskScheduler.Default);
-        return gate;
-    }
+        var returned = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Dispatcher.UIThread.Post(() =>
+        {
+            try { returned.SetResult(invoke()); }
+            catch (Exception ex) { returned.SetException(ex); }
+        });
+        var bound = TimeSpan.FromSeconds(2);
+        try
+        {
+            await entered.WaitAsync(bound, TestContext.Current.CancellationToken);
+            var operation = await returned.Task.WaitAsync(bound, TestContext.Current.CancellationToken);
+            var responsive = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Dispatcher.UIThread.Post(() => responsive.SetResult());
+            await responsive.Task.WaitAsync(bound, TestContext.Current.CancellationToken);
+            Assert.False(gate.IsSet);
+            Assert.False(operation.IsCompleted);
+        }
+        finally
+        {
+            gate.Set();
+            var operation = await returned.Task.WaitAsync(bound);
+            await operation.WaitAsync(bound);
+        }
+    });
 
-    [Fact]
+    [AvaloniaFact]
     public async Task AddPaths_SavesThePathListOffTheCallingThread()
     {
-        using var gate = ReleasedLater(out var release);
+        using var gate = new ManualResetEventSlim(false);
         var paths = new FakeJsonStore<List<PathEntry>> { SaveGate = gate };
         var vm = CreateViewModel(new FakeVisibilityService(), paths);
 
-        var add = vm.AddPathsCommand.ExecuteAsync(new[] { "/x" });
-        var returnedWhileSaving = !gate.IsSet;
-        gate.Set();
-        await add;
-        await release;
+        await RemainsResponsiveWhileStorageIsHeldAsync(
+            () => vm.AddPathsCommand.ExecuteAsync(new[] { "/x" }), paths.SaveEntered.Task, gate);
 
-        Assert.True(returnedWhileSaving);
         Assert.Equal(1, paths.SaveCount);
         Assert.Single(vm.Rows);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task TryApplySettings_SavesOffTheCallingThread()
     {
-        using var gate = ReleasedLater(out var release);
+        using var gate = new ManualResetEventSlim(false);
         var settingsStore = new FakeSettingsStore { SaveGate = gate };
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
             new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
+        Task<Message?>? save = null;
 
-        var save = vm.TryApplySettingsAsync(Languages.System, string.Empty, hiddenAndSystem: false, ThemePreference.Dark);
-        var returnedWhileSaving = !gate.IsSet;
-        gate.Set();
-        Assert.Null(await save);
-        await release;
+        await RemainsResponsiveWhileStorageIsHeldAsync(
+            () => save = vm.TryApplySettingsAsync(Languages.System, string.Empty, hiddenAndSystem: false, ThemePreference.Dark),
+            settingsStore.SaveEntered.Task, gate);
 
-        Assert.True(returnedWhileSaving);
+        Assert.Null(await save!);
         Assert.Equal(ThemePreference.Dark, settingsStore.LastSaved!.Theme);
         Assert.Equal(ThemePreference.Dark, vm.Theme);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task Reload_ReadsThePathListOffTheCallingThread()
     {
         var paths = new FakeJsonStore<List<PathEntry>>();
         var vm = CreateViewModel(new FakeVisibilityService(), paths);
-        using var gate = ReleasedLater(out var release);
+        using var gate = new ManualResetEventSlim(false);
         paths.LoadGate = gate;
 
-        var reload = ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
-        var returnedWhileLoading = !gate.IsSet;
-        gate.Set();
-        await reload;
-        await release;
+        await RemainsResponsiveWhileStorageIsHeldAsync(
+            () => ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null), paths.LoadEntered.Task, gate);
 
-        Assert.True(returnedWhileLoading);
         Assert.Equal(2, paths.LoadCount);
     }
 

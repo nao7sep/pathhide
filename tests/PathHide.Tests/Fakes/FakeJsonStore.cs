@@ -1,5 +1,6 @@
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using PathHide.Storage;
 
 namespace PathHide.Tests.Fakes;
@@ -23,8 +24,13 @@ public class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
     /// <summary>When set, <see cref="Load"/> blocks on this gate first, like a read from a slow share.</summary>
     public ManualResetEventSlim? LoadGate { get; set; }
 
+    /// <summary>Signals entry into a load held by <see cref="LoadGate"/>.</summary>
+    public TaskCompletionSource LoadEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public LoadedStore<T> Load()
     {
+        if (LoadGate is not null)
+            LoadEntered.TrySetResult();
         LoadGate?.Wait();
         LoadCount++;
         if (LoadException is not null)
@@ -35,8 +41,13 @@ public class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
     /// <summary>When set, <see cref="Save"/> blocks on this gate first, like a write to a slow share.</summary>
     public ManualResetEventSlim? SaveGate { get; set; }
 
+    /// <summary>Signals entry into a save held by <see cref="SaveGate"/>.</summary>
+    public TaskCompletionSource SaveEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public void Save(T value)
     {
+        if (SaveGate is not null)
+            SaveEntered.TrySetResult();
         SaveGate?.Wait();
 
         if (ThrowOnSave)
