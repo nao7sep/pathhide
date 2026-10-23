@@ -278,6 +278,36 @@ public sealed class MacVisibilityServiceTests : IDisposable
         Assert.Equal(ActualState.Visible, _service.Inspect(target).ActualState);
     }
 
+    // Each kind comes from the entry's own attributes: a link to a directory is a link, and a dangling
+    // link is still a link.
+    [MacOnlyFact]
+    public void Inspect_TellsFilesDirectoriesAndLinksApartWithoutFollowingLinks()
+    {
+        var file = NewFile();
+        var directory = Path.Combine(_dir, "dir");
+        Directory.CreateDirectory(directory);
+        var directoryLink = Path.Combine(_dir, "dir-link");
+        Directory.CreateSymbolicLink(directoryLink, directory);
+        var dangling = Path.Combine(_dir, "dangling-link");
+        File.CreateSymbolicLink(dangling, Path.Combine(_dir, "absent"));
+
+        Assert.Equal(ItemKind.File, _service.Inspect(file).ItemKind);
+        Assert.Equal(ItemKind.Directory, _service.Inspect(directory).ItemKind);
+        Assert.Equal(ItemKind.Symlink, _service.Inspect(directoryLink).ItemKind);
+        Assert.Equal(ItemKind.Symlink, _service.Inspect(dangling).ItemKind);
+    }
+
+    // A probe macOS cannot answer, here a name longer than the file system allows, is an honest Error,
+    // never a guessed kind or a silent Missing.
+    [MacOnlyFact]
+    public void Inspect_ReportsAProbeTheSystemCannotAnswerAsAnError()
+    {
+        var result = _service.Inspect(Path.Combine(_dir, new string('n', 300)));
+
+        Assert.Equal(ActualState.Error, result.ActualState);
+        Assert.Equal(ItemKind.Unknown, result.ItemKind);
+    }
+
     [MacOnlyFact]
     public void Hide_DanglingSymlink_HidesTheLinkItself()
     {

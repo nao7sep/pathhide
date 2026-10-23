@@ -128,35 +128,14 @@ public sealed class MacVisibilityService : IVisibilityService
         throw new IOException($"{operation} failed: {message} (errno {errno})");
     }
 
-    private static bool IsSymlink(string path)
-    {
-        try
-        {
-            // FileInfo/DirectoryInfo.LinkTarget is the link-aware probe; unlike
-            // File.GetAttributes it doesn't follow the symlink before answering.
-            return new FileInfo(path).LinkTarget is not null
-                || new DirectoryInfo(path).LinkTarget is not null;
-        }
-        catch (Exception ex)
-        {
-            Log.Debug("symlink probe failed", ex, new { path });
-            return false;
-        }
-    }
-
+    // One no-follow read of the entry's own attributes decides its kind: a link is a link whatever it
+    // points to. A failure propagates to Inspect, which reports it once and shows the row as Error,
+    // rather than becoming a guess such as File.
     private static ItemKind DetectKind(string path)
     {
-        try
-        {
-            if (IsSymlink(path))
-                return ItemKind.Symlink;
-
-            return Directory.Exists(path) ? ItemKind.Directory : ItemKind.File;
-        }
-        catch (Exception ex)
-        {
-            Log.Debug("kind probe failed", ex, new { path });
-            return ItemKind.Unknown;
-        }
+        var attributes = File.GetAttributes(path);
+        return attributes.HasFlag(FileAttributes.ReparsePoint) ? ItemKind.Symlink
+            : attributes.HasFlag(FileAttributes.Directory) ? ItemKind.Directory
+            : ItemKind.File;
     }
 }

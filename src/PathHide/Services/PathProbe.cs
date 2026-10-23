@@ -52,7 +52,9 @@ public static class PathProbe
             }
             catch (Exception ex)
             {
-                Log.Debug("reachability probe failed", ex, new { path, current });
+                // Neither absent nor denied: the row shows Error, and the cause is kept at warn so a
+                // release build can explain it.
+                Log.Warn("inspect: reachability probe failed", ex, new { path, current });
                 return ActualState.Error;
             }
         }
