@@ -10,9 +10,8 @@ namespace PathHide.Services;
 /// <para>This is the ONE place that rule is written. Both writers call <see cref="Set"/> — the
 /// ordinary in-process write (<see cref="WindowsVisibilityService"/>) and the elevated <c>apply</c>
 /// child — because they must agree: a path hidden normally and the same path hidden through the UAC
-/// retry have to end up with the same attributes. They were separate copies, and the divergence
-/// would have been near-invisible, since only the extracted copy has tests that run off
-/// Windows.</para>
+/// retry have to end up with the same attributes. Separate copies could diverge near-invisibly, since
+/// only this one has tests that run off Windows.</para>
 ///
 /// <para><see cref="Change"/> is pure, so the bit math and the skip are unit-tested without touching
 /// a real file or running on Windows — the <see cref="FileAttributes"/> flags exist on every

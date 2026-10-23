@@ -37,8 +37,7 @@ public static class StorageRoot
                 var hasOverride = !string.IsNullOrEmpty(rawOverride?.Trim());
 
                 // One clause, because the raw value determines everything else: hasOverride is a
-                // pure function of it, so a second clause comparing the two could never be the
-                // deciding condition — a field, an assignment and a comparison that decided nothing.
+                // pure function of it, so a second clause comparing the two could never decide.
                 if (_cachedRoot is null ||
                     !string.Equals(_cachedOverride, rawOverride, StringComparison.Ordinal))
                 {

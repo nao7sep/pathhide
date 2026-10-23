@@ -395,9 +395,8 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// The mutation protocol in one place: exclusive of every other mutating command, with the
-    /// background scan paused for the body's duration and resumed after if it was running. Each
-    /// command used to open and close with these two lines itself, which is a protocol that can
-    /// be forgotten one command at a time.
+    /// background scan paused for the body's duration and resumed after if it was running. Every
+    /// mutating command goes through here, so none can forget to pause or resume the scan.
     /// </summary>
     private Task MutateAsync(Func<Task> body) => UnderMutationGateAsync(async () =>
     {
@@ -703,9 +702,8 @@ public partial class MainWindowViewModel : ObservableObject
     /// value, persist, apply, report — under the mutation gate, with the scan paused.
     /// </summary>
     /// <remarks>
-    /// The four commands were four copies of this body differing only in which
-    /// rows they took and which value they wrote, so any change to the mutation
-    /// protocol had to land in all four and would be forgotten in one.
+    /// Hide and Show, selected and all, differ only in which rows they take and which value they
+    /// write, so the protocol they share is written once, here.
     /// <para>Capture submitted path identities before waiting. Resolve their current rows under the
     /// gate so selection changes cannot redirect the action and removed entries cannot return.</para>
     /// <para>Desired visibility in <c>paths.json</c> is authoritative; the rows show the actual attribute
@@ -1444,9 +1442,8 @@ public partial class MainWindowViewModel : ObservableObject
     /// <remarks>
     /// <c>_scanCts</c> is never a disposed source: the scan nulls the field and disposes the source
     /// in the same <c>finally</c>, with no await between them, so no other UI-thread work can run
-    /// in the gap. This used to catch <see cref="ObjectDisposedException"/> around the cancel and
-    /// return false — which, had it ever fired, would have told the caller there was no scan and
-    /// left the paused one unresumed.
+    /// in the gap. So nothing is caught around the cancel: a false return would tell the caller there
+    /// was no scan and leave the paused one unresumed.
     /// </remarks>
     private async Task<bool> PauseScanningAsync()
     {
@@ -1533,10 +1530,8 @@ public partial class MainWindowViewModel : ObservableObject
     /// either <see cref="Initialize"/> — once, before any command can run — or a mutating command
     /// holding <c>_mutationGate</c>, and every one of those cancels the running scan and AWAITS it
     /// before starting another; <see cref="RescanOnActivation"/> holds the gate too, and starts only
-    /// when no scan is running. This method used to open by cancelling and disposing a "previous"
-    /// source that cannot exist, and to gate each of its shared-state writes on
-    /// <c>ReferenceEquals(_scanCts, scanCts)</c> — four re-checks of one invariant, in the type
-    /// least able to enforce it.
+    /// when no scan is running. So this method neither cancels a "previous" scan nor re-checks, before
+    /// its shared-state writes, that it is still the current one: the callers own that invariant.
     /// </remarks>
     private async Task RunScanAsync()
     {
@@ -1588,7 +1583,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// Every file-system call goes through <see cref="BoundedVisibility"/>, so one stalled network
     /// share or half-ejected volume costs its path a bounded wait and an Unresponsive verdict, never
     /// the whole command: the caller holds the mutation gate throughout, and an unbounded stat here
-    /// once kept every other command queued behind it until the app was force-quit.
+    /// would keep every other command queued behind it until the app was force-quit.
     /// </remarks>
     private Task<ApplyOutcome> ApplyDesiredStateAsync(List<PathRowViewModel> targets) =>
         RunCancellableAsync(token => ApplyAsync(targets, token));

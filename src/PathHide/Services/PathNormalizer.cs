@@ -96,7 +96,7 @@ public static class PathNormalizer
         // Stripping must never leave something that is no longer an absolute path, which is what
         // TryNormalize's [NotNullWhen(true)] contract promises its callers.
         //
-        // "//" trimmed to "" was persisted as an entry with an empty path and a row stuck at
+        // "//" trimmed to "" would be persisted as an entry with an empty path and a row stuck at
         // Error that could only be cleared by removing it. "C://" trimmed to "C:" is worse on
         // Windows: a bare drive is drive-RELATIVE, so a later GetAttributes/SetAttributes resolves
         // it against the process's current directory on that drive — a Hide would set +h on

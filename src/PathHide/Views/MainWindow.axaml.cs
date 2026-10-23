@@ -342,11 +342,11 @@ public partial class MainWindow : Window
     /// Never a hand-typed constant, so adding or resizing a column moves the minimum with it and
     /// the window can never shrink small enough to hide the toolbar, list, or status bar.
     /// <para>Re-run whenever the UI font changes. The font is user-changeable at runtime and
-    /// applies live through a DynamicResource, so a minimum measured once at load went stale:
-    /// switch to a wider family and the toolbar's natural width exceeded it, letting the window
-    /// be dragged down until the rightmost action buttons clipped under the hamburger — the very
-    /// truncation the minimum exists to prevent. Both chrome heights are measured for the same
-    /// reason, rather than the pixel constants they used to be.</para>
+    /// applies live through a DynamicResource, so a minimum measured once at load would go stale:
+    /// with a wider family the toolbar's natural width exceeds it, letting the window be dragged down
+    /// until the rightmost action buttons clip under the hamburger — the very truncation the minimum
+    /// exists to prevent. Both chrome heights are measured for the same reason, not fixed in
+    /// pixels.</para>
     /// </remarks>
     private void ApplyWindowMinimums()
     {

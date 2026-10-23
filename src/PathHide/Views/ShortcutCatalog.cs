@@ -145,9 +145,8 @@ public static class ShortcutCatalog
                 new KeyGesture(Key.Escape), ShortcutAction.Cancel),
             Display(ShortcutGroup.List, "shortcuts.remove", "Delete"),
 
-            // App. Settings is cross-platform — it was Windows-only until the UI-font
-            // setting was added; HasWindowsHideMode is the platform-specific flag now,
-            // and it gates a section INSIDE the dialog rather than the dialog itself.
+            // App. Settings is cross-platform; HasWindowsHideMode gates a section INSIDE the dialog
+            // rather than the dialog itself.
             Command(ShortcutGroup.App, "shortcuts.settings", cmd, cmdLabel, shift: false, Key.OemComma, "Comma", ShortcutAction.OpenSettings),
             Command(ShortcutGroup.App, "shortcuts.shortcuts", cmd, cmdLabel, shift: false, Key.OemQuestion, "Slash", ShortcutAction.ShowShortcuts),
             // Every window closes this way (keyboard-shortcut conventions, Closing a window); the main
