@@ -215,7 +215,7 @@ public sealed class BackupStoreTests : IDisposable
     }
 
     [Fact]
-    public void Record_KeepsRowsFromBeforeSessions_AndAddsTheColumnInPlace()
+    public void Record_LeavesAnUnsupportedPreSessionStoreUntouched()
     {
         // A store written by a build without sessions: same table and version, no session_id column.
         using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -241,9 +241,16 @@ public sealed class BackupStoreTests : IDisposable
 
         BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("new"));
 
-        var rows = RowsFor(PathOf("config.json"));
-        Assert.Equal([(null, "old"), (BackupStore.Session, "new")],
-            rows.Select(row => (row.Session, Encoding.UTF8.GetString(row.Content))));
+        BackupStore.Close();
+        using var retained = new SqliteConnection($"Data Source={StoreFile};Mode=ReadOnly;Pooling=False");
+        retained.Open();
+        using var check = retained.CreateCommand();
+        check.CommandText = "SELECT content FROM backups";
+        Assert.Equal("old", Encoding.UTF8.GetString((byte[])check.ExecuteScalar()!));
+        check.CommandText = "SELECT count(*) FROM backups";
+        Assert.Equal(1L, check.ExecuteScalar());
+        check.CommandText = "SELECT count(*) FROM pragma_table_info('backups') WHERE name = 'session_id'";
+        Assert.Equal(0L, check.ExecuteScalar());
     }
 
     /// <summary>Holds SQLite's write lock on the store from another connection, as a stalled store would.</summary>

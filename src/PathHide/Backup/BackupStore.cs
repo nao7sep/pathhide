@@ -39,15 +39,13 @@ public static class BackupStore
     // Serialized ISO-8601 with exactly three fractional digits and a Z suffix (2026-07-06T04:05:12.345Z) —
     // the timestamp conventions' stored-value form, NEVER the filename stamp.
 
-    /// <summary>The one table. <c>content</c> is a BLOB of the exact bytes written — never decoded text, so
-    /// CR/LF, a BOM, and non-UTF-8 bytes are stored byte-identically. <c>session_id</c> is null for rows
-    /// recorded before sessions. The <c>(path, id)</c> index serves the latest-row lookup; the unique
-    /// <c>(path, session_id)</c> index is created by <see cref="EnsureSessions"/>, after a store from
-    /// before sessions has gained the column.</summary>
+    /// <summary>The one table. <c>content</c> keeps the exact published bytes. The unique
+    /// <c>(path, session_id)</c> key keeps one version per path per launch; <c>(path, id)</c>
+    /// serves the latest-row lookup.</summary>
     private const string Schema = @"
 CREATE TABLE IF NOT EXISTS backups (
   id             INTEGER PRIMARY KEY,
-  session_id     TEXT,
+  session_id     TEXT NOT NULL,
   path           TEXT NOT NULL,
   content        BLOB NOT NULL,
   content_sha256 TEXT NOT NULL,
@@ -55,6 +53,7 @@ CREATE TABLE IF NOT EXISTS backups (
   written_at_utc TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_path_session ON backups (path, session_id);
 ";
 
     private readonly record struct PendingWrite(byte[] Bytes, DateTimeOffset WrittenAt);
@@ -210,8 +209,8 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
     }
 
     /// <summary>
-    /// Open and initialize the store once: create it if absent, switch on WAL, and give a store from before
-    /// sessions its <c>session_id</c> column. On any failure it logs ONE warn, leaves recording disabled for
+    /// Open and initialize the current store once: create it if absent and switch on WAL.
+    /// On any failure it logs ONE warn, leaves recording disabled for
     /// the session, and never throws.
     /// </summary>
     private static SqliteConnection? EnsureOpen()
@@ -240,7 +239,6 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
                 pragma.CommandText = "PRAGMA journal_mode = WAL;";
                 pragma.ExecuteNonQuery();
             }
-            EnsureSessions(connection);
 
             _connection = connection;
         }
@@ -257,37 +255,6 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
         }
 
         return _connection;
-    }
-
-    /// <summary>
-    /// Adds the nullable <c>session_id</c> column to a store from before sessions, keeping its rows as
-    /// earlier history, and the unique key that owns one row per path per session. The format version
-    /// stays 1: an older build's inserts leave the column null, which never conflicts, so it keeps
-    /// recording into the same store (store-recovery-conventions).
-    /// </summary>
-    private static void EnsureSessions(SqliteConnection connection)
-    {
-        using var transaction = connection.BeginTransaction();
-        using (var probe = connection.CreateCommand())
-        {
-            probe.Transaction = transaction;
-            probe.CommandText = "SELECT EXISTS (SELECT 1 FROM pragma_table_info('backups') WHERE name = 'session_id')";
-            if ((long)probe.ExecuteScalar()! == 0)
-            {
-                using var add = connection.CreateCommand();
-                add.Transaction = transaction;
-                add.CommandText = "ALTER TABLE backups ADD COLUMN session_id TEXT";
-                add.ExecuteNonQuery();
-            }
-        }
-        using (var index = connection.CreateCommand())
-        {
-            index.Transaction = transaction;
-            index.CommandText =
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_path_session ON backups (path, session_id)";
-            index.ExecuteNonQuery();
-        }
-        transaction.Commit();
     }
 
     /// <summary>SHA-256 of the exact bytes, lowercase hex.</summary>
