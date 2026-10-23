@@ -85,7 +85,7 @@ sealed class Program
             if (logClosed)
                 return;
             logClosed = true;
-            Log.Info("shutdown", new { clean });
+            Log.Info("shutdown", new { clean, reason = Log.ExitReason(clean) });
             Log.Shutdown();
         }
 

@@ -85,6 +85,12 @@ public static class Log
     public static void EndingSession() => _sessionEnding = true;
 
     /// <summary>
+    /// Why this launch is ending, for its shutdown record: a fatal failure when it did not end cleanly,
+    /// the operating system ending the session, or else the user's quit.
+    /// </summary>
+    public static string ExitReason(bool clean) => !clean ? "fatal" : _sessionEnding ? "session end" : "quit";
+
+    /// <summary>
     /// Writes the queued entries, within a bound, and closes the session's sink. Idempotent. Late events
     /// that arrive after shutdown fall back to the console rather than being lost.
     /// </summary>
