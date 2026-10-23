@@ -699,6 +699,49 @@ public class MainWindowViewModelTests
         }
     }
 
+    // The status bar counts what the rows show, so it follows each row an apply changes rather than
+    // keeping the counts from before the apply until it ends.
+    [Fact(Timeout = 10_000)]
+    public async Task The_status_bar_follows_each_row_an_apply_changes()
+    {
+        using var stalled = new ManualResetEventSlim(false);
+        var visibility = new FakeVisibilityService();
+        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [Entry("/stuck"), Entry("/b")] });
+        await vm.ScanTask;
+        visibility.OnHide = path =>
+        {
+            if (path == "/stuck")
+                stalled.Wait();
+            return null;
+        };
+        string? announced = null;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(vm.StatusBarText))
+                announced = English.Of(vm.Summary());
+        };
+        var other = vm.Rows.Single(r => r.Path == "/b");
+        var otherHidden = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        other.PropertyChanged += (_, _) =>
+        {
+            if (other.ActualState == ActualState.Hidden)
+                otherHidden.TrySetResult(announced);
+        };
+
+        var hideAll = vm.HideAllCommand.ExecuteAsync(null);
+        try
+        {
+            var shown = await otherHidden.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            Assert.Equal(English.Of(vm.Summary()), shown);
+            Assert.Contains("1 hidden", shown);
+        }
+        finally
+        {
+            stalled.Set();
+            await hideAll;
+        }
+    }
+
     [Fact(Timeout = 10_000)]
     public async Task AddPaths_ReportsAnUnresponsivePathInTheAddResult()
     {

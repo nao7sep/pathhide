@@ -210,6 +210,24 @@ public partial class MainWindowViewModel : ObservableObject
 
     public string StatusBarText => Localizer.Of(Summary());
 
+    // The status bar counts the rows' states, so it is read again whenever a row joins, leaves or changes
+    // state, wherever that happens.
+    private void OnRowsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        foreach (PathRowViewModel row in e.OldItems ?? Array.Empty<PathRowViewModel>())
+            row.PropertyChanged -= OnRowChanged;
+        foreach (PathRowViewModel row in e.NewItems ?? Array.Empty<PathRowViewModel>())
+            row.PropertyChanged += OnRowChanged;
+        OnPropertyChanged(nameof(IsPathListEmpty));
+        OnPropertyChanged(nameof(StatusBarText));
+    }
+
+    private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PathRowViewModel.ActualState))
+            OnPropertyChanged(nameof(StatusBarText));
+    }
+
     /// <summary>
     /// The status bar's line: the entry count and each non-zero state, each counted in its own
     /// sentence so it takes its own plural form, joined as the language joins them.
@@ -278,7 +296,7 @@ public partial class MainWindowViewModel : ObservableObject
         _entries = entries;
         _scanner = new PathScanner(visibility);
         DisplayZone.Use(settings.DisplayTimeZone);
-        Rows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(IsPathListEmpty));
+        Rows.CollectionChanged += OnRowsChanged;
         ApplyUiFont();
         SyncRowsWithEntries();
     }
@@ -1478,7 +1496,6 @@ public partial class MainWindowViewModel : ObservableObject
 
         var tracked = _entries.Select(entry => entry.Path).ToHashSet(StringComparer.Ordinal);
         ResolveVisibilityResults(path => !tracked.Contains(path));
-        OnPropertyChanged(nameof(StatusBarText));
     }
 
     /// <summary>
@@ -1533,7 +1550,6 @@ public partial class MainWindowViewModel : ObservableObject
                 ResolveOperationalResult(OperationalResultOwner.Scan);
             _scanCts = null;
             IsScanning = false;
-            OnPropertyChanged(nameof(StatusBarText));
             scanCts.Dispose();
         }
     }
@@ -1793,7 +1809,6 @@ public partial class MainWindowViewModel : ObservableObject
         Log.Info("apply: done", new { applied, unchanged = result.Unchanged, missing = result.Missing,
             errors = result.Errors, unresponsive = result.Unresponsive, cancelled = result.Cancelled,
             elevationBusy = result.ElevationBusy, elevationDeclined = result.ElevationDeclined, elevationExitCode });
-        OnPropertyChanged(nameof(StatusBarText));
 
         return result;
     }
