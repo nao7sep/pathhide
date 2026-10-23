@@ -83,8 +83,6 @@ public partial class RecordsWindow : Window
         // (window-conventions); their height follows the UI font, which Settings can change while open.
         FiltersBand.SizeChanged += (_, e) => MinHeight = RecordsLayout.MinHeightFor(e.NewSize.Height);
         Splitter.DragCompleted += (_, _) => CommitListWidth();
-        // handledEventsToo: the splitter handles its own arrow steps (KeyboardIncrement) before a bubbling
-        // handler would see them.
         // Cmd/Ctrl+W closes Records the way its close button does (keyboard-shortcut conventions).
         KeyDown += (_, e) =>
         {
@@ -94,6 +92,8 @@ public partial class RecordsWindow : Window
                 Close();
             }
         };
+        // handledEventsToo: the splitter handles its own arrow steps (KeyboardIncrement) before a bubbling
+        // handler would see them.
         Splitter.AddHandler(KeyDownEvent, OnSplitterKeyDown, handledEventsToo: true);
         Splitter.KeyUp += OnSplitterKeyUp;
         Splitter.LostFocus += (_, _) =>
