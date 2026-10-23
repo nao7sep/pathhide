@@ -387,6 +387,28 @@ public class MainWindowViewModelTests
         Assert.Null(vm.PathAddResult);
     }
 
+    // The add result reports problems with entries in the list; once those entries leave the list, as
+    // the visibility results do, it has nothing left to report.
+    [Fact]
+    public async Task An_add_result_goes_once_the_entries_it_reports_are_removed()
+    {
+        var visibility = new FakeVisibilityService();
+        visibility.Set("/gone/a", ActualState.Missing);
+        visibility.Set("/gone/b", ActualState.Missing);
+        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>>());
+
+        await vm.AddPathsCommand.ExecuteAsync(new[] { "/gone/a", "/gone/b", "/fine" });
+        Assert.NotNull(vm.PathAddResult);
+
+        vm.Rows.Single(row => row.Path == "/gone/a").IsSelected = true;
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+        Assert.NotNull(vm.PathAddResult);
+
+        vm.Rows.Single(row => row.Path == "/gone/b").IsSelected = true;
+        await vm.RemoveSelectedCommand.ExecuteAsync(null);
+        Assert.Null(vm.PathAddResult);
+    }
+
     [Fact]
     public async Task AddPaths_DuplicateIsPersistentInformationUntilDismissed()
     {

@@ -135,6 +135,9 @@ public partial class MainWindowViewModel : ObservableObject
     private PathAddResultViewModel? _pathAddResult;
 
     private readonly List<string> _pathAddIssuePaths = [];
+    // Whether the issue paths are entries in the list (a problem applying them, or a duplicate of one),
+    // which an entry leaving the list resolves, rather than paths that were never added.
+    private bool _pathAddIssuesAreTracked;
     private bool _pathAddHasOpaqueIssues;
     private bool _pathAddResultIsPickerFailure;
 
@@ -510,7 +513,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
         else
         {
-            ClearPathAddResultIfResolvedBy(addedPaths);
+            ResolvePathAddIssues(issue => addedPaths.Any(path => PathNormalizer.AreEqual(issue, path)));
         }
     }));
 
@@ -592,32 +595,47 @@ public partial class MainWindowViewModel : ObservableObject
             Message.Of("result.summary", "parts", Message.Join("result.join", parts)),
             severity,
             issuePaths: duplicatePaths.Concat(outcome.ProblemPaths),
-            hasOpaqueIssues: invalid > 0);
+            hasOpaqueIssues: invalid > 0,
+            issuesAreTracked: true);
     }
 
     private void SetPathAddResult(
         Message message,
         PathAddResultSeverity severity,
         IEnumerable<string>? issuePaths = null,
-        bool hasOpaqueIssues = false)
+        bool hasOpaqueIssues = false,
+        bool issuesAreTracked = false)
     {
         _pathAddResultIsPickerFailure = false;
         _pathAddIssuePaths.Clear();
         if (issuePaths is not null)
             _pathAddIssuePaths.AddRange(issuePaths.Distinct(StringComparer.Ordinal));
         _pathAddHasOpaqueIssues = hasOpaqueIssues;
+        _pathAddIssuesAreTracked = issuesAreTracked;
         PathAddResult = new PathAddResultViewModel(message, severity);
         Log.Info("path add result", new { message, severity });
     }
 
-    private void ClearPathAddResultIfResolvedBy(IEnumerable<string> resolvedPaths)
+    /// <summary>
+    /// Drops the add result's issue paths that <paramref name="resolved"/> settles, one by one as the
+    /// visibility results do, and the result itself once none is left. An issue that names no path
+    /// (an invalid drop) keeps it until it is dismissed.
+    /// </summary>
+    private void ResolvePathAddIssues(Func<string, bool> resolved)
     {
         if (_pathAddHasOpaqueIssues || _pathAddIssuePaths.Count == 0)
             return;
 
-        var resolved = resolvedPaths.ToList();
-        if (_pathAddIssuePaths.All(issue => resolved.Any(path => PathNormalizer.AreEqual(issue, path))))
+        _pathAddIssuePaths.RemoveAll(issue => resolved(issue));
+        if (_pathAddIssuePaths.Count == 0)
             DismissPathAddResult();
+    }
+
+    /// <summary>A path an apply reached without a problem settles the add result's issue about it.</summary>
+    private void ResolvePathAddIssues(IEnumerable<PathRowViewModel> targets, ApplyOutcome outcome)
+    {
+        var settled = targets.Select(row => row.Path).Where(path => !outcome.Problems.ContainsKey(path)).ToList();
+        ResolvePathAddIssues(issue => settled.Any(path => PathNormalizer.AreEqual(issue, path)));
     }
 
     [RelayCommand]
@@ -626,6 +644,7 @@ public partial class MainWindowViewModel : ObservableObject
         _pathAddResultIsPickerFailure = false;
         _pathAddIssuePaths.Clear();
         _pathAddHasOpaqueIssues = false;
+        _pathAddIssuesAreTracked = false;
         PathAddResult = null;
     }
 
@@ -718,8 +737,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         var outcome = await ApplyDesiredStateAsync(targets);
         ShowApplyOutcome(outcome, targets.Select(row => row.Path));
-        if (!outcome.HasProblems)
-            ClearPathAddResultIfResolvedBy(targets.Select(row => row.Path));
+        ResolvePathAddIssues(targets, outcome);
     });
 
     private HashSet<string> SelectedPaths() => Rows.Where(row => row.IsSelected)
@@ -752,8 +770,7 @@ public partial class MainWindowViewModel : ObservableObject
             Log.Info("reapply all", new { count = targets.Count });
             var outcome = await ApplyDesiredStateAsync(targets);
             ShowApplyOutcome(outcome, targets.Select(row => row.Path));
-            if (!outcome.HasProblems)
-                ClearPathAddResultIfResolvedBy(targets.Select(row => row.Path));
+            ResolvePathAddIssues(targets, outcome);
         });
     }
 
@@ -1496,6 +1513,9 @@ public partial class MainWindowViewModel : ObservableObject
 
         var tracked = _entries.Select(entry => entry.Path).ToHashSet(StringComparer.Ordinal);
         ResolveVisibilityResults(path => !tracked.Contains(path));
+        // The same rule for the add result: an entry that left the list has no issue left to report.
+        if (_pathAddIssuesAreTracked)
+            ResolvePathAddIssues(issue => !_entries.Any(entry => PathNormalizer.AreEqual(entry.Path, issue)));
     }
 
     /// <summary>
