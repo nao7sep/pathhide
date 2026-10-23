@@ -74,4 +74,26 @@ public sealed class ApplyModeProcessTests : IDisposable
         Assert.Equal(attributes, File.GetAttributes(target));
         Assert.Equal("keep", File.ReadAllText(target));
     }
+
+    // The request sits where an unelevated process can rewrite it after approval; the child applies
+    // only the request whose digest the approved command line carries.
+    [Fact]
+    public void A_request_changed_after_approval_is_refused_before_any_target_changes()
+    {
+        var approvedTarget = Path.Combine(_dir, "approved.txt");
+        var injectedTarget = Path.Combine(_dir, "injected.txt");
+        File.WriteAllText(approvedTarget, "keep");
+        File.WriteAllText(injectedTarget, "keep");
+        var attributes = File.GetAttributes(injectedTarget);
+        var request = Path.Combine(_dir, "request.json");
+        var results = Path.Combine(_dir, "results.jsonl");
+        File.WriteAllText(request, ElevatedApplyCommand.SerializeRequest(new([approvedTarget], [], [])));
+        var approved = ElevatedApplyCommand.RequestDigest(File.ReadAllBytes(request));
+        File.WriteAllText(request, ElevatedApplyCommand.SerializeRequest(new([injectedTarget], [], [])));
+
+        Assert.Equal(2, ApplyChildProcess.Run(request, results, Path.Combine(_dir, "root"),
+            ElevatedApplyCommand.Parent.Current, approved));
+        Assert.Empty(ElevatedApplyResults.Parse(File.ReadAllText(results)).Results);
+        Assert.Equal(attributes, File.GetAttributes(injectedTarget));
+    }
 }

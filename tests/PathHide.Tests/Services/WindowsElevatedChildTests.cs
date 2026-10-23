@@ -19,7 +19,8 @@ public sealed class WindowsElevatedChildTests
             @"C:\Users\山田 太郎\AppData\Local\Temp\pathhide-apply-PC.1.a.request.json",
             @"C:\Users\山田 太郎\AppData\Local\Temp\pathhide-apply-PC.1.a.results.jsonl",
             @"D:\Data Root\",
-            new ElevatedApplyCommand.Parent(1234, 638_000_000_000_000_000));
+            new ElevatedApplyCommand.Parent(1234, 638_000_000_000_000_000),
+            new string('c', 64));
 
         var start = WindowsElevatedChild.CreateStartInfo(@"C:\Program Files\PathHide\PathHide.exe", arguments);
 
@@ -27,6 +28,7 @@ public sealed class WindowsElevatedChildTests
         Assert.True(start.UseShellExecute);
         Assert.Equal(@"C:\Program Files\PathHide\PathHide.exe", start.FileName);
         Assert.Equal(arguments, start.ArgumentList);
+        Assert.NotNull(ElevatedApplyCommand.ParseArguments(arguments));
         Assert.Equal(
             ElevatedApplyCommand.ParseArguments(arguments),
             ElevatedApplyCommand.ParseArguments([.. start.ArgumentList]));

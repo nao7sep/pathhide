@@ -47,11 +47,11 @@ public sealed class ElevatedApplicatorTests : IDisposable
         }, _temp, "/storage-root")
         {
             FileWaitBound = cancel ? Generous : TimeSpan.FromMilliseconds(100),
-            WriteRequest = (path, text) =>
+            WriteRequest = (path, content) =>
             {
                 entered.SetResult();
                 release.Wait();
-                File.WriteAllText(path, text);
+                File.WriteAllBytes(path, content);
             },
         };
         var apply = applicator.ApplyAsync(Buckets, stop.Token);

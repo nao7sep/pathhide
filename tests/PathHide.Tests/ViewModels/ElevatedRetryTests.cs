@@ -114,11 +114,11 @@ public sealed class ElevatedRetryTests : IDisposable
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var applicator = new ElevatedApplicator(_child.LaunchAsync, _temp, "/storage-root")
         {
-            WriteRequest = (path, text) =>
+            WriteRequest = (path, content) =>
             {
                 entered.SetResult();
                 release.Wait();
-                File.WriteAllText(path, text);
+                File.WriteAllBytes(path, content);
             },
         };
         var vm = ViewModel(applicator, null, "/a");

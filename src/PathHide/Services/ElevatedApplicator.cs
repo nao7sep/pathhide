@@ -105,7 +105,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
     private readonly TimeSpan _childTimeout;
 
     internal TimeSpan FileWaitBound { get; init; } = BoundedStoreWork.DefaultBound;
-    internal Action<string, string> WriteRequest { get; init; } = File.WriteAllText;
+    internal Action<string, byte[]> WriteRequest { get; init; } = File.WriteAllBytes;
     internal Func<ElevatedApplyFiles, IReadOnlyDictionary<string, bool>> ReadResults { get; init; } = files => files.ReadResults();
     internal Func<ElevatedApplyFiles, bool> DeleteFiles { get; init; } = files => files.TryDelete();
 
@@ -140,6 +140,8 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         }
 
         var totalPaths = buckets.ToHide.Count + buckets.ToHideWithSystem.Count + buckets.ToShow.Count;
+        var request = System.Text.Encoding.UTF8.GetBytes(ElevatedApplyCommand.SerializeRequest(buckets));
+        var requestDigest = ElevatedApplyCommand.RequestDigest(request);
         var files = ElevatedApplyFiles.Create(_tempDirectory);
         var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _outstanding = settled.Task; // Claim preparation too, before the first wait.
@@ -154,7 +156,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
                 // not recorded: transient IPC, never reloaded as managed state.
                 await fileWork.RunAsync(() =>
                 {
-                    WriteRequest(files.RequestPath, ElevatedApplyCommand.SerializeRequest(buckets));
+                    WriteRequest(files.RequestPath, request);
                     return true;
                 }, FileWaitBound, TimeProvider.System, cancellationToken, started: work => fileTail = work)
                     .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
@@ -186,7 +188,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
             });
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var declined = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            run = RunChildAsync(files, started, declined);
+            run = RunChildAsync(files, requestDigest, started, declined);
             status = await WaitAsync(run, started.Task, declined.Task, cancellationToken).ConfigureAwait(false);
 
             IReadOnlyDictionary<string, bool> results;
@@ -251,14 +253,14 @@ public sealed class ElevatedApplicator : IElevatedApplicator
     /// Launches the child and waits for it to exit. Null exit code: it never ran, or the wait failed;
     /// <paramref name="declined"/> completes when it never ran because the user declined the prompt.
     /// </summary>
-    private async Task<int?> RunChildAsync(ElevatedApplyFiles files, TaskCompletionSource started,
+    private async Task<int?> RunChildAsync(ElevatedApplyFiles files, string requestDigest, TaskCompletionSource started,
         TaskCompletionSource declined)
     {
         Task<int>? child;
         try
         {
             child = await _launch(ElevatedApplyCommand.BuildArguments(files.RequestPath, files.ResultsPath,
-                _storageRoot, ElevatedApplyCommand.Parent.Current)).ConfigureAwait(false);
+                _storageRoot, ElevatedApplyCommand.Parent.Current, requestDigest)).ConfigureAwait(false);
         }
         catch (ElevationDeclinedException)
         {

@@ -223,7 +223,8 @@ public sealed class AttributeWriteReservationTests : IDisposable
         var attributes = File.GetAttributes(path);
         using var gui = new Probe("parent");
         var identity = await gui.ReadAsync();
-        var parent = ElevatedApplyCommand.ParseArguments(["apply", "--request", "unused", "--parent", identity])!.Parent;
+        var parent = ElevatedApplyCommand.ParseArguments(
+            ["apply", "--request", "unused", "--parent", identity, "--request-sha256", new string('0', 64)])!.Parent;
         gui.Release();
         Assert.Equal(0, await gui.ExitAsync());
         var request = Path.Combine(_dir, "request.json");

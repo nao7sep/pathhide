@@ -99,8 +99,37 @@ public sealed class ElevatedApplyCommandTests
     {
         var parent = ElevatedApplyCommand.Parent.Current;
         var invocation = ElevatedApplyCommand.ParseArguments(
-            ElevatedApplyCommand.BuildArguments("/request", "/results", StorageRootArg, parent));
+            ElevatedApplyCommand.BuildArguments("/request", "/results", StorageRootArg, parent, new string('a', 64)));
         Assert.Equal(parent, invocation!.Parent);
+    }
+
+    // A launch by the GUI names its parent and carries the digest the approval was given for; one
+    // without a digest, or with a malformed one, is not a valid launch.
+    [Fact]
+    public void A_GUI_launch_must_carry_a_well_formed_request_digest()
+    {
+        var parent = ElevatedApplyCommand.Parent.Current;
+        var digest = ElevatedApplyCommand.RequestDigest([1, 2, 3]);
+
+        Assert.Equal(digest, ElevatedApplyCommand.ParseArguments(
+            ElevatedApplyCommand.BuildArguments("/request", "/results", StorageRootArg, parent, digest))!.RequestDigest);
+        Assert.Null(ElevatedApplyCommand.ParseArguments(
+            ElevatedApplyCommand.BuildArguments("/request", "/results", StorageRootArg, parent)));
+        Assert.Null(ElevatedApplyCommand.ParseArguments(
+            ElevatedApplyCommand.BuildArguments("/request", "/results", StorageRootArg, parent, "not-a-digest")));
+    }
+
+    [Fact]
+    public void A_request_is_read_only_when_it_matches_the_approved_digest()
+    {
+        var content = System.Text.Encoding.UTF8.GetBytes(
+            ElevatedApplyCommand.SerializeRequest(new(["/a"], [], [])));
+        var approved = ElevatedApplyCommand.RequestDigest(content);
+
+        Assert.Equal(["/a"], ElevatedApplyCommand.ReadRequest(content, approved).ToHide);
+        var changed = System.Text.Encoding.UTF8.GetBytes(
+            ElevatedApplyCommand.SerializeRequest(new(["/b"], [], [])));
+        Assert.Throws<System.IO.InvalidDataException>(() => ElevatedApplyCommand.ReadRequest(changed, approved));
     }
 
     [Theory]

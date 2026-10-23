@@ -3,6 +3,10 @@ using System.Collections.Generic;
 using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using PathHide.Models;
@@ -27,6 +31,13 @@ public static class ElevatedApplyCommand
     public const string RequestOption = "--request";
     public const string ResultsOption = "--results";
     public const string ParentOption = "--parent";
+
+    /// <summary>
+    /// The SHA-256 of the request file as the GUI wrote it. The request sits in the user's temp folder,
+    /// which any unelevated process of the user can change after the approval prompt; the command line
+    /// is fixed when the elevated process starts, so the digest it carries is what the child trusts.
+    /// </summary>
+    public const string RequestDigestOption = "--request-sha256";
 
     /// <summary>PID plus UTC creation time distinguishes the GUI from a recycled process id.</summary>
     public sealed record Parent(int Id, long StartTimeUtcTicks)
@@ -98,21 +109,25 @@ public static class ElevatedApplyCommand
     /// the batch: the paths are in the request file.
     /// </summary>
     public static IReadOnlyList<string> BuildArguments(string requestPath, string resultsPath, string storageRoot,
-        Parent? parent = null)
+        Parent? parent = null, string? requestDigest = null)
     {
         var arguments = new List<string> { Subcommand, RequestOption, requestPath, ResultsOption, resultsPath,
             HomeOption, storageRoot };
         if (parent is not null)
             arguments.AddRange([ParentOption, parent.ToString()]);
+        if (requestDigest is not null)
+            arguments.AddRange([RequestDigestOption, requestDigest]);
         return arguments;
     }
 
     /// <summary>What the elevated child was asked to do, as parsed from its command line.</summary>
-    public sealed record Invocation(string RequestPath, string? ResultsPath, string? StorageRoot, Parent? Parent = null);
+    public sealed record Invocation(string RequestPath, string? ResultsPath, string? StorageRoot, Parent? Parent = null,
+        string? RequestDigest = null);
 
     /// <summary>
     /// Parses the child's command line, or returns null when it is not a valid apply invocation. The
-    /// results file is optional (a standalone run writes none); the request file is required.
+    /// results file is optional (a standalone run writes none); the request file is required. A launch
+    /// by the GUI, which names its parent, must also carry the request's digest.
     /// </summary>
     public static Invocation? ParseArguments(IReadOnlyList<string> args)
     {
@@ -120,7 +135,8 @@ public static class ElevatedApplyCommand
         var resultsOpt = new Option<string?>(ResultsOption);
         var homeOpt = new Option<string?>(HomeOption);
         var parentOpt = new Option<string?>(ParentOption);
-        var applyCmd = new Command(Subcommand, "Apply file attributes in batch") { requestOpt, resultsOpt, homeOpt, parentOpt };
+        var digestOpt = new Option<string?>(RequestDigestOption);
+        var applyCmd = new Command(Subcommand, "Apply file attributes in batch") { requestOpt, resultsOpt, homeOpt, parentOpt, digestOpt };
         var root = new RootCommand("PathHide apply mode") { applyCmd };
 
         var result = root.Parse(args);
@@ -139,9 +155,29 @@ public static class ElevatedApplyCommand
                 return null;
             parent = new(id, ticks);
         }
+        var digest = result.GetValue(digestOpt);
+        if (digest is not null && (digest.Length != 64 || !digest.All(Uri.IsHexDigit)))
+            return null;
+        if (parent is not null && digest is null)
+            return null;
         return string.IsNullOrEmpty(request)
             ? null
-            : new Invocation(request, result.GetValue(resultsOpt), result.GetValue(homeOpt), parent);
+            : new Invocation(request, result.GetValue(resultsOpt), result.GetValue(homeOpt), parent, digest);
+    }
+
+    /// <summary>The SHA-256 of request content, lowercase hex, as the command line carries it.</summary>
+    public static string RequestDigest(byte[] content) => Convert.ToHexStringLower(SHA256.HashData(content));
+
+    /// <summary>
+    /// Reads request content the child has loaded once. When the command line carries a digest, the
+    /// content must match it, or the request is refused before any path is touched.
+    /// </summary>
+    public static Buckets ReadRequest(byte[] content, string? expectedDigest)
+    {
+        if (expectedDigest is not null
+            && !string.Equals(RequestDigest(content), expectedDigest, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("The request file changed after the elevated launch was approved.");
+        return ParseRequest(Encoding.UTF8.GetString(content));
     }
 
     private static readonly JsonSerializerOptions RequestOptions = new()

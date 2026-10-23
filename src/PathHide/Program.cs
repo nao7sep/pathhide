@@ -215,7 +215,18 @@ sealed class Program
                 return 3;
             }
 
-            var request = ElevatedApplyCommand.ParseRequest(File.ReadAllText(invocation.RequestPath));
+            // Read once: the bytes that are checked against the approved digest are the bytes applied.
+            ElevatedApplyCommand.Buckets request;
+            try
+            {
+                request = ElevatedApplyCommand.ReadRequest(File.ReadAllBytes(invocation.RequestPath), invocation.RequestDigest);
+            }
+            catch (InvalidDataException ex)
+            {
+                Log.Error("apply mode: refused a request that does not match the approved launch", ex);
+                clean = false;
+                return 2;
+            }
             using var parent = invocation.Parent is { } identity ? new ApplyParentProcess(identity) : null;
 
             // Each result is written and flushed the moment its path is done, so when the parent stops
