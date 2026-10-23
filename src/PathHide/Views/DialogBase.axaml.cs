@@ -130,8 +130,8 @@ public partial class DialogBase : Window
     protected void SetInitialFocus(Control control) => _initialFocusControl = control;
 
     /// <summary>
-    /// Shows the dialog modally over <paramref name="owner"/>, bounded to a share of the owner's
-    /// content height before the window is placed (modal-dialog conventions). Every owned dialog
+    /// Shows the dialog modally over <paramref name="owner"/>, bounded to a share of the screen's
+    /// working height before the window is placed. Every owned dialog
     /// opens through here.
     /// </summary>
     public Task ShowBoundedAsync(Window owner)
