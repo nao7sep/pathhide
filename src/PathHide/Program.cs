@@ -62,6 +62,7 @@ sealed class Program
         {
             if (!SingleInstanceLease.TryAcquire(StorageRoot.Directory, out instanceLease))
             {
+                LauncherRuntime.Report(args, activated: true);
                 _ = Log.ReportStartup("PathHide is already running; requested activation of its existing window.");
                 return 0;
             }
@@ -74,6 +75,7 @@ sealed class Program
             return 1;
         }
         using var ownedInstance = instanceLease;
+        LauncherRuntime.Report(args, activated: false);
 
         // This process alone owns the records database; the logger installs its own crash hooks and
         // falls back to the session's file under logs/.

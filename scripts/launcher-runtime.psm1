@@ -38,96 +38,53 @@ function Release-LauncherRuntime {
     }
 }
 
-function Get-OwnedRuntimeProcess {
-    param(
-        [Parameter(Mandatory = $true)][string]$RepoDir,
-        [string]$ProjectFile,
-        [Parameter(Mandatory = $true)][string]$ExecutableName,
-        [Parameter(Mandatory = $true)][string]$BuiltExecutable
-    )
-
-    $repoPrefix = [System.IO.Path]::GetFullPath($RepoDir).TrimEnd('\') + '\'
-    $builtPath = [System.IO.Path]::GetFullPath($BuiltExecutable)
-    Get-CimInstance Win32_Process | Where-Object {
-        $path = if ($_.ExecutablePath) { [System.IO.Path]::GetFullPath($_.ExecutablePath) } else { '' }
-        $command = if ($_.CommandLine) { $_.CommandLine } else { '' }
-        if ($path -eq $builtPath) { return $true }
-        foreach ($launcherName in @('run-dev.ps1', 'run-built.ps1', 'rebuild.ps1')) {
-            $launcherPath = Join-Path (Join-Path $RepoDir 'scripts') $launcherName
-            if ($command.IndexOf($launcherPath, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
-                return $true
-            }
-        }
-
-        return (($path.StartsWith($repoPrefix, [System.StringComparison]::OrdinalIgnoreCase) -and
-                [System.IO.Path]::GetFileName($path) -ieq "$ExecutableName.exe") -or
-                ($ProjectFile -and $command.IndexOf($ProjectFile, [System.StringComparison]::OrdinalIgnoreCase) -ge 0))
+function Get-RuntimeRecord {
+    param([string]$RepoDir)
+    $file = Join-Path (Join-Path $RepoDir '.git') 'launcher-runtime-child'
+    if (Test-Path -LiteralPath $file) {
+        try { return Get-Content -LiteralPath $file -Raw | ConvertFrom-Json } catch { return $null }
     }
+    return $null
+}
+
+function Get-OwnedRuntimeProcess {
+    param([string]$RepoDir, [string]$ProjectFile, [string]$ExecutableName, [string]$BuiltExecutable)
+    $record = Get-RuntimeRecord $RepoDir
+    if (-not $record -or $record.state -ne 'running') { return }
+    $process = Get-Process -Id $record.pid -ErrorAction SilentlyContinue
+    if ($process -and $process.StartTime.ToUniversalTime().Ticks -eq $record.startTicks) { return $process }
 }
 
 function Stop-OwnedRuntime {
-    param(
-        [Parameter(Mandatory = $true)][string]$Label,
-        [Parameter(Mandatory = $true)][string]$RepoDir,
-        [string]$ProjectFile,
-        [Parameter(Mandatory = $true)][string]$ExecutableName,
-        [Parameter(Mandatory = $true)][string]$BuiltExecutable
-    )
-
-    $owned = @(Get-OwnedRuntimeProcess -RepoDir $RepoDir -ProjectFile $ProjectFile -ExecutableName $ExecutableName -BuiltExecutable $BuiltExecutable |
-        Where-Object { $_.ProcessId -ne $PID })
-    if ($owned.Count -eq 0) { return }
-    $originalProcessIds = @($owned.ProcessId)
-
-    Write-Host "Stopping the existing $Label runtime (pid $($owned.ProcessId -join ', '))."
-    foreach ($item in $owned) {
-        try {
-            $process = Get-Process -Id $item.ProcessId -ErrorAction Stop
-            $null = $process.CloseMainWindow()
-        } catch {}
+    param([string]$Label, [string]$RepoDir, [string]$ProjectFile, [string]$ExecutableName, [string]$BuiltExecutable, [string]$ExpectedToken)
+    if ($ExpectedToken) {
+        $record = Get-RuntimeRecord $RepoDir
+        if (-not $record -or $record.token -cne $ExpectedToken) { return }
     }
-
-    $deadline = [DateTime]::UtcNow.AddSeconds(5)
-    do {
-        Start-Sleep -Milliseconds 100
-        $remainingProcessIds = @($originalProcessIds | Where-Object {
-            Get-Process -Id $_ -ErrorAction SilentlyContinue
-        })
-    } while ($remainingProcessIds.Count -gt 0 -and [DateTime]::UtcNow -lt $deadline)
-
-    $owned = @(Get-OwnedRuntimeProcess -RepoDir $RepoDir -ProjectFile $ProjectFile -ExecutableName $ExecutableName -BuiltExecutable $BuiltExecutable |
-        Where-Object { $originalProcessIds -contains $_.ProcessId })
-    foreach ($item in $owned) {
-        Stop-Process -Id $item.ProcessId -Force -ErrorAction SilentlyContinue
+    $process = Get-OwnedRuntimeProcess -RepoDir $RepoDir
+    if (-not $process) { return }
+    $null = $process.CloseMainWindow()
+    if (-not $process.WaitForExit(5000)) {
+        throw "$Label is still open. Finish or cancel its pending changes before replacing it."
     }
 }
 
 function Wait-OwnedRuntime {
-    param(
-        [Parameter(Mandatory = $true)][string]$Label,
-        [Parameter(Mandatory = $true)][string]$RepoDir,
-        [string]$ProjectFile,
-        [Parameter(Mandatory = $true)][string]$ExecutableName,
-        [Parameter(Mandatory = $true)][string]$BuiltExecutable,
-        [int]$TimeoutSeconds = 30
-    )
-
+    param([string]$Label, [string]$RepoDir, [string]$ProjectFile, [string]$ExecutableName,
+        [string]$BuiltExecutable, [int]$TimeoutSeconds = 30)
+    $token = (Get-Content -LiteralPath (Get-LauncherOwnerFile $RepoDir) -Raw).Trim()
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     do {
-        $repoPrefix = [System.IO.Path]::GetFullPath($RepoDir).TrimEnd('\') + '\'
-        $builtPath = [System.IO.Path]::GetFullPath($BuiltExecutable)
-        $owned = @(Get-OwnedRuntimeProcess -RepoDir $RepoDir -ProjectFile $ProjectFile -ExecutableName $ExecutableName -BuiltExecutable $BuiltExecutable |
-            Where-Object {
-                if ($_.ProcessId -eq $PID) { return $false }
-                $path = if ($_.ExecutablePath) { [System.IO.Path]::GetFullPath($_.ExecutablePath) } else { '' }
-                if ($path -eq $builtPath) { return $true }
-                return $path.StartsWith($repoPrefix, [System.StringComparison]::OrdinalIgnoreCase) -and
-                    [System.IO.Path]::GetFileName($path) -ieq "$ExecutableName.exe"
-            })
-        if ($owned.Count -gt 0) { return }
+        $record = Get-RuntimeRecord $RepoDir
+        if ($record -and $record.token -ceq $token) {
+            if ($record.state -eq 'activated') {
+                Write-Host "$Label activated an independently started instance; the selected launch mode did not replace it."
+                return
+            }
+            if (Get-OwnedRuntimeProcess -RepoDir $RepoDir) { return }
+        }
         Start-Sleep -Milliseconds 100
     } while ([DateTime]::UtcNow -lt $deadline)
-
     throw "$Label did not start within ${TimeoutSeconds}s."
 }
 

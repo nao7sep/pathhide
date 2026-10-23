@@ -66,5 +66,5 @@ dotnet publish "$PROJECT_FILE" -c Release -r "$RID" --self-contained true -o "$R
 log_step "Launching the rebuilt app"
 claim_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
 stop_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE"
-open -n "$APP_BUNDLE"
+open -n "$APP_BUNDLE" --args --launcher-repo "$REPO_DIR" --launcher-token "$RUNTIME_TOKEN"
 wait_for_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE" 30

@@ -68,7 +68,7 @@ try {
     Invoke-Native -FilePath "dotnet" -ArgumentList @("restore", $projectFile)
 
     Write-Step "Starting $appName (Debug, from source)"
-    $devProcess = Start-Process -FilePath "dotnet" -ArgumentList @("run", "--project", $projectFile) -NoNewWindow -PassThru
+    $devProcess = Start-Process -FilePath "dotnet" -ArgumentList @("run", "--project", "`"$projectFile`"", "--", "--launcher-repo", "`"$repoDir`"", "--launcher-token", $runtimeToken) -NoNewWindow -PassThru
     Wait-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile "" -ExecutableName $appName -BuiltExecutable $builtExecutable -TimeoutSeconds 120
     Write-Step "$appName is ready"
     $devProcess.WaitForExit()
@@ -83,7 +83,7 @@ catch {
 }
 finally {
     if (Test-LauncherRuntimeOwner -Token $runtimeToken -RepoDir $repoDir) {
-        Stop-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName $appName -BuiltExecutable $builtExecutable
+        Stop-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName $appName -BuiltExecutable $builtExecutable -ExpectedToken $runtimeToken
         Release-LauncherRuntime -Token $runtimeToken -RepoDir $repoDir
         Read-Host "Press Enter to close" | Out-Null
     }

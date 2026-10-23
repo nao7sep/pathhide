@@ -51,7 +51,7 @@ try {
     Write-Host "If you changed source since then, run rebuild instead."
 
     # GUI app: launch non-blocking via Start-Process.
-    Start-Process -FilePath $exePath | Out-Null
+    Start-Process -FilePath $exePath -ArgumentList @('--launcher-repo', "`"$repoDir`"", '--launcher-token', $runtimeToken) | Out-Null
     Wait-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile "" -ExecutableName $appName -BuiltExecutable $exePath -TimeoutSeconds 30
 }
 catch {

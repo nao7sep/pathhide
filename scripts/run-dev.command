@@ -43,7 +43,7 @@ cleanup() {
   local status="$?"
   trap - EXIT
   if is_launcher_runtime_owner "$RUNTIME_TOKEN" "$REPO_DIR"; then
-    stop_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE" >/dev/null 2>&1 || true
+    stop_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE" "$RUNTIME_TOKEN" >/dev/null 2>&1 || true
     release_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
   fi
   pause_on_failure "$status"
@@ -64,7 +64,7 @@ log_step "Restoring packages required for launch"
 dotnet restore "$PROJECT_FILE"
 
 log_step "Starting $APP_NAME (Debug, from source)"
-dotnet run --project "$PROJECT_FILE" &
+dotnet run --project "$PROJECT_FILE" -- --launcher-repo "$REPO_DIR" --launcher-token "$RUNTIME_TOKEN" &
 DEV_PID=$!
 wait_for_owned_runtime "$APP_NAME" "$REPO_DIR" "" "$APP_NAME" "$APP_EXECUTABLE" 120
 log_step "$APP_NAME is ready"

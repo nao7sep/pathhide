@@ -50,5 +50,5 @@ echo "If you changed source since then, run rebuild instead."
 
 # `open` routes through Launch Services, which registers the bundle identity with
 # TCC and triggers permission prompts on first access.
-open -n "$APP_BUNDLE"
+open -n "$APP_BUNDLE" --args --launcher-repo "$REPO_DIR" --launcher-token "$RUNTIME_TOKEN"
 wait_for_owned_runtime "$APP_NAME" "$REPO_DIR" "$REPO_DIR/src/PathHide/PathHide.csproj" "$APP_NAME" "$APP_EXECUTABLE" 30

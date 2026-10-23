@@ -88,7 +88,7 @@ try {
     Write-Step "Launching $appName"
     # GUI app: launch non-blocking via Start-Process (the Windows counterpart to
     # macOS `open`), so the console does not wait on the app's lifetime.
-    Start-Process -FilePath $exePath | Out-Null
+    Start-Process -FilePath $exePath -ArgumentList @('--launcher-repo', "`"$repoDir`"", '--launcher-token', $runtimeToken) | Out-Null
     Wait-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile "" -ExecutableName $appName -BuiltExecutable $exePath -TimeoutSeconds 30
 }
 catch {

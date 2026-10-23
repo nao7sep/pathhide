@@ -32,75 +32,58 @@ release_launcher_runtime() {
   fi
 }
 
+runtime_field() {
+  /usr/bin/plutil -extract "$2" raw -o - "$1/.git/launcher-runtime-child" 2>/dev/null
+}
+
 owned_runtime_pids() {
-  local repo_dir="$1" project_file="$2" executable_name="$3" built_executable="$4"
-  local pid command
-  ps -axo pid=,command= | while read -r pid command; do
-    [[ "$pid" == "$$" || "$pid" == "$PPID" ]] && continue
-    if [[ "$command" == *"$repo_dir/scripts/run-dev.command"* ||
-          "$command" == *"$repo_dir/scripts/run-built.command"* ||
-          "$command" == *"$repo_dir/scripts/rebuild.command"* ]]; then
-      printf '%s\n' "$pid"
-      continue
-    fi
-    if [[ "$command" == "$built_executable" || "$command" == "$built_executable "* ]] ||
-       [[ "$command" == "$repo_dir/"*"/bin/"*"/$executable_name" || "$command" == "$repo_dir/"*"/bin/"*"/$executable_name "* ]] ||
-       [[ -n "$project_file" && "$command" == *"dotnet"* && "$command" == *"$project_file"* ]]; then
-      printf '%s\n' "$pid"
-    fi
-  done
+  local repo_dir="$1" pid recorded actual
+  [[ "$(runtime_field "$repo_dir" state)" == running ]] || return 0
+  pid="$(runtime_field "$repo_dir" pid)" || return 0
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 0
+  recorded="$(runtime_field "$repo_dir" startLabel)" || return 0
+  actual="$(LC_ALL=C TZ=UTC ps -p "$pid" -o lstart= | awk '{$1=$1; print}')"
+  [[ -n "$actual" && "$actual" == "$recorded" ]] && printf '%s\n' "$pid"
+  return 0
+}
+
+request_runtime_close() {
+  /usr/bin/osascript -l JavaScript - "$1" <<'JXA'
+ObjC.import('AppKit');
+function run(args) {
+  var application = $.NSRunningApplication.runningApplicationWithProcessIdentifier(Number(args[0]));
+  if (application) application.terminate;
+}
+JXA
 }
 
 stop_owned_runtime() {
-  local label="$1" repo_dir="$2" project_file="$3" executable_name="$4" built_executable="$5"
-  local pids pid deadline remaining current_owned
-  pids="$(owned_runtime_pids "$repo_dir" "$project_file" "$executable_name" "$built_executable")"
-  [[ -z "$pids" ]] && return 0
-
-  echo "Stopping the existing $label runtime (pid $(echo "$pids" | tr '\n' ' '))."
-  while read -r pid; do
-    [[ -n "$pid" ]] && kill -TERM "$pid" 2>/dev/null || true
-  done <<< "$pids"
-
+  local label="$1" repo_dir="$2" pid deadline
+  if [[ -n "${6:-}" && "$(runtime_field "$repo_dir" token)" != "$6" ]]; then return 0; fi
+  pid="$(owned_runtime_pids "$repo_dir")"
+  [[ -z "$pid" ]] && return 0
+  request_runtime_close "$pid"
   deadline=$((SECONDS + 5))
   while (( SECONDS < deadline )); do
-    remaining=""
-    while read -r pid; do
-      if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-        remaining+="$pid"$'\n'
-      fi
-    done <<< "$pids"
-    [[ -z "$remaining" ]] && return 0
+    [[ -z "$(owned_runtime_pids "$repo_dir")" ]] && return 0
     sleep 0.1
   done
-
-  current_owned="$(owned_runtime_pids "$repo_dir" "$project_file" "$executable_name" "$built_executable")"
-  while read -r pid; do
-    if [[ -n "$pid" ]] && grep -qx "$pid" <<< "$current_owned"; then
-      kill -KILL "$pid" 2>/dev/null || true
-    fi
-  done <<< "$pids"
-}
-
-ready_runtime_pids() {
-  local repo_dir="$1" executable_name="$2" built_executable="$3"
-  local pid command
-  ps -axo pid=,command= | while read -r pid command; do
-    [[ "$pid" == "$$" || "$pid" == "$PPID" ]] && continue
-    if [[ "$command" == "$built_executable" || "$command" == "$built_executable "* ]] ||
-       [[ "$command" == "$repo_dir/"*"/bin/"*"/$executable_name" || "$command" == "$repo_dir/"*"/bin/"*"/$executable_name "* ]]; then
-      printf '%s\n' "$pid"
-    fi
-  done
+  echo "$label is still open. Finish or cancel its pending changes before replacing it." >&2
+  return 1
 }
 
 wait_for_owned_runtime() {
-  local label="$1" repo_dir="$2" project_file="$3" executable_name="$4" built_executable="$5" timeout_seconds="$6"
-  local deadline pids
+  local label="$1" repo_dir="$2" timeout_seconds="$6" deadline token
+  token="$(cat "$(launcher_owner_file "$repo_dir")")"
   deadline=$((SECONDS + timeout_seconds))
   while (( SECONDS < deadline )); do
-    pids="$(ready_runtime_pids "$repo_dir" "$executable_name" "$built_executable")"
-    [[ -n "$pids" ]] && return 0
+    if [[ "$(runtime_field "$repo_dir" token)" == "$token" ]]; then
+      if [[ "$(runtime_field "$repo_dir" state)" == activated ]]; then
+        echo "$label activated an independently started instance; the selected launch mode did not replace it."
+        return 0
+      fi
+      [[ -n "$(owned_runtime_pids "$repo_dir")" ]] && return 0
+    fi
     sleep 0.1
   done
   echo "$label did not start within ${timeout_seconds}s." >&2
