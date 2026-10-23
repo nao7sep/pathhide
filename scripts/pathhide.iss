@@ -7,6 +7,8 @@
 #endif
 
 [Setup]
+; .NET 10 runs on Windows 10 1607 and later; do not confuse technical admission with servicing dates.
+MinVersion=10.0.14393
 ; This .iss lives in scripts/, but the Windows publish output and the dist/ output
 ; folder are at the repo root — so resolve all source/output paths one level up.
 SourceDir=..

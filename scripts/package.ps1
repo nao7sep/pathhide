@@ -7,7 +7,16 @@ Set-Location $Repo
 
 $Project = "src/PathHide/PathHide.csproj"
 # The installer's names and the build's Windows runtime identifier come from the project.
-function Get-ProjectProperty([string]$Name) { (& dotnet msbuild $Project "-getProperty:$Name").Trim() }
+function Invoke-PackageNative {
+    param([string]$FilePath, [string[]]$Arguments)
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "$FilePath failed with exit code $LASTEXITCODE." }
+}
+function Get-ProjectProperty([string]$Name) {
+    $value = (Invoke-PackageNative dotnet @('msbuild', $Project, "-getProperty:$Name")) -join "`n"
+    if ([string]::IsNullOrWhiteSpace($value)) { throw "Project property $Name is empty." }
+    return $value.Trim()
+}
 $AppName = Get-ProjectProperty AssemblyName
 $Product = Get-ProjectProperty Product
 $Publisher = Get-ProjectProperty Company
@@ -18,7 +27,8 @@ Remove-Item -Recurse -Force publish-win, dist -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path dist | Out-Null
 
 # Self-contained win-x64 publish -> a folder of PathHide.exe + its runtime.
-dotnet publish $Project -c Release -r $Rid --self-contained true -o publish-win
+Invoke-PackageNative dotnet @('publish', $Project, '-c', 'Release', '-r', $Rid, '--self-contained', 'true', '-o', 'publish-win')
+if (-not (Test-Path -LiteralPath "publish-win/$AppName.exe" -PathType Leaf)) { throw 'Publish did not produce the application.' }
 
 # Debug symbols are useful to developers but add about 105 MB of uncompressed
 # payload. Keep them in build outputs, not in the user-facing package.
@@ -46,6 +56,11 @@ if (-not $iscc) {
 if (-not $iscc) {
     throw "Inno Setup compiler not found. Install Inno Setup 6 for the current user or machine, or add ISCC.exe to PATH."
 }
-& $iscc "/DMyAppVersion=$Version" "/DMyAppName=$Product" "/DMyAppExe=$AppName.exe" "/DMyAppPublisher=$Publisher" scripts/pathhide.iss
+Invoke-PackageNative $iscc @("/DMyAppVersion=$Version", "/DMyAppName=$Product", "/DMyAppExe=$AppName.exe", "/DMyAppPublisher=$Publisher", 'scripts/pathhide.iss')
+foreach ($artifact in @("dist/$AppName-$Version-win.zip", "dist/$Product-$Version-setup.exe")) {
+    if (-not (Test-Path -LiteralPath $artifact -PathType Leaf) -or (Get-Item -LiteralPath $artifact).Length -eq 0) {
+        throw "Packaging did not produce $artifact."
+    }
+}
 
 Get-ChildItem dist
