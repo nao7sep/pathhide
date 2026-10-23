@@ -56,11 +56,17 @@ public sealed class RecordFormatTests
         Assert.Equal(new RecordCursor(last.Time, 3), RecordFormat.CursorAfter(Newest(5, 4, 3)));
     }
 
+    // The detail shows plain names and values: a Windows path as typed, nested values indented under
+    // their name, list items dashed, and words for true, false and null. Damaged text shows as stored.
     [Fact]
-    public void Stored_json_is_indented_and_other_text_is_shown_as_it_is()
+    public void Stored_values_show_plain_and_damaged_text_is_shown_as_it_is()
     {
-        Assert.Equal("{\n  \"path\": \"/a/日本\"\n}", RecordFormat.PrettyJson("{\"path\":\"/a/日本\"}").ReplaceLineEndings("\n"));
-        Assert.Equal("not json {", RecordFormat.PrettyJson("not json {"));
+        var json = """{"path":"C:\\Users\\me\\\"q\".txt","count":3,"ok":true,"none":null,"error":{"type":"IOException"},"tags":["a","b"]}""";
+
+        Assert.Equal(
+            "path: C:\\Users\\me\\\"q\".txt\ncount: 3\nok: true\nnone: null\nerror:\n  type: IOException\ntags:\n  - a\n  - b",
+            RecordFormat.PlainValues(json));
+        Assert.Equal("not json {", RecordFormat.PlainValues("not json {"));
     }
 
     [Fact]

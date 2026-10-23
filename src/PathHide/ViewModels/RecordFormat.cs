@@ -15,12 +15,6 @@ namespace PathHide.ViewModels;
 /// </summary>
 internal static class RecordFormat
 {
-    private static readonly JsonSerializerOptions Indented = new()
-    {
-        WriteIndented = true,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
-
     /// <summary>The order the list shows records in, newest first; the database pages them the same way.</summary>
     internal static int NewestFirst(RecordSummary a, RecordSummary b)
     {
@@ -51,12 +45,15 @@ internal static class RecordFormat
         return (records, beyond ? shownMore : page.More);
     }
 
-    /// <summary>Stored JSON, indented for reading; text that is not JSON is shown as it is.</summary>
-    internal static string PrettyJson(string text)
+    /// <summary>
+    /// A record's fields or error as the plain names and values search matches; a damaged one shows as
+    /// stored, so nothing it holds is hidden.
+    /// </summary>
+    internal static string PlainValues(string text)
     {
         try
         {
-            return JsonNode.Parse(text)?.ToJsonString(Indented) ?? text;
+            return PathHide.Storage.RecordValues.Plain(text);
         }
         catch (JsonException)
         {

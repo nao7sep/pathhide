@@ -96,11 +96,11 @@ public sealed class RecordDetailViewModel(RecordDetail record, string currentSes
 
     public string LaunchText => RecordsViewModel.LaunchLabel(Record.Session, currentSession);
 
-    public string? FieldsText { get; } = record.Fields is null ? null : RecordFormat.PrettyJson(record.Fields);
+    public string? FieldsText { get; } = record.Fields is null ? null : RecordFormat.PlainValues(record.Fields);
 
     public bool HasFields => FieldsText is not null;
 
-    public string? ErrorText { get; } = record.Error is null ? null : RecordFormat.PrettyJson(record.Error);
+    public string? ErrorText { get; } = record.Error is null ? null : RecordFormat.PlainValues(record.Error);
 
     public bool HasError => ErrorText is not null;
 

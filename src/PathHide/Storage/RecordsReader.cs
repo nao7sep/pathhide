@@ -92,8 +92,6 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
                 pragma.ExecuteNonQuery();
             }
             FormatVersions.CheckDatabase(connection, databasePath, FormatVersions.Records);
-            connection.CreateFunction<string?, string, bool>("pathhide_contains", Contains, isDeterministic: true);
-            connection.CreateFunction<string?, string, bool>("pathhide_contains_json", ContainsInJson, isDeterministic: true);
             return read(connection);
         }).WaitAsync(ReadBound);
 
@@ -118,8 +116,24 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
                 command.Parameters.AddWithValue("$level", LevelName(level));
             }
         }
+        // A damaged record's fields or error cannot be read as values: it is skipped, and the search
+        // records once how many it skipped rather than failing.
+        var damaged = 0;
         if (query.Search.Trim() is { Length: > 0 } search)
         {
+            connection.CreateFunction<string?, string, bool>("pathhide_contains", Contains, isDeterministic: true);
+            connection.CreateFunction<string?, string, bool>("pathhide_contains_json", (json, text) =>
+            {
+                try
+                {
+                    return ContainsInJson(json, text);
+                }
+                catch (JsonException)
+                {
+                    damaged++;
+                    return false;
+                }
+            }, isDeterministic: true);
             where.Add($"({Searched})");
             command.Parameters.AddWithValue("$search", search);
         }
@@ -144,6 +158,9 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
             records.Add(new RecordSummary(
                 reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4)));
         }
+
+        if (damaged > 0)
+            PathHide.Services.Log.Warn("records: search skipped records whose details cannot be read", new { count = damaged });
 
         var more = records.Count > PageSize;
         if (more)
@@ -184,23 +201,10 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
 
     // A record's fields and error are JSON objects the logger wrote, so each parses; the search looks at
     // their names and text values decoded, as the detail pane presents them.
-    internal static bool ContainsInJson(string? json, string search)
-    {
-        if (json is null)
-            return false;
-        using var document = JsonDocument.Parse(json);
-        return Matches(document.RootElement);
-
-        bool Matches(JsonElement element) => element.ValueKind switch
-        {
-            JsonValueKind.Object => element.EnumerateObject()
-                .Any(property => Contains(property.Name, search) || Matches(property.Value)),
-            JsonValueKind.Array => element.EnumerateArray().Any(Matches),
-            JsonValueKind.String => Contains(element.GetString(), search),
-            JsonValueKind.Number => Contains(element.GetRawText(), search),
-            _ => false,
-        };
-    }
+    // Throws JsonException for a damaged record, which the search skips.
+    internal static bool ContainsInJson(string? json, string search) =>
+        json is not null
+        && RecordValues.Read(json).Any(entry => Contains(entry.Name, search) || Contains(entry.Value, search));
 
     internal static string LevelName(RecordLevelFilter level) => level switch
     {

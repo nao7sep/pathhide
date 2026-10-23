@@ -197,4 +197,40 @@ public sealed class RecordsReaderTests : IDisposable
         Assert.Equal([ids[3]], await Found("ioexception"));
         Assert.Empty(await Found("\\\\"));
     }
+
+    // Search matches exactly what the detail pane shows, so a value copied from it finds its record,
+    // the words true, false and null included.
+    [Fact]
+    public async Task A_value_copied_from_the_detail_finds_its_record()
+    {
+        Write(1, "apply", fields: new JsonObject { ["path"] = @"C:\Users\me\a.txt", ["elevated"] = true, ["parent"] = null });
+        Write(2, "scan", fields: new JsonObject { ["path"] = "/other" });
+        var id = (await _reader.ReadPageAsync(All())).Records.Single(record => record.Message == "apply").Id;
+        var detail = new PathHide.ViewModels.RecordDetailViewModel((await _reader.ReadDetailAsync(id))!, "s1");
+
+        foreach (var line in detail.FieldsText!.Split('\n'))
+        {
+            var value = line[(line.IndexOf(": ", StringComparison.Ordinal) + 2)..];
+            Assert.Equal([id], (await _reader.ReadPageAsync(All(value))).Records.Select(record => record.Id).ToArray());
+        }
+    }
+
+    // A record whose details cannot be read is skipped, so one damaged row cannot fail every search.
+    [Fact]
+    public async Task A_damaged_record_is_skipped_instead_of_failing_the_search()
+    {
+        Write(1, "scan", fields: new JsonObject { ["path"] = "/findme" });
+        Write(2, "scan", fields: new JsonObject { ["path"] = "/damaged" });
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + Path.Combine(_root, RecordsStore.FileName)))
+        {
+            connection.Open();
+            using var damage = connection.CreateCommand();
+            damage.CommandText = "UPDATE log_entries SET fields = '{not json' WHERE fields LIKE '%damaged%'";
+            Assert.Equal(1, damage.ExecuteNonQuery());
+        }
+
+        var found = await _reader.ReadPageAsync(All("findme"));
+
+        Assert.Equal("scan", Assert.Single(found.Records).Message);
+    }
 }

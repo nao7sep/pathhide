@@ -392,7 +392,7 @@ public sealed class RecordsViewModelTests
         Assert.Same(selected, vm.SelectedRow);
         Assert.Same(selected, vm.Rows[1]);
         Assert.Equal("m2", vm.Detail!.Message);
-        Assert.Equal("{\n  \"a\": 1\n}", vm.Detail.FieldsText!.ReplaceLineEndings("\n"));
+        Assert.Equal("a: 1", vm.Detail.FieldsText);
     }
 
     [AvaloniaFact]
