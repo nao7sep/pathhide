@@ -23,7 +23,7 @@ public sealed class SettingsStore : ISettingsStore
     /// <summary>
     /// Writes <paramref name="current"/> when its sets differ from <paramref name="previous"/>, the
     /// settings the app holds in memory, or always when <paramref name="previous"/> is null;
-    /// <c>config.json</c> is not read first. PathHide is the file's only writer while it runs, and its four
+    /// <c>config.json</c> is not read first. PathHide is the file's only writer while it runs, and its
     /// sets are harmless preferences, so a file that could not be used at startup is simply replaced by
     /// this save (see <see cref="SettingsSets"/> for what it drops).
     /// </summary>
