@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -59,6 +60,34 @@ public sealed class RecordsViewModelTests
     }
 
     [AvaloniaFact]
+    public void An_older_A_request_cannot_replace_the_current_A_detail_or_its_loading_note()
+    {
+        var pending = new List<TaskCompletionSource<RecordDetail?>>();
+        _reader.DetailRead = (_, _) =>
+        {
+            var reply = new TaskCompletionSource<RecordDetail?>();
+            pending.Add(reply);
+            return reply.Task;
+        };
+        var vm = Started();
+        Answer(false, Record(2), Record(1));
+        vm.SelectedRow = vm.Rows[1];
+        vm.SelectedRow = vm.Rows[0];
+        vm.SelectedRow = vm.Rows[1];
+        Assert.Equal(English.Of("records.loading"), vm.DetailNote);
+        pending[0].SetException(new IOException("old A failure"));
+        Settle();
+        Assert.Equal(RecordDetailStatus.Loading, vm.DetailStatus);
+        pending[2].SetResult(new RecordDetail(1, ThisLaunch, Record(1).Time, "info", "current A", null, null));
+        Settle();
+        pending[1].SetResult(null);
+        Settle();
+        Assert.Equal("current A", vm.Detail!.Message);
+        Assert.Equal(RecordDetailStatus.Ready, vm.DetailStatus);
+        vm.Close();
+    }
+
+    [AvaloniaFact]
     public void A_late_import_with_an_older_time_appears_inside_the_loaded_range()
     {
         var vm = Started();
@@ -71,12 +100,10 @@ public sealed class RecordsViewModelTests
 
         Signal(vm);
         ElapseLive();
-        Answer(true, Newest(300, 100));
-        Assert.Equal(new RecordCursor(Record(201).Time, 201), _reader.LastPage.Query.After);
+        Assert.Equal(300, _reader.LastPage.Query.InsertedAfter);
+        Assert.Null(_reader.LastPage.Query.After);
         var imported = Record(1000) with { Time = Record(150).Time };
-        Answer(true, Newest(200, 99).Append(imported).OrderByDescending(record => record.Time, StringComparer.Ordinal)
-            .ThenByDescending(record => record.Id).ToArray());
-        Answer(false, Record(101));
+        Answer(false, imported);
 
         Assert.Contains(vm.Rows, row => row.Id == 1000);
         Assert.Same(selected, vm.SelectedRow);
@@ -93,12 +120,9 @@ public sealed class RecordsViewModelTests
         vm.SelectedRow = selected;
         Signal(vm);
         ElapseLive();
-        Answer(true, Newest(250, 100));
-
-        Assert.Equal(new RecordCursor(Record(151).Time, 151), _reader.LastPage.Query.After);
-        Assert.Equal(100, vm.Rows.Count); // The incomplete bridge is not displayed.
-        Answer(true, Newest(150, 100));
-        Answer(false, Newest(50, 50));
+        Answer(true, Enumerable.Range(101, 100).Select(i => Record(i)).ToArray());
+        Assert.Equal(200, _reader.LastPage.Query.InsertedAfter);
+        Answer(false, Enumerable.Range(201, 50).Select(i => Record(i)).ToArray());
 
         Assert.Equal(Newest(250, 250).Select(record => record.Id), vm.Rows.Select(row => row.Id));
         Assert.Same(selected, vm.SelectedRow);
@@ -290,36 +314,17 @@ public sealed class RecordsViewModelTests
         Assert.Null(vm.MoreNote);
     }
 
-    [AvaloniaTheory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void A_late_filter_reload_keeps_the_newer_live_snapshot_and_selection(bool reloadFails)
+    [AvaloniaFact]
+    public void Signals_during_initial_read_are_consumed_after_its_snapshot()
     {
         var vm = Started();
-        Answer(false, Record(1));
-
-        vm.SelectedLevel = vm.LevelOptions.Single(option => option.Level == RecordLevelFilter.Error);
-        Settle();
-        var reload = _reader.Unanswered.Single();
         Signal(vm);
         ElapseLive();
-        var newest = _reader.Unanswered.Single(page => page != reload);
-
-        // The live snapshot includes a record committed after the initial reload took its snapshot.
-        newest.Answer(true, Record(3, level: "error"), Record(2, level: "error"));
-        Settle();
-        var selected = vm.Rows[0];
-        vm.SelectedRow = selected;
-        if (reloadFails)
-            reload.Fail();
-        else
-            reload.Answer(false, Record(2, level: "error"));
-        Settle();
-
+        Assert.Single(_reader.Unanswered);
+        Answer(false, Record(2));
+        Assert.Equal(2, _reader.LastPage.Query.InsertedAfter);
+        Answer(false, Record(3));
         Assert.Equal([3, 2], vm.Rows.Select(row => row.Id));
-        Assert.Same(selected, vm.SelectedRow);
-        Assert.True(vm.HasMore);
-        Assert.Equal(RecordsListStatus.Ready, vm.ListStatus);
     }
 
     [AvaloniaFact]
@@ -344,11 +349,10 @@ public sealed class RecordsViewModelTests
         Assert.Equal(RecordsListStatus.Ready, vm.ListStatus);
         Assert.Equal(2 * RecordsReader.PageSize, vm.Rows.Count);
 
-        Answer(true, Newest(302, RecordsReader.PageSize));
-        Answer(true, Newest(202, RecordsReader.PageSize));
-        Answer(true, Newest(102, RecordsReader.PageSize));
+        Assert.Equal(300, newest.Query.InsertedAfter);
+        Answer(false, Record(301), Record(302));
 
-        Assert.Equal(reads + 3, _reader.Pages.Count);
+        Assert.Equal(reads + 1, _reader.Pages.Count);
         // Only this launch gains records while the window is open, so the launches are not read again.
         Assert.Equal(sessionReads, _reader.SessionReads);
         Assert.Equal([302, 301, 300], vm.Rows.Take(3).Select(row => row.Id));
@@ -370,8 +374,7 @@ public sealed class RecordsViewModelTests
 
         vm.OnListScrolled(atTop: true, nearEnd: false);
         Settle();
-        Answer(true, Newest(301, RecordsReader.PageSize));
-        Answer(true, Newest(201, RecordsReader.PageSize));
+        Answer(false, Record(301));
 
         Assert.Equal(301, vm.Rows[0].Id);
     }

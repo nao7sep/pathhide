@@ -9,7 +9,7 @@ namespace PathHide.Services;
 /// One log record (logging and data-lifecycle conventions): the session it came from, the event's
 /// time, level and message, the caller's free fields as given, and the full exception when there was
 /// one. <see cref="Session"/> is the serialized start time of the process launch that logged it, so an
-/// entry handed back by the elevated child keeps the child's own session.
+/// entry handed back by the elevated child keeps the requesting GUI's session.
 /// </summary>
 public sealed record LogEntry(
     string Session,

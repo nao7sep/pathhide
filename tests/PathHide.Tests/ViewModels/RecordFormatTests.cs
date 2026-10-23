@@ -16,39 +16,6 @@ public sealed class RecordFormatTests
     private static RecordSummary[] Newest(params long[] ids) => ids.Select(id => Record(id)).ToArray();
 
     [Fact]
-    public void New_records_go_ahead_of_the_rows_shown_and_the_pages_already_read_stay()
-    {
-        var (records, more) = RecordFormat.MergeNewestPage(Newest(5, 4, 3, 2, 1), shownMore: true, new RecordsPage(Newest(7, 6, 5), More: true));
-
-        Assert.Equal([7, 6, 5, 4, 3, 2, 1], records.Select(record => record.Id));
-        Assert.True(more);
-    }
-
-    [Fact]
-    public void The_page_says_whether_more_follow_when_it_reaches_past_every_row_shown()
-    {
-        var (_, more) = RecordFormat.MergeNewestPage(Newest(2, 1), shownMore: true, new RecordsPage(Newest(3, 2, 1), More: false));
-
-        Assert.False(more);
-    }
-
-    [Fact]
-    public void An_older_page_arriving_after_a_newer_one_loses_nothing()
-    {
-        var (records, _) = RecordFormat.MergeNewestPage(Newest(9, 8, 7), shownMore: false, new RecordsPage(Newest(8, 7), More: false));
-
-        Assert.Equal([9, 8, 7], records.Select(record => record.Id));
-    }
-
-    [Fact]
-    public void An_older_record_handed_back_late_joins_where_its_time_puts_it()
-    {
-        var (records, _) = RecordFormat.MergeNewestPage(Newest(9, 7), shownMore: false, new RecordsPage(Newest(9, 8, 7), More: false));
-
-        Assert.Equal([9, 8, 7], records.Select(record => record.Id));
-    }
-
-    [Fact]
     public void The_next_page_starts_after_the_last_row_shown()
     {
         Assert.Null(RecordFormat.CursorAfter([]));

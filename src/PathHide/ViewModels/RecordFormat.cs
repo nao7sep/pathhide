@@ -1,17 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using PathHide.Storage;
 
 namespace PathHide.ViewModels;
 
 /// <summary>
-/// The records window's pure decisions: the order it lists records in, how a newest page joins the rows
-/// shown, where the next page starts, and how a stored value reads on screen.
+/// The records window's pure decisions: the order it lists records in, where the next page starts, and how a stored value reads on screen.
 /// </summary>
 internal static class RecordFormat
 {
@@ -25,25 +21,6 @@ internal static class RecordFormat
     /// <summary>The page after the last record shown, or the first page when none is.</summary>
     internal static RecordCursor? CursorAfter(IReadOnlyList<RecordSummary> shown) =>
         shown.Count == 0 ? null : new RecordCursor(shown[^1].Time, shown[^1].Id);
-
-    /// <summary>
-    /// The newest page read again, joined with the rows already shown: a row in both stays as shown,
-    /// and the rows shown beyond the page stay, so the pages already read are kept and a page read out
-    /// of order loses nothing. Whether more follow is the page's word only when it reaches past every
-    /// row shown.
-    /// </summary>
-    internal static (IReadOnlyList<RecordSummary> Records, bool More) MergeNewestPage(
-        IReadOnlyList<RecordSummary> shown, bool shownMore, RecordsPage page)
-    {
-        var byId = shown.ToDictionary(record => record.Id);
-        foreach (var record in page.Records)
-            byId.TryAdd(record.Id, record);
-
-        var records = byId.Values.ToList();
-        records.Sort(NewestFirst);
-        var beyond = page.Records.Count > 0 && shown.Any(record => NewestFirst(record, page.Records[^1]) > 0);
-        return (records, beyond ? shownMore : page.More);
-    }
 
     /// <summary>
     /// A record's fields or error as the plain names and values search matches; a damaged one shows as

@@ -16,7 +16,7 @@ public sealed class FakeRecordsReader : IRecordsReader
 {
     public sealed record PendingPage(RecordsQuery Query, TaskCompletionSource<RecordsPage> Reply, CancellationToken Token)
     {
-        public void Answer(bool more, params RecordSummary[] records) => Reply.SetResult(new RecordsPage(records, more));
+        public void Answer(bool more, params RecordSummary[] records) => Reply.SetResult(new RecordsPage(records, more) { UpperId = Query.ThroughId ?? records.Select(record => record.Id).DefaultIfEmpty(Query.InsertedAfter ?? 0).Max() });
 
         public void Fail() => Reply.SetException(new InvalidOperationException("SQLite Error 11: 'database disk image is malformed'."));
     }
@@ -42,8 +42,10 @@ public sealed class FakeRecordsReader : IRecordsReader
         return pending.Reply.Task;
     }
 
+    public Func<long, CancellationToken, Task<RecordDetail?>>? DetailRead { get; set; }
+
     public Task<RecordDetail?> ReadDetailAsync(long id, CancellationToken cancellationToken) =>
-        Task.FromResult(Details.TryGetValue(id, out var record) ? record : null);
+        DetailRead?.Invoke(id, cancellationToken) ?? Task.FromResult(Details.TryGetValue(id, out var record) ? record : null);
 
     public Task<IReadOnlyList<string>> ReadSessionsAsync(CancellationToken cancellationToken)
     {

@@ -61,7 +61,9 @@ public sealed partial class RecordsViewModel : ObservableObject
     private int _searchVersion;
     private string _appliedSearch = string.Empty;
     // The record the detail pane was last asked for, so an older detail read is dropped.
-    private long? _detailFor;
+    private int _detailGeneration;
+    private long _insertedThrough;
+    private bool _readingNewest;
     // Cancelled when what they were read for is no longer asked for, so the reader stops them inside
     // the database: the list's reads with each new list query, the detail's with each new selection,
     // and every read when the window closes.
@@ -156,6 +158,7 @@ public sealed partial class RecordsViewModel : ObservableObject
 
     public string? DetailNote => DetailStatus switch
     {
+        RecordDetailStatus.Loading => Localizer.T("records.loading"),
         RecordDetailStatus.None => Localizer.T("records.noSelection"),
         RecordDetailStatus.Failed => Localizer.T("records.detailFailed"),
         _ => null,
@@ -188,13 +191,20 @@ public sealed partial class RecordsViewModel : ObservableObject
     /// <summary>The window has closed: nothing read from now on applies.</summary>
     public void Close()
     {
+        if (_closed) return;
         _closed = true;
         _windowReads.Cancel();
+        _listReads.Cancel();
+        _detailReads.Cancel();
+        _listReads.Dispose();
+        _detailReads.Dispose();
+        _windowReads.Dispose();
     }
 
     private static CancellationTokenSource Renew(ref CancellationTokenSource reads, CancellationToken window)
     {
         reads.Cancel();
+        reads.Dispose();
         reads = CancellationTokenSource.CreateLinkedTokenSource(window);
         return reads;
     }
@@ -305,6 +315,7 @@ public sealed partial class RecordsViewModel : ObservableObject
 
     private async Task ReloadAsync()
     {
+        if (_closed) return;
         var query = Query(after: null);
         _listQuery = query;
         var generation = ++_generation;
@@ -341,80 +352,77 @@ public sealed partial class RecordsViewModel : ObservableObject
         _liveSuspended = false;
         foreach (var record in page.Records)
             Rows.Add(new RecordRowViewModel(record));
+        _insertedThrough = page.UpperId;
         HasMore = page.More;
         ListStatus = RecordsListStatus.Ready;
         // The record selected before the filters changed stays selected while it is still listed.
         if (keep is { } id && Rows.FirstOrDefault(row => row.Id == id) is { } kept)
             SelectedRow = kept;
         PageApplied?.Invoke();
+        if (_newestPending)
+        {
+            _newestPending = false;
+            _ = ReadNewestAsync();
+        }
     }
 
-    // The newest page read again for new records. It joins the rows shown rather than replacing them,
-    // so the list never falls back to its loading note and the pages already read stay.
+    // Read only newly inserted records, including late events within the displayed time range.
+    // Existing rows and selection remain in place while bounded pages of additions arrive.
     private async Task ReadNewestAsync()
     {
+        if (_closed) return;
+        if (_readingNewest || ListStatus != RecordsListStatus.Ready)
+        {
+            _newestPending = true;
+            return;
+        }
+        _readingNewest = true;
         var generation = _generation;
         var token = _listReads.Token;
-        // Refresh through the loaded range before merging. Besides bursts larger than a page,
-        // child records can arrive late with earlier event times inside an older displayed page.
-        var boundary = Rows.LastOrDefault()?.Record;
-        var query = _listQuery;
-        RecordsPage page;
         try
         {
-            page = await _reader.ReadPageAsync(query, token);
-            var records = page.Records.ToList();
-            while (boundary is not null && page.More && page.Records.Count > 0
-                && RecordFormat.NewestFirst(page.Records[^1], boundary) < 0)
+            var query = _listQuery with { InsertedAfter = _insertedThrough };
+            while (true)
             {
-                if (generation != _generation || _closed)
-                    return;
-                query = query with { After = RecordFormat.CursorAfter(page.Records) };
-                page = await _reader.ReadPageAsync(query, token);
-                records.AddRange(page.Records);
+                var page = await _reader.ReadPageAsync(query, token);
+                if (generation != _generation || _closed) return;
+                var boundary = Rows.LastOrDefault()?.Record;
+                var additions = boundary is null ? page.Records
+                    : page.Records.Where(record => RecordFormat.NewestFirst(record, boundary) <= 0).ToList();
+                var byId = Rows.ToDictionary(row => row.Id);
+                var ordered = Rows.Select(row => row.Record).Concat(additions.Where(record => !byId.ContainsKey(record.Id)))
+                    .Order(Comparer<RecordSummary>.Create(RecordFormat.NewestFirst)).ToList();
+                for (var index = 0; index < ordered.Count; index++)
+                    if (index >= Rows.Count || Rows[index].Id != ordered[index].Id)
+                        Rows.Insert(index, new RecordRowViewModel(ordered[index]));
+                if (additions.Count < page.Records.Count) HasMore = true;
+                _insertedThrough = page.More ? page.Records[^1].Id : page.UpperId;
+                if (!page.More) break;
+                query = query with { InsertedAfter = _insertedThrough, ThroughId = page.UpperId };
             }
-            var loadedRange = boundary is null ? records
-                : records.Where(record => RecordFormat.NewestFirst(record, boundary) <= 0).ToList();
-            page = new RecordsPage(loadedRange, page.More || loadedRange.Count < records.Count);
+            _liveSuspended = false;
+            OnPropertyChanged(nameof(ListNote));
+            OnPropertyChanged(nameof(HasListNote));
+            PageApplied?.Invoke();
         }
         catch (Exception ex)
         {
-            if (generation == _generation && !_closed)
-                Fail("newest", ex);
-            return;
+            if (generation == _generation && !_closed) Fail("newest", ex);
         }
-
-        if (generation != _generation || _closed)
-            return;
-        _liveSuspended = false;
-        if (ListStatus != RecordsListStatus.Ready)
+        finally
         {
-            Rows.Clear();
-            foreach (var record in page.Records)
-                Rows.Add(new RecordRowViewModel(record));
-            HasMore = page.More;
-            ListStatus = RecordsListStatus.Ready;
-        }
-        else
-        {
-            var (records, more) = RecordFormat.MergeNewestPage(Rows.Select(row => row.Record).ToList(), HasMore, page);
-            // The merge keeps every row shown in its order and only adds, so each new record is
-            // inserted where it falls; a row object is never replaced, and the selection stays on it.
-            for (var index = 0; index < records.Count; index++)
+            _readingNewest = false;
+            if (_newestPending && !_closed && !_liveSuspended && ListStatus == RecordsListStatus.Ready)
             {
-                if (index >= Rows.Count || Rows[index].Id != records[index].Id)
-                    Rows.Insert(index, new RecordRowViewModel(records[index]));
+                _newestPending = false;
+                _ = ReadNewestAsync();
             }
-            HasMore = more;
-            OnPropertyChanged(nameof(ListNote));
-            OnPropertyChanged(nameof(HasListNote));
         }
-        PageApplied?.Invoke();
     }
 
     private async Task LoadMoreAsync()
     {
-        if (ListStatus != RecordsListStatus.Ready || !HasMore || _fetchingMore)
+        if (_closed || ListStatus != RecordsListStatus.Ready || !HasMore || _fetchingMore)
             return;
 
         _fetchingMore = true;
@@ -480,7 +488,8 @@ public sealed partial class RecordsViewModel : ObservableObject
 
     private async Task ReadDetailAsync(long? id)
     {
-        _detailFor = id;
+        if (_closed) return;
+        var generation = ++_detailGeneration;
         var token = Renew(ref _detailReads, _windowReads.Token).Token;
         if (id is not { } recordId)
         {
@@ -497,7 +506,7 @@ public sealed partial class RecordsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            if (_detailFor != id || _closed)
+            if (generation != _detailGeneration || _closed)
                 return;
             Log.Error("records window: a read failed", ex, new { read = "record", id = recordId });
             Detail = null;
@@ -505,7 +514,7 @@ public sealed partial class RecordsViewModel : ObservableObject
             return;
         }
 
-        if (_detailFor != id || _closed)
+        if (generation != _detailGeneration || _closed)
             return;
         Detail = record is null ? null : new RecordDetailViewModel(record, _currentSession);
         DetailStatus = record is null ? RecordDetailStatus.Failed : RecordDetailStatus.Ready;

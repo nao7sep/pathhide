@@ -42,6 +42,27 @@ public sealed class RecordsReaderTests : IDisposable
 
     private static RecordsQuery All(string search = "") => new(null, null, search, null);
 
+    [Fact]
+    public async Task Incremental_reads_use_insertion_identity_and_a_fixed_upper_bound()
+    {
+        var token = TestContext.Current.CancellationToken;
+        Write(50, "initial");
+        var initial = await _reader.ReadPageAsync(All(), token);
+        for (var i = 0; i < RecordsReader.PageSize + 1; i++) Write(1, "late");
+        var first = await _reader.ReadPageAsync(All() with { InsertedAfter = initial.UpperId }, token);
+        Assert.True(first.More);
+        Assert.All(first.Records, record => Assert.Equal("late", record.Message));
+        Write(60, "next signal");
+        var rest = await _reader.ReadPageAsync(All() with { InsertedAfter = first.Records[^1].Id, ThroughId = first.UpperId }, token);
+        Assert.False(rest.More);
+        Assert.Equal("late", Assert.Single(rest.Records).Message);
+        var filtered = await _reader.ReadPageAsync(All("absent") with { InsertedAfter = rest.UpperId }, token);
+        Assert.Empty(filtered.Records);
+        Assert.True(filtered.UpperId > rest.UpperId);
+        var next = await _reader.ReadPageAsync(All() with { InsertedAfter = rest.UpperId }, token);
+        Assert.Equal("next signal", Assert.Single(next.Records).Message);
+    }
+
     // A read its caller no longer needs ends as cancelled, not as a failure the window would report.
     [Fact]
     public async Task A_cancelled_read_ends_as_cancelled()

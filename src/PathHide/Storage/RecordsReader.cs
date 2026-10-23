@@ -25,13 +25,17 @@ public readonly record struct RecordCursor(string Time, long Id);
 /// A page of records to read: one launch (named by its session) or all of them, a level or all of
 /// them, the words to search for, and where the page starts.
 /// </summary>
-public sealed record RecordsQuery(string? Session, RecordLevelFilter? Level, string Search, RecordCursor? After);
+public sealed record RecordsQuery(string? Session, RecordLevelFilter? Level, string Search, RecordCursor? After,
+    long? InsertedAfter = null, long? ThroughId = null);
 
 /// <summary>One record as the list shows it.</summary>
 public sealed record RecordSummary(long Id, string Session, string Time, string Level, string Message);
 
 /// <summary>A page of records, newest first, and whether more follow it.</summary>
-public sealed record RecordsPage(IReadOnlyList<RecordSummary> Records, bool More);
+public sealed record RecordsPage(IReadOnlyList<RecordSummary> Records, bool More)
+{
+    public long UpperId { get; init; }
+}
 
 /// <summary>One record whole: every column as stored. The fields and the error are the JSON text the database holds.</summary>
 public sealed record RecordDetail(
@@ -132,8 +136,20 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
 
     private RecordsPage ReadPage(SqliteConnection connection, RecordsQuery query)
     {
+        using var snapshot = connection.BeginTransaction(deferred: true);
+        using var upper = connection.CreateCommand();
+        upper.Transaction = snapshot;
+        upper.CommandText = "SELECT COALESCE(MAX(id), 0) FROM log_entries";
+        var upperId = query.ThroughId ?? (long)upper.ExecuteScalar()!;
         using var command = connection.CreateCommand();
-        var where = new List<string>();
+        command.Transaction = snapshot;
+        var where = new List<string> { "id <= $upper" };
+        command.Parameters.AddWithValue("$upper", upperId);
+        if (query.InsertedAfter is { } insertedAfter)
+        {
+            where.Add("id > $insertedAfter");
+            command.Parameters.AddWithValue("$insertedAfter", insertedAfter);
+        }
         if (query.Session is { } session)
         {
             where.Add("session = $session");
@@ -182,7 +198,7 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
         command.CommandText =
             "SELECT id, session, time, level, message FROM log_entries" +
             (where.Count > 0 ? " WHERE " + string.Join(" AND ", where) : "") +
-            " ORDER BY time DESC, id DESC LIMIT $limit";
+            (query.InsertedAfter is null ? " ORDER BY time DESC, id DESC" : " ORDER BY id ASC") + " LIMIT $limit";
         // One past the page, which says whether another follows.
         command.Parameters.AddWithValue("$limit", PageSize + 1);
 
@@ -200,7 +216,7 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
         var more = records.Count > PageSize;
         if (more)
             records.RemoveAt(PageSize);
-        return new RecordsPage(records, more);
+        return new RecordsPage(records, more) { UpperId = upperId };
     }
 
     private static RecordDetail? ReadDetail(SqliteConnection connection, long id)
