@@ -299,6 +299,18 @@ public sealed class MacVisibilityServiceTests : IDisposable
 
     // A probe macOS cannot answer, here a name longer than the file system allows, is an honest Error,
     // never a guessed kind or a silent Missing.
+    // An item whose own type cannot be read shows as Error with no guessed kind, though its flags read.
+    [MacOnlyFact]
+    public void Inspect_ReportsAnItemWhoseTypeCannotBeReadAsAnError()
+    {
+        var service = new MacVisibilityService(_ => throw new IOException("the type could not be read"));
+
+        var result = service.Inspect(NewFile());
+
+        Assert.Equal(ActualState.Error, result.ActualState);
+        Assert.Equal(ItemKind.Unknown, result.ItemKind);
+    }
+
     [MacOnlyFact]
     public void Inspect_ReportsAProbeTheSystemCannotAnswerAsAnError()
     {

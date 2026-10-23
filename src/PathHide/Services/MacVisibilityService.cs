@@ -7,6 +7,19 @@ namespace PathHide.Services;
 
 public sealed class MacVisibilityService : IVisibilityService
 {
+    private readonly Func<string, FileAttributes> _readAttributes;
+
+    public MacVisibilityService()
+        : this(File.GetAttributes)
+    {
+    }
+
+    /// <summary>Tests replace the attribute read, the one outbound call the item kind rests on.</summary>
+    internal MacVisibilityService(Func<string, FileAttributes> readAttributes)
+    {
+        _readAttributes = readAttributes;
+    }
+
     public PathInspection Inspect(string path)
     {
         try
@@ -131,9 +144,9 @@ public sealed class MacVisibilityService : IVisibilityService
     // One no-follow read of the entry's own attributes decides its kind: a link is a link whatever it
     // points to. A failure propagates to Inspect, which reports it once and shows the row as Error,
     // rather than becoming a guess such as File.
-    private static ItemKind DetectKind(string path)
+    private ItemKind DetectKind(string path)
     {
-        var attributes = File.GetAttributes(path);
+        var attributes = _readAttributes(path);
         return attributes.HasFlag(FileAttributes.ReparsePoint) ? ItemKind.Symlink
             : attributes.HasFlag(FileAttributes.Directory) ? ItemKind.Directory
             : ItemKind.File;
