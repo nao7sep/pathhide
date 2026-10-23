@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
@@ -55,7 +56,7 @@ public sealed class BoundedVisibility
     {
         try
         {
-            return await RunAsync(path, () => _service.Inspect(path), cancellationToken).ConfigureAwait(false);
+            return await RunAsync(path, "inspect", () => _service.Inspect(path), cancellationToken).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
@@ -72,7 +73,7 @@ public sealed class BoundedVisibility
     {
         try
         {
-            var resolved = await RunAsync(path, () => _service.ResolvePath(path), cancellationToken).ConfigureAwait(false);
+            var resolved = await RunAsync(path, "resolve", () => _service.ResolvePath(path), cancellationToken).ConfigureAwait(false);
             // Only an observed result establishes identity. An abandoned resolver cannot publish late.
             if (resolved is not null)
                 _identities[LiteralIdentity(path)] = LiteralIdentity(resolved);
@@ -85,12 +86,13 @@ public sealed class BoundedVisibility
     }
 
     /// <summary>
-    /// Hides or shows <paramref name="path"/>, hiding in <paramref name="mode"/>. Throws <see cref="TimeoutException"/> when the path does
-    /// not answer in time, <see cref="OperationCanceledException"/> when the caller cancels, and
-    /// whatever the write itself threw otherwise.
+    /// Hides <paramref name="path"/> in <paramref name="mode"/> or shows it. Throws
+    /// <see cref="TimeoutException"/> when the path does not answer in time,
+    /// <see cref="OperationCanceledException"/> when the caller cancels, and whatever the write itself
+    /// threw otherwise.
     /// </summary>
     public Task WriteAsync(string path, DesiredVisibility desired, WindowsHideMode mode, CancellationToken cancellationToken) =>
-        RunAsync(path, () =>
+        RunAsync(path, desired == DesiredVisibility.Hidden ? "hide" : "show", () =>
         {
             if (desired == DesiredVisibility.Hidden)
                 _service.Hide(path, mode);
@@ -99,7 +101,7 @@ public sealed class BoundedVisibility
             return true;
         }, cancellationToken);
 
-    private async Task<T> RunAsync<T>(string path, Func<T> call, CancellationToken cancellationToken)
+    private async Task<T> RunAsync<T>(string path, string operation, Func<T> call, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var literal = LiteralIdentity(path);
@@ -112,6 +114,7 @@ public sealed class BoundedVisibility
         if (_stuck.TryGetValue(identity, out var earlier) && !await EndsWithinAsync(earlier, bound.Token))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            Log.Warn("path not called; an earlier call has not returned", new { path, operation });
             throw new TimeoutException($"An earlier call on this path has not returned: {path}");
         }
 
@@ -120,10 +123,11 @@ public sealed class BoundedVisibility
         // shared pool: a call stuck for the network timeout would hold a pool thread the app's own
         // continuations, saves and reads need, and enough of them would leave that work waiting on
         // the pool's slow thread injection.
+        var started = Stopwatch.GetTimestamp();
         var work = Task.Factory.StartNew(call, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         if (!await EndsWithinAsync(work, bound.Token))
         {
-            Abandon(path, identity, work);
+            Abandon(path, operation, identity, work, started, timedOut: !cancellationToken.IsCancellationRequested);
             cancellationToken.ThrowIfCancellationRequested();
             throw new TimeoutException($"No answer within {Timeout.TotalSeconds:0} s: {path}");
         }
@@ -150,21 +154,31 @@ public sealed class BoundedVisibility
     /// Marks <paramref name="path"/> stuck until <paramref name="work"/> returns, and keeps the
     /// abandoned call's failure from surfacing as an unobserved exception.
     /// </summary>
-    private void Abandon(string path, string identity, Task work)
+    /// <remarks>
+    /// A wait that timed out is recorded with the call's outcome, and so is any write, whose row shows
+    /// Unknown because it may have landed. A read the caller stopped waiting for is recorded only if
+    /// it failed: every command stops the background scan, and its healthy reads return at once.
+    /// </remarks>
+    private void Abandon(string path, string operation, string identity, Task work, long started, bool timedOut)
     {
-        Log.Warn("path did not answer; abandoned the wait", new { path });
+        var write = operation is "hide" or "show";
+        if (timedOut)
+            Log.Warn("path did not answer; abandoned the wait", new { path, operation, waitedSeconds = Seconds(started) });
         _stuck[identity] = work;
         _ = work.ContinueWith(
             finished =>
             {
                 _stuck.TryRemove(new(identity, finished));
                 if (finished.IsFaulted)
-                    Log.Warn("abandoned path call failed", (Exception)finished.Exception!, new { path });
-                else
-                    Log.Info("abandoned path call returned", new { path });
+                    Log.Warn("abandoned path call failed", (Exception)finished.Exception!,
+                        new { path, operation, timedOut, seconds = Seconds(started) });
+                else if (timedOut || write)
+                    Log.Info("abandoned path call returned", new { path, operation, timedOut, seconds = Seconds(started) });
             },
             CancellationToken.None,
             TaskContinuationOptions.None,
             TaskScheduler.Default);
     }
+
+    private static double Seconds(long started) => Math.Round(Stopwatch.GetElapsedTime(started).TotalSeconds, 1);
 }

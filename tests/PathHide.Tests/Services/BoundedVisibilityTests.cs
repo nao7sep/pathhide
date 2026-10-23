@@ -138,6 +138,36 @@ public class BoundedVisibilityTests
         stalled.Set();
     }
 
+    // The records say what was attempted on a path that did not answer, so a row left Unknown after a
+    // write can be explained: which call, how long it was waited on, and what it did once it returned.
+    [Fact(Timeout = 10_000)]
+    public async Task An_abandoned_call_is_recorded_with_its_operation_and_its_return()
+    {
+        using var log = new StartupDiagnosticLog("path did not answer; abandoned the wait");
+        using var stalled = new ManualResetEventSlim(false);
+        var service = new FakeVisibilityService { WriteGate = stalled };
+        var visibility = new BoundedVisibility(service, Short);
+        var token = TestContext.Current.CancellationToken;
+        const string path = "/abandoned/recorded";
+        bool For(LogEntry entry, string message) =>
+            entry.Message == message && entry.Fields?["path"]?.GetValue<string>() == path;
+
+        await Assert.ThrowsAsync<TimeoutException>(
+            () => visibility.WriteAsync(path, DesiredVisibility.Hidden, WindowsHideMode.HiddenOnly, token));
+        await Assert.ThrowsAsync<TimeoutException>(
+            () => visibility.WriteAsync(path, DesiredVisibility.Shown, WindowsHideMode.HiddenOnly, token));
+        stalled.Set();
+
+        var abandoned = await log.Find(entry => For(entry, "path did not answer; abandoned the wait")).WaitAsync(token);
+        var refused = await log.Find(entry => For(entry, "path not called; an earlier call has not returned")).WaitAsync(token);
+        var returned = await log.Find(entry => For(entry, "abandoned path call returned")).WaitAsync(token);
+        Assert.Equal("hide", abandoned.Fields!["operation"]!.GetValue<string>());
+        Assert.True(abandoned.Fields["waitedSeconds"]!.GetValue<double>() > 0);
+        Assert.Equal("show", refused.Fields!["operation"]!.GetValue<string>());
+        Assert.Equal("hide", returned.Fields!["operation"]!.GetValue<string>());
+        Assert.True(returned.Fields["timedOut"]!.GetValue<bool>());
+    }
+
     [Fact(Timeout = 10_000)]
     public async Task APathStillStuck_IsNotCalledAgain_UntilItsAbandonedCallReturns()
     {
