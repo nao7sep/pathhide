@@ -544,7 +544,7 @@ public partial class MainWindow : Window
             .Select(i => i.Path.LocalPath)
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .ToArray();
-        await ViewModel.AddDroppedPathsAsync(paths, deliveredItems.Length - paths.Length);
+        await OwnViewActionAsync(() => ViewModel.AddDroppedPathsAsync(paths, deliveredItems.Length - paths.Length));
     }
 
     private void SetPathDropActive(bool active) => PathListReceiver.Classes.Set("dropActive", active);
@@ -627,7 +627,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            Log.Error("ui: shortcut window action failed", ex);
+            Log.Error("ui: window action failed", ex);
             ViewModel.ReportWindowActionFailure(ex);
         }
     }
@@ -652,11 +652,12 @@ public partial class MainWindow : Window
         if (e.Key == Key.Delete)
         {
             e.Handled = true;
-            _ = RemoveSelectedWithRecoveryAsync();
+            _ = OwnViewActionAsync(RemoveSelectedWithRecoveryAsync);
         }
     }
 
-    private async void OnRemoveClick(object? sender, RoutedEventArgs e) => await RemoveSelectedWithRecoveryAsync();
+    private async void OnRemoveClick(object? sender, RoutedEventArgs e) =>
+        await OwnViewActionAsync(RemoveSelectedWithRecoveryAsync);
 
     // Both the Remove button and the Delete key route here so the grid recovers a usable
     // selection after a removal. Without it, deleting the selected rows leaves nothing

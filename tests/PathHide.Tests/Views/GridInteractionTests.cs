@@ -34,6 +34,31 @@ public sealed class GridInteractionTests : WindowTest
     private static Point Center(Control control, Window window) =>
         control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), window)!.Value;
 
+    // A removal that fails, here because its confirmation cannot be shown, is reported in the window
+    // like any other window action, and the list is left as it was.
+    [AvaloniaFact]
+    public async System.Threading.Tasks.Task A_failed_removal_from_the_Delete_key_is_reported_and_removes_nothing()
+    {
+        var (window, viewModel) = PopulatedMainWindow.Create();
+        Show(window);
+        await viewModel.ScanTask;
+        viewModel.ConfirmDestructiveAsync = _ => throw new System.InvalidOperationException("dialog failed");
+        var grid = window.FindControl<DataGrid>("PathGrid")!;
+        var count = viewModel.Rows.Count;
+        grid.SelectedIndex = 0;
+        grid.Focus(NavigationMethod.Tab);
+
+        Press(window, Key.Delete);
+        for (var turn = 0; turn < 100 && viewModel.OperationalResults.Count == 0; turn++)
+        {
+            await System.Threading.Tasks.Task.Delay(10);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Assert.True(Assert.Single(viewModel.OperationalResults).IsError);
+        Assert.Equal(count, viewModel.Rows.Count);
+    }
+
     [AvaloniaFact]
     public async System.Threading.Tasks.Task Delete_pressed_in_the_focused_grid_removes_the_selected_entry()
     {
