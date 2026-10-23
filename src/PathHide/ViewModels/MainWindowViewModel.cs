@@ -126,8 +126,6 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool HasPathAddResult => PathAddResult is not null;
 
-    // Settings are always available now: the UI font is a cross-platform setting, so the dialog
-
     /// <summary>Whether the Windows-only hide-mode setting applies; the dialog shows it only then.</summary>
     public bool HasWindowsHideMode { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
