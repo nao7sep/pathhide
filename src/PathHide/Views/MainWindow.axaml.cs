@@ -697,9 +697,7 @@ public partial class MainWindow : Window
     // The action bar is ONE tab stop (KeyboardNavigation.TabNavigation="Once" in the XAML),
     // and these keys move within it: Left/Right to the adjacent button, Home/End to the ends,
     // skipping any currently hidden (Cancel, shown only while scanning or applying) and stopping at the
-    // ends rather than letting the key escape the group. Ten separately-tabbable buttons made
-    // reaching the grid below cost up to ten Tab presses — and the bar's width is a user
-    // preference, so it grew with every configured action.
+    // ends rather than letting the key escape the group. Tab reaches the grid without traversing every action.
     private void OnActionButtonsKeyDown(object? sender, KeyEventArgs e)
     {
         var key = e.Key switch

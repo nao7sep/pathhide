@@ -17,8 +17,7 @@ public enum ToolbarKey
 /// </summary>
 /// <remarks>
 /// This is the inner half of the Toolbar pattern: the bar is ONE tab stop (set in the XAML) and these
-/// keys move within it. Without the single tab stop, every button was its own stop — and the bar's width
-/// is a user preference, so reaching the grid below it cost one more Tab press per configured button.
+/// keys move within it. A single tab stop lets Tab reach the grid without traversing every action.
 /// </remarks>
 public static class ActionButtonNavigation
 {
