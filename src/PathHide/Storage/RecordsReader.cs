@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 
@@ -61,7 +63,11 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
 
     internal static readonly TimeSpan ReadBound = TimeSpan.FromSeconds(10);
 
-    private const string Searched = "message LIKE $search ESCAPE '\\' OR fields LIKE $search ESCAPE '\\' OR error LIKE $search ESCAPE '\\'";
+    // The message, and every name and text value in the fields and the error as the detail pane shows
+    // them decoded: a Windows path's backslashes and a quoted value match as typed, not as their JSON
+    // escapes, and the search is literal text compared without case in every script.
+    private const string Searched =
+        "pathhide_contains(message, $search) OR pathhide_contains_json(fields, $search) OR pathhide_contains_json(error, $search)";
 
     public Task<RecordsPage> ReadPageAsync(RecordsQuery query) => Read(connection => ReadPage(connection, query));
 
@@ -86,6 +92,8 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
                 pragma.ExecuteNonQuery();
             }
             FormatVersions.CheckDatabase(connection, databasePath, FormatVersions.Records);
+            connection.CreateFunction<string?, string, bool>("pathhide_contains", Contains, isDeterministic: true);
+            connection.CreateFunction<string?, string, bool>("pathhide_contains_json", ContainsInJson, isDeterministic: true);
             return read(connection);
         }).WaitAsync(ReadBound);
 
@@ -110,10 +118,10 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
                 command.Parameters.AddWithValue("$level", LevelName(level));
             }
         }
-        if (LikePattern(query.Search) is { } pattern)
+        if (query.Search.Trim() is { Length: > 0 } search)
         {
             where.Add($"({Searched})");
-            command.Parameters.AddWithValue("$search", pattern);
+            command.Parameters.AddWithValue("$search", search);
         }
         if (query.After is { } after)
         {
@@ -171,15 +179,27 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
         return sessions;
     }
 
-    // The search as a LIKE pattern that matches it anywhere, its own wildcards taken literally; null
-    // when there is nothing to search for.
-    internal static string? LikePattern(string search)
-    {
-        var trimmed = search.Trim();
-        if (trimmed.Length == 0)
-            return null;
+    internal static bool Contains(string? text, string search) =>
+        text is not null && text.Contains(search, StringComparison.OrdinalIgnoreCase);
 
-        return "%" + trimmed.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+    // A record's fields and error are JSON objects the logger wrote, so each parses; the search looks at
+    // their names and text values decoded, as the detail pane presents them.
+    internal static bool ContainsInJson(string? json, string search)
+    {
+        if (json is null)
+            return false;
+        using var document = JsonDocument.Parse(json);
+        return Matches(document.RootElement);
+
+        bool Matches(JsonElement element) => element.ValueKind switch
+        {
+            JsonValueKind.Object => element.EnumerateObject()
+                .Any(property => Contains(property.Name, search) || Matches(property.Value)),
+            JsonValueKind.Array => element.EnumerateArray().Any(Matches),
+            JsonValueKind.String => Contains(element.GetString(), search),
+            JsonValueKind.Number => Contains(element.GetRawText(), search),
+            _ => false,
+        };
     }
 
     internal static string LevelName(RecordLevelFilter level) => level switch

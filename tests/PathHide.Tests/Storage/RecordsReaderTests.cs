@@ -175,10 +175,26 @@ public sealed class RecordsReaderTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_root, "missing", RecordsStore.FileName)));
     }
 
+    // The search matches what the detail pane shows, not the JSON escapes underneath it, without case
+    // in any script, and takes wildcard characters as the text they are.
     [Fact]
-    public void A_search_pattern_escapes_its_own_wildcards()
+    public async Task Search_matches_decoded_paths_quotes_and_case_in_any_script()
     {
-        Assert.Null(RecordsReader.LikePattern("  "));
-        Assert.Equal(@"%a\%b\_c\\d%", RecordsReader.LikePattern(@" a%b_c\d "));
+        Write(1, "scan", fields: new JsonObject { ["path"] = @"C:\Users\me\Report ""final"".txt" });
+        Write(2, "scan", fields: new JsonObject { ["path"] = "/Users/me/Документы/Äpfel" });
+        Write(3, "scan", fields: new JsonObject { ["path"] = "/Users/me/100%_done" });
+        Write(4, "save failed", "error", error: new JsonObject { ["type"] = "System.IO.IOException", ["message"] = @"D:\Data is full" });
+
+        async Task<long[]> Found(string search) =>
+            (await _reader.ReadPageAsync(All(search))).Records.Select(record => record.Id).Order().ToArray();
+        var ids = (await _reader.ReadPageAsync(All())).Records.Select(record => record.Id).Order().ToArray();
+
+        Assert.Equal([ids[0]], await Found(@"c:\users\ME"));
+        Assert.Equal([ids[0]], await Found(@"""final"""));
+        Assert.Equal([ids[1]], await Found("документы/äpfel"));
+        Assert.Equal([ids[2]], await Found("%_d"));
+        Assert.Equal([ids[3]], await Found(@"d:\data"));
+        Assert.Equal([ids[3]], await Found("ioexception"));
+        Assert.Empty(await Found("\\\\"));
     }
 }
