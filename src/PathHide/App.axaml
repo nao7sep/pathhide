@@ -92,8 +92,7 @@
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
-            <!-- Action fills: the same in both themes, each carrying white (or the About
-                 foreground) text at 4.5:1 or more. -->
+            <!-- Action fills: the same in both themes, each carrying white text at 4.5:1 or more. -->
             <Color x:Key="Add">#047857</Color>
             <Color x:Key="AddHover">#065F46</Color>
             <Color x:Key="AddPressed">#064E3B</Color>
@@ -115,9 +114,6 @@
             <Color x:Key="Cancel">#B45309</Color>
             <Color x:Key="CancelHover">#92400E</Color>
             <Color x:Key="CancelPressed">#78350F</Color>
-            <Color x:Key="About">#4A044E</Color>
-            <Color x:Key="AboutHover">#3B0764</Color>
-            <Color x:Key="AboutForeground">#FFF7FE</Color>
             <Color x:Key="Utility">#374151</Color>
             <Color x:Key="UtilityHover">#1F2937</Color>
             <Color x:Key="UtilityPressed">#111827</Color>
@@ -144,9 +140,6 @@
             <SolidColorBrush x:Key="CancelBrush" Color="{StaticResource Cancel}"/>
             <SolidColorBrush x:Key="CancelHoverBrush" Color="{StaticResource CancelHover}"/>
             <SolidColorBrush x:Key="CancelPressedBrush" Color="{StaticResource CancelPressed}"/>
-            <SolidColorBrush x:Key="AboutBrush" Color="{StaticResource About}"/>
-            <SolidColorBrush x:Key="AboutHoverBrush" Color="{StaticResource AboutHover}"/>
-            <SolidColorBrush x:Key="AboutForegroundBrush" Color="{StaticResource AboutForeground}"/>
             <SolidColorBrush x:Key="UtilityBrush" Color="{StaticResource Utility}"/>
             <SolidColorBrush x:Key="UtilityHoverBrush" Color="{StaticResource UtilityHover}"/>
             <SolidColorBrush x:Key="UtilityPressedBrush" Color="{StaticResource UtilityPressed}"/>
@@ -407,17 +400,6 @@
         <Style Selector="Button.cancel:disabled /template/ ContentPresenter">
             <Setter Property="Background" Value="{StaticResource CancelBrush}"/>
             <Setter Property="Foreground" Value="White"/>
-        </Style>
-
-        <!-- About button -->
-        <Style Selector="Button.about">
-            <Setter Property="Background" Value="{StaticResource AboutBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource AboutForegroundBrush}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-        </Style>
-        <Style Selector="Button.about:pointerover /template/ ContentPresenter">
-            <Setter Property="Background" Value="{StaticResource AboutHoverBrush}"/>
-            <Setter Property="Foreground" Value="{StaticResource AboutForegroundBrush}"/>
         </Style>
 
         <!-- Utility buttons: a dark-gray neutral (clearly not black) with a white icon/label — a
