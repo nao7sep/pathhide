@@ -193,8 +193,7 @@
              the main window - the toolbar, the grid header and cells, the menu, the status bar -
              rendered at whatever the Fluent theme's default happened to be, so a theme update
              would resize the app's primary surface all at once and silently invalidate the chrome
-             heights WindowMetrics reserves for it. 13 matches what the dialogs already state for
-             their body text. -->
+             heights WindowMetrics reserves for it. Dialog body text can override this base size. -->
         <Style Selector="Window">
             <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}"/>
             <Setter Property="FontSize" Value="13"/>
