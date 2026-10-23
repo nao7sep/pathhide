@@ -29,6 +29,11 @@
     "many": "{count} non modifiés\u00a0: une modification précédente en tant qu’administrateur est toujours en cours",
     "other": "{count} non modifiés\u00a0: une modification précédente en tant qu’administrateur est toujours en cours"
   },
+  "apply.elevationDeclined": {
+    "one": "{count} non modifié\u00a0: l’autorisation d’administrateur a été refusée",
+    "many": "{count} non modifiés\u00a0: l’autorisation d’administrateur a été refusée",
+    "other": "{count} non modifiés\u00a0: l’autorisation d’administrateur a été refusée"
+  },
   "apply.errors": {
     "one": "{count} erreur",
     "many": "{count} d’erreurs",
@@ -183,6 +188,11 @@
     "one": "{count} chemin n’a pas été masqué\u00a0: une modification précédente en tant qu’administrateur est toujours en cours",
     "many": "{count} de chemins n’ont pas été masqués\u00a0: une modification précédente en tant qu’administrateur est toujours en cours",
     "other": "{count} chemins n’ont pas été masqués\u00a0: une modification précédente en tant qu’administrateur est toujours en cours"
+  },
+  "result.elevationDeclined": {
+    "one": "{count} chemin n’a pas été masqué\u00a0: l’autorisation d’administrateur a été refusée",
+    "many": "{count} de chemins n’ont pas été masqués\u00a0: l’autorisation d’administrateur a été refusée",
+    "other": "{count} chemins n’ont pas été masqués\u00a0: l’autorisation d’administrateur a été refusée"
   },
   "result.errors": {
     "one": "{count} chemin n’a pas pu être masqué",

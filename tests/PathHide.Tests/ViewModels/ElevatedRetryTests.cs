@@ -167,8 +167,10 @@ public sealed class ElevatedRetryTests : IDisposable
         Assert.Empty(TempFiles());
     }
 
+    // Declining the approval prompt is the user's choice, not a failure: the rows stay as they are on
+    // disk and the summary says why, without counting errors.
     [Fact(Timeout = 10_000)]
-    public async Task ADeclinedPrompt_CountsTheRowsAsErrors_AndLeavesNoFiles()
+    public async Task ADeclinedPrompt_SaysApprovalWasDeclined_WithoutCountingErrors_AndLeavesNoFiles()
     {
         _child.Decline = true;
         var vm = ViewModel(Applicator(), null, "/a", "/b");
@@ -176,7 +178,23 @@ public sealed class ElevatedRetryTests : IDisposable
 
         await HideAll(vm);
 
+        Assert.Equal("2 not changed: administrator approval was declined", ResultText(vm));
+        Assert.False(Assert.Single(vm.OperationalResults).IsError);
+        Assert.Equal(ActualState.Visible, StateOf(vm, "/a"));
+        Assert.Empty(TempFiles());
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task AFailedLaunch_CountsTheRowsAsErrors_AndLeavesNoFiles()
+    {
+        _child.FailLaunch = true;
+        var vm = ViewModel(Applicator(), null, "/a", "/b");
+        await vm.ScanTask;
+
+        await HideAll(vm);
+
         Assert.Equal("2 errors", ResultText(vm));
+        Assert.True(Assert.Single(vm.OperationalResults).IsError);
         Assert.Equal(ActualState.Visible, StateOf(vm, "/a"));
         Assert.Empty(TempFiles());
     }

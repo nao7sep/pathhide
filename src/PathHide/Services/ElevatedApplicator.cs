@@ -12,8 +12,11 @@ public enum ElevatedApplyStatus
     /// <summary>The child ran and exited; <see cref="ElevatedApplyOutcome.Results"/> contains its available report.</summary>
     Completed,
 
-    /// <summary>No child ran: preparation or launch failed, or the consent prompt was declined.</summary>
+    /// <summary>No child ran: preparation or launch failed.</summary>
     NotStarted,
+
+    /// <summary>No child ran: the user declined the administrator approval prompt.</summary>
+    Declined,
 
     /// <summary>The user cancelled the wait. The child, if it started, finishes on its own.</summary>
     Cancelled,
@@ -61,6 +64,9 @@ public interface IElevatedApplicator
 /// started, otherwise a task that completes with the child's exit code when it exits.
 /// </summary>
 public delegate Task<Task<int>?> ElevatedChildLauncher(IReadOnlyList<string> arguments);
+
+/// <summary>Thrown by an <see cref="ElevatedChildLauncher"/> when the user declines the approval prompt.</summary>
+public sealed class ElevationDeclinedException() : Exception("The administrator approval prompt was declined.");
 
 /// <summary>
 /// The platform-neutral half of the elevated retry: writes the request, launches the child through an
@@ -179,8 +185,9 @@ public sealed class ElevatedApplicator : IElevatedApplicator
                 show = buckets.ToShow.Count,
             });
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            run = RunChildAsync(files, started);
-            status = await WaitAsync(run, started.Task, cancellationToken).ConfigureAwait(false);
+            var declined = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            run = RunChildAsync(files, started, declined);
+            status = await WaitAsync(run, started.Task, declined.Task, cancellationToken).ConfigureAwait(false);
 
             IReadOnlyDictionary<string, bool> results;
             try
@@ -195,7 +202,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
                 results = EmptyResults;
             }
 
-            if (status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted)
+            if (status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted or ElevatedApplyStatus.Declined)
             {
                 var exitCode = await run.ConfigureAwait(false);
                 if (status == ElevatedApplyStatus.Completed)
@@ -219,7 +226,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
             // Physical preparation/read, child exit and cleanup remain one lifetime. A timed-out
             // file operation is joined before deleting its files; no late evidence reaches the UI.
             var cleanup = DeleteAfterSettlementAsync(run, fileTail, files, settled);
-            if ((status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted) && fileTail.IsCompleted)
+            if ((status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted or ElevatedApplyStatus.Declined) && fileTail.IsCompleted)
             {
                 try { await cleanup.WaitAsync(FileWaitBound).ConfigureAwait(false); }
                 catch (TimeoutException)
@@ -240,14 +247,24 @@ public sealed class ElevatedApplicator : IElevatedApplicator
             Log.Warn("elevated apply: a child is still running at quit; the next launch removes its files");
     }
 
-    /// <summary>Launches the child and waits for it to exit. Null exit code: it never ran, or the wait failed.</summary>
-    private async Task<int?> RunChildAsync(ElevatedApplyFiles files, TaskCompletionSource started)
+    /// <summary>
+    /// Launches the child and waits for it to exit. Null exit code: it never ran, or the wait failed;
+    /// <paramref name="declined"/> completes when it never ran because the user declined the prompt.
+    /// </summary>
+    private async Task<int?> RunChildAsync(ElevatedApplyFiles files, TaskCompletionSource started,
+        TaskCompletionSource declined)
     {
         Task<int>? child;
         try
         {
             child = await _launch(ElevatedApplyCommand.BuildArguments(files.RequestPath, files.ResultsPath,
                 _storageRoot, ElevatedApplyCommand.Parent.Current)).ConfigureAwait(false);
+        }
+        catch (ElevationDeclinedException)
+        {
+            Log.Info("elevated apply: administrator approval declined");
+            declined.TrySetResult();
+            return null;
         }
         catch (Exception ex)
         {
@@ -274,7 +291,8 @@ public sealed class ElevatedApplicator : IElevatedApplicator
     /// Waits for the launch to settle and then for the child to exit, ending early on a cancel, or on
     /// the timeout once the child has started.
     /// </summary>
-    private async Task<ElevatedApplyStatus> WaitAsync(Task<int?> run, Task started, CancellationToken cancellationToken)
+    private async Task<ElevatedApplyStatus> WaitAsync(Task<int?> run, Task started, Task declined,
+        CancellationToken cancellationToken)
     {
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var registration = cancellationToken.Register(() => cancelled.TrySetResult());
@@ -283,7 +301,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         if (first == cancelled.Task)
             return ElevatedApplyStatus.Cancelled;
         if (first == run && !started.IsCompleted)
-            return ElevatedApplyStatus.NotStarted;
+            return declined.IsCompleted ? ElevatedApplyStatus.Declined : ElevatedApplyStatus.NotStarted;
 
         using var timer = new CancellationTokenSource();
         var timeout = Task.Delay(_childTimeout, timer.Token);

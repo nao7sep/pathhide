@@ -275,6 +275,33 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
+    public async Task AddPaths_CancelledWhileIdentitiesAreDecidedAddsNothing()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var visibility = new FakeVisibilityService { ResolveGate = gate };
+        var paths = new FakeJsonStore<List<PathEntry>>();
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+        try
+        {
+            var add = vm.AddPathsCommand.ExecuteAsync(new[] { "/Volumes/NAS/a" });
+            await visibility.ResolveEntered.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+            vm.CancelCommand.Execute(null);
+            await add.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+            Assert.Empty(paths.Value);
+            Assert.Empty(vm.Rows);
+            Assert.Empty(visibility.Hidden);
+            Assert.False(vm.IsApplying);
+        }
+        finally
+        {
+            gate.Set();
+        }
+    }
+
+    [Fact]
     public void Path_picker_failure_uses_the_add_receiver_without_diagnostics()
     {
         var vm = CreateViewModel(

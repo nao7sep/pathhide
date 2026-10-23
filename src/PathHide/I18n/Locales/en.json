@@ -26,6 +26,10 @@
     "one": "{count} not changed: an earlier administrator change is still running",
     "other": "{count} not changed: an earlier administrator change is still running"
   },
+  "apply.elevationDeclined": {
+    "one": "{count} not changed: administrator approval was declined",
+    "other": "{count} not changed: administrator approval was declined"
+  },
   "apply.errors": {
     "one": "{count} error",
     "other": "{count} errors"
@@ -171,6 +175,10 @@
   "result.elevationBusy": {
     "one": "{count} path was not hidden: an earlier administrator change is still running",
     "other": "{count} paths were not hidden: an earlier administrator change is still running"
+  },
+  "result.elevationDeclined": {
+    "one": "{count} path was not hidden: administrator approval was declined",
+    "other": "{count} paths were not hidden: administrator approval was declined"
   },
   "result.errors": {
     "one": "{count} path could not be hidden",

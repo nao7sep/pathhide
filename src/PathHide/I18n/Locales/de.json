@@ -26,6 +26,10 @@
     "one": "{count} nicht geändert: eine frühere Administratoränderung läuft noch",
     "other": "{count} nicht geändert: eine frühere Administratoränderung läuft noch"
   },
+  "apply.elevationDeclined": {
+    "one": "{count} nicht geändert: die Administratorfreigabe wurde abgelehnt",
+    "other": "{count} nicht geändert: die Administratorfreigabe wurde abgelehnt"
+  },
   "apply.errors": {
     "one": "{count} Fehler",
     "other": "{count} Fehler"
@@ -171,6 +175,10 @@
   "result.elevationBusy": {
     "one": "{count} Pfad wurde nicht versteckt: eine frühere Administratoränderung läuft noch",
     "other": "{count} Pfade wurden nicht versteckt: eine frühere Administratoränderung läuft noch"
+  },
+  "result.elevationDeclined": {
+    "one": "{count} Pfad wurde nicht versteckt: die Administratorfreigabe wurde abgelehnt",
+    "other": "{count} Pfade wurden nicht versteckt: die Administratorfreigabe wurde abgelehnt"
   },
   "result.errors": {
     "one": "{count} Pfad konnte nicht versteckt werden",

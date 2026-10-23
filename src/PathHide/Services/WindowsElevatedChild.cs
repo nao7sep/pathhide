@@ -32,8 +32,7 @@ public static class WindowsElevatedChild
         }
         catch (Exception ex) when (IsDeclined(ex))
         {
-            Log.Info("elevated apply: UAC cancelled by user");
-            return null;
+            throw new ElevationDeclinedException();
         }
         catch (Exception ex)
         {

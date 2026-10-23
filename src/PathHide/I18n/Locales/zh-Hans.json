@@ -23,6 +23,9 @@
   "apply.elevationBusy": {
     "other": "{count} 个未更改：之前的管理员更改仍在运行"
   },
+  "apply.elevationDeclined": {
+    "other": "{count} 个未更改：管理员批准被拒绝"
+  },
   "apply.errors": {
     "other": "{count} 个错误"
   },
@@ -159,6 +162,9 @@
   },
   "result.elevationBusy": {
     "other": "{count} 个路径未隐藏：之前的管理员更改仍在运行"
+  },
+  "result.elevationDeclined": {
+    "other": "{count} 个路径未隐藏：管理员批准被拒绝"
   },
   "result.errors": {
     "other": "{count} 个路径无法隐藏"

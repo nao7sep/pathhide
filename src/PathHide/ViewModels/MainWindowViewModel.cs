@@ -421,6 +421,9 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         var identities = await ResolveIdentitiesAsync(_entries.Select(entry => entry.Path).Concat(accepted).ToList(), token);
+        // Cancel while identities are still being decided adds nothing: no entry is saved or hidden.
+        if (identities is null)
+            return;
         var existing = identities.Take(_entries.Count).ToList();
         foreach (var candidate in identities.Skip(_entries.Count))
         {
@@ -478,30 +481,33 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// Resolve incoming and existing references at Add's bounded native boundary. This recognizes
     /// old alias spellings without rewriting stored entries, and distinguishes case-only Mac files.
-    /// Unknown identities retain their normalized spelling; later comparisons remain pure.
+    /// A path whose identity cannot be read in time (an unavailable volume) keeps its normalized
+    /// spelling; later comparisons remain pure. Null when the user cancelled before every identity was
+    /// decided, so Add stops before saving anything.
     /// </summary>
-    private async Task<List<string>> ResolveIdentitiesAsync(List<string> paths, CancellationToken token)
+    private async Task<List<string>?> ResolveIdentitiesAsync(List<string> paths, CancellationToken token)
     {
         var resolved = new Dictionary<string, string>(StringComparer.Ordinal);
         var identities = new List<string>(paths.Count);
-        foreach (var path in paths)
+        try
         {
-            PathNormalizer.TryNormalize(path, out var normalized, out _);
-            normalized ??= path;
-            if (!resolved.TryGetValue(normalized, out var identity))
+            foreach (var path in paths)
             {
-                identity = normalized;
-                if (!token.IsCancellationRequested)
+                PathNormalizer.TryNormalize(path, out var normalized, out _);
+                normalized ??= path;
+                if (!resolved.TryGetValue(normalized, out var identity))
                 {
-                    try { identity = await _visibility.ResolvePathAsync(normalized, token) ?? normalized; }
-                    catch (OperationCanceledException) when (token.IsCancellationRequested)
-                    {
-                        Log.Info("add: cancelled while resolving paths");
-                    }
+                    token.ThrowIfCancellationRequested();
+                    identity = await _visibility.ResolvePathAsync(normalized, token) ?? normalized;
+                    resolved[normalized] = identity;
                 }
-                resolved[normalized] = identity;
+                identities.Add(identity);
             }
-            identities.Add(identity);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            Log.Info("add: cancelled while resolving paths; nothing was added");
+            return null;
         }
         return identities;
     }
@@ -534,6 +540,8 @@ public partial class MainWindowViewModel : ObservableObject
             parts.Add(Message.Of("result.cancelled", ("count", outcome.Cancelled)));
         if (outcome.ElevationBusy > 0)
             parts.Add(Message.Of("result.elevationBusy", ("count", outcome.ElevationBusy)));
+        if (outcome.ElevationDeclined > 0)
+            parts.Add(Message.Of("result.elevationDeclined", ("count", outcome.ElevationDeclined)));
 
         if (parts.Count == 0)
             return;
@@ -1742,6 +1750,15 @@ public partial class MainWindowViewModel : ObservableObject
                     continue;
                 }
 
+                // The user declined administrator approval: nothing was attempted, which is their
+                // choice rather than a failure, so the row shows what is on disk and the summary says so.
+                if (outcome.Status == ElevatedApplyStatus.Declined)
+                {
+                    row.ApplyScanResult(recheck, row.PathFamily);
+                    problems[row.Path] = ApplyProblem.ElevationDeclined;
+                    continue;
+                }
+
                 var (display, wasApplied) = DecideElevatedRow(
                     row.Entry.DesiredVisibility, reported ? ok : null, recheck);
                 row.ApplyScanResult(recheck with { ActualState = display }, row.PathFamily);
@@ -1759,7 +1776,7 @@ public partial class MainWindowViewModel : ObservableObject
         var result = new ApplyOutcome(applied, problems);
         Log.Info("apply: done", new { applied, unchanged = result.Unchanged, missing = result.Missing,
             errors = result.Errors, unresponsive = result.Unresponsive, cancelled = result.Cancelled,
-            elevationBusy = result.ElevationBusy, elevationExitCode });
+            elevationBusy = result.ElevationBusy, elevationDeclined = result.ElevationDeclined, elevationExitCode });
         OnPropertyChanged(nameof(StatusBarText));
 
         return result;
@@ -1775,6 +1792,7 @@ public partial class MainWindowViewModel : ObservableObject
         public int Unresponsive => Count(ApplyProblem.Unresponsive);
         public int Cancelled => Count(ApplyProblem.Cancelled);
         public int ElevationBusy => Count(ApplyProblem.ElevationBusy);
+        public int ElevationDeclined => Count(ApplyProblem.ElevationDeclined);
         private int Count(ApplyProblem key) => Problems.Values.Count(value => value == key);
         public bool HasProblems => Problems.Count > 0;
         public bool HasFailures => Problems.Values.Any(problem => problem.IsFailure());

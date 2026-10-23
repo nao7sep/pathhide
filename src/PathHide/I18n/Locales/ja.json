@@ -23,6 +23,9 @@
   "apply.elevationBusy": {
     "other": "変更なし {count} 件（以前の管理者としての変更がまだ実行中です）"
   },
+  "apply.elevationDeclined": {
+    "other": "変更なし {count} 件（管理者の承認が拒否されました）"
+  },
   "apply.errors": {
     "other": "エラー {count} 件"
   },
@@ -159,6 +162,9 @@
   },
   "result.elevationBusy": {
     "other": "パス {count} 件を非表示にしませんでした（以前の管理者としての変更がまだ実行中です）"
+  },
+  "result.elevationDeclined": {
+    "other": "パス {count} 件を非表示にしませんでした（管理者の承認が拒否されました）"
   },
   "result.errors": {
     "other": "パス {count} 件を非表示にできませんでした"

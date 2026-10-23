@@ -29,6 +29,11 @@
     "many": "{count} de entradas não alteradas: uma alteração anterior como administrador ainda está em andamento",
     "other": "{count} não alteradas: uma alteração anterior como administrador ainda está em andamento"
   },
+  "apply.elevationDeclined": {
+    "one": "{count} não alterada: a aprovação de administrador foi recusada",
+    "many": "{count} de entradas não alteradas: a aprovação de administrador foi recusada",
+    "other": "{count} não alteradas: a aprovação de administrador foi recusada"
+  },
   "apply.errors": {
     "one": "{count} erro",
     "many": "{count} de erros",
@@ -183,6 +188,11 @@
     "one": "{count} caminho não foi ocultado: uma alteração anterior como administrador ainda está em andamento",
     "many": "{count} de caminhos não foram ocultados: uma alteração anterior como administrador ainda está em andamento",
     "other": "{count} caminhos não foram ocultados: uma alteração anterior como administrador ainda está em andamento"
+  },
+  "result.elevationDeclined": {
+    "one": "{count} caminho não foi ocultado: a aprovação de administrador foi recusada",
+    "many": "{count} de caminhos não foram ocultados: a aprovação de administrador foi recusada",
+    "other": "{count} caminhos não foram ocultados: a aprovação de administrador foi recusada"
   },
   "result.errors": {
     "one": "{count} caminho não pôde ser ocultado",

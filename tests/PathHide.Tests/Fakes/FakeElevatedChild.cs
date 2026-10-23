@@ -21,6 +21,9 @@ public sealed class FakeElevatedChild
     /// <summary>When true, the consent prompt is declined and no child runs.</summary>
     public bool Decline { get; set; }
 
+    /// <summary>When true, the launch fails for another reason and no child runs.</summary>
+    public bool FailLaunch { get; set; }
+
     /// <summary>When set, the launch waits for it, the way the consent prompt holds a launch.</summary>
     public TaskCompletionSource? Prompt { get; set; }
 
@@ -54,6 +57,8 @@ public sealed class FakeElevatedChild
             await prompt.Task;
         }
         if (Decline)
+            throw new ElevationDeclinedException();
+        if (FailLaunch)
             return null;
 
         var run = new Run(arguments, invocation, request);

@@ -29,6 +29,11 @@
     "many": "{count} de elementos sin cambios: todavía se está ejecutando un cambio anterior como administrador",
     "other": "{count} sin cambios: todavía se está ejecutando un cambio anterior como administrador"
   },
+  "apply.elevationDeclined": {
+    "one": "{count} sin cambios: se rechazó la aprobación de administrador",
+    "many": "{count} de elementos sin cambios: se rechazó la aprobación de administrador",
+    "other": "{count} sin cambios: se rechazó la aprobación de administrador"
+  },
   "apply.errors": {
     "one": "{count} error",
     "many": "{count} de errores",
@@ -183,6 +188,11 @@
     "one": "{count} ruta no se ocultó: todavía se está ejecutando un cambio anterior como administrador",
     "many": "{count} de rutas no se ocultaron: todavía se está ejecutando un cambio anterior como administrador",
     "other": "{count} rutas no se ocultaron: todavía se está ejecutando un cambio anterior como administrador"
+  },
+  "result.elevationDeclined": {
+    "one": "{count} ruta no se ocultó: se rechazó la aprobación de administrador",
+    "many": "{count} de rutas no se ocultaron: se rechazó la aprobación de administrador",
+    "other": "{count} rutas no se ocultaron: se rechazó la aprobación de administrador"
   },
   "result.errors": {
     "one": "{count} ruta no se pudo ocultar",

@@ -8,6 +8,7 @@ internal enum ApplyProblem
     Unresponsive,
     Cancelled,
     ElevationBusy,
+    ElevationDeclined,
 }
 
 internal static class ApplyProblemPresentation
@@ -23,6 +24,7 @@ internal static class ApplyProblemPresentation
         ApplyProblem.Unresponsive => "apply.unresponsive",
         ApplyProblem.Cancelled => "apply.cancelled",
         ApplyProblem.ElevationBusy => "apply.elevationBusy",
+        ApplyProblem.ElevationDeclined => "apply.elevationDeclined",
         _ => throw new System.Diagnostics.UnreachableException(),
     };
 }
