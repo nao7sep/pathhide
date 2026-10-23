@@ -25,12 +25,20 @@ public sealed class MacVisibilityService : IVisibilityService
         try
         {
             path = PathNormalizer.RequireNativeAbsolutePath(path, windows: false);
-            if (!Path.Exists(path))
+            // One no-follow read of the entry's own attributes says both that it is there and what kind
+            // it is: a link is a link whatever it points to. A missing or access-denied path throws a
+            // reason-bearing exception, sorted out below; any other failure is reported once below and
+            // shows the row as Error, rather than becoming a guess such as File.
+            FileAttributes attributes;
+            try
             {
-                // Not directly statable — distinguish a genuinely missing path/ancestor
-                // from a permission wall. macOS has no elevation step, but the state is
-                // still reported faithfully (the apply pipeline treats AccessDenied as a
-                // terminal error here).
+                attributes = _readAttributes(path);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            {
+                // Distinguish a genuinely missing path/ancestor from a permission wall higher up.
+                // macOS has no elevation step, but the state is still reported faithfully (the apply
+                // pipeline treats AccessDenied as a terminal error here).
                 return new PathInspection(PathProbe.ClassifyInaccessible(path), ItemKind.Unknown);
             }
 
@@ -44,7 +52,7 @@ public sealed class MacVisibilityService : IVisibilityService
 
             var hidden = (flags & MacFs.UF_HIDDEN) != 0 || IsDotPrefixed(path);
             var state = hidden ? ActualState.Hidden : ActualState.Visible;
-            return new PathInspection(state, DetectKind(path));
+            return new PathInspection(state, KindOf(attributes));
         }
         catch (UnauthorizedAccessException)
         {
@@ -143,14 +151,8 @@ public sealed class MacVisibilityService : IVisibilityService
         throw new IOException($"{operation} failed: {message} (errno {errno})");
     }
 
-    // One no-follow read of the entry's own attributes decides its kind: a link is a link whatever it
-    // points to. A failure propagates to Inspect, which reports it once and shows the row as Error,
-    // rather than becoming a guess such as File.
-    private ItemKind DetectKind(string path)
-    {
-        var attributes = _readAttributes(path);
-        return attributes.HasFlag(FileAttributes.ReparsePoint) ? ItemKind.Symlink
+    private static ItemKind KindOf(FileAttributes attributes) =>
+        attributes.HasFlag(FileAttributes.ReparsePoint) ? ItemKind.Symlink
             : attributes.HasFlag(FileAttributes.Directory) ? ItemKind.Directory
             : ItemKind.File;
-    }
 }
