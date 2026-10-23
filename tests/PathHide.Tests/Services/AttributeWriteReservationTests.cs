@@ -188,6 +188,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
     {
         public PathInspection Inspect(string _) => new(Models.ActualState.Visible, Models.ItemKind.File);
         public string? ResolvePath(string _) => null;
+        public bool ResolvesPaths => false;
         public void Show(string _) => Hide(_, Models.WindowsHideMode.HiddenOnly);
         public void Hide(string _, Models.WindowsHideMode __)
         {

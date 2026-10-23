@@ -90,6 +90,8 @@ public sealed class FakeVisibilityService : IVisibilityService
         return _byPath.TryGetValue(path, out var inspection) ? inspection : Default;
     }
 
+    public bool ResolvesPaths { get; set; } = true;
+
     public string? ResolvePath(string path)
     {
         Resolved.Enqueue(path);

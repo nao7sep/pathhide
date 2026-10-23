@@ -16,6 +16,16 @@ public class BoundedVisibilityTests
 {
     private static readonly TimeSpan Short = TimeSpan.FromMilliseconds(200);
 
+    // Where the system resolves no spelling, there is nothing to wait on: no call runs for it.
+    [Fact]
+    public async Task A_system_that_resolves_nothing_is_not_asked()
+    {
+        var service = new FakeVisibilityService { ResolvesPaths = false };
+
+        Assert.Null(await new BoundedVisibility(service, Short).ResolvePathAsync("/a", TestContext.Current.CancellationToken));
+        Assert.Empty(service.Resolved);
+    }
+
     // A stuck call holds its thread for the network timeout; on the shared pool, enough of them would
     // delay the app's own continuations, saves and reads.
     [Fact(Timeout = 10_000)]

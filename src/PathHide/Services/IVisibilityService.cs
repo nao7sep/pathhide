@@ -23,4 +23,10 @@ public interface IVisibilityService
     /// following a final symbolic link, or null when unavailable. Implementations must not throw.
     /// </summary>
     string? ResolvePath(string path);
+
+    /// <summary>
+    /// Whether <see cref="ResolvePath"/> can answer anything but null on this system; when it cannot,
+    /// nothing is run to ask it.
+    /// </summary>
+    bool ResolvesPaths { get; }
 }

@@ -111,6 +111,9 @@ public sealed class BoundedVisibility
     /// </summary>
     public async Task<string?> ResolvePathAsync(string path, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!_service.ResolvesPaths)
+            return null;
         try
         {
             var resolved = await RunAsync(path, "resolve", () => _service.ResolvePath(path), cancellationToken).ConfigureAwait(false);

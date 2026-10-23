@@ -73,6 +73,8 @@ public sealed class MacVisibilityService : IVisibilityService
         SetHidden(path, hidden: false);
     }
 
+    public bool ResolvesPaths => true;
+
     /// <summary>Resolve parent aliases and actual leaf case without following a final link.</summary>
     public string? ResolvePath(string path)
     {

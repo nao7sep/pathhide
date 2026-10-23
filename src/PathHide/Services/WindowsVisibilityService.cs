@@ -59,6 +59,8 @@ public sealed class WindowsVisibilityService : IVisibilityService
     /// </summary>
     public string? ResolvePath(string path) => null;
 
+    public bool ResolvesPaths => false;
+
     /// <summary>
     /// What one attribute read says: Hidden alone decides visibility, System never does, and a reparse
     /// point (symlink or junction) counts as a link whatever it points to.
