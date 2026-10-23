@@ -25,8 +25,8 @@ public sealed record ElevatedApplyFiles(string RequestPath, string ResultsPath)
     private const string RequestSuffix = ".request.json";
     private const string ResultsSuffix = ".results.jsonl";
 
-    private static readonly IReadOnlyDictionary<string, bool> EmptyResults =
-        new Dictionary<string, bool>(StringComparer.Ordinal);
+    private static readonly IReadOnlyDictionary<string, PathApplyResult> EmptyResults =
+        new Dictionary<string, PathApplyResult>(StringComparer.Ordinal);
 
     /// <summary>A fresh, unguessable pair of names in <paramref name="directory"/> owned by this process.</summary>
     public static ElevatedApplyFiles Create(string directory)
@@ -40,15 +40,15 @@ public sealed record ElevatedApplyFiles(string RequestPath, string ResultsPath)
     /// <summary>
     /// The per-path outcomes the child has written so far, keyed by the exact path it was handed.
     /// </summary>
-    public IReadOnlyDictionary<string, bool> ReadResults()
+    public IReadOnlyDictionary<string, PathApplyResult> ReadResults()
     {
         var text = ReadText(ResultsPath);
         if (text is null)
             return EmptyResults;
 
-        var byPath = new Dictionary<string, bool>(StringComparer.Ordinal);
+        var byPath = new Dictionary<string, PathApplyResult>(StringComparer.Ordinal);
         foreach (var result in ElevatedApplyResults.Parse(text).Results)
-            byPath[result.Path] = result.Ok;
+            byPath[result.Path] = result;
         return byPath;
     }
 

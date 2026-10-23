@@ -227,7 +227,7 @@
     "other": "{count} rutas no respondieron"
   },
   "settings.hiddenAndSystem": "Al ocultar, activar también el atributo Sistema (Windows)",
-  "settings.hideModeHint": "PathHide quita el atributo Sistema al mostrar, y también al ocultar si esta opción está desactivada. Esto incluye el atributo Sistema que un archivo o una carpeta ya tuviera, y PathHide no puede restaurarlo.",
+  "settings.hideModeHint": "PathHide quita el atributo Sistema solo donde lo puso: al mostrar, y al ocultar si esta opción está desactivada. El atributo Sistema que un archivo o una carpeta ya tuviera se conserva.",
   "settings.language": "Idioma",
   "settings.languageSystem": "Sistema ({language})",
   "settings.theme": "Tema",

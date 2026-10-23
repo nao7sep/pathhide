@@ -11,12 +11,14 @@ public interface IVisibilityService
     /// </summary>
     PathInspection Inspect(string path);
     /// <summary>
-    /// Hides <paramref name="path"/>. <paramref name="mode"/> decides whether Windows also sets System;
-    /// macOS has one hidden flag and ignores it. A batch passes the mode it started with, so a Settings
-    /// change while it runs applies to the next command, not to the rest of this one.
+    /// Hides <paramref name="path"/>, doing <paramref name="system"/> to its Windows System attribute,
+    /// and returns whether this write turned System on. macOS has one hidden flag, ignores
+    /// <paramref name="system"/> and returns false.
     /// </summary>
-    void Hide(string path, WindowsHideMode mode);
-    void Show(string path);
+    bool Hide(string path, SystemBit system);
+
+    /// <summary>Shows <paramref name="path"/>, clearing or keeping its Windows System attribute.</summary>
+    void Show(string path, SystemBit system);
 
     /// <summary>
     /// The entry's canonical spelling, resolving parent aliases and actual leaf case without

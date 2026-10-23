@@ -67,15 +67,16 @@ public sealed class MacVisibilityService : IVisibilityService
         }
     }
 
-    public void Hide(string path, WindowsHideMode mode)
+    public bool Hide(string path, SystemBit system)
     {
         // Per-item boundary crossing: debug, not info. The command's paths are logged once by the
         // caller's "apply: start".
         Log.Debug("hiding path", new { path });
         SetHidden(path, hidden: true);
+        return false;
     }
 
-    public void Show(string path)
+    public void Show(string path, SystemBit system)
     {
         Log.Debug("showing path", new { path });
         SetHidden(path, hidden: false);

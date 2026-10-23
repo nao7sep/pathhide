@@ -187,7 +187,7 @@
     "other": "{count} 个路径没有响应"
   },
   "settings.hiddenAndSystem": "隐藏时同时设置“系统”属性（Windows）",
-  "settings.hideModeHint": "显示时，以及在此选项关闭的情况下隐藏时，PathHide 都会清除“系统”属性。文件或文件夹原本就带有的“系统”属性也会被清除，且 PathHide 无法将其恢复。",
+  "settings.hideModeHint": "PathHide 只清除由它自己设置的“系统”属性：在显示时，以及在此选项关闭的情况下隐藏时。文件或文件夹原本就带有的“系统”属性会保持不变。",
   "settings.language": "语言",
   "settings.languageSystem": "跟随系统（{language}）",
   "settings.theme": "主题",

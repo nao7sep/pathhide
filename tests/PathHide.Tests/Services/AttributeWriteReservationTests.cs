@@ -165,7 +165,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
         var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var service = new HeldWriter(path, finish, started, settled);
         var visibility = new BoundedVisibility(service, TimeSpan.FromMilliseconds(100));
-        var write = visibility.WriteAsync(path, Models.DesiredVisibility.Hidden, Models.WindowsHideMode.HiddenOnly, CancellationToken.None);
+        var write = visibility.WriteAsync(path, Models.DesiredVisibility.Hidden, Models.SystemBit.Keep, CancellationToken.None);
         try
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
@@ -189,8 +189,8 @@ public sealed class AttributeWriteReservationTests : IDisposable
         public PathInspection Inspect(string _) => new(Models.ActualState.Visible, Models.ItemKind.File);
         public string? ResolvePath(string _) => null;
         public bool ResolvesPaths => false;
-        public void Show(string _) => Hide(_, Models.WindowsHideMode.HiddenOnly);
-        public void Hide(string _, Models.WindowsHideMode __)
+        public void Show(string _, Models.SystemBit __) => Hide(_, __);
+        public bool Hide(string _, Models.SystemBit __)
         {
             try
             {
@@ -203,6 +203,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
                 });
             }
             finally { settled.SetResult(); }
+            return false;
         }
     }
 
@@ -251,7 +252,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
         File.WriteAllText(first, "keep");
         File.WriteAllText(second, "keep");
         Assert.Throws<OperationCanceledException>(() => PathHide.Program.ApplyFileAttributes(
-            [first, second], hide: true, system: false, results: null, parent));
+            [first, second], hide: true, Models.SystemBit.Keep, results: null, parent));
         Assert.Equal((FileAttributes)0, File.GetAttributes(first) & FileAttributes.Hidden);
         Assert.Equal((FileAttributes)0, File.GetAttributes(second) & FileAttributes.Hidden);
     }

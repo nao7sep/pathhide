@@ -85,8 +85,8 @@ public sealed class FakeElevatedChild
         public Task<int> Exited => _exit.Task;
 
         /// <summary>Appends one result line, as the child does once a path is done.</summary>
-        public void Report(string path, bool ok = true) =>
-            File.AppendAllText(Invocation.ResultsPath!, ElevatedApplyResults.SerializeLine(new PathApplyResult(path, ok)));
+        public void Report(string path, bool ok = true, bool systemSet = false) =>
+            File.AppendAllText(Invocation.ResultsPath!, ElevatedApplyResults.SerializeLine(new PathApplyResult(path, ok, systemSet)));
 
         public void Exit(int exitCode = 0) => _exit.TrySetResult(exitCode);
     }

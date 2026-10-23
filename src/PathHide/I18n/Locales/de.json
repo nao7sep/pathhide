@@ -207,7 +207,7 @@
     "other": "{count} Pfade haben nicht reagiert"
   },
   "settings.hiddenAndSystem": "Beim Verstecken auch das Systemattribut setzen (Windows)",
-  "settings.hideModeHint": "PathHide entfernt das Systemattribut beim Anzeigen und, wenn diese Option deaktiviert ist, auch beim Verstecken. Das gilt auch für ein Systemattribut, das eine Datei oder ein Ordner bereits hatte; PathHide kann es nicht wiederherstellen.",
+  "settings.hideModeHint": "PathHide entfernt das Systemattribut nur dort, wo es dieses selbst gesetzt hat: beim Anzeigen und, wenn diese Option deaktiviert ist, beim Verstecken. Ein Systemattribut, das eine Datei oder ein Ordner bereits hatte, bleibt erhalten.",
   "settings.language": "Sprache",
   "settings.languageSystem": "Systemsprache ({language})",
   "settings.theme": "Design",

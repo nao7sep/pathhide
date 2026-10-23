@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
 using PathHide.I18n;
+using PathHide.Models;
 using PathHide.Services;
 using PathHide.Storage;
 using PathHide.Views;
@@ -239,9 +240,11 @@ sealed class Program
             // Each result is written and flushed the moment its path is done, so when the parent stops
             // waiting on a child stalled inside SetAttributes on a share that stopped answering, every
             // path already changed is still reported.
-            var failed = ApplyFileAttributes(request.ToHide, hide: true, system: false, results, parent)
-                | ApplyFileAttributes(request.ToHideWithSystem, hide: true, system: true, results, parent)
-                | ApplyFileAttributes(request.ToShow, hide: false, system: false, results, parent);
+            var failed = ApplyFileAttributes(request.ToHide, hide: true, SystemBit.Keep, results, parent)
+                | ApplyFileAttributes(request.ToHideWithSystem, hide: true, SystemBit.Set, results, parent)
+                | ApplyFileAttributes(request.ToHideClearingSystem, hide: true, SystemBit.Clear, results, parent)
+                | ApplyFileAttributes(request.ToShow, hide: false, SystemBit.Keep, results, parent)
+                | ApplyFileAttributes(request.ToShowClearingSystem, hide: false, SystemBit.Clear, results, parent);
 
             // The per-path file is the authoritative channel; the exit code stays a coarse
             // 0 = all ok / 1 = some failed signal for callers and logs.
@@ -271,7 +274,7 @@ sealed class Program
     /// remarks say why that matters for this elevated write.
     /// </remarks>
     internal static bool ApplyFileAttributes(
-        IReadOnlyList<string> paths, bool hide, bool system, ElevatedResultsWriter? results, ApplyParentProcess? parent)
+        IReadOnlyList<string> paths, bool hide, SystemBit system, ElevatedResultsWriter? results, ApplyParentProcess? parent)
     {
         if (paths.Count == 0)
             return false;
@@ -285,8 +288,8 @@ sealed class Program
         {
             try
             {
-                WindowsFileVisibility.Set(path, hide, system, parent);
-                WriteResult(results, new PathApplyResult(path, Ok: true));
+                var systemSet = WindowsFileVisibility.Set(path, hide, system, parent);
+                WriteResult(results, new PathApplyResult(path, Ok: true, systemSet));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

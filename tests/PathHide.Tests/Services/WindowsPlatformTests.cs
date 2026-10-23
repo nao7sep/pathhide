@@ -117,7 +117,7 @@ public sealed class WindowsPlatformTests : IDisposable
         DenyWriteAttributes(path);
 
         Assert.Throws<UnauthorizedAccessException>(() =>
-            new WindowsVisibilityService().Hide(path, WindowsHideMode.HiddenOnly));
+            new WindowsVisibilityService().Hide(path, SystemBit.Keep));
     }
 
     [WindowsOnlyFact]
@@ -130,10 +130,10 @@ public sealed class WindowsPlatformTests : IDisposable
         DenyWriteAttributes(hidden);
         DenyWriteAttributes(hiddenAndSystem);
 
-        new WindowsVisibilityService().Hide(hidden, WindowsHideMode.HiddenOnly);
-        WindowsFileVisibility.Set(hidden, hide: true, system: false);
-        new WindowsVisibilityService().Hide(hiddenAndSystem, WindowsHideMode.HiddenAndSystem);
-        WindowsFileVisibility.Set(hiddenAndSystem, hide: true, system: true);
+        new WindowsVisibilityService().Hide(hidden, SystemBit.Clear);
+        WindowsFileVisibility.Set(hidden, hide: true, SystemBit.Keep);
+        new WindowsVisibilityService().Hide(hiddenAndSystem, SystemBit.Set);
+        WindowsFileVisibility.Set(hiddenAndSystem, hide: true, SystemBit.Keep);
     }
 
     [WindowsOnlyFact]
@@ -225,9 +225,9 @@ public sealed class WindowsPlatformTests : IDisposable
             var foreign = actual[2..].Replace('\\', '/');
             var service = new WindowsVisibilityService();
             Assert.Equal(ActualState.Error, service.Inspect(foreign).ActualState);
-            Assert.Throws<ArgumentException>(() => service.Hide(foreign, WindowsHideMode.HiddenOnly));
-            Assert.Throws<ArgumentException>(() => service.Show(foreign));
-            Assert.Throws<ArgumentException>(() => WindowsFileVisibility.Set(foreign, true, true));
+            Assert.Throws<ArgumentException>(() => service.Hide(foreign, SystemBit.Keep));
+            Assert.Throws<ArgumentException>(() => service.Show(foreign, SystemBit.Clear));
+            Assert.Throws<ArgumentException>(() => WindowsFileVisibility.Set(foreign, true, SystemBit.Set));
             Assert.Equal((FileAttributes)0, File.GetAttributes(actual) & (FileAttributes.Hidden | FileAttributes.System));
         }
         finally { Environment.CurrentDirectory = previous; }

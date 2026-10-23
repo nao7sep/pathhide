@@ -15,43 +15,42 @@ public sealed class ElevatedApplyCommandTests
 {
     private const string StorageRootArg = @"C:\Users\u\.pathhide";
 
-    /// <summary>
-    /// The routing half of the Windows attribute rule: what a desired visibility plus the hide
-    /// mode means for the Hidden and System bits, decided once for a whole batch. It used to be
-    /// three inline Where clauses in the apply pass, where nothing tested it.
-    /// </summary>
+    // Each path travels in the list of what its write does: Hidden + System hiding sets System, and
+    // any other write clears it only where PathHide set it.
     [Fact]
-    public void Partition_SortsEachPathByItsDesiredVisibilityAndTheHideMode()
+    public void Partition_SortsEachPathByItsVisibilityTheHideModeAndWhoSetSystem()
     {
-        var targets = new[]
-        {
-            ("/hide-me", DesiredVisibility.Hidden),
-            ("/show-me", DesiredVisibility.Shown),
-            ("/hide-me-too", DesiredVisibility.Hidden),
-        };
+        (string, DesiredVisibility, bool)[] targets =
+        [
+            ("/hide-mine", DesiredVisibility.Hidden, true),
+            ("/hide-theirs", DesiredVisibility.Hidden, false),
+            ("/show-mine", DesiredVisibility.Shown, true),
+            ("/show-theirs", DesiredVisibility.Shown, false),
+        ];
 
         var plain = ElevatedApplyCommand.Partition(targets, WindowsHideMode.HiddenOnly);
-        Assert.Equal(new[] { "/hide-me", "/hide-me-too" }, plain.ToHide);
+        Assert.Equal(["/hide-theirs"], plain.ToHide);
+        Assert.Equal(["/hide-mine"], plain.ToHideClearingSystem);
         Assert.Empty(plain.ToHideWithSystem);
-        Assert.Equal(new[] { "/show-me" }, plain.ToShow);
+        Assert.Equal(["/show-theirs"], plain.ToShow);
+        Assert.Equal(["/show-mine"], plain.ToShowClearingSystem);
 
-        // The mode moves the hides to the System list and must leave the show exactly where it is:
-        // showing always clears both bits, whatever the hide mode says.
         var withSystem = ElevatedApplyCommand.Partition(targets, WindowsHideMode.HiddenAndSystem);
+        Assert.Equal(["/hide-mine", "/hide-theirs"], withSystem.ToHideWithSystem);
         Assert.Empty(withSystem.ToHide);
-        Assert.Equal(new[] { "/hide-me", "/hide-me-too" }, withSystem.ToHideWithSystem);
-        Assert.Equal(new[] { "/show-me" }, withSystem.ToShow);
+        Assert.Empty(withSystem.ToHideClearingSystem);
+        Assert.Equal(["/show-theirs"], withSystem.ToShow);
+        Assert.Equal(["/show-mine"], withSystem.ToShowClearingSystem);
+        Assert.Equal(4, withSystem.Count);
     }
 
     [Fact]
-    public void Partition_WithNothingToDo_ReturnsThreeEmptyLists()
+    public void Partition_WithNothingToDo_ReturnsEmptyLists()
     {
         var buckets = ElevatedApplyCommand.Partition(
-            Array.Empty<(string, DesiredVisibility)>(), WindowsHideMode.HiddenAndSystem);
+            Array.Empty<(string, DesiredVisibility, bool)>(), WindowsHideMode.HiddenAndSystem);
 
-        Assert.Empty(buckets.ToHide);
-        Assert.Empty(buckets.ToHideWithSystem);
-        Assert.Empty(buckets.ToShow);
+        Assert.Equal(0, buckets.Count);
     }
 
     [Fact]
@@ -171,13 +170,19 @@ public sealed class ElevatedApplyCommandTests
         var buckets = new ElevatedApplyCommand.Buckets(
             [@"C:\Program Files\a b", @"C:\"],
             [@"\\server\share\日本語 フォルダ"],
-            [@"C:\quote""d\trailing\"]);
+            [@"C:\quote""d\trailing\"])
+        {
+            ToHideClearingSystem = [@"D:\mine"],
+            ToShowClearingSystem = [@"D:\also mine"],
+        };
 
         var parsed = ElevatedApplyCommand.ParseRequest(ElevatedApplyCommand.SerializeRequest(buckets));
 
         Assert.Equal(buckets.ToHide, parsed.ToHide);
         Assert.Equal(buckets.ToHideWithSystem, parsed.ToHideWithSystem);
         Assert.Equal(buckets.ToShow, parsed.ToShow);
+        Assert.Equal(buckets.ToHideClearingSystem, parsed.ToHideClearingSystem);
+        Assert.Equal(buckets.ToShowClearingSystem, parsed.ToShowClearingSystem);
     }
 
     [Fact]
@@ -186,8 +191,7 @@ public sealed class ElevatedApplyCommandTests
         var parsed = ElevatedApplyCommand.ParseRequest("{\"toHide\":[\"C:\\\\a\"]}");
 
         Assert.Equal([@"C:\a"], parsed.ToHide);
-        Assert.Empty(parsed.ToHideWithSystem);
-        Assert.Empty(parsed.ToShow);
+        Assert.Equal(1, parsed.Count);
     }
 
     /// <summary>

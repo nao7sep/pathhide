@@ -149,10 +149,8 @@ public sealed class SettingsDialog : DialogBase
         _uiFontMissing[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("WarningTextBrush");
         UpdateUiFontMissing();
 
-        // The checkbox label only covers the setting's ON behaviour. Hiding with it OFF
-        // CLEARS the System attribute, and showing clears it unconditionally — so a path that
-        // carried System for its own reasons loses it, and PathHide keeps no record to put it
-        // back. Advertising the operation as reversible without saying this was the gap.
+        // The checkbox label only covers the setting's ON behaviour; the note says what showing, and
+        // hiding with it OFF, do to System: they clear only a System bit PathHide set itself.
         var hideModeHint = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap };
         Localized.SetText(hideModeHint, "settings.hideModeHint");
         hideModeHint[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("TextSecondaryBrush");

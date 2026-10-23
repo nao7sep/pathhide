@@ -36,7 +36,7 @@ namespace PathHide.Tests.ViewModels;
 public class MainWindowViewModelTests
 {
     internal static PathEntry Entry(string path) =>
-        new() { Path = path, DesiredVisibility = DesiredVisibility.Hidden };
+        new() { Path = path, DesiredVisibility = DesiredVisibility.Hidden, SystemSetByPathHide = false };
 
     /// <summary>
     /// Builds a view model and runs <see cref="MainWindowViewModel.Initialize"/>, mirroring
@@ -120,7 +120,9 @@ public class MainWindowViewModelTests
         }
 
         Assert.Equal(all.Order(StringComparer.Ordinal), visibility.Hidden.Order(StringComparer.Ordinal));
-        Assert.All(visibility.HideModes, mode => Assert.Equal(WindowsHideMode.HiddenOnly, mode));
+        // Hidden-only hiding keeps a System bit PathHide does not own; a write that re-read the new
+        // mode would set it instead.
+        Assert.All(visibility.HideSystem, system => Assert.Equal(SystemBit.Keep, system));
     }
 
     // A command with nothing to act on is unavailable instead of quietly doing nothing: the selected
@@ -148,6 +150,75 @@ public class MainWindowViewModelTests
         Assert.True(changed > 0);
         Assert.All(selected, command => Assert.True(command.CanExecute(null)));
         Assert.True(vm.CanActOnSelection);
+    }
+
+    // PathHide clears only a System attribute it set itself. Hidden + System hiding of an item without
+    // one makes it PathHide's, which a later Show clears and records as no longer PathHide's.
+    [Fact]
+    public async Task A_System_bit_PathHide_set_is_recorded_and_cleared_by_Show()
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>> { Value = [Entry("/mine")] };
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+        Assert.Null(await vm.TryApplySettingsAsync("en", "", hiddenAndSystem: true, ThemePreference.System));
+        visibility.Set("/mine", ActualState.Visible);
+
+        await vm.ReapplyAllCommand.ExecuteAsync(null);
+
+        Assert.Equal([SystemBit.Set], visibility.HideSystem);
+        Assert.True(Assert.Single(paths.Value).SystemSetByPathHide);
+
+        vm.Rows.Single().IsSelected = true;
+        await vm.ShowSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal([SystemBit.Clear], visibility.ShowSystem);
+        Assert.False(visibility.SystemOn["/mine"]);
+        Assert.False(Assert.Single(paths.Value).SystemSetByPathHide);
+    }
+
+    // A System attribute the item already had is not PathHide's: hiding with System leaves it the
+    // item's, and Show keeps it.
+    [Fact]
+    public async Task A_System_bit_the_item_already_had_survives_Show()
+    {
+        var visibility = new FakeVisibilityService();
+        visibility.SystemOn["/theirs"] = true;
+        var paths = new FakeJsonStore<List<PathEntry>> { Value = [Entry("/theirs")] };
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+        Assert.Null(await vm.TryApplySettingsAsync("en", "", hiddenAndSystem: true, ThemePreference.System));
+        visibility.Set("/theirs", ActualState.Visible);
+
+        await vm.ReapplyAllCommand.ExecuteAsync(null);
+        vm.Rows.Single().IsSelected = true;
+        await vm.ShowSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal([SystemBit.Keep], visibility.ShowSystem);
+        Assert.True(visibility.SystemOn["/theirs"]);
+        Assert.False(Assert.Single(paths.Value).SystemSetByPathHide);
+    }
+
+    // An entry from a list written before ownership was recorded keeps the behaviour it had: Show
+    // clears System, after which the entry records that PathHide no longer owns it.
+    [Fact]
+    public async Task An_entry_from_before_ownership_records_is_treated_as_PathHides()
+    {
+        var visibility = new FakeVisibilityService();
+        visibility.SystemOn["/old"] = true;
+        var paths = new FakeJsonStore<List<PathEntry>>
+        {
+            Value = [new PathEntry { Path = "/old", DesiredVisibility = DesiredVisibility.Hidden }],
+        };
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+
+        vm.Rows.Single().IsSelected = true;
+        await vm.ShowSelectedCommand.ExecuteAsync(null);
+
+        Assert.Equal([SystemBit.Clear], visibility.ShowSystem);
+        Assert.False(visibility.SystemOn["/old"]);
+        Assert.False(Assert.Single(paths.Value).SystemSetByPathHide);
     }
 
     // While one list-changing command runs, every other one is unavailable rather than queueing out of

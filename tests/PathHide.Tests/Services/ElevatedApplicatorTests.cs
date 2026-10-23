@@ -168,7 +168,7 @@ public sealed class ElevatedApplicatorTests : IDisposable
             await entered.Task.WaitAsync(Generous, TestContext.Current.CancellationToken);
             var outcome = await apply.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
             Assert.Equal(ElevatedApplyStatus.Completed, outcome.Status);
-            Assert.True(outcome.Results["/a"]);
+            Assert.True(outcome.Results["/a"].Ok);
             Assert.True(applicator.HasRunningChild);
             await applicator.ReleaseAsync(TimeSpan.Zero);
             Assert.False(release.IsSet);

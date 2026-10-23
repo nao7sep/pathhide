@@ -102,7 +102,7 @@ public sealed class ElevatedApplyFilesTests : IDisposable
 
             var results = files.ReadResults();
 
-            Assert.True(results[@"C:\a"]);
+            Assert.True(results[@"C:\a"].Ok);
         }
 
         Assert.True(files.TryDelete());
@@ -149,7 +149,7 @@ public sealed class ElevatedApplyFilesTests : IDisposable
                 writer.Report(new PathApplyResult(@"C:\fixture.txt", true));
                 writer.Write(new LogEntry("2026-10-02T09:31:00.000Z", "2026-10-02T09:31:00.500Z",
                     "info", message, null, null));
-                Assert.True(files.ReadResults()[@"C:\fixture.txt"]);
+                Assert.True(files.ReadResults()[@"C:\fixture.txt"].Ok);
                 // The GUI owner has gone, but Windows still protects the child's open report.
                 Assert.Equal(1, ElevatedApplyFiles.SweepLeftovers(_temp, _ => false));
                 Assert.False(File.Exists(files.RequestPath));

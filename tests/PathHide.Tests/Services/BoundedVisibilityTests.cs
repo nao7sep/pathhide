@@ -62,9 +62,9 @@ public class BoundedVisibilityTests
         service.WriteGate = release;
         try
         {
-            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync(oldPath, DesiredVisibility.Hidden, WindowsHideMode.HiddenOnly, token));
+            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync(oldPath, DesiredVisibility.Hidden, SystemBit.Keep, token));
             service.WriteGate = null; // A bypass would now write immediately.
-            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync(replacement, DesiredVisibility.Shown, WindowsHideMode.HiddenOnly, token));
+            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync(replacement, DesiredVisibility.Shown, SystemBit.Keep, token));
             Assert.Empty(service.Shown);
         }
         finally
@@ -72,7 +72,7 @@ public class BoundedVisibilityTests
             release.Set();
             await visibility.InspectAsync(oldPath, token); // Join before disposing the fixture.
         }
-        await visibility.WriteAsync(replacement, DesiredVisibility.Shown, WindowsHideMode.HiddenOnly, token);
+        await visibility.WriteAsync(replacement, DesiredVisibility.Shown, SystemBit.Keep, token);
         Assert.Equal([replacement], service.Shown);
     }
 
@@ -90,13 +90,13 @@ public class BoundedVisibilityTests
         service.WriteGate = release;
         try
         {
-            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync("/Foo", DesiredVisibility.Hidden, WindowsHideMode.HiddenOnly, token));
+            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync("/Foo", DesiredVisibility.Hidden, SystemBit.Keep, token));
             service.WriteGate = null;
-            await visibility.WriteAsync("/foo", DesiredVisibility.Shown, WindowsHideMode.HiddenOnly, token);
+            await visibility.WriteAsync("/foo", DesiredVisibility.Shown, SystemBit.Keep, token);
             service.WriteGate = release;
-            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync("/link", DesiredVisibility.Hidden, WindowsHideMode.HiddenOnly, token));
+            await Assert.ThrowsAsync<TimeoutException>(() => visibility.WriteAsync("/link", DesiredVisibility.Hidden, SystemBit.Keep, token));
             service.WriteGate = null;
-            await visibility.WriteAsync("/target", DesiredVisibility.Shown, WindowsHideMode.HiddenOnly, token);
+            await visibility.WriteAsync("/target", DesiredVisibility.Shown, SystemBit.Keep, token);
             Assert.Equal(["/foo", "/target"], service.Shown);
         }
         finally
@@ -129,7 +129,7 @@ public class BoundedVisibilityTests
         var visibility = new BoundedVisibility(service, Short);
 
         await Assert.ThrowsAsync<TimeoutException>(
-            () => visibility.WriteAsync("/share/a", DesiredVisibility.Hidden, WindowsHideMode.HiddenOnly, TestContext.Current.CancellationToken));
+            () => visibility.WriteAsync("/share/a", DesiredVisibility.Hidden, SystemBit.Keep, TestContext.Current.CancellationToken));
         stalled.Set();
     }
 
@@ -164,9 +164,9 @@ public class BoundedVisibilityTests
             entry.Message == message && entry.Fields?["path"]?.GetValue<string>() == path;
 
         await Assert.ThrowsAsync<TimeoutException>(
-            () => visibility.WriteAsync(path, DesiredVisibility.Hidden, WindowsHideMode.HiddenOnly, token));
+            () => visibility.WriteAsync(path, DesiredVisibility.Hidden, SystemBit.Keep, token));
         await Assert.ThrowsAsync<TimeoutException>(
-            () => visibility.WriteAsync(path, DesiredVisibility.Shown, WindowsHideMode.HiddenOnly, token));
+            () => visibility.WriteAsync(path, DesiredVisibility.Shown, SystemBit.Keep, token));
         stalled.Set();
 
         var abandoned = await log.Find(entry => For(entry, "path did not answer; abandoned the wait")).WaitAsync(token);
@@ -190,13 +190,13 @@ public class BoundedVisibilityTests
         var token = TestContext.Current.CancellationToken;
 
         await Assert.ThrowsAsync<TimeoutException>(
-            () => visibility.WriteAsync("/share/a", DesiredVisibility.Hidden, WindowsHideMode.HiddenOnly, token));
+            () => visibility.WriteAsync("/share/a", DesiredVisibility.Hidden, SystemBit.Keep, token));
 
         // Still stuck: once the bound runs out waiting for it, reported without touching the path.
         var inspectedBefore = service.Inspected.Count;
         Assert.Equal(ActualState.Unresponsive, (await visibility.InspectAsync("/share/a", token)).ActualState);
         await Assert.ThrowsAsync<TimeoutException>(
-            () => visibility.WriteAsync("/share/a", DesiredVisibility.Shown, WindowsHideMode.HiddenOnly, token));
+            () => visibility.WriteAsync("/share/a", DesiredVisibility.Shown, SystemBit.Keep, token));
         Assert.Equal(inspectedBefore, service.Inspected.Count);
         Assert.Empty(service.Shown);
 

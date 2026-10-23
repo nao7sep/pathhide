@@ -227,7 +227,7 @@
     "other": "{count} caminhos não responderam"
   },
   "settings.hiddenAndSystem": "Definir também o atributo Sistema ao ocultar (Windows)",
-  "settings.hideModeHint": "O PathHide remove o atributo Sistema ao mostrar e também ao ocultar com esta opção desativada. Isso inclui um atributo Sistema que um arquivo ou uma pasta já tinha, e o PathHide não consegue restaurá-lo.",
+  "settings.hideModeHint": "O PathHide remove o atributo Sistema apenas onde ele mesmo o definiu: ao mostrar e ao ocultar com esta opção desativada. Um atributo Sistema que um arquivo ou uma pasta já tinha é mantido.",
   "settings.language": "Idioma",
   "settings.languageSystem": "Sistema ({language})",
   "settings.theme": "Tema",

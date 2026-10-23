@@ -36,7 +36,7 @@ public enum ElevatedApplyStatus
 public sealed record ElevatedApplyOutcome(
     ElevatedApplyStatus Status,
     int? ExitCode,
-    IReadOnlyDictionary<string, bool> Results);
+    IReadOnlyDictionary<string, PathApplyResult> Results);
 
 /// <summary>Runs access-denied paths through one elevated child process.</summary>
 public interface IElevatedApplicator
@@ -96,8 +96,8 @@ public sealed class ElevatedApplicator : IElevatedApplicator
     /// </summary>
     public static readonly TimeSpan DefaultChildTimeout = TimeSpan.FromMinutes(5);
 
-    private static readonly IReadOnlyDictionary<string, bool> EmptyResults =
-        new Dictionary<string, bool>(StringComparer.Ordinal);
+    private static readonly IReadOnlyDictionary<string, PathApplyResult> EmptyResults =
+        new Dictionary<string, PathApplyResult>(StringComparer.Ordinal);
 
     private readonly ElevatedChildLauncher _launch;
     private readonly string _tempDirectory;
@@ -106,7 +106,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
 
     internal TimeSpan FileWaitBound { get; init; } = BoundedStoreWork.DefaultBound;
     internal Action<string, byte[]> WriteRequest { get; init; } = File.WriteAllBytes;
-    internal Func<ElevatedApplyFiles, IReadOnlyDictionary<string, bool>> ReadResults { get; init; } = files => files.ReadResults();
+    internal Func<ElevatedApplyFiles, IReadOnlyDictionary<string, PathApplyResult>> ReadResults { get; init; } = files => files.ReadResults();
     internal Func<ElevatedApplyFiles, bool> DeleteFiles { get; init; } = files => files.TryDelete();
 
     // The preparation-to-cleanup lifetime of the newest elevated operation. Completed when none
@@ -139,7 +139,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
             return new ElevatedApplyOutcome(ElevatedApplyStatus.Busy, null, EmptyResults);
         }
 
-        var totalPaths = buckets.ToHide.Count + buckets.ToHideWithSystem.Count + buckets.ToShow.Count;
+        var totalPaths = buckets.Count;
         var request = System.Text.Encoding.UTF8.GetBytes(ElevatedApplyCommand.SerializeRequest(buckets));
         var requestDigest = ElevatedApplyCommand.RequestDigest(request);
         var files = ElevatedApplyFiles.Create(_tempDirectory);
@@ -184,7 +184,9 @@ public sealed class ElevatedApplicator : IElevatedApplicator
                 totalPaths,
                 hide = buckets.ToHide.Count,
                 system = buckets.ToHideWithSystem.Count,
+                hideClearingSystem = buckets.ToHideClearingSystem.Count,
                 show = buckets.ToShow.Count,
+                showClearingSystem = buckets.ToShowClearingSystem.Count,
             });
             var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var declined = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -197,7 +199,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
             if (status == ElevatedApplyStatus.Cancelled && !started.Task.IsCompleted && !files.TryWithdrawRequest())
                 Log.Warn("elevated apply: could not withdraw the request; a child approved later applies it");
 
-            IReadOnlyDictionary<string, bool> results;
+            IReadOnlyDictionary<string, PathApplyResult> results;
             try
             {
                 // Cancel still collects already-flushed verdicts, within a separate file-read bound.

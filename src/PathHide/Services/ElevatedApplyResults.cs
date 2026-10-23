@@ -10,7 +10,12 @@ namespace PathHide.Services;
 
 /// <summary>One path's outcome from the elevated apply pass: the exact path the elevated
 /// child was handed, and whether it set the attribute successfully.</summary>
-public sealed record PathApplyResult(string Path, bool Ok);
+/// <param name="SystemSet">Whether the write turned the System attribute on, which makes it PathHide's.</param>
+public sealed record PathApplyResult(
+    string Path,
+    bool Ok,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    bool SystemSet = false);
 
 /// <summary>What the elevated child handed back: its per-path outcomes and its log entries.</summary>
 public sealed record ElevatedApplyReport(

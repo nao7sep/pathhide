@@ -16,7 +16,6 @@ namespace PathHide.Tests.Services;
 public sealed class WindowsVisibilityServiceTests : IDisposable
 {
     private readonly string _dir;
-    private WindowsHideMode _mode = WindowsHideMode.HiddenOnly;
 
     public WindowsVisibilityServiceTests()
     {
@@ -56,9 +55,8 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
     public void Hide_HiddenOnly_SetsHiddenNotSystem()
     {
         var path = NewFile();
-        _mode = WindowsHideMode.HiddenOnly;
 
-        Service().Hide(path, _mode);
+        Assert.False(Service().Hide(path, SystemBit.Keep));
 
         var attrs = File.GetAttributes(path);
         Assert.True(attrs.HasFlag(FileAttributes.Hidden));
@@ -67,12 +65,11 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
     }
 
     [WindowsOnlyFact]
-    public void Hide_HiddenAndSystem_SetsBoth()
+    public void Hide_HiddenAndSystem_SetsBoth_AndReportsTheSystemBitAsSetByPathHide()
     {
         var path = NewFile();
-        _mode = WindowsHideMode.HiddenAndSystem;
 
-        Service().Hide(path, _mode);
+        Assert.True(Service().Hide(path, SystemBit.Set));
 
         var attrs = File.GetAttributes(path);
         Assert.True(attrs.HasFlag(FileAttributes.Hidden));
@@ -80,18 +77,22 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
     }
 
     [WindowsOnlyFact]
-    public void Show_ClearsHiddenAndSystem_RegardlessOfMode()
+    public void Show_ClearsAnOwnedSystemBit_AndKeepsOneTheItemAlreadyHad()
     {
-        var path = NewFile();
-        _mode = WindowsHideMode.HiddenAndSystem;
-        Service().Hide(path, _mode);
+        var owned = NewFile();
+        Service().Hide(owned, SystemBit.Set);
+        var unowned = NewFile();
+        File.SetAttributes(unowned, FileAttributes.System);
+        Assert.False(Service().Hide(unowned, SystemBit.Set));
 
-        Service().Show(path);
+        Service().Show(owned, SystemBit.Clear);
+        Service().Show(unowned, SystemBit.Keep);
 
-        var attrs = File.GetAttributes(path);
-        Assert.False(attrs.HasFlag(FileAttributes.Hidden));
-        Assert.False(attrs.HasFlag(FileAttributes.System));
-        Assert.Equal(ActualState.Visible, Service().Inspect(path).ActualState);
+        Assert.False(File.GetAttributes(owned).HasFlag(FileAttributes.Hidden));
+        Assert.False(File.GetAttributes(owned).HasFlag(FileAttributes.System));
+        Assert.False(File.GetAttributes(unowned).HasFlag(FileAttributes.Hidden));
+        Assert.True(File.GetAttributes(unowned).HasFlag(FileAttributes.System));
+        Assert.Equal(ActualState.Visible, Service().Inspect(owned).ActualState);
     }
 
     [WindowsOnlyFact]
@@ -130,7 +131,7 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         var link = Path.Combine(_dir, "junction-link");
         CreateJunction(link, target);
 
-        Service().Hide(link, _mode);
+        Service().Hide(link, SystemBit.Keep);
 
         Assert.True(File.GetAttributes(link).HasFlag(FileAttributes.Hidden));
         Assert.True(File.GetAttributes(link).HasFlag(FileAttributes.ReparsePoint));
@@ -147,7 +148,7 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         // Enable Windows Developer Mode before running the ordinary suite.
         File.CreateSymbolicLink(link, target);
 
-        Service().Hide(link, _mode);
+        Service().Hide(link, SystemBit.Keep);
 
         Assert.True(File.GetAttributes(link).HasFlag(FileAttributes.Hidden));
         Assert.True(File.GetAttributes(link).HasFlag(FileAttributes.ReparsePoint));

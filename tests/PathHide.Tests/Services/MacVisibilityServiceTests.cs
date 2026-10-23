@@ -73,8 +73,8 @@ public sealed class MacVisibilityServiceTests : IDisposable
             File.WriteAllText(foreign, "x");
             var actual = Path.Combine(_dir, foreign);
             Assert.Equal(ActualState.Error, _service.Inspect(foreign).ActualState);
-            Assert.Throws<ArgumentException>(() => _service.Hide(foreign, WindowsHideMode.HiddenOnly));
-            Assert.Throws<ArgumentException>(() => _service.Show(foreign));
+            Assert.Throws<ArgumentException>(() => _service.Hide(foreign, SystemBit.Keep));
+            Assert.Throws<ArgumentException>(() => _service.Show(foreign, SystemBit.Keep));
             Assert.Equal(ActualState.Visible, _service.Inspect(actual).ActualState);
         }
         finally { Environment.CurrentDirectory = previous; }
@@ -96,7 +96,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
     {
         var path = NewFile();
 
-        _service.Hide(path, WindowsHideMode.HiddenOnly);
+        _service.Hide(path, SystemBit.Keep);
 
         Assert.Contains("hidden", StatFlags(path));                 // independent OS-level check
         Assert.Equal(ActualState.Hidden, _service.Inspect(path).ActualState);
@@ -106,9 +106,9 @@ public sealed class MacVisibilityServiceTests : IDisposable
     public void Show_ClearsHiddenFlag()
     {
         var path = NewFile();
-        _service.Hide(path, WindowsHideMode.HiddenOnly);
+        _service.Hide(path, SystemBit.Keep);
 
-        _service.Show(path);
+        _service.Show(path, SystemBit.Keep);
 
         Assert.DoesNotContain("hidden", StatFlags(path));
         Assert.Equal(ActualState.Visible, _service.Inspect(path).ActualState);
@@ -119,8 +119,8 @@ public sealed class MacVisibilityServiceTests : IDisposable
     {
         var path = NewFile();
 
-        _service.Hide(path, WindowsHideMode.HiddenOnly);
-        _service.Hide(path, WindowsHideMode.HiddenOnly); // must not throw; no-op when already hidden
+        _service.Hide(path, SystemBit.Keep);
+        _service.Hide(path, SystemBit.Keep); // must not throw; no-op when already hidden
 
         Assert.Equal(ActualState.Hidden, _service.Inspect(path).ActualState);
     }
@@ -130,7 +130,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
     {
         var path = NewFile();
 
-        _service.Show(path); // already visible
+        _service.Show(path, SystemBit.Keep); // already visible
 
         Assert.Equal(ActualState.Visible, _service.Inspect(path).ActualState);
     }
@@ -141,12 +141,12 @@ public sealed class MacVisibilityServiceTests : IDisposable
         var path = NewFile();
         Chflags("nodump", path);
 
-        _service.Hide(path, WindowsHideMode.HiddenOnly);
+        _service.Hide(path, SystemBit.Keep);
         var afterHide = StatFlags(path);
         Assert.Contains("hidden", afterHide);
         Assert.Contains("nodump", afterHide);   // unrelated flag must survive Hide
 
-        _service.Show(path);
+        _service.Show(path, SystemBit.Keep);
         var afterShow = StatFlags(path);
         Assert.DoesNotContain("hidden", afterShow);
         Assert.Contains("nodump", afterShow);    // and survive Show
@@ -217,7 +217,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
         var link = Path.Combine(_dir, "link.txt");
         File.CreateSymbolicLink(link, target);
 
-        _service.Hide(link, WindowsHideMode.HiddenOnly);
+        _service.Hide(link, SystemBit.Keep);
 
         // The link itself is hidden and reported as a symlink...
         var linkInspection = _service.Inspect(link);
@@ -258,7 +258,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
         // Showing it clears any flag but cannot change the name, so it stays
         // hidden — and the inspection keeps saying so rather than claiming
         // success.
-        _service.Show(dotFile);
+        _service.Show(dotFile, SystemBit.Keep);
         Assert.Equal(ActualState.Hidden, _service.Inspect(dotFile).ActualState);
     }
 
@@ -272,7 +272,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
         var link = Path.Combine(_dir, "link-dir");
         Directory.CreateSymbolicLink(link, target);
 
-        _service.Hide(link, WindowsHideMode.HiddenOnly);
+        _service.Hide(link, SystemBit.Keep);
 
         Assert.Equal(ActualState.Hidden, _service.Inspect(link).ActualState);
         Assert.Equal(ActualState.Visible, _service.Inspect(target).ActualState);
@@ -328,10 +328,10 @@ public sealed class MacVisibilityServiceTests : IDisposable
         var link = Path.Combine(_dir, "dangling.txt");
         File.CreateSymbolicLink(link, Path.Combine(_dir, "no-such-target.txt"));
 
-        _service.Hide(link, WindowsHideMode.HiddenOnly);
+        _service.Hide(link, SystemBit.Keep);
         Assert.Equal(ActualState.Hidden, _service.Inspect(link).ActualState);
 
-        _service.Show(link);
+        _service.Show(link, SystemBit.Keep);
         Assert.Equal(ActualState.Visible, _service.Inspect(link).ActualState);
     }
 

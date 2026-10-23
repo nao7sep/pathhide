@@ -23,7 +23,12 @@ public sealed class FakeVisibilityService : IVisibilityService
 
     public ConcurrentQueue<string> Inspected { get; } = new();
     public ConcurrentQueue<string> Hidden { get; } = new();
-    public ConcurrentQueue<WindowsHideMode> HideModes { get; } = new();
+    /// <summary>What each Hide and Show was asked to do to System, in call order per kind.</summary>
+    public ConcurrentQueue<SystemBit> HideSystem { get; } = new();
+    public ConcurrentQueue<SystemBit> ShowSystem { get; } = new();
+
+    /// <summary>The paths whose System attribute is on, as the writes leave it.</summary>
+    public ConcurrentDictionary<string, bool> SystemOn { get; } = new(StringComparer.Ordinal);
     public ConcurrentQueue<string> Shown { get; } = new();
 
     /// <summary>When set, the next matching call throws this exception once.</summary>
@@ -105,7 +110,7 @@ public sealed class FakeVisibilityService : IVisibilityService
             ? resolved.TrimEnd('/') + path[slash..] : null;
     }
 
-    public void Hide(string path, WindowsHideMode mode)
+    public bool Hide(string path, SystemBit system)
     {
         WriteEntered.TrySetResult();
         WriteEntries.Release();
@@ -116,23 +121,37 @@ public sealed class FakeVisibilityService : IVisibilityService
             throw thrown;
 
         Hidden.Enqueue(path);
-        HideModes.Enqueue(mode);
-        if (!WritesTakeEffect) return;
+        HideSystem.Enqueue(system);
+        if (!WritesTakeEffect) return false;
+        var setNow = WriteSystem(path, system);
         _byPath[path] = new PathInspection(
             ActualState.Hidden,
             _byPath.TryGetValue(path, out var existing) ? existing.ItemKind : Default.ItemKind);
+        return setNow;
     }
 
-    public void Show(string path)
+    public void Show(string path, SystemBit system)
     {
         WriteEntered.TrySetResult();
         WriteEntries.Release();
         WriteGate?.Wait();
 
         Shown.Enqueue(path);
+        ShowSystem.Enqueue(system);
         if (!WritesTakeEffect) return;
+        WriteSystem(path, system);
         _byPath[path] = new PathInspection(
             ActualState.Visible,
             _byPath.TryGetValue(path, out var existing) ? existing.ItemKind : Default.ItemKind);
+    }
+
+    private bool WriteSystem(string path, SystemBit system)
+    {
+        var was = SystemOn.TryGetValue(path, out var on) && on;
+        if (system == SystemBit.Set)
+            SystemOn[path] = true;
+        else if (system == SystemBit.Clear)
+            SystemOn[path] = false;
+        return !was && system == SystemBit.Set;
     }
 }

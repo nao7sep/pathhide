@@ -39,18 +39,18 @@ public sealed class WindowsVisibilityService : IVisibilityService
         }
     }
 
-    public void Hide(string path, WindowsHideMode mode)
+    public bool Hide(string path, SystemBit system)
     {
         // Per-item boundary crossing: debug, not info. The command's paths are logged once by the
         // caller's "apply: start".
-        Log.Debug("hiding path", new { path, mode });
-        WindowsFileVisibility.Set(path, hide: true, system: mode == WindowsHideMode.HiddenAndSystem);
+        Log.Debug("hiding path", new { path, system });
+        return WindowsFileVisibility.Set(path, hide: true, system);
     }
 
-    public void Show(string path)
+    public void Show(string path, SystemBit system)
     {
-        Log.Debug("showing path", new { path });
-        WindowsFileVisibility.Set(path, hide: false, system: false);
+        Log.Debug("showing path", new { path, system });
+        WindowsFileVisibility.Set(path, hide: false, system);
     }
 
     /// <summary>

@@ -129,19 +129,18 @@ public sealed class BoundedVisibility
     }
 
     /// <summary>
-    /// Hides <paramref name="path"/> in <paramref name="mode"/> or shows it. Throws
-    /// <see cref="TimeoutException"/> when the path does not answer in time,
-    /// <see cref="OperationCanceledException"/> when the caller cancels, and whatever the write itself
-    /// threw otherwise.
+    /// Hides or shows <paramref name="path"/>, doing <paramref name="system"/> to its System attribute,
+    /// and returns whether the write turned System on. Throws <see cref="TimeoutException"/> when the
+    /// path does not answer in time, <see cref="OperationCanceledException"/> when the caller cancels,
+    /// and whatever the write itself threw otherwise.
     /// </summary>
-    public Task WriteAsync(string path, DesiredVisibility desired, WindowsHideMode mode, CancellationToken cancellationToken) =>
+    public Task<bool> WriteAsync(string path, DesiredVisibility desired, SystemBit system, CancellationToken cancellationToken) =>
         RunAsync(path, desired == DesiredVisibility.Hidden ? "hide" : "show", () =>
         {
             if (desired == DesiredVisibility.Hidden)
-                _service.Hide(path, mode);
-            else
-                _service.Show(path);
-            return true;
+                return _service.Hide(path, system);
+            _service.Show(path, system);
+            return false;
         }, cancellationToken);
 
     private async Task<T> RunAsync<T>(string path, string operation, Func<T> call, CancellationToken cancellationToken)

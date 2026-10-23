@@ -227,7 +227,7 @@
     "other": "{count} chemins n’ont pas répondu"
   },
   "settings.hiddenAndSystem": "Définir aussi l’attribut Système lors du masquage (Windows)",
-  "settings.hideModeHint": "PathHide retire l’attribut Système lors de l’affichage, ainsi que lors du masquage si cette option est désactivée. Cela inclut un attribut Système qu’un fichier ou un dossier avait déjà, et que PathHide ne peut pas rétablir.",
+  "settings.hideModeHint": "PathHide ne retire l’attribut Système que là où il l’a lui-même ajouté\u00a0: lors de l’affichage, et lors du masquage si cette option est désactivée. Un attribut Système qu’un fichier ou un dossier avait déjà est conservé.",
   "settings.language": "Langue",
   "settings.languageSystem": "Système ({language})",
   "settings.theme": "Thème",

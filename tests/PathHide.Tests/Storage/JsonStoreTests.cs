@@ -262,6 +262,26 @@ public sealed class JsonStoreTests : IDisposable
         Assert.Equal(content, File.ReadAllText(path));
     }
 
+    // Whether PathHide set an entry's System attribute survives a save, and a list from before it was
+    // recorded reads back with no record, which counts as PathHide's.
+    [Fact]
+    public void System_ownership_round_trips_and_an_older_list_has_none()
+    {
+        var store = new PathListStore();
+        store.Save(
+        [
+            new PathEntry { Path = "/mine", DesiredVisibility = DesiredVisibility.Hidden, SystemSetByPathHide = true },
+            new PathEntry { Path = "/theirs", DesiredVisibility = DesiredVisibility.Hidden, SystemSetByPathHide = false },
+        ]);
+        var loaded = store.Load().Value;
+        Assert.True(loaded.Single(entry => entry.Path == "/mine").SystemSetByPathHide);
+        Assert.False(loaded.Single(entry => entry.Path == "/theirs").SystemSetByPathHide);
+
+        File.WriteAllText(PathOf("paths.json"),
+            "{\"formatVersion\":1,\"paths\":[{\"path\":\"/old\",\"desiredVisibility\":\"hidden\"}]}");
+        Assert.Null(Assert.Single(new PathListStore().Load().Value).SystemSetByPathHide);
+    }
+
     [Fact]
     public void Load_LiteralNullPathList_IsLeftInPlaceAndRefused()
     {

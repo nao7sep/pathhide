@@ -511,6 +511,7 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 Path = candidate,
                 DesiredVisibility = DesiredVisibility.Hidden,
+                SystemSetByPathHide = false,
             });
             addedPaths.Add(candidate);
             existing.Add(candidate);
@@ -748,7 +749,7 @@ public partial class MainWindowViewModel : ObservableObject
             var flipping = new HashSet<PathEntry>(targets.Select(row => row.Entry));
             var updated = _entries
                 .Select(entry => flipping.Contains(entry)
-                    ? new PathEntry { Path = entry.Path, DesiredVisibility = desired }
+                    ? new PathEntry { Path = entry.Path, DesiredVisibility = desired, SystemSetByPathHide = entry.SystemSetByPathHide }
                     : entry)
                 .ToList();
 
@@ -1443,12 +1444,13 @@ public partial class MainWindowViewModel : ObservableObject
     private static List<PathEntry> SortedForDisk(IEnumerable<PathEntry> entries) =>
         entries.OrderBy(e => e.Path, StringComparer.OrdinalIgnoreCase).ToList();
 
-    /// <summary>Whether two lists in disk order hold the same paths with the same desired visibility.</summary>
+    /// <summary>Whether two lists in disk order hold the same entries, field for field.</summary>
     private static bool SameContent(List<PathEntry> left, List<PathEntry> right) =>
         left.Count == right.Count
         && left.Zip(right).All(pair =>
             string.Equals(pair.First.Path, pair.Second.Path, StringComparison.Ordinal)
-            && pair.First.DesiredVisibility == pair.Second.DesiredVisibility);
+            && pair.First.DesiredVisibility == pair.Second.DesiredVisibility
+            && pair.First.SystemSetByPathHide == pair.Second.SystemSetByPathHide);
 
     private void StartBackgroundScan()
     {
@@ -1670,10 +1672,14 @@ public partial class MainWindowViewModel : ObservableObject
         // Paths are worked on a few at a time, so a stalled one costs its own bound rather than
         // delaying every path behind it; each result is taken here, one at a time, on this thread.
         var cancelled = 0;
+        // Which entries' System bit PathHide owns after the writes that landed, saved once at the end.
+        var systemOwnership = new Dictionary<string, bool>(StringComparer.Ordinal);
         var attempts = BoundedVisibility.InCompletionOrderAsync(targets, row => AttemptAsync(row, hideMode, token));
         await foreach (var attempt in attempts)
         {
             var row = attempt.Row;
+            if (attempt.SystemSet is { } systemSet)
+                systemOwnership[row.Path] = OwnershipAfter(row, hideMode, systemSet);
             if (attempt.Cancelled)
             {
                 // A path whose write was under way may or may not have changed — the call was
@@ -1775,7 +1781,7 @@ public partial class MainWindowViewModel : ObservableObject
         else if (retryBucket.Count > 0 && ElevatedApplicator is { } elevated)
         {
             var buckets = Services.ElevatedApplyCommand.Partition(
-                retryBucket.Select(r => (r.Path, r.Entry.DesiredVisibility)),
+                retryBucket.Select(r => (r.Path, r.Entry.DesiredVisibility, WindowsFileVisibility.OwnsSystem(r.Entry))),
                 hideMode);
 
             // The outcome is final once this returns: a child still running after a cancel or a
@@ -1785,7 +1791,10 @@ public partial class MainWindowViewModel : ObservableObject
 
             foreach (var row in retryBucket)
             {
-                var reported = outcome.Results.TryGetValue(row.Path, out var ok);
+                var reported = outcome.Results.TryGetValue(row.Path, out var childResult);
+                var ok = childResult?.Ok == true;
+                if (ok)
+                    systemOwnership[row.Path] = OwnershipAfter(row, hideMode, childResult!.SystemSet);
 
                 // The wait ended, not the child: a path it had not reported on may still change,
                 // so its row no longer claims a state.
@@ -1848,6 +1857,8 @@ public partial class MainWindowViewModel : ObservableObject
             }
         }
 
+        await RecordSystemOwnershipAsync(systemOwnership);
+
         // elevationExitCode is a coarse diagnostic kept in the structured log; the user-facing
         // tally below is built per-path, so the raw child exit code is not surfaced to the UI.
         var result = new ApplyOutcome(applied, problems);
@@ -1865,7 +1876,10 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task<ApplyAttempt> AttemptAsync(PathRowViewModel row, WindowsHideMode hideMode, CancellationToken token)
     {
         var (path, desired) = (row.Path, row.Entry.DesiredVisibility);
+        var system = WindowsFileVisibility.SystemChange(
+            desired == DesiredVisibility.Hidden, hideMode, WindowsFileVisibility.OwnsSystem(row.Entry));
         var written = false;
+        bool? systemSet = null;
         try
         {
             var before = await _visibility.InspectAsync(path, token);
@@ -1874,12 +1888,15 @@ public partial class MainWindowViewModel : ObservableObject
                 return new(row) { Before = before };
 
             written = true;
-            await _visibility.WriteAsync(path, desired, hideMode, token);
-            return new(row) { Before = before, Written = true, After = await _visibility.InspectAsync(path, token) };
+            systemSet = await _visibility.WriteAsync(path, desired, system, token);
+            return new(row)
+            {
+                Before = before, Written = true, SystemSet = systemSet, After = await _visibility.InspectAsync(path, token),
+            };
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            return new(row) { Written = written, Cancelled = true };
+            return new(row) { Written = written, SystemSet = systemSet, Cancelled = true };
         }
         catch (Exception ex) when (ex is TimeoutException
             || (ex is UnauthorizedAccessException && ElevatedApplicator is not null))
@@ -1898,9 +1915,35 @@ public partial class MainWindowViewModel : ObservableObject
     {
         public PathInspection? Before { get; init; }
         public bool Written { get; init; }
+        // Set once the write returned: whether it turned System on.
+        public bool? SystemSet { get; init; }
         public PathInspection? After { get; init; }
         public Exception? Failure { get; init; }
         public bool Cancelled { get; init; }
+    }
+
+    /// <summary>Whether PathHide owns the row's System bit after a write for it landed.</summary>
+    private static bool OwnershipAfter(PathRowViewModel row, WindowsHideMode hideMode, bool systemSet)
+    {
+        var owned = WindowsFileVisibility.OwnsSystem(row.Entry);
+        var change = WindowsFileVisibility.SystemChange(row.Entry.DesiredVisibility == DesiredVisibility.Hidden, hideMode, owned);
+        return WindowsFileVisibility.OwnsSystemAfter(change, owned, systemSet);
+    }
+
+    /// <summary>
+    /// Saves which entries' System bit PathHide now owns, for the writes that landed. A save that fails
+    /// is reported like any path-list save; the attributes are already as the apply left them.
+    /// </summary>
+    private async Task RecordSystemOwnershipAsync(IReadOnlyDictionary<string, bool> ownership)
+    {
+        if (!_entries.Any(entry => ownership.TryGetValue(entry.Path, out var owned) && entry.SystemSetByPathHide != owned))
+            return;
+
+        var updated = _entries.Select(entry => ownership.TryGetValue(entry.Path, out var owned) && entry.SystemSetByPathHide != owned
+            ? new PathEntry { Path = entry.Path, DesiredVisibility = entry.DesiredVisibility, SystemSetByPathHide = owned }
+            : entry).ToList();
+        if (await TrySaveEntriesAsync(updated) is { } failure)
+            ShowOperationalResult(OperationalResultOwner.PathStore, failure, error: true);
     }
 
     private readonly record struct ApplyOutcome(int Applied, IReadOnlyDictionary<string, ApplyProblem> Problems)

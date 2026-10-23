@@ -52,7 +52,10 @@ public sealed class ElevatedRetryTests : IDisposable
     private MainWindowViewModel ViewModel(
         ElevatedApplicator applicator, TimeSpan? shutdownBound = null, params string[] paths)
     {
-        _paths.Value = paths.Select(path => new PathEntry { Path = path, DesiredVisibility = DesiredVisibility.Hidden }).ToList();
+        _paths.Value = paths.Select(path => new PathEntry
+        {
+            Path = path, DesiredVisibility = DesiredVisibility.Hidden, SystemSetByPathHide = false,
+        }).ToList();
         var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
             new BoundedVisibility(_visibility), _paths, settingsStore, settingsStore.Load().Value,
@@ -95,7 +98,7 @@ public sealed class ElevatedRetryTests : IDisposable
             var outcome = await applicator.ApplyAsync(new ElevatedApplyCommand.Buckets(["/a"], [], []),
                 TestContext.Current.CancellationToken);
             Assert.Equal(ElevatedApplyStatus.TimedOut, outcome.Status);
-            Assert.True(outcome.Results["/a"]);
+            Assert.True(outcome.Results["/a"].Ok);
             Assert.True(applicator.HasRunningChild);
         }
         finally
@@ -165,6 +168,31 @@ public sealed class ElevatedRetryTests : IDisposable
         Assert.Equal(ActualState.Hidden, StateOf(vm, "/b"));
         Assert.Empty(vm.OperationalResults);
         Assert.Empty(TempFiles());
+    }
+
+    // The elevated child says which writes turned System on; those become PathHide's to clear later,
+    // and one the item already had does not.
+    [Fact(Timeout = 10_000)]
+    public async Task The_child_reports_which_System_bits_it_set_and_they_are_recorded()
+    {
+        _child.OnStart = run =>
+        {
+            foreach (var path in run.Request.ToHideWithSystem)
+            {
+                _visibility.Set(path, ActualState.Hidden);
+                run.Report(path, systemSet: path == "/set");
+            }
+            run.Exit(0);
+        };
+        var vm = ViewModel(Applicator(), null, "/set", "/had");
+        await vm.ScanTask;
+        Assert.Null(await vm.TryApplySettingsAsync("en", "", hiddenAndSystem: true, ThemePreference.System));
+
+        await HideAll(vm);
+
+        Assert.Equal(["/set", "/had"], _child.Runs[0].Request.ToHideWithSystem);
+        Assert.True(_paths.Value.Single(entry => entry.Path == "/set").SystemSetByPathHide);
+        Assert.False(_paths.Value.Single(entry => entry.Path == "/had").SystemSetByPathHide);
     }
 
     // Declining the approval prompt is the user's choice, not a failure: the rows stay as they are on
@@ -265,7 +293,7 @@ public sealed class ElevatedRetryTests : IDisposable
                 run.Report(path);
             run.Exit(0);
         };
-        var buckets = ElevatedApplyCommand.Partition([("/a", DesiredVisibility.Hidden)], WindowsHideMode.HiddenOnly);
+        var buckets = ElevatedApplyCommand.Partition([("/a", DesiredVisibility.Hidden, false)], WindowsHideMode.HiddenOnly);
 
         var apply = Applicator().ApplyAsync(buckets, CancellationToken.None);
 
@@ -290,7 +318,7 @@ public sealed class ElevatedRetryTests : IDisposable
                 ? Task.FromException<Task<int>?>(new IOException("launch failed"))
                 : Task.FromResult<Task<int>?>(Task.FromResult(0));
         }, _temp, "/storage-root");
-        var buckets = ElevatedApplyCommand.Partition([("/a", DesiredVisibility.Hidden)], WindowsHideMode.HiddenOnly);
+        var buckets = ElevatedApplyCommand.Partition([("/a", DesiredVisibility.Hidden, false)], WindowsHideMode.HiddenOnly);
 
         var apply = applicator.ApplyAsync(buckets, CancellationToken.None);
 

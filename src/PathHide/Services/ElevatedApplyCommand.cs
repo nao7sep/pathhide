@@ -72,42 +72,54 @@ public static class ElevatedApplyCommand
     /// </summary>
     public const string SessionOption = "--session";
 
-    /// <summary>The three path lists the elevated child takes, in the order it takes them.</summary>
+    /// <summary>
+    /// The path lists the elevated child takes: hidden keeping System as it is, setting it, or clearing
+    /// the one PathHide set; and shown keeping or clearing it.
+    /// </summary>
     public sealed record Buckets(
         IReadOnlyList<string> ToHide,
         IReadOnlyList<string> ToHideWithSystem,
-        IReadOnlyList<string> ToShow);
+        IReadOnlyList<string> ToShow)
+    {
+        public IReadOnlyList<string> ToHideClearingSystem { get; init; } = [];
+        public IReadOnlyList<string> ToShowClearingSystem { get; init; } = [];
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public int Count => ToHide.Count + ToHideWithSystem.Count + ToShow.Count
+            + ToHideClearingSystem.Count + ToShowClearingSystem.Count;
+    }
 
     /// <summary>
-    /// Sorts the paths that need an elevated retry into the child's three lists.
+    /// Sorts the paths that need an elevated retry into the child's lists, by the rule
+    /// <see cref="WindowsFileVisibility.SystemChange"/> writes with, decided once for a whole batch.
     /// </summary>
-    /// <remarks>
-    /// This is the third and last spelling of one rule — what a desired visibility plus the
-    /// Windows hide mode means for the Hidden and System bits. <see cref="WindowsFileVisibility"/>
-    /// writes it as bit math for the two processes that touch a file; here it decides which list
-    /// a path travels in, which is the same decision made once for a whole batch. It lived inline
-    /// in the apply pass as three <c>Where</c> clauses, where nothing could test it and nothing
-    /// tied it to the rule it was restating.
-    /// </remarks>
     public static Buckets Partition(
-        IEnumerable<(string Path, DesiredVisibility Desired)> targets,
+        IEnumerable<(string Path, DesiredVisibility Desired, bool OwnsSystem)> targets,
         WindowsHideMode mode)
     {
         var toHide = new List<string>();
         var toHideWithSystem = new List<string>();
+        var toHideClearingSystem = new List<string>();
         var toShow = new List<string>();
+        var toShowClearingSystem = new List<string>();
 
-        foreach (var (path, desired) in targets)
+        foreach (var (path, desired, ownsSystem) in targets)
         {
-            if (desired == DesiredVisibility.Shown)
-                toShow.Add(path);
-            else if (mode == WindowsHideMode.HiddenAndSystem)
-                toHideWithSystem.Add(path);
-            else
-                toHide.Add(path);
+            var hide = desired == DesiredVisibility.Hidden;
+            var list = WindowsFileVisibility.SystemChange(hide, mode, ownsSystem) switch
+            {
+                SystemBit.Set => toHideWithSystem,
+                SystemBit.Clear => hide ? toHideClearingSystem : toShowClearingSystem,
+                _ => hide ? toHide : toShow,
+            };
+            list.Add(path);
         }
 
-        return new Buckets(toHide, toHideWithSystem, toShow);
+        return new Buckets(toHide, toHideWithSystem, toShow)
+        {
+            ToHideClearingSystem = toHideClearingSystem,
+            ToShowClearingSystem = toShowClearingSystem,
+        };
     }
 
     /// <summary>
@@ -210,6 +222,10 @@ public static class ElevatedApplyCommand
     {
         var parsed = JsonSerializer.Deserialize<Buckets>(json, RequestOptions)
             ?? throw new JsonException("The apply request is empty.");
-        return new Buckets(parsed.ToHide ?? [], parsed.ToHideWithSystem ?? [], parsed.ToShow ?? []);
+        return new Buckets(parsed.ToHide ?? [], parsed.ToHideWithSystem ?? [], parsed.ToShow ?? [])
+        {
+            ToHideClearingSystem = parsed.ToHideClearingSystem ?? [],
+            ToShowClearingSystem = parsed.ToShowClearingSystem ?? [],
+        };
     }
 }

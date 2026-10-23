@@ -227,7 +227,7 @@
     "other": "{count} percorsi non hanno risposto"
   },
   "settings.hiddenAndSystem": "Imposta anche l’attributo di sistema quando nascondi (Windows)",
-  "settings.hideModeHint": "PathHide rimuove l’attributo di sistema quando mostra un elemento e, se questa opzione è disattivata, anche quando lo nasconde. L’attributo viene rimosso anche da un file o da una cartella che lo aveva già, e PathHide non può ripristinarlo.",
+  "settings.hideModeHint": "PathHide rimuove l’attributo di sistema solo dove l’ha impostato: quando mostra un elemento e, se questa opzione è disattivata, quando lo nasconde. L’attributo di sistema che un file o una cartella aveva già viene mantenuto.",
   "settings.language": "Lingua",
   "settings.languageSystem": "Sistema ({language})",
   "settings.theme": "Tema",

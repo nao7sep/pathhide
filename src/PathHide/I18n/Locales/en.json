@@ -207,7 +207,7 @@
     "other": "{count} paths did not respond"
   },
   "settings.hiddenAndSystem": "Also set the System attribute when hiding (Windows)",
-  "settings.hideModeHint": "PathHide clears the System attribute when showing, and when hiding with this off. That includes a System attribute a file or folder already had, which PathHide cannot restore.",
+  "settings.hideModeHint": "PathHide clears the System attribute only where it set it: when showing, and when hiding with this off. A System attribute a file or folder already had is left as it is.",
   "settings.language": "Language",
   "settings.languageSystem": "System ({language})",
   "settings.theme": "Theme",
