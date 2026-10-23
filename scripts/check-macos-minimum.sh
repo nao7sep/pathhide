@@ -8,9 +8,10 @@ set -euo pipefail
 
 bundle="$1"
 declared="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$bundle/Contents/Info.plist")"
+# grep finding nothing is the "no binary" case reported below, not a reason to stop here.
 required="$(find "$bundle" -type f -print0 \
   | xargs -0 file \
-  | grep 'Mach-O' \
+  | { grep 'Mach-O' || true; } \
   | cut -d: -f1 \
   | while IFS= read -r binary; do vtool -show-build "$binary" 2>/dev/null | awk '/minos/ {print $2}'; done \
   | sort -V | tail -n 1)"
