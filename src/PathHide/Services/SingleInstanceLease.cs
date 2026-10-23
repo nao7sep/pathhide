@@ -199,7 +199,8 @@ internal sealed class SingleInstanceLease : IDisposable
         else
             canonicalRoot = Path.TrimEndingDirectorySeparator(canonicalRoot);
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonicalRoot));
-        return "PathHide-" + Convert.ToHexString(hash);
+        // The data root is shared by this user's console and remote logon sessions.
+        return (OperatingSystem.IsWindows() ? @"Global\PathHide-" : "PathHide-") + Convert.ToHexString(hash);
     }
 
     public static void RegisterOwnerActivationHandler(Action handler)

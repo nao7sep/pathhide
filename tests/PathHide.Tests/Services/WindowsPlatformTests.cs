@@ -141,6 +141,7 @@ public sealed class WindowsPlatformTests : IDisposable
     {
         var root = Path.Combine(_dir, "Root");
         Directory.CreateDirectory(root);
+        Assert.StartsWith(@"Global\", SingleInstanceLease.MutexName(root));
         Assert.Equal(SingleInstanceLease.MutexName(root.ToLowerInvariant()),
             SingleInstanceLease.MutexName(root.ToUpperInvariant()));
 
