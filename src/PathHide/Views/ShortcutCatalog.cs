@@ -69,9 +69,7 @@ public static class ShortcutCatalog
     /// The order the shortcuts dialog lays its sections out in, and so the order its two columns
     /// divide. App sits with Files and Navigation rather than at the end: those three are the app and
     /// getting around it, while Visibility and List act on the entries, which divides the card into
-    /// two columns that are about the same height as well as about the same subject. Left in the
-    /// original order the split can do no better than five rows against eight, which leaves a third
-    /// of the left column empty.
+    /// two columns grouped by subject.
     /// </summary>
     public static readonly IReadOnlyList<ShortcutGroup> GroupOrder =
     [
