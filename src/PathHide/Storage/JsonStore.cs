@@ -173,12 +173,18 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         // The BCL's random name, its dot removed so the temp keeps one role extension.
         var tempPath = TempPath(_filePath, Path.GetRandomFileName().Replace(".", "", StringComparison.Ordinal));
 
+        var ownsScratch = false;
         try
         {
             // not recorded: this temp is atomic-write scratch under the derived-filename grammar, never a
             // managed-text destination — it is renamed away (or deleted) before anything reads it, and the
             // record fires only on the final file below. It is written directly, not through this store.
-            File.WriteAllBytes(tempPath, bytes);
+            using (var staged = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                ownsScratch = true;
+                staged.Write(bytes);
+                staged.Flush(flushToDisk: true);
+            }
 
             // A pure atomic temp-then-rename with no .bak sidecar: replace the existing file in place, or
             // move the temp into a fresh one. This is the durability floor (the storage-path conventions);
@@ -201,7 +207,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         {
             // Successful rename already consumed the scratch file: no post-publication I/O.
             // Failed-write cleanup is best-effort and must preserve the primary failure.
-            try { DeleteScratch(tempPath); }
+            try { if (ownsScratch) DeleteScratch(tempPath); }
             catch (Exception ex) { Log.Warn("store: could not remove failed-write scratch", ex, new { tempPath }); }
             throw;
         }
