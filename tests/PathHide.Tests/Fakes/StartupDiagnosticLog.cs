@@ -22,6 +22,9 @@ internal sealed class StartupDiagnosticLog : IDisposable
     /// <summary>The first record, already written or still to come, that <paramref name="matches"/> accepts.</summary>
     internal Task<LogEntry> Find(Func<LogEntry, bool> matches) => _sink.Await(matches).Task;
 
+    /// <summary>Every record written so far, in the order the log wrote them.</summary>
+    internal IReadOnlyList<LogEntry> Written => _sink.Written;
+
     public void Dispose()
     {
         try { Log.Shutdown(); }
@@ -36,6 +39,15 @@ internal sealed class StartupDiagnosticLog : IDisposable
     {
         private readonly List<LogEntry> _written = [];
         private readonly List<(Func<LogEntry, bool> Matches, TaskCompletionSource<LogEntry> Found)> _waiting = [];
+
+        public IReadOnlyList<LogEntry> Written
+        {
+            get
+            {
+                lock (_written)
+                    return [.. _written];
+            }
+        }
 
         public TaskCompletionSource<LogEntry> Await(Func<LogEntry, bool> matches)
         {

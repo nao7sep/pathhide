@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 
@@ -54,12 +55,15 @@ public interface IRecordsReader
 /// alongside it; the logger alone writes. A read waits at most <see cref="ReadBound"/> to keep the window responsive, and then fails while the read it gave up on finishes or fails on its own.
 /// </summary>
 /// <remarks>
-/// A read logs nothing: every record the database stores signals the records window to read again, so a
-/// read that logged would keep an open window reading forever. The caller reports a failed read.
+/// A read logs nothing, but for one warning per reader the first time a search skips damaged records:
+/// every record the database stores signals the records window to read again, so a read that logged
+/// each time would keep an open window reading forever. The caller reports a failed read.
 /// </remarks>
 public sealed class RecordsReader(string databasePath) : IRecordsReader
 {
     public const int PageSize = 100;
+
+    private int _reportedDamaged;
 
     internal static readonly TimeSpan ReadBound = TimeSpan.FromSeconds(10);
 
@@ -95,7 +99,7 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
             return read(connection);
         }).WaitAsync(ReadBound);
 
-    private static RecordsPage ReadPage(SqliteConnection connection, RecordsQuery query)
+    private RecordsPage ReadPage(SqliteConnection connection, RecordsQuery query)
     {
         using var command = connection.CreateCommand();
         var where = new List<string>();
@@ -159,7 +163,7 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
                 reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4)));
         }
 
-        if (damaged > 0)
+        if (damaged > 0 && Interlocked.Exchange(ref _reportedDamaged, 1) == 0)
             PathHide.Services.Log.Warn("records: search skipped records whose details cannot be read", new { count = damaged });
 
         var more = records.Count > PageSize;

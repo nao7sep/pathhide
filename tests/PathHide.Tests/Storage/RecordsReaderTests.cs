@@ -6,11 +6,13 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using PathHide.Services;
 using PathHide.Storage;
+using PathHide.Tests.Fakes;
 using Xunit;
 
 namespace PathHide.Tests.Storage;
 
 /// <summary>The records window's reads, against a real records database written by <see cref="RecordsStore"/>.</summary>
+[Collection(ProcessLogCollection.Name)]
 public sealed class RecordsReaderTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "pathhide-records-reader-tests", Guid.NewGuid().ToString("N"));
@@ -215,10 +217,12 @@ public sealed class RecordsReaderTests : IDisposable
         }
     }
 
-    // A record whose details cannot be read is skipped, so one damaged row cannot fail every search.
+    // A record whose details cannot be read is skipped, so one damaged row cannot fail every search. It
+    // is reported once: the report is itself a record, which signals an open window to read again.
     [Fact]
-    public async Task A_damaged_record_is_skipped_instead_of_failing_the_search()
+    public async Task A_damaged_record_is_skipped_instead_of_failing_the_search_and_reported_once()
     {
+        using var log = new StartupDiagnosticLog("records test: done");
         Write(1, "scan", fields: new JsonObject { ["path"] = "/findme" });
         Write(2, "scan", fields: new JsonObject { ["path"] = "/damaged" });
         using (var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + Path.Combine(_root, RecordsStore.FileName)))
@@ -230,7 +234,11 @@ public sealed class RecordsReaderTests : IDisposable
         }
 
         var found = await _reader.ReadPageAsync(All("findme"));
+        await _reader.ReadPageAsync(All("findme"));
+        Log.Info("records test: done");
+        await log.Reported.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         Assert.Equal("scan", Assert.Single(found.Records).Message);
+        Assert.Single(log.Written, entry => entry.Message == "records: search skipped records whose details cannot be read");
     }
 }
