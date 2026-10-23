@@ -59,7 +59,7 @@ public sealed class MacVisibilityService : IVisibilityService
         }
     }
 
-    public void Hide(string path)
+    public void Hide(string path, WindowsHideMode mode)
     {
         // Per-item boundary crossing: debug, not info. The aggregate of a hide/show
         // command is logged once by the caller (ApplyDesiredStateAsync).

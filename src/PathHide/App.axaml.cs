@@ -206,7 +206,7 @@ public partial class App : Application
         });
 
         var (visibilityService, elevatedApplicator) =
-            CreatePlatformServices(OperatingSystem.IsWindows(), () => settings.WindowsHideMode);
+            CreatePlatformServices(OperatingSystem.IsWindows());
 
         return new MainWindowViewModel(new BoundedVisibility(visibilityService), pathListStore, settingsStore, settings, stateStore, state, loaded.Paths)
         {
@@ -220,9 +220,9 @@ public partial class App : Application
     /// only Windows has.
     /// </summary>
     internal static (IVisibilityService Visibility, IElevatedApplicator? Elevated) CreatePlatformServices(
-        bool windows, Func<WindowsHideMode> hideMode) =>
+        bool windows) =>
         windows
-            ? (new WindowsVisibilityService(hideMode),
+            ? (new WindowsVisibilityService(),
                 new ElevatedApplicator(LaunchElevatedAsync, System.IO.Path.GetTempPath(), StorageRoot.Directory))
             : (new MacVisibilityService(), null);
 

@@ -10,7 +10,12 @@ public interface IVisibilityService
     /// so callers (including the re-inspect after a failed Hide/Show) can rely on it.
     /// </summary>
     PathInspection Inspect(string path);
-    void Hide(string path);
+    /// <summary>
+    /// Hides <paramref name="path"/>. <paramref name="mode"/> decides whether Windows also sets System;
+    /// macOS has one hidden flag and ignores it. A batch passes the mode it started with, so a Settings
+    /// change while it runs applies to the next command, not to the rest of this one.
+    /// </summary>
+    void Hide(string path, WindowsHideMode mode);
     void Show(string path);
 
     /// <summary>

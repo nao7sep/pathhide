@@ -6,13 +6,6 @@ namespace PathHide.Services;
 
 public sealed class WindowsVisibilityService : IVisibilityService
 {
-    private readonly Func<WindowsHideMode> _getHideMode;
-
-    public WindowsVisibilityService(Func<WindowsHideMode> getHideMode)
-    {
-        _getHideMode = getHideMode;
-    }
-
     public PathInspection Inspect(string path)
     {
         try
@@ -46,10 +39,8 @@ public sealed class WindowsVisibilityService : IVisibilityService
         }
     }
 
-    public void Hide(string path)
+    public void Hide(string path, WindowsHideMode mode)
     {
-        var mode = _getHideMode();
-
         // Per-item boundary crossing: debug, not info. The command aggregate is
         // logged once by the caller (ApplyDesiredStateAsync).
         Log.Debug("hiding path", new { path, mode });

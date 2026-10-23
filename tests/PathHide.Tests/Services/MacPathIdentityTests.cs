@@ -137,7 +137,7 @@ public sealed class MacPathIdentityTests : IDisposable
             Directory.Delete(alias);
             Directory.CreateSymbolicLink(alias, replacement);
             // Keep the replacement hidden: accidentally showing through the alias must fail this test.
-            service.Hide(replacementLink);
+            service.Hide(replacementLink, WindowsHideMode.HiddenOnly);
             await vm.ReloadCommand.ExecuteAsync(null);
             await vm.ShowAllCommand.ExecuteAsync(null);
 

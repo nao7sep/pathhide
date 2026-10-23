@@ -1584,6 +1584,9 @@ public partial class MainWindowViewModel : ObservableObject
     {
         Log.Info("apply: start", new { count = targets.Count });
 
+        // Settings stay open to the user while a batch runs; every path in it is hidden the same way.
+        var hideMode = _settings.WindowsHideMode;
+
         var applied = 0;
         var problems = new Dictionary<string, ApplyProblem>(StringComparer.Ordinal);
         var retryBucket = new List<PathRowViewModel>();
@@ -1636,7 +1639,7 @@ public partial class MainWindowViewModel : ObservableObject
                 }
 
                 written = true;
-                await _visibility.WriteAsync(row.Path, row.Entry.DesiredVisibility, token);
+                await _visibility.WriteAsync(row.Path, row.Entry.DesiredVisibility, hideMode, token);
 
                 var updated = await _visibility.InspectAsync(row.Path, token);
                 if (updated.ActualState == ActualState.Unresponsive)
@@ -1717,7 +1720,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             var buckets = Services.ElevatedApplyCommand.Partition(
                 retryBucket.Select(r => (r.Path, r.Entry.DesiredVisibility)),
-                _settings.WindowsHideMode);
+                hideMode);
 
             // The outcome is final once this returns: a child still running after a cancel or a
             // timeout never reports again, so its late writes cannot reach these rows.

@@ -85,15 +85,15 @@ public sealed class BoundedVisibility
     }
 
     /// <summary>
-    /// Hides or shows <paramref name="path"/>. Throws <see cref="TimeoutException"/> when the path does
+    /// Hides or shows <paramref name="path"/>, hiding in <paramref name="mode"/>. Throws <see cref="TimeoutException"/> when the path does
     /// not answer in time, <see cref="OperationCanceledException"/> when the caller cancels, and
     /// whatever the write itself threw otherwise.
     /// </summary>
-    public Task WriteAsync(string path, DesiredVisibility desired, CancellationToken cancellationToken) =>
+    public Task WriteAsync(string path, DesiredVisibility desired, WindowsHideMode mode, CancellationToken cancellationToken) =>
         RunAsync(path, () =>
         {
             if (desired == DesiredVisibility.Hidden)
-                _service.Hide(path);
+                _service.Hide(path, mode);
             else
                 _service.Show(path);
             return true;

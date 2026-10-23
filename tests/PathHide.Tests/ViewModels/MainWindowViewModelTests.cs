@@ -94,6 +94,32 @@ public class MainWindowViewModelTests
             Assert.Equal(["/a"], visibility.Shown);
     }
 
+    // Settings stay available during a batch; a hide mode saved meanwhile reaches the next command, so
+    // one batch never leaves some paths with System and some without.
+    [Fact]
+    public async Task A_batch_hides_every_path_in_the_mode_it_started_with()
+    {
+        var visibility = new FakeVisibilityService();
+        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [Entry("/a"), Entry("/b")] });
+        await vm.ScanTask;
+        using var release = new ManualResetEventSlim();
+        visibility.WriteGate = release;
+        var hide = vm.HideAllCommand.ExecuteAsync(null);
+        try
+        {
+            await visibility.WriteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            Assert.Null(await vm.TryApplySettingsAsync("en", "", hiddenAndSystem: true, ThemePreference.System));
+        }
+        finally
+        {
+            release.Set();
+            await hide;
+        }
+
+        Assert.Equal(["/a", "/b"], visibility.Hidden);
+        Assert.Equal([WindowsHideMode.HiddenOnly, WindowsHideMode.HiddenOnly], visibility.HideModes);
+    }
+
     // While one list-changing command runs, every other one is unavailable rather than queueing out of
     // sight, and Cancel stays available; they return once it finishes.
     [Fact]

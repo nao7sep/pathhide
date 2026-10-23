@@ -23,6 +23,7 @@ public sealed class FakeVisibilityService : IVisibilityService
 
     public ConcurrentQueue<string> Inspected { get; } = new();
     public ConcurrentQueue<string> Hidden { get; } = new();
+    public ConcurrentQueue<WindowsHideMode> HideModes { get; } = new();
     public ConcurrentQueue<string> Shown { get; } = new();
 
     /// <summary>When set, the next matching call throws this exception once.</summary>
@@ -95,7 +96,7 @@ public sealed class FakeVisibilityService : IVisibilityService
             ? resolved.TrimEnd('/') + path[slash..] : null;
     }
 
-    public void Hide(string path)
+    public void Hide(string path, WindowsHideMode mode)
     {
         WriteEntered.TrySetResult();
         WriteGate?.Wait();
@@ -105,6 +106,7 @@ public sealed class FakeVisibilityService : IVisibilityService
             throw thrown;
 
         Hidden.Enqueue(path);
+        HideModes.Enqueue(mode);
         if (!WritesTakeEffect) return;
         _byPath[path] = new PathInspection(
             ActualState.Hidden,

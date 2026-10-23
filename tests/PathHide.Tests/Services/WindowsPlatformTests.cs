@@ -117,7 +117,7 @@ public sealed class WindowsPlatformTests : IDisposable
         DenyWriteAttributes(path);
 
         Assert.Throws<UnauthorizedAccessException>(() =>
-            new WindowsVisibilityService(() => WindowsHideMode.HiddenOnly).Hide(path));
+            new WindowsVisibilityService().Hide(path, WindowsHideMode.HiddenOnly));
     }
 
     [WindowsOnlyFact]
@@ -130,9 +130,9 @@ public sealed class WindowsPlatformTests : IDisposable
         DenyWriteAttributes(hidden);
         DenyWriteAttributes(hiddenAndSystem);
 
-        new WindowsVisibilityService(() => WindowsHideMode.HiddenOnly).Hide(hidden);
+        new WindowsVisibilityService().Hide(hidden, WindowsHideMode.HiddenOnly);
         WindowsFileVisibility.Set(hidden, hide: true, system: false);
-        new WindowsVisibilityService(() => WindowsHideMode.HiddenAndSystem).Hide(hiddenAndSystem);
+        new WindowsVisibilityService().Hide(hiddenAndSystem, WindowsHideMode.HiddenAndSystem);
         WindowsFileVisibility.Set(hiddenAndSystem, hide: true, system: true);
     }
 
@@ -223,9 +223,9 @@ public sealed class WindowsPlatformTests : IDisposable
         {
             Environment.CurrentDirectory = _dir;
             var foreign = actual[2..].Replace('\\', '/');
-            var service = new WindowsVisibilityService(() => WindowsHideMode.HiddenOnly);
+            var service = new WindowsVisibilityService();
             Assert.Equal(ActualState.Error, service.Inspect(foreign).ActualState);
-            Assert.Throws<ArgumentException>(() => service.Hide(foreign));
+            Assert.Throws<ArgumentException>(() => service.Hide(foreign, WindowsHideMode.HiddenOnly));
             Assert.Throws<ArgumentException>(() => service.Show(foreign));
             Assert.Throws<ArgumentException>(() => WindowsFileVisibility.Set(foreign, true, true));
             Assert.Equal((FileAttributes)0, File.GetAttributes(actual) & (FileAttributes.Hidden | FileAttributes.System));

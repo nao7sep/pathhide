@@ -30,7 +30,7 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         catch { /* best-effort */ }
     }
 
-    private WindowsVisibilityService Service() => new(() => _mode);
+    private static WindowsVisibilityService Service() => new();
 
     // How one attribute read is classified runs anywhere; only reading the attributes needs Windows.
     [Theory]
@@ -58,7 +58,7 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         var path = NewFile();
         _mode = WindowsHideMode.HiddenOnly;
 
-        Service().Hide(path);
+        Service().Hide(path, _mode);
 
         var attrs = File.GetAttributes(path);
         Assert.True(attrs.HasFlag(FileAttributes.Hidden));
@@ -72,7 +72,7 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         var path = NewFile();
         _mode = WindowsHideMode.HiddenAndSystem;
 
-        Service().Hide(path);
+        Service().Hide(path, _mode);
 
         var attrs = File.GetAttributes(path);
         Assert.True(attrs.HasFlag(FileAttributes.Hidden));
@@ -84,7 +84,7 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
     {
         var path = NewFile();
         _mode = WindowsHideMode.HiddenAndSystem;
-        Service().Hide(path);
+        Service().Hide(path, _mode);
 
         Service().Show(path);
 
@@ -130,7 +130,7 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         var link = Path.Combine(_dir, "junction-link");
         CreateJunction(link, target);
 
-        Service().Hide(link);
+        Service().Hide(link, _mode);
 
         Assert.True(File.GetAttributes(link).HasFlag(FileAttributes.Hidden));
         Assert.True(File.GetAttributes(link).HasFlag(FileAttributes.ReparsePoint));
@@ -147,7 +147,7 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         // Enable Windows Developer Mode before running the ordinary suite.
         File.CreateSymbolicLink(link, target);
 
-        Service().Hide(link);
+        Service().Hide(link, _mode);
 
         Assert.True(File.GetAttributes(link).HasFlag(FileAttributes.Hidden));
         Assert.True(File.GetAttributes(link).HasFlag(FileAttributes.ReparsePoint));

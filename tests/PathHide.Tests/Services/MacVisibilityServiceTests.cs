@@ -73,7 +73,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
             File.WriteAllText(foreign, "x");
             var actual = Path.Combine(_dir, foreign);
             Assert.Equal(ActualState.Error, _service.Inspect(foreign).ActualState);
-            Assert.Throws<ArgumentException>(() => _service.Hide(foreign));
+            Assert.Throws<ArgumentException>(() => _service.Hide(foreign, WindowsHideMode.HiddenOnly));
             Assert.Throws<ArgumentException>(() => _service.Show(foreign));
             Assert.Equal(ActualState.Visible, _service.Inspect(actual).ActualState);
         }
@@ -96,7 +96,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
     {
         var path = NewFile();
 
-        _service.Hide(path);
+        _service.Hide(path, WindowsHideMode.HiddenOnly);
 
         Assert.Contains("hidden", StatFlags(path));                 // independent OS-level check
         Assert.Equal(ActualState.Hidden, _service.Inspect(path).ActualState);
@@ -106,7 +106,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
     public void Show_ClearsHiddenFlag()
     {
         var path = NewFile();
-        _service.Hide(path);
+        _service.Hide(path, WindowsHideMode.HiddenOnly);
 
         _service.Show(path);
 
@@ -119,8 +119,8 @@ public sealed class MacVisibilityServiceTests : IDisposable
     {
         var path = NewFile();
 
-        _service.Hide(path);
-        _service.Hide(path); // must not throw; no-op when already hidden
+        _service.Hide(path, WindowsHideMode.HiddenOnly);
+        _service.Hide(path, WindowsHideMode.HiddenOnly); // must not throw; no-op when already hidden
 
         Assert.Equal(ActualState.Hidden, _service.Inspect(path).ActualState);
     }
@@ -141,7 +141,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
         var path = NewFile();
         Chflags("nodump", path);
 
-        _service.Hide(path);
+        _service.Hide(path, WindowsHideMode.HiddenOnly);
         var afterHide = StatFlags(path);
         Assert.Contains("hidden", afterHide);
         Assert.Contains("nodump", afterHide);   // unrelated flag must survive Hide
@@ -217,7 +217,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
         var link = Path.Combine(_dir, "link.txt");
         File.CreateSymbolicLink(link, target);
 
-        _service.Hide(link);
+        _service.Hide(link, WindowsHideMode.HiddenOnly);
 
         // The link itself is hidden and reported as a symlink...
         var linkInspection = _service.Inspect(link);
@@ -272,7 +272,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
         var link = Path.Combine(_dir, "link-dir");
         Directory.CreateSymbolicLink(link, target);
 
-        _service.Hide(link);
+        _service.Hide(link, WindowsHideMode.HiddenOnly);
 
         Assert.Equal(ActualState.Hidden, _service.Inspect(link).ActualState);
         Assert.Equal(ActualState.Visible, _service.Inspect(target).ActualState);
@@ -328,7 +328,7 @@ public sealed class MacVisibilityServiceTests : IDisposable
         var link = Path.Combine(_dir, "dangling.txt");
         File.CreateSymbolicLink(link, Path.Combine(_dir, "no-such-target.txt"));
 
-        _service.Hide(link);
+        _service.Hide(link, WindowsHideMode.HiddenOnly);
         Assert.Equal(ActualState.Hidden, _service.Inspect(link).ActualState);
 
         _service.Show(link);
