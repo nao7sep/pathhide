@@ -18,10 +18,8 @@ using Xunit;
 namespace PathHide.Tests.Storage;
 
 /// <summary>
-/// Each store's format version (store-recovery-conventions): a store without its marker is unreadable,
-/// the current version round-trips, and a newer one is never read. The path list and the databases
-/// refuse it and leave it byte-identical; settings and window state run on defaults and leave it
-/// untouched until their next save replaces it.
+/// Unmarked stores use current-shape validation; known newer stores remain byte-identical.
+/// Harmless settings and window state use session defaults but refuse overwriting newer formats.
 /// </summary>
 [Collection(StorageRootEnvironment.CollectionName)]
 public sealed class FormatVersionTests : IDisposable
@@ -73,15 +71,12 @@ public sealed class FormatVersionTests : IDisposable
     // --- paths.json ---
 
     [Fact]
-    public void PathList_WithoutAVersion_IsUnreadableAndLeftInPlace()
+    public void PathList_WithoutAVersion_ReadsCurrentShapeWithoutRewriting()
     {
         var bytes = WriteNewer(PathListStore.FileName, """{ "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""");
         var store = new PathListStore();
 
-        var refused = Assert.Throws<UnreadableStoreException>(() => store.Load());
-        Assert.Throws<UnreadableStoreException>(() => store.Save([Entry("/b")]));
-
-        Assert.Equal(PathOf(PathListStore.FileName), refused.Path);
+        Assert.Equal("/a", Assert.Single(store.Load().Value).Path);
         AssertLeftAsItWas(PathListStore.FileName, bytes);
     }
 
@@ -115,10 +110,6 @@ public sealed class FormatVersionTests : IDisposable
     [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a/", "desiredVisibility": "hidden" }, { "path": "/a", "desiredVisibility": "shown" } ] }""")]
     [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "C:/a", "desiredVisibility": "hidden" }, { "path": "c:\\A\\", "desiredVisibility": "shown" } ] }""")]
     [InlineData("""[ { "path": "/a", "desiredVisibility": "hidden" } ]""")]
-    [InlineData("""{ "formatVersion": 0, "paths": [] }""")]
-    [InlineData("""{ "formatVersion": "1", "paths": [] }""")]
-    [InlineData("""{ "formatVersion": 1.5, "paths": [] }""")]
-    [InlineData("""{ "formatVersion": null, "paths": [] }""")]
     [InlineData("""{ "formatVersion": 1, "paths": null }""")]
     [InlineData("""{ "formatVersion": 1, "paths": [ null ] }""")]
     [InlineData("""{ "formatVersion": 1, "paths": [ { "path": null, "desiredVisibility": "hidden" } ] }""")]
@@ -175,16 +166,16 @@ public sealed class FormatVersionTests : IDisposable
     // --- config.json ---
 
     [Fact]
-    public void Settings_WithoutAVersion_AreUnreadable()
+    public void Settings_WithoutAVersion_ReadCurrentSets()
     {
         const string contents = """{ "language": "ja", "theme": "dark" }""";
         File.WriteAllText(PathOf(AppSettings.FileName), contents);
 
-        Assert.Equal(Languages.System, LanguageBootstrap.SavedPreference());
+        Assert.Equal("ja", LanguageBootstrap.SavedPreference());
         var loaded = new SettingsStore().Load();
 
-        Assert.True(loaded.WasUnreadable);
-        Assert.Equal(ThemePreference.System, loaded.Value.Theme);
+        Assert.False(loaded.WasUnreadable);
+        Assert.Equal(ThemePreference.Dark, loaded.Value.Theme);
         AssertLeftAsItWas(AppSettings.FileName, Encoding.UTF8.GetBytes(contents));
     }
 
@@ -201,7 +192,7 @@ public sealed class FormatVersionTests : IDisposable
     }
 
     [Fact]
-    public void Settings_Newer_LoadBuiltIns_StayUntouched_UntilTheNextSaveReplacesThem()
+    public void Settings_Newer_LoadBuiltInsAndRefuseSaves()
     {
         var bytes = WriteNewer(AppSettings.FileName, """{ "formatVersion": 2, "language": "ja", "theme": "dark" }""");
         var store = new SettingsStore();
@@ -214,23 +205,21 @@ public sealed class FormatVersionTests : IDisposable
         Assert.Equal(Languages.System, LanguageBootstrap.SavedPreference());
         AssertLeftAsItWas(AppSettings.FileName, bytes);
 
-        Assert.True(store.SaveChanges(loaded.Value, new AppSettings { Theme = ThemePreference.Light }));
-
-        Assert.Equal(FormatVersions.Settings, RecordedIn(AppSettings.FileName));
-        Assert.Equal(ThemePreference.Light, store.Load().Value.Theme);
+        Assert.Throws<NewerFormatException>(() => store.SaveChanges(loaded.Value, new AppSettings { Theme = ThemePreference.Light }));
+        AssertLeftAsItWas(AppSettings.FileName, bytes);
     }
 
     // --- state.json ---
 
     [Fact]
-    public void State_WithoutAVersion_IsUnreadable()
+    public void State_WithoutAVersion_ReadsCurrentShape()
     {
         File.WriteAllText(PathOf(AppState.FileName), """{ "windowWidth": 900 }""");
 
         var loaded = StateStore().Load();
 
-        Assert.True(loaded.WasUnreadable);
-        Assert.Null(loaded.Value.WindowWidth);
+        Assert.False(loaded.WasUnreadable);
+        Assert.Equal(900, loaded.Value.WindowWidth);
         AssertLeftAsItWas(AppState.FileName, Encoding.UTF8.GetBytes("""{ "windowWidth": 900 }"""));
     }
 
@@ -246,7 +235,7 @@ public sealed class FormatVersionTests : IDisposable
     }
 
     [Fact]
-    public void State_Newer_ResetsAndTheNextSaveReplacesIt()
+    public void State_Newer_UsesDefaultsAndRefusesSaves()
     {
         var bytes = WriteNewer(AppState.FileName, """{ "formatVersion": 2, "windows": [] }""");
         var store = StateStore();
@@ -254,9 +243,8 @@ public sealed class FormatVersionTests : IDisposable
         Assert.True(store.Load().WasUnreadable);
         AssertLeftAsItWas(AppState.FileName, bytes);
 
-        store.Save(new AppState { WindowWidth = 900 });
-
-        Assert.Equal(900, store.Load().Value.WindowWidth);
+        Assert.Throws<NewerFormatException>(() => store.Save(new AppState { WindowWidth = 900 }));
+        AssertLeftAsItWas(AppState.FileName, bytes);
     }
 
     // --- SQLite ---
@@ -323,11 +311,33 @@ public sealed class FormatVersionTests : IDisposable
         var bytes = File.ReadAllBytes(path);
 
         var store = RecordsStore.TryOpen(path, out var failure);
-        await Assert.ThrowsAsync<InvalidDataException>(() => new RecordsReader(path).ReadSessionsAsync(TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<SqliteException>(() => new RecordsReader(path).ReadSessionsAsync(TestContext.Current.CancellationToken));
 
         Assert.Null(store);
-        Assert.IsType<InvalidDataException>(failure);
+        Assert.IsType<SqliteException>(failure);
         Assert.Equal(bytes, File.ReadAllBytes(path));
+    }
+
+    [Fact]
+    public async Task Unmarked_current_records_are_read_then_marked_by_the_writer_without_schema_repair()
+    {
+        var path = PathOf(RecordsStore.FileName);
+        using (var store = RecordsStore.TryOpen(path, out var failure) ?? throw failure!)
+            store.Write(new LogEntry("session", "2026-10-05T00:00:00.000Z", "info", "kept", null, null));
+        using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA user_version = 0;";
+            command.ExecuteNonQuery();
+        }
+        Assert.Equal("kept", Assert.Single((await new RecordsReader(path).ReadPageAsync(
+            new RecordsQuery(null, null, "", null), TestContext.Current.CancellationToken)).Records).Message);
+        Assert.Equal(0, UserVersion(path));
+        using var reopened = RecordsStore.TryOpen(path, out var error);
+        Assert.Null(error);
+        Assert.NotNull(reopened);
+        Assert.Equal(1, UserVersion(path));
     }
 
     [Fact]

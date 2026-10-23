@@ -232,7 +232,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_path_session ON backups (path, ses
             // the first thing written on a fresh root.
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
 
-            connection = FormatVersions.OpenDatabase(file, FormatVersions.Backups, Schema);
+            connection = FormatVersions.OpenDatabase(file, FormatVersions.Backups, Schema, ValidateUnmarked);
             using (var pragma = connection.CreateCommand())
             {
                 pragma.CommandText = "PRAGMA journal_mode = WAL;";
@@ -254,6 +254,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_path_session ON backups (path, ses
         }
 
         return _connection;
+    }
+
+    private static void ValidateUnmarked(SqliteConnection connection)
+    {
+        // EXPLAIN prepares without executing: both the current columns and conflict key must exist.
+        using var command = connection.CreateCommand();
+        command.CommandText = "EXPLAIN INSERT INTO backups (session_id, path, content, content_sha256, byte_size, written_at_utc) "
+            + "VALUES ('', '', X'', '', 0, '') ON CONFLICT(path, session_id) DO UPDATE SET content = excluded.content;";
+        using var reader = command.ExecuteReader();
     }
 
     /// <summary>SHA-256 of the exact bytes, lowercase hex.</summary>

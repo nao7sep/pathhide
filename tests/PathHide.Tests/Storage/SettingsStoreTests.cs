@@ -106,7 +106,7 @@ public sealed class SettingsStoreTests : IDisposable
     [AvaloniaFact]
     public async Task DialogSave_ChangingThemeStoresExactlyTheme_AndDeletionRestoresBuiltIns()
     {
-        using var restoreLanguage = Localizer.Speaking(Localizer.Language);
+        using var restoreLanguage = PathHide.Tests.I18n.TestLanguage.Speaking(Localizer.Language);
         var vm = App.CreateMainViewModel(App.ReadStartupStores());
 
         Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Dark));
@@ -214,7 +214,7 @@ public sealed class SettingsStoreTests : IDisposable
     [AvaloniaFact]
     public async Task DialogSave_DropsAnInvalidSet_AndStoresTheFontCleaned()
     {
-        using var restoreLanguage = Localizer.Speaking(Localizer.Language);
+        using var restoreLanguage = PathHide.Tests.I18n.TestLanguage.Speaking(Localizer.Language);
         const string original = """{ "formatVersion": 1, "language": "future-language", "uiFontFamily": "  Inter  " }""";
         File.WriteAllText(ConfigPath, original);
         var vm = App.CreateMainViewModel(App.ReadStartupStores());
@@ -271,10 +271,9 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("{ invalid json")]
     [InlineData("[]")]
     [InlineData("null")]
-    [InlineData("{ \"formatVersion\": 2, \"theme\": \"dark\" }")]
     public async Task Startup_UnusableConfigUsesBuiltIns_LeavesTheFileUntilASettingsSaveReplacesIt(string original)
     {
-        using var restoreLanguage = Localizer.Speaking(Localizer.Language);
+        using var restoreLanguage = PathHide.Tests.I18n.TestLanguage.Speaking(Localizer.Language);
         File.WriteAllText(ConfigPath, original);
 
         var vm = App.CreateMainViewModel(App.ReadStartupStores());
@@ -291,9 +290,9 @@ public sealed class SettingsStoreTests : IDisposable
     [AvaloniaFact]
     public async Task DialogSave_DoesNotReadConfig_AndReplacesWhatChangedOnDisk()
     {
-        // The draft is compared with the settings held in memory: a config.json damaged after startup is
-        // neither read nor set aside, and the save writes the session's settings over it.
-        using var restoreLanguage = Localizer.Speaking(Localizer.Language);
+        // Draft comparison uses memory; save admission allows replacing damaged harmless preferences
+        // without moving the file aside. Newer readable markers are protected separately.
+        using var restoreLanguage = PathHide.Tests.I18n.TestLanguage.Speaking(Localizer.Language);
         var vm = App.CreateMainViewModel(App.ReadStartupStores());
         var notices = new List<(Message Title, Message Body)>();
         vm.ShowNoticeAsync = (title, body) =>

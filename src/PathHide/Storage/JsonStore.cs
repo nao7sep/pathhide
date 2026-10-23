@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -17,8 +18,8 @@ namespace PathHide.Storage;
 ///   <see cref="Load"/> and <see cref="Save"/> throw <see cref="UnreadableStoreException"/> or
 ///   <see cref="NewerFormatException"/>, so an unreadable or newer file is never written over.</item>
 ///   <item>Any other store holds only harmless preferences or presentation state: a file that cannot be
-///   read, is invalid or records a newer version yields defaults with a warning in the log and stays
-///   untouched, and the next save replaces it. Nothing is moved aside.</item>
+///   read or is invalid yields defaults with a warning. Newer files also yield defaults but cannot
+///   be replaced by this version. Nothing is moved aside.</item>
 /// </list>
 /// </summary>
 /// <remarks>
@@ -70,7 +71,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         try
         {
             // An absent file is normal (first run): not a failure, so it is not logged as one.
-            if (ReadFile() is not { } value)
+            if (ReadFile(out _) is not { } value)
             {
                 Log.Info("store: no existing data, using defaults", new { label = _label });
                 return new LoadedStore<T>(new T(), WasUnreadable: false);
@@ -80,9 +81,8 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         }
         catch (Exception ex) when (!_haltWhenUnreadable)
         {
-            // The file stays exactly as it is until the next save replaces it; this session runs on
-            // defaults. Absent and unreadable are reported apart: unreadable means there was content.
-            Log.Warn("store: file unusable, using defaults; left in place until the next save", ex,
+            // Defaults do not authorize overwriting a newer format. Save checks the same boundary.
+            Log.Warn("store: file unusable, using session defaults", ex,
                 new { label = _label, path = _filePath });
             return new LoadedStore<T>(new T(), WasUnreadable: true);
         }
@@ -90,94 +90,68 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
     public void Save(T value) => Save(value, compareExistingContent: true);
 
-    // Settings already compares its authoritative in-memory sets. Reading again would prevent a
-    // changed draft from replacing an unreadable config, and duplicate that owner's decision.
+    // Settings compares its in-memory sets; on-disk admission still protects newer files.
     internal void Save(T value, bool compareExistingContent)
     {
-        try
+        byte[]? existing;
+        try { ReadFile(out existing); }
+        catch (Exception ex) when (!_haltWhenUnreadable && ex is not NewerFormatException)
         {
-            StorageRoot.EnsureExists();
-            // A store that halts when unreadable reads the file it would replace, so it refuses an
-            // unreadable or newer one: after a failed Reload of a hand-edited list, a save must not
-            // overwrite the user's edit. Other stores replace whatever is there.
-            if (_haltWhenUnreadable)
-                ReadFile();
-            var document = JsonSerializer.SerializeToNode(value, JsonOptions.Default) as JsonObject
-                ?? throw new InvalidOperationException($"The {_label} store holds a JSON object.");
-            document.Insert(0, FormatVersions.JsonKey, _formatVersion);
-            var json = document.ToJsonString(JsonOptions.Default);
-            // Encode once, here, so the exact bytes written to disk are the exact bytes recorded to the
-            // backup store after the rename (no re-encode, no re-read). No BOM: File.WriteAllText/Encoding
-            // .UTF8 without a preamble matches what the app writes and reads back.
-            var bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
-            if (compareExistingContent && HasIdenticalContent(bytes))
-                return;
-            WriteAtomically(bytes);
-            Log.Info("store: saved", new { label = _label, path = _filePath });
+            existing = null; // Invalid disposable preferences can still be replaced.
         }
-        catch (Exception ex)
-        {
-            Log.Error("store: save failed", ex, new { label = _label, path = _filePath });
-            throw;
-        }
+        var document = JsonSerializer.SerializeToNode(value, JsonOptions.Default) as JsonObject
+            ?? throw new InvalidOperationException($"The {_label} store holds a JSON object.");
+        document.Insert(0, FormatVersions.JsonKey, _formatVersion);
+        var bytes = new UTF8Encoding(false).GetBytes(document.ToJsonString(JsonOptions.Default));
+        if (compareExistingContent && existing is not null && existing.AsSpan().SequenceEqual(bytes))
+            return;
+        StorageRoot.EnsureExists();
+        WriteAtomically(bytes);
+        Log.Info("store: saved", new { label = _label, path = _filePath });
     }
 
-    private bool HasIdenticalContent(byte[] bytes)
+    // Only the read itself establishes absence. Reuse these exact admitted bytes for no-op saves.
+    private T? ReadFile(out byte[]? bytes)
     {
+        bytes = null;
         try
         {
-            return File.Exists(_filePath) && File.ReadAllBytes(_filePath).AsSpan().SequenceEqual(bytes);
-        }
-        catch (Exception ex) when (!_haltWhenUnreadable && ex is IOException or UnauthorizedAccessException)
-        {
-            // Unreadable disposable state can still be replaced when its directory is writable.
-            // Failure to compare must not turn its harmless load fallback into a save refusal.
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Reads the file, or returns null when there is none. For a store that halts, every failure surfaces
-    /// as <see cref="NewerFormatException"/> or <see cref="UnreadableStoreException"/> naming the file.
-    /// </summary>
-    /// <remarks>
-    /// Only the read itself says the file is absent: an existence check answers false for a file it
-    /// cannot look at (a denied folder, an I/O error on a share), which would open the list as a first
-    /// run and let the next save replace the real one.
-    /// </remarks>
-    private T? ReadFile()
-    {
-        try
-        {
-            string text;
-            try
-            {
-                text = File.ReadAllText(_filePath);
-            }
+            try { bytes = File.ReadAllBytes(_filePath); }
             catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
             {
                 return null;
             }
-            using var document = JsonDocument.Parse(text);
-            var version = FormatVersions.Recorded(document.RootElement)
-                ?? throw new JsonException($"The {_label} file is not an object with a valid {FormatVersions.JsonKey}.");
-            if (version > _formatVersion)
+            using var document = JsonDocument.Parse(bytes.AsMemory(bytes.AsSpan().StartsWith(new byte[] { 0xEF, 0xBB, 0xBF }) ? 3 : 0));
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                throw new JsonException($"The {_label} file must contain an object.");
+            RejectDuplicates(root, FormatVersions.JsonKey);
+            if (FormatVersions.Recorded(root) is { } version && version > _formatVersion)
                 throw new NewerFormatException(_filePath, version, _formatVersion);
-
-            return document.RootElement.Deserialize<T>(JsonOptions.Default)
+            if (typeof(T) == typeof(PathListDocument))
+            {
+                RejectDuplicates(root, "paths");
+                if (root.TryGetProperty("paths", out var paths) && paths.ValueKind == JsonValueKind.Array)
+                    foreach (var entry in paths.EnumerateArray())
+                        if (entry.ValueKind == JsonValueKind.Object)
+                            RejectDuplicates(entry, "path", "desiredVisibility", "systemSetByPathHide");
+            }
+            return root.Deserialize<T>(JsonOptions.Default)
                 ?? throw new JsonException($"The {_label} file could not be read as its document.");
         }
-        catch (NewerFormatException newer) when (_haltWhenUnreadable)
-        {
-            Log.Warn("store: written by a newer version, left as it is",
-                new { label = _label, path = _filePath, version = newer.Version, supported = _formatVersion });
-            throw;
-        }
+        catch (NewerFormatException) { throw; }
         catch (Exception ex) when (_haltWhenUnreadable)
         {
-            Log.Warn("store: file unreadable, left in place", ex, new { label = _label, path = _filePath });
             throw new UnreadableStoreException(_label, _filePath, ex);
         }
+    }
+
+    private static void RejectDuplicates(JsonElement value, params string[] critical)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in value.EnumerateObject())
+            if (Array.IndexOf(critical, property.Name) >= 0 && !seen.Add(property.Name))
+                throw new JsonException($"Repeated critical property: {property.Name}.");
     }
 
     private void WriteAtomically(byte[] bytes)

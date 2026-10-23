@@ -60,7 +60,8 @@ internal static class LanguageBootstrap
                 return Languages.System;
 
             using var document = JsonDocument.Parse(File.ReadAllText(path));
-            return FormatVersions.Recorded(document.RootElement) <= FormatVersions.Settings
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && !(FormatVersions.Recorded(document.RootElement) > FormatVersions.Settings)
                 && document.RootElement.TryGetProperty(SettingsSets.Language, out var language)
                 && language.ValueKind == JsonValueKind.String
                 ? Languages.NormalizePreference(language.GetString())

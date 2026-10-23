@@ -32,7 +32,7 @@ public static class FormatVersions
 
     /// <summary>
     /// The version a JSON store's root records, or null when the root is not an object or does not record
-    /// a positive integer: a store without its marker is unreadable.
+    /// a positive integer. Missing or unrecognized markers use current-format validation.
     /// </summary>
     internal static int? Recorded(JsonElement root) =>
         root.ValueKind == JsonValueKind.Object
@@ -44,16 +44,13 @@ public static class FormatVersions
             : null;
 
     /// <summary>
-    /// Refuses a database whose <c>PRAGMA user_version</c> records no version (0) or one newer than
+    /// Refuses a database whose <c>PRAGMA user_version</c> records a version newer than
     /// <paramref name="supported"/>.
     /// </summary>
-    /// <exception cref="InvalidDataException">The database records no version.</exception>
     /// <exception cref="NewerFormatException">The database is newer than <paramref name="supported"/>.</exception>
     internal static void CheckDatabase(SqliteConnection connection, string path, int supported)
     {
         var recorded = UserVersion(connection);
-        if (recorded < 1)
-            throw new InvalidDataException($"{path} records no format version.");
         if (recorded > supported)
             throw new NewerFormatException(path, (int)recorded, supported);
     }
@@ -69,7 +66,7 @@ public static class FormatVersions
     /// One GUI per data root is the only writer of a store (<see cref="Services.SingleInstanceLease"/>),
     /// so creation needs no claim against a concurrent creator.
     /// </remarks>
-    internal static SqliteConnection OpenDatabase(string path, int supported, string schema)
+    internal static SqliteConnection OpenDatabase(string path, int supported, string schema, Action<SqliteConnection>? validateUnmarked = null)
     {
         var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
@@ -87,7 +84,19 @@ public static class FormatVersions
             }
             var isNew = UserVersion(connection) == 0 && !HasSchema(connection);
             if (!isNew)
+            {
                 CheckDatabase(connection, path, supported);
+                if (UserVersion(connection) < 1)
+                {
+                    if (validateUnmarked is null)
+                        throw new InvalidDataException($"{path} has no current-schema validator.");
+                    validateUnmarked(connection);
+                    using var mark = connection.CreateCommand();
+                    mark.CommandText = $"PRAGMA user_version = {supported};";
+                    mark.ExecuteNonQuery();
+                    return connection; // No schema creation or repair on a populated unmarked database.
+                }
+            }
             using (var transaction = connection.BeginTransaction())
             {
                 using var initialize = connection.CreateCommand();

@@ -16,6 +16,7 @@ public static class FailurePresentation
 
     public static Message SettingsSave(Exception error) => error switch
     {
+        NewerFormatException newer => NewerStore(newer),
         UnauthorizedAccessException => Message.Of("failure.settingsSavePermission"),
         TimeoutException => Message.Of("failure.settingsSaveTimeout"),
         _ => Message.Of("failure.settingsSave"),

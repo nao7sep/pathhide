@@ -68,6 +68,32 @@ public sealed class JsonStoreTests : IDisposable
         public ThemePreference Theme { get; set; }
     }
 
+    [Theory]
+    [InlineData("{\"paths\":[],\"paths\":[]}")]
+    [InlineData("{\"formatVersion\":2,\"formatVersion\":1,\"paths\":[]}")]
+    [InlineData("{\"paths\":[{\"path\":\"/a\",\"path\":\"/b\",\"desiredVisibility\":\"hidden\"}]}")]
+    [InlineData("{\"paths\":[{\"path\":\"/a\",\"desiredVisibility\":\"hidden\",\"desiredVisibility\":\"shown\"}]}")]
+    [InlineData("{\"paths\":[{\"path\":\"/a\",\"desiredVisibility\":\"hidden\",\"systemSetByPathHide\":false,\"systemSetByPathHide\":true}]}")]
+    public void Ambiguous_path_documents_are_neither_loaded_nor_replaced(string content)
+    {
+        File.WriteAllText(PathOf("paths.json"), content);
+        var store = new PathListStore();
+        Assert.Throws<UnreadableStoreException>(() => store.Load());
+        Assert.Throws<UnreadableStoreException>(() => store.Save([]));
+        Assert.Equal(content, File.ReadAllText(PathOf("paths.json")));
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("null")]
+    [InlineData("\"unknown\"")]
+    [InlineData("1.5")]
+    public void Unrecognized_markers_use_current_shape_and_unknown_fields_are_allowed(string marker)
+    {
+        File.WriteAllText(PathOf("paths.json"), "{\"formatVersion\":" + marker + ",\"paths\":[],\"extra\":1,\"extra\":2}");
+        Assert.Empty(new PathListStore().Load().Value);
+    }
+
     [Fact]
     public void SaveThenLoad_RoundTripsValue()
     {
@@ -137,7 +163,7 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_NewerConfig_GivesDefaultsAndTheNextSaveReplacesIt()
+    public void Load_NewerConfig_GivesDefaultsButRefusesReplacement()
     {
         const string newer = "{\"formatVersion\":2,\"theme\":\"dark\"}";
         File.WriteAllText(PathOf("config.json"), newer);
@@ -149,10 +175,8 @@ public sealed class JsonStoreTests : IDisposable
         Assert.Equal(ThemePreference.System, loaded.Value.Theme);
         Assert.Equal(newer, File.ReadAllText(PathOf("config.json")));
 
-        store.Save(new TestDocument { Theme = ThemePreference.Light });
-
-        Assert.Equal(ThemePreference.Light, store.Load().Value.Theme);
-        Assert.Contains("\"formatVersion\": 1", File.ReadAllText(PathOf("config.json")));
+        Assert.Throws<NewerFormatException>(() => store.Save(new TestDocument { Theme = ThemePreference.Light }));
+        Assert.Equal(newer, File.ReadAllText(PathOf("config.json")));
     }
 
     [Fact]
