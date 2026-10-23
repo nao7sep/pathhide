@@ -202,6 +202,7 @@ public partial class App : Application
             theme = settings.Theme,
             hideMode = settings.WindowsHideMode,
             uiFontFamily = settings.UiFontFamily,
+            displayTimeZone = settings.DisplayTimeZone,
         });
 
         var (visibilityService, elevatedApplicator) =

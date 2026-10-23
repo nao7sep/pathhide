@@ -79,6 +79,17 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Startup_records_the_selected_display_time_zone()
+    {
+        using var log = new Fakes.StartupDiagnosticLog("config");
+        var settings = new AppSettings { DisplayTimeZone = "Europe/Paris" };
+        _ = App.CreateMainViewModel((settings, new AppState(), new List<PathEntry>()));
+
+        var record = await log.Reported.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.Equal(settings.DisplayTimeZone, record.Fields!["displayTimeZone"]!.GetValue<string>());
+    }
+
+    [AvaloniaFact]
     public void Startup_WithNoConfig_WritesNothingAndUsesBuiltIns()
     {
         var vm = App.CreateMainViewModel(App.ReadStartupStores());
