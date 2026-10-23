@@ -228,9 +228,10 @@ public sealed class RecordsWindowTests : WindowTest
     }
 
     [AvaloniaFact]
-    public void A_stored_record_signals_the_open_window_and_a_closed_one_stops_listening()
+    public void A_stored_record_signals_the_open_window_and_a_closed_one_does_not_refresh()
     {
-        Log.Start(new NullSink(), Path.Combine(Path.GetTempPath(), "pathhide-records-window-tests", Guid.NewGuid().ToString("N")));
+        var sink = new LastEntrySink();
+        Log.Start(sink, Path.Combine(Path.GetTempPath(), "pathhide-records-window-tests", Guid.NewGuid().ToString("N")));
         try
         {
             var (window, records) = ShowRecords(Owner());
@@ -248,8 +249,24 @@ public sealed class RecordsWindowTests : WindowTest
 
             window.Close();
             Dispatcher.UIThread.RunJobs();
-            Log.Info("after closing");
-            Thread.Sleep(100);
+            // Listeners are told in the order they subscribed, so once this one hears of the record, an
+            // open window would already have been told and posted its refresh.
+            using var delivered = new ManualResetEventSlim();
+            void Heard()
+            {
+                if (sink.Last == "after closing")
+                    delivered.Set();
+            }
+            Log.RecordStored += Heard;
+            try
+            {
+                Log.Info("after closing");
+                Assert.True(delivered.Wait(TimeSpan.FromSeconds(5)));
+            }
+            finally
+            {
+                Log.RecordStored -= Heard;
+            }
             Dispatcher.UIThread.RunJobs();
 
             Assert.Equal(0, _delays.Running(RecordsViewModel.LiveInterval));
@@ -445,11 +462,12 @@ public sealed class RecordsWindowTests : WindowTest
         Assert.True(body.Bounds.Height <= window.Bounds.Height);
     }
 
-    private sealed class NullSink : ILogSink
+    /// <summary>Keeps the message last written; the log writes on one thread and signals after each write.</summary>
+    private sealed class LastEntrySink : ILogSink
     {
-        public void Write(LogEntry entry)
-        {
-        }
+        public volatile string? Last;
+
+        public void Write(LogEntry entry) => Last = entry.Message;
 
         public void Dispose()
         {
