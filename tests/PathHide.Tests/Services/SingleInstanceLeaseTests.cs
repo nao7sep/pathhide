@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -94,6 +95,53 @@ public sealed class SingleInstanceLeaseTests
         {
             release.Set();
             ownerThread.Join(TimeSpan.FromSeconds(10));
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    // Anything local can connect to the activation port. One that keeps sending must neither grow the
+    // owner's memory nor hold its only listener: the next launch still brings the window forward.
+    [Fact]
+    public void A_connection_that_keeps_sending_does_not_keep_a_second_launch_from_activating_the_owner()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "pathhide-instance-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        using var activated = new ManualResetEventSlim();
+        using var stopSending = new ManualResetEventSlim();
+        Thread? sender = null;
+        Assert.True(SingleInstanceLease.TryAcquire(root, out var owner));
+        try
+        {
+            SingleInstanceLease.RegisterOwnerActivationHandler(activated.Set);
+            var port = int.Parse(File.ReadAllText(Path.Combine(root, "instance.endpoint")).Trim(), CultureInfo.InvariantCulture);
+            var hog = new System.Net.Sockets.TcpClient();
+            hog.Connect(System.Net.IPAddress.Loopback, port);
+            sender = new Thread(() =>
+            {
+                using (hog)
+                {
+                    try
+                    {
+                        while (!stopSending.Wait(100))
+                            hog.GetStream().Write("xxxxxxxx"u8);
+                    }
+                    catch (IOException)
+                    {
+                        // The owner stopped reading this connection, as it should.
+                    }
+                }
+            }) { IsBackground = true };
+            sender.Start();
+
+            Assert.False(SingleInstanceLease.TryAcquire(root, out var duplicate));
+            Assert.Null(duplicate);
+            Assert.True(activated.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            stopSending.Set();
+            sender?.Join(TimeSpan.FromSeconds(5));
+            owner?.Dispose();
             Directory.Delete(root, recursive: true);
         }
     }

@@ -50,6 +50,7 @@ internal sealed class ActivationRequestRouter
 internal sealed class SingleInstanceLease : IDisposable
 {
     private const string EndpointFileName = "instance.endpoint";
+    private static readonly byte[] ActivationRequest = Encoding.ASCII.GetBytes("activate");
     private static readonly TimeSpan NotifyTimeout = TimeSpan.FromSeconds(2);
     private static readonly object CurrentGate = new();
     private static SingleInstanceLease? _current;
@@ -231,8 +232,7 @@ internal sealed class SingleInstanceLease : IDisposable
                 {
                     using var client = new TcpClient();
                     client.Connect(IPAddress.Loopback, port);
-                    var request = Encoding.ASCII.GetBytes("activate");
-                    client.GetStream().Write(request);
+                    client.GetStream().Write(ActivationRequest);
                     return;
                 }
             }
@@ -250,15 +250,18 @@ internal sealed class SingleInstanceLease : IDisposable
 
     private void ListenForActivation()
     {
+        var failures = 0;
         while (!_disposed)
         {
             try
             {
                 using var client = _listener.AcceptTcpClient();
-                using var stream = client.GetStream();
-                stream.ReadTimeout = (int)NotifyTimeout.TotalMilliseconds;
-                using var reader = new StreamReader(stream, Encoding.ASCII);
-                if (reader.ReadToEnd().StartsWith("activate", StringComparison.Ordinal))
+                if (failures > 0)
+                {
+                    Log.Info("instance: activation listener accepts again", new { failures });
+                    failures = 0;
+                }
+                if (ReadsActivation(client.GetStream()))
                     _activationRouter.Request();
             }
             catch (SocketException) when (_disposed)
@@ -274,11 +277,39 @@ internal sealed class SingleInstanceLease : IDisposable
                 // A client can disconnect mid-request; keep the owner available
                 // for the next legitimate activation rather than losing the listener.
             }
-            catch (SocketException)
+            catch (SocketException ex)
             {
-                // A transient loopback failure is not a reason to surrender ownership.
+                // A transient loopback failure is not a reason to surrender ownership, but one that
+                // persists must not spin this thread: each retry waits twice as long, up to 5 s.
+                if (failures++ == 0)
+                    Log.Warn("instance: activation listener could not accept a connection; retrying", ex);
+                Thread.Sleep(TimeSpan.FromMilliseconds(Math.Min(100 << Math.Min(failures - 1, 6), 5000)));
             }
         }
+    }
+
+    /// <summary>
+    /// Whether the connection carries the activation request. The request is a few fixed bytes, so no
+    /// more than that is read, and all of it within one <see cref="NotifyTimeout"/>: a local client that
+    /// streams or trickles data cannot grow memory or hold the only listener thread.
+    /// </summary>
+    private static bool ReadsActivation(NetworkStream stream)
+    {
+        var received = new byte[ActivationRequest.Length];
+        var timer = Stopwatch.StartNew();
+        var count = 0;
+        while (count < received.Length)
+        {
+            var remaining = NotifyTimeout - timer.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+                return false;
+            stream.ReadTimeout = Math.Max(1, (int)remaining.TotalMilliseconds);
+            var read = stream.Read(received, count, received.Length - count);
+            if (read == 0)
+                return false;
+            count += read;
+        }
+        return received.AsSpan().SequenceEqual(ActivationRequest);
     }
 
     public void Dispose()
