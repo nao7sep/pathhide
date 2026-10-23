@@ -349,7 +349,8 @@ public sealed class RecordsViewModelTests
         Answer(true, Newest(102, RecordsReader.PageSize));
 
         Assert.Equal(reads + 3, _reader.Pages.Count);
-        Assert.Equal(sessionReads + 1, _reader.SessionReads);
+        // Only this launch gains records while the window is open, so the launches are not read again.
+        Assert.Equal(sessionReads, _reader.SessionReads);
         Assert.Equal([302, 301, 300], vm.Rows.Take(3).Select(row => row.Id));
         Assert.Equal(2 * RecordsReader.PageSize + 2, vm.Rows.Count);
         Assert.True(vm.HasMore);

@@ -167,7 +167,11 @@ public sealed partial class RecordsViewModel : ObservableObject
         return session == currentSession ? Localizer.T("records.thisLaunch", ("time", time)) : time;
     }
 
-    /// <summary>Reads the first page and the launches, as the window opens.</summary>
+    /// <summary>
+    /// Reads the first page and the launches, as the window opens. The launches are read once: the only
+    /// one that gains records while the window is open is this launch, since an elevated child logs
+    /// under the launch that started it.
+    /// </summary>
     public void Start()
     {
         Reload();
@@ -224,7 +228,6 @@ public sealed partial class RecordsViewModel : ObservableObject
 
         if (_closed)
             return;
-        _ = ReadSessionsAsync();
         if (_atTop)
             _ = ReadNewestAsync();
         else
