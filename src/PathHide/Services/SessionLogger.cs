@@ -31,7 +31,7 @@ public sealed class SessionLogger : IDisposable
         Converters = { new JsonStringEnumConverter() },
     };
 
-    // PLAYBOOK, Own the work in flight: how long closing waits for the queued entries. After the window
+    // How long closing waits for the queued entries. After the window
     // has gone, an ordinary quit can afford it; when the OS is ending the session the quit has already
     // spent its bound, so the drain gets only a moment before what is left goes to the fallback file.
     internal static readonly TimeSpan DrainBound = TimeSpan.FromSeconds(5);

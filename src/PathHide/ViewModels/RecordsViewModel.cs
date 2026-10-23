@@ -28,8 +28,7 @@ public enum RecordDetailStatus
 /// <summary>
 /// The records window: a filtered list of <c>records.sqlite3</c>, newest first, read a page at a time,
 /// and the selected record whole. Every method runs on the UI thread; the reads run on the reader's
-/// worker, and a result applies only while what it was read for is still what the window asks for
-/// (PLAYBOOK, Own the work in flight).
+/// worker, and a result applies only while what it was read for is still what the window asks for.
 /// </summary>
 /// <remarks>
 /// Live updates: each record the database stores signals <see cref="OnRecordStored"/>, and the newest

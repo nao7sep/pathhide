@@ -49,8 +49,7 @@ public interface IRecordsReader
 /// <summary>
 /// Reads <c>records.sqlite3</c> for the records window. Each read opens its own read-only connection on
 /// a worker thread, beside the logger's writing one, which the database's WAL journal lets run
-/// alongside it; the logger alone writes. A read waits at most <see cref="ReadBound"/> (PLAYBOOK, Bound
-/// every external wait), and then fails while the read it gave up on finishes or fails on its own.
+/// alongside it; the logger alone writes. A read waits at most <see cref="ReadBound"/> to keep the window responsive, and then fails while the read it gave up on finishes or fails on its own.
 /// </summary>
 /// <remarks>
 /// A read logs nothing: every record the database stores signals the records window to read again, so a
