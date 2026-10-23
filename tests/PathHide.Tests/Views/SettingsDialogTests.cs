@@ -95,7 +95,13 @@ public sealed class SettingsDialogTests
         var save = dialog.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "save"));
         font.Text = "Menlo";
         save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(save.IsEnabled);
+        Assert.Equal(English.Of("common.saving"), save.Content);
+        Assert.True(font.IsEffectivelyEnabled);
+        Assert.All(dialog.GetLogicalDescendants().OfType<Button>().Where(button => button.Tag is string),
+            button => Assert.False(button.IsEffectivelyEnabled));
         font.Text = "Arial";
+        Assert.False(save.IsEnabled);
         pending.SetResult(null);
         await Task.Yield();
         Dispatcher.UIThread.RunJobs();

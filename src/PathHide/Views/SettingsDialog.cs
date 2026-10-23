@@ -254,7 +254,13 @@ public sealed class SettingsDialog : DialogBase
         return false;
     }
 
-    private void UpdateSaveState() => _saveButton.IsEnabled = HasUnsavedChanges;
+    protected override void OnSavingChanged()
+    {
+        Localized.SetContent(_saveButton, IsSaving ? "common.saving" : "common.save");
+        UpdateSaveState();
+    }
+
+    private void UpdateSaveState() => _saveButton.IsEnabled = !IsSaving && HasUnsavedChanges;
 
     private void OnColorValuesChanged(object? sender, Avalonia.Platform.PlatformColorValues e) => ShowSystemTheme();
 

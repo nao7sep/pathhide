@@ -44,6 +44,7 @@
   "common.closeResult": "結果を閉じる",
   "common.remove": "一覧から削除",
   "common.save": "保存",
+  "common.saving": "保存中…",
   "desired.hidden": "非表示",
   "desired.shown": "表示",
   "dialog.discard": "破棄",

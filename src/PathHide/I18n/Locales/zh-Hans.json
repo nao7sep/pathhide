@@ -44,6 +44,7 @@
   "common.closeResult": "关闭结果",
   "common.remove": "从列表中移除",
   "common.save": "保存",
+  "common.saving": "正在保存…",
   "desired.hidden": "隐藏",
   "desired.shown": "显示",
   "dialog.discard": "放弃",

@@ -301,8 +301,7 @@ public partial class MainWindow : Window
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
         // Build the catalog now that PlatformSettings (the platform command key) and the view model
-        // are both available, then point the accelerator-bearing menu items at the live gestures so
-        // their visible hint always matches what OnKeyDown actually binds.
+        // are both available; OnKeyDown and shortcut help consume this same catalog.
         _shortcuts = ShortcutCatalog.Build(this);
         ViewModel.ConfirmDestructiveAsync = request =>
             ConfirmDialog.ConfirmDestructiveAsync(this, request.Title, request.Message, request.ConfirmLabelKey);
@@ -435,14 +434,14 @@ public partial class MainWindow : Window
             ViewModel.IsHiddenAndSystem,
             ViewModel.HasWindowsHideMode,
             ViewModel.DisplayTimeZone,
-            ViewModel.TryApplySettingsAsync);
+            async (language, font, system, theme, zone) =>
+            {
+                var failure = await ViewModel.TryApplySettingsAsync(language, font, system, theme, zone);
+                if (failure is null) AppTheme.Apply(ViewModel.Theme);
+                return failure;
+            });
         await dialog.ShowBoundedAsync(this);
 
-        if (dialog.Accepted)
-        {
-            // The theme is app-wide: every window, dialog, and title bar follows the variant.
-            AppTheme.Apply(ViewModel.Theme);
-        }
     }
 
     private async void OnAddFilesClick(object? sender, RoutedEventArgs e) => await AddFilesAsync();

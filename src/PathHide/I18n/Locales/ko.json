@@ -44,6 +44,7 @@
   "common.closeResult": "결과 닫기",
   "common.remove": "목록에서 제거",
   "common.save": "저장",
+  "common.saving": "저장 중…",
   "desired.hidden": "숨김",
   "desired.shown": "표시",
   "dialog.discard": "버리기",

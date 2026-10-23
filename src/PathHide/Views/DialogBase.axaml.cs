@@ -54,6 +54,8 @@ public partial class DialogBase : Window
     // True while a commit button's TryCommitAsync is saving: a second click, Enter or Escape
     // does nothing until it has finished.
     private bool _saving;
+    protected bool IsSaving => _saving;
+    protected virtual void OnSavingChanged() { }
 
     /// <summary>Tag of the button the user activated, or <c>null</c> if the dialog was dismissed.</summary>
     public string? ResultTag { get; private set; }
@@ -225,6 +227,8 @@ public partial class DialogBase : Window
         if (_commitButtons.Contains(button))
         {
             _saving = true;
+            ButtonPanel.IsEnabled = false;
+            OnSavingChanged();
             bool committed;
             try
             {
@@ -233,6 +237,8 @@ public partial class DialogBase : Window
             finally
             {
                 _saving = false;
+                ButtonPanel.IsEnabled = true;
+                OnSavingChanged();
             }
 
             if (!committed)
