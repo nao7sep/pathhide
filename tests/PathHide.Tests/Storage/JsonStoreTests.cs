@@ -236,6 +236,32 @@ public sealed class JsonStoreTests : IDisposable
         Assert.Equal(content, File.ReadAllText(path));
     }
 
+    // A folder that cannot be searched hides whether the list is there: that is a failure to read it,
+    // never a first run whose empty list the next save would write over the real one.
+    [MacOnlyFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public void Load_PathListThatCannotBeLookedAt_HaltsRatherThanStartingEmpty()
+    {
+        var path = PathOf("paths.json");
+        const string content = "{\"formatVersion\":1,\"paths\":[{\"path\":\"/a\",\"desiredVisibility\":\"hidden\"}]}";
+        File.WriteAllText(path, content);
+        var mode = File.GetUnixFileMode(_root);
+        File.SetUnixFileMode(_root, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        UnreadableStoreException refused;
+        try
+        {
+            Assert.False(File.Exists(path));
+            refused = Assert.Throws<UnreadableStoreException>(() => new PathListStore().Load());
+        }
+        finally
+        {
+            File.SetUnixFileMode(_root, mode);
+        }
+
+        Assert.True(refused.IsAccessFailure);
+        Assert.Equal(content, File.ReadAllText(path));
+    }
+
     [Fact]
     public void Load_LiteralNullPathList_IsLeftInPlaceAndRefused()
     {

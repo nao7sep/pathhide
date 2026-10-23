@@ -67,16 +67,14 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
     public LoadedStore<T> Load()
     {
-        // An absent file is normal (first run): not a failure, so it is not logged as one.
-        if (!File.Exists(_filePath))
-        {
-            Log.Info("store: no existing data, using defaults", new { label = _label });
-            return new LoadedStore<T>(new T(), WasUnreadable: false);
-        }
-
         try
         {
-            var value = ReadFile();
+            // An absent file is normal (first run): not a failure, so it is not logged as one.
+            if (ReadFile() is not { } value)
+            {
+                Log.Info("store: no existing data, using defaults", new { label = _label });
+                return new LoadedStore<T>(new T(), WasUnreadable: false);
+            }
             Log.Info("store: loaded", new { label = _label, path = _filePath });
             return new LoadedStore<T>(value, WasUnreadable: false);
         }
@@ -102,7 +100,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             // A store that halts when unreadable reads the file it would replace, so it refuses an
             // unreadable or newer one: after a failed Reload of a hand-edited list, a save must not
             // overwrite the user's edit. Other stores replace whatever is there.
-            if (_haltWhenUnreadable && File.Exists(_filePath))
+            if (_haltWhenUnreadable)
                 ReadFile();
             var document = JsonSerializer.SerializeToNode(value, JsonOptions.Default) as JsonObject
                 ?? throw new InvalidOperationException($"The {_label} store holds a JSON object.");
@@ -139,14 +137,28 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     }
 
     /// <summary>
-    /// Reads the present file. For a store that halts, every failure surfaces as
-    /// <see cref="NewerFormatException"/> or <see cref="UnreadableStoreException"/> naming the file.
+    /// Reads the file, or returns null when there is none. For a store that halts, every failure surfaces
+    /// as <see cref="NewerFormatException"/> or <see cref="UnreadableStoreException"/> naming the file.
     /// </summary>
-    private T ReadFile()
+    /// <remarks>
+    /// Only the read itself says the file is absent: an existence check answers false for a file it
+    /// cannot look at (a denied folder, an I/O error on a share), which would open the list as a first
+    /// run and let the next save replace the real one.
+    /// </remarks>
+    private T? ReadFile()
     {
         try
         {
-            using var document = JsonDocument.Parse(File.ReadAllText(_filePath));
+            string text;
+            try
+            {
+                text = File.ReadAllText(_filePath);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+            {
+                return null;
+            }
+            using var document = JsonDocument.Parse(text);
             var version = FormatVersions.Recorded(document.RootElement)
                 ?? throw new JsonException($"The {_label} file is not an object with a valid {FormatVersions.JsonKey}.");
             if (version > _formatVersion)
