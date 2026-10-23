@@ -1559,12 +1559,12 @@ public partial class MainWindowViewModel : ObservableObject
         Log.Info("apply: start", new { count = targets.Count });
 
         var applied = 0;
-        var problems = new Dictionary<string, string>(StringComparer.Ordinal);
+        var problems = new Dictionary<string, ApplyProblem>(StringComparer.Ordinal);
         var retryBucket = new List<PathRowViewModel>();
 
         void MarkUnresponsive(PathRowViewModel row)
         {
-            problems[row.Path] = "apply.unresponsive";
+            problems[row.Path] = ApplyProblem.Unresponsive;
             row.ActualState = ActualState.Unresponsive;
         }
 
@@ -1584,7 +1584,7 @@ public partial class MainWindowViewModel : ObservableObject
 
                 if (inspection.ActualState == ActualState.Missing)
                 {
-                    problems[row.Path] = "apply.missing";
+                    problems[row.Path] = ApplyProblem.Missing;
                     row.ActualState = ActualState.Missing;
                     continue;
                 }
@@ -1604,7 +1604,7 @@ public partial class MainWindowViewModel : ObservableObject
 
                 if (inspection.ActualState is ActualState.AccessDenied or ActualState.Error)
                 {
-                    problems[row.Path] = "apply.errors";
+                    problems[row.Path] = ApplyProblem.Error;
                     row.ActualState = inspection.ActualState;
                     continue;
                 }
@@ -1636,7 +1636,7 @@ public partial class MainWindowViewModel : ObservableObject
                 }
                 else
                 {
-                    problems[row.Path] = "apply.unchanged";
+                    problems[row.Path] = ApplyProblem.Unchanged;
                     Log.Info("apply: state unchanged", new
                     {
                         path = row.Path,
@@ -1654,7 +1654,7 @@ public partial class MainWindowViewModel : ObservableObject
                     row.ActualState = ActualState.Unknown;
                 var skipped = targets.Skip(index).ToList();
                 foreach (var skippedRow in skipped)
-                    problems[skippedRow.Path] = "apply.cancelled";
+                    problems[skippedRow.Path] = ApplyProblem.Cancelled;
                 Log.Info("apply: cancelled", new { skipped = skipped.Count });
                 break;
             }
@@ -1671,7 +1671,7 @@ public partial class MainWindowViewModel : ObservableObject
             catch (Exception ex)
             {
                 Log.Error("apply: failed", ex, new { path = row.Path });
-                problems[row.Path] = "apply.errors";
+                problems[row.Path] = ApplyProblem.Error;
                 // Not cancellable, so it cannot throw out of this handler; still bounded.
                 var recheck = await _visibility.InspectAsync(row.Path, CancellationToken.None);
                 row.ApplyScanResult(recheck, row.PathFamily);
@@ -1685,7 +1685,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (retryBucket.Count > 0 && token.IsCancellationRequested)
         {
             foreach (var row in retryBucket)
-                problems[row.Path] = "apply.cancelled";
+                problems[row.Path] = ApplyProblem.Cancelled;
         }
         else if (retryBucket.Count > 0 && ElevatedApplicator is { } elevated)
         {
@@ -1708,7 +1708,7 @@ public partial class MainWindowViewModel : ObservableObject
                 {
                     row.ActualState = ActualState.Unknown;
                     problems[row.Path] = outcome.Status == ElevatedApplyStatus.Cancelled
-                        ? "apply.cancelled" : "apply.unresponsive";
+                        ? ApplyProblem.Cancelled : ApplyProblem.Unresponsive;
                     continue;
                 }
 
@@ -1724,7 +1724,7 @@ public partial class MainWindowViewModel : ObservableObject
                     if (ok) applied++;
                     else
                     {
-                        problems[row.Path] = "apply.errors";
+                        problems[row.Path] = ApplyProblem.Error;
                     }
                     continue;
                 }
@@ -1738,7 +1738,7 @@ public partial class MainWindowViewModel : ObservableObject
                 if (outcome.Status == ElevatedApplyStatus.Busy)
                 {
                     row.ApplyScanResult(recheck, row.PathFamily);
-                    problems[row.Path] = "apply.elevationBusy";
+                    problems[row.Path] = ApplyProblem.ElevationBusy;
                     continue;
                 }
 
@@ -1749,7 +1749,7 @@ public partial class MainWindowViewModel : ObservableObject
                 if (wasApplied) applied++;
                 else
                 {
-                    problems[row.Path] = "apply.errors";
+                    problems[row.Path] = ApplyProblem.Error;
                 }
             }
         }
@@ -1765,19 +1765,19 @@ public partial class MainWindowViewModel : ObservableObject
         return result;
     }
 
-    private readonly record struct ApplyOutcome(int Applied, IReadOnlyDictionary<string, string> Problems)
+    private readonly record struct ApplyOutcome(int Applied, IReadOnlyDictionary<string, ApplyProblem> Problems)
     {
-        public static ApplyOutcome Empty { get; } = new(0, new Dictionary<string, string>());
+        public static ApplyOutcome Empty { get; } = new(0, new Dictionary<string, ApplyProblem>());
         public IEnumerable<string> ProblemPaths => Problems.Keys;
-        public int Unchanged => Count("apply.unchanged");
-        public int Missing => Count("apply.missing");
-        public int Errors => Count("apply.errors");
-        public int Unresponsive => Count("apply.unresponsive");
-        public int Cancelled => Count("apply.cancelled");
-        public int ElevationBusy => Count("apply.elevationBusy");
-        private int Count(string key) => Problems.Values.Count(value => value == key);
+        public int Unchanged => Count(ApplyProblem.Unchanged);
+        public int Missing => Count(ApplyProblem.Missing);
+        public int Errors => Count(ApplyProblem.Error);
+        public int Unresponsive => Count(ApplyProblem.Unresponsive);
+        public int Cancelled => Count(ApplyProblem.Cancelled);
+        public int ElevationBusy => Count(ApplyProblem.ElevationBusy);
+        private int Count(ApplyProblem key) => Problems.Values.Count(value => value == key);
         public bool HasProblems => Problems.Count > 0;
-        public bool HasFailures => Errors > 0 || Unresponsive > 0;
+        public bool HasFailures => Problems.Values.Any(problem => problem.IsFailure());
         public Message Summary => OperationalResultViewModel.VisibilitySummary(Problems, Applied);
     }
 

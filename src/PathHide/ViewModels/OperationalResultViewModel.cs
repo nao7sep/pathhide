@@ -33,28 +33,28 @@ public sealed partial class OperationalResultViewModel(
     public bool IsError => _isError;
 
     // Visibility reports outlive unrelated commands. Only their affected paths can resolve them.
-    internal Dictionary<string, string> UnresolvedPaths { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, ApplyProblem> UnresolvedPaths { get; } = new(StringComparer.Ordinal);
 
     internal void UpdateVisibilitySummary()
     {
         _message = VisibilitySummary(UnresolvedPaths);
-        _isError = UnresolvedPaths.Values.Any(key => key is "apply.errors" or "apply.unresponsive");
+        _isError = UnresolvedPaths.Values.Any(problem => problem.IsFailure());
         OnPropertyChanged(nameof(Message));
         OnPropertyChanged(nameof(Text));
         OnPropertyChanged(nameof(IsError));
         OnPropertyChanged(nameof(LiveSetting));
     }
 
-    internal static Message VisibilitySummary(IReadOnlyDictionary<string, string> problems, int applied = 0)
+    internal static Message VisibilitySummary(IReadOnlyDictionary<string, ApplyProblem> problems, int applied = 0)
     {
         var parts = new List<Message>();
         if (applied > 0)
             parts.Add(Message.Of("apply.applied", ("count", applied)));
-        foreach (var key in new[] { "apply.unchanged", "apply.missing", "apply.errors", "apply.unresponsive", "apply.cancelled", "apply.elevationBusy" })
+        foreach (var problem in Enum.GetValues<ApplyProblem>())
         {
-            var count = problems.Values.Count(value => value == key);
+            var count = problems.Values.Count(value => value == problem);
             if (count > 0)
-                parts.Add(Message.Of(key, ("count", count)));
+                parts.Add(Message.Of(problem.MessageKey(), ("count", count)));
         }
         return Message.Join("apply.join", parts);
     }

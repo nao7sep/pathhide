@@ -1,0 +1,28 @@
+namespace PathHide.ViewModels;
+
+internal enum ApplyProblem
+{
+    Unchanged,
+    Missing,
+    Error,
+    Unresponsive,
+    Cancelled,
+    ElevationBusy,
+}
+
+internal static class ApplyProblemPresentation
+{
+    internal static bool IsFailure(this ApplyProblem problem) =>
+        problem is ApplyProblem.Error or ApplyProblem.Unresponsive;
+
+    internal static string MessageKey(this ApplyProblem problem) => problem switch
+    {
+        ApplyProblem.Unchanged => "apply.unchanged",
+        ApplyProblem.Missing => "apply.missing",
+        ApplyProblem.Error => "apply.errors",
+        ApplyProblem.Unresponsive => "apply.unresponsive",
+        ApplyProblem.Cancelled => "apply.cancelled",
+        ApplyProblem.ElevationBusy => "apply.elevationBusy",
+        _ => throw new System.Diagnostics.UnreachableException(),
+    };
+}
