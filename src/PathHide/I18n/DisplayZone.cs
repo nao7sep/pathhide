@@ -15,13 +15,17 @@ internal static class DisplayZone
     internal const string System = "system";
 
     private static readonly Lazy<IReadOnlyList<string>> s_zones = new(ReadZones);
-    private static string s_preference = System;
+    // Resolved once when put in effect, since every shown time reads it; one reference, so a reader
+    // never pairs one preference with another's zone.
+    private static volatile InEffect s_inEffect = new(System, TimeZoneInfo.Local);
+
+    private sealed record InEffect(string Preference, TimeZoneInfo Zone);
 
     /// <summary>The saved preference in effect: <see cref="System"/> or an IANA zone.</summary>
-    internal static string Preference => s_preference;
+    internal static string Preference => s_inEffect.Preference;
 
     /// <summary>The zone times are shown in now.</summary>
-    internal static TimeZoneInfo Current => Resolve(s_preference);
+    internal static TimeZoneInfo Current => s_inEffect.Zone;
 
     /// <summary>Raised when the preference in effect changes, so shown times can be redrawn.</summary>
     internal static event Action? Changed;
@@ -29,9 +33,9 @@ internal static class DisplayZone
     internal static void Use(string? preference)
     {
         var normalized = NormalizePreference(preference);
-        if (normalized == s_preference)
+        if (normalized == s_inEffect.Preference)
             return;
-        s_preference = normalized;
+        s_inEffect = new(normalized, Resolve(normalized));
         Changed?.Invoke();
     }
 
