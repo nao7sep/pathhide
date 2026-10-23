@@ -229,6 +229,11 @@ sealed class Program
             // 0 = all ok / 1 = some failed signal for callers and logs.
             return failed ? 1 : 0;
         }
+        catch (OperationCanceledException)
+        {
+            Log.Info("apply mode: stopped because the requesting GUI exited");
+            return 1;
+        }
         catch (Exception ex)
         {
             Log.Error("apply mode: failed", ex);
@@ -247,7 +252,7 @@ sealed class Program
     /// <see cref="WindowsFileVisibility.Set"/> is path-based and never follows a reparse point; its
     /// remarks say why that matters for this elevated write.
     /// </remarks>
-    private static bool ApplyFileAttributes(
+    internal static bool ApplyFileAttributes(
         IReadOnlyList<string> paths, bool hide, bool system, ElevatedResultsWriter? results, ApplyParentProcess? parent)
     {
         if (paths.Count == 0)
@@ -265,7 +270,7 @@ sealed class Program
                 WindowsFileVisibility.Set(path, hide, system, parent);
                 WriteResult(results, new PathApplyResult(path, Ok: true));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // These paths reached the elevated pass precisely because the
                 // unelevated attempt hit access-denied, so a failure here is

@@ -234,6 +234,26 @@ public sealed class AttributeWriteReservationTests : IDisposable
         Assert.Equal(attributes, File.GetAttributes(path));
     }
 
+    [WindowsOnlyFact]
+    public async Task A_GUI_exit_stops_the_attribute_batch_instead_of_reporting_each_path_as_failed()
+    {
+        using var gui = new Probe("parent");
+        var identity = await gui.ReadAsync();
+        var invocation = ElevatedApplyCommand.ParseArguments(["apply", "--request", "unused", "--parent", identity])!;
+        using var parent = new ApplyParentProcess(invocation.Parent!);
+        gui.Release();
+        Assert.Equal(0, await gui.ExitAsync());
+
+        var first = Path.Combine(_dir, "first");
+        var second = Path.Combine(_dir, "second");
+        File.WriteAllText(first, "keep");
+        File.WriteAllText(second, "keep");
+        Assert.Throws<OperationCanceledException>(() => PathHide.Program.ApplyFileAttributes(
+            [first, second], hide: true, system: false, results: null, parent));
+        Assert.Equal((FileAttributes)0, File.GetAttributes(first) & FileAttributes.Hidden);
+        Assert.Equal((FileAttributes)0, File.GetAttributes(second) & FileAttributes.Hidden);
+    }
+
     [Fact]
     public void Dot_segments_and_trailing_separators_share_the_same_reservation()
     {
