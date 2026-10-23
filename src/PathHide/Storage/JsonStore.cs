@@ -182,8 +182,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 
     private void WriteAtomically(byte[] bytes)
     {
-        // The BCL's random name, its dot removed so the temp keeps one role extension.
-        var tempPath = TempPath(_filePath, Path.GetRandomFileName().Replace(".", "", StringComparison.Ordinal));
+        var tempPath = TempPath(_filePath, StoreScratch.NewDiscriminator());
 
         var ownsScratch = false;
         try
@@ -252,4 +251,43 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         Path.Combine(
             Path.GetDirectoryName(targetPath) ?? string.Empty,
             $"{Path.GetFileNameWithoutExtension(targetPath)}-{discriminator}.tmp");
+}
+
+/// <summary>
+/// The scratch files <see cref="JsonStore{T}"/> saves write beside their target before renaming them
+/// into place, and their removal when a save was cut off between the two.
+/// </summary>
+internal static class StoreScratch
+{
+    private static readonly System.Text.RegularExpressions.Regex Name =
+        new(@"^[^-]+-[a-z0-9]{11}\.tmp$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>The BCL's random name, its dot removed so the scratch file keeps one role extension.</summary>
+    internal static string NewDiscriminator() => Path.GetRandomFileName().Replace(".", "", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Removes the scratch files in <paramref name="directory"/> that saves left when the app was killed,
+    /// crashed or lost power between writing one and renaming it. Called at startup, before any save, by
+    /// the one instance that owns the folder, so none of them is a save still under way.
+    /// </summary>
+    internal static void Sweep(string directory)
+    {
+        var removed = 0;
+        foreach (var path in Directory.EnumerateFiles(directory, "*.tmp"))
+        {
+            if (!Name.IsMatch(Path.GetFileName(path)))
+                continue;
+            try
+            {
+                File.Delete(path);
+                removed++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Warn("store: could not remove scratch left by an interrupted save", ex, new { path });
+            }
+        }
+        if (removed > 0)
+            Log.Info("store: removed scratch left by interrupted saves", new { removed });
+    }
 }

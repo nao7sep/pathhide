@@ -384,6 +384,23 @@ public sealed class JsonStoreTests : IDisposable
         Assert.Empty(temps);
     }
 
+    // A save cut off between writing its scratch file and renaming it leaves that file behind; the next
+    // startup removes it, and nothing else in the folder.
+    [Fact]
+    public void Startup_removes_scratch_an_interrupted_save_left_and_nothing_else()
+    {
+        var left = JsonStore<AppState>.TempPath(PathOf("paths.json"), StoreScratch.NewDiscriminator());
+        File.WriteAllText(left, "{\"formatVersion\":1,\"paths\":[]}");
+        File.WriteAllText(PathOf("notes.tmp"), "the user's own");
+        File.WriteAllText(PathOf("paths.json"), "{\"formatVersion\":1,\"paths\":[]}");
+
+        App.ReadStartupStores();
+
+        Assert.False(File.Exists(left));
+        Assert.True(File.Exists(PathOf("notes.tmp")));
+        Assert.True(File.Exists(PathOf("paths.json")));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

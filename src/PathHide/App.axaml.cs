@@ -166,10 +166,14 @@ public partial class App : Application
     /// <summary>
     /// Prepare every persisted value on the bounded startup worker before the normal shell exists.
     /// </summary>
-    internal static (AppSettings Settings, AppState State, List<PathEntry> Paths) ReadStartupStores() =>
-        (new SettingsStore().Load().Value,
-         CreateStateStore().Load().Value,
-         new PathListStore().Load().Value);
+    internal static (AppSettings Settings, AppState State, List<PathEntry> Paths) ReadStartupStores()
+    {
+        if (System.IO.Directory.Exists(StorageRoot.Directory))
+            StoreScratch.Sweep(StorageRoot.Directory);
+        return (new SettingsStore().Load().Value,
+            CreateStateStore().Load().Value,
+            new PathListStore().Load().Value);
+    }
 
     /// <summary>
     /// Window geometry: independent, disposable presentation state outside backup history. An unusable
