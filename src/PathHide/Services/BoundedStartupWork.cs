@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace PathHide.Services;
 
-// Required startup work has no successor: a timeout opens the startup failure surface.
+// Bounds startup preparation and disposes abandoned results; the caller decides whether failure is fatal.
 internal static class BoundedStartupWork
 {
     internal static async Task<T> RunAsync<T>(Func<T> prepare, Action<T>? abandoned = null,
