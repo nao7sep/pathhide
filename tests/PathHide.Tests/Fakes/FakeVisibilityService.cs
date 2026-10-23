@@ -19,6 +19,8 @@ public sealed class FakeVisibilityService : IVisibilityService
 
     public PathInspection Default { get; set; } = new(ActualState.Visible, ItemKind.File);
 
+    public bool WritesTakeEffect { get; set; } = true;
+
     public ConcurrentQueue<string> Inspected { get; } = new();
     public ConcurrentQueue<string> Hidden { get; } = new();
     public ConcurrentQueue<string> Shown { get; } = new();
@@ -103,6 +105,7 @@ public sealed class FakeVisibilityService : IVisibilityService
             throw thrown;
 
         Hidden.Enqueue(path);
+        if (!WritesTakeEffect) return;
         _byPath[path] = new PathInspection(
             ActualState.Hidden,
             _byPath.TryGetValue(path, out var existing) ? existing.ItemKind : Default.ItemKind);
@@ -114,6 +117,7 @@ public sealed class FakeVisibilityService : IVisibilityService
         WriteGate?.Wait();
 
         Shown.Enqueue(path);
+        if (!WritesTakeEffect) return;
         _byPath[path] = new PathInspection(
             ActualState.Visible,
             _byPath.TryGetValue(path, out var existing) ? existing.ItemKind : Default.ItemKind);

@@ -1238,6 +1238,25 @@ public class MainWindowViewModelTests
         Assert.Equal(OperationalResultOwner.Scan, remaining.Owner);
     }
 
+    [Fact]
+    public async Task ShowThatLeavesTheItemHiddenReportsUnchangedInsteadOfApplied()
+    {
+        var visibility = new FakeVisibilityService { WritesTakeEffect = false };
+        visibility.Set("/.hidden", ActualState.Hidden);
+        var paths = new FakeJsonStore<List<PathEntry>> { Value = [Entry("/.hidden")] };
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+
+        await vm.ShowAllCommand.ExecuteAsync(null);
+
+        Assert.Equal(DesiredVisibility.Shown, Assert.Single(paths.Value).DesiredVisibility);
+        Assert.Equal(ActualState.Hidden, Assert.Single(vm.Rows).ActualState);
+        Assert.Equal("/.hidden", Assert.Single(visibility.Shown));
+        var result = Assert.Single(vm.OperationalResults);
+        Assert.Equal(English.Of(Message.Of("apply.unchanged", ("count", 1))), English.Of(result.Message));
+        Assert.False(result.IsError);
+    }
+
     // --- Apply error handling ---
 
     [Fact]
