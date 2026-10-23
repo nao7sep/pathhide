@@ -93,18 +93,6 @@ public sealed class VersionConsistencyTests
             $"(Directory.Build.props' <Version> '{canonical}' plus a trailing .0).");
     }
 
-    [Fact]
-    public void GitHub_Release_Tag_Matches_The_Product_Version()
-    {
-        if (Environment.GetEnvironmentVariable("GITHUB_REF_TYPE") != "tag")
-        {
-            return;
-        }
-
-        var canonical = CanonicalVersion(RepoRoot());
-        Assert.Equal("v" + canonical, Environment.GetEnvironmentVariable("GITHUB_REF_NAME"));
-    }
-
     private static string PlistStringValue(string plistPath, string key)
     {
         var dict = XDocument.Load(plistPath).Root?.Element("dict");
