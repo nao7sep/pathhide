@@ -41,8 +41,8 @@ public sealed class WindowsVisibilityService : IVisibilityService
 
     public void Hide(string path, WindowsHideMode mode)
     {
-        // Per-item boundary crossing: debug, not info. The command aggregate is
-        // logged once by the caller (ApplyDesiredStateAsync).
+        // Per-item boundary crossing: debug, not info. The command's paths are logged once by the
+        // caller's "apply: start".
         Log.Debug("hiding path", new { path, mode });
         WindowsFileVisibility.Set(path, hide: true, system: mode == WindowsHideMode.HiddenAndSystem);
     }

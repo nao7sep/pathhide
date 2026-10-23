@@ -464,7 +464,7 @@ public partial class MainWindowViewModel : ObservableObject
             added++;
         }
 
-        Log.Info("add paths", new { added, duplicates, invalid });
+        Log.Info("add paths", new { added, duplicates, invalid, paths = addedPaths, duplicatePaths });
 
         if (added == 0)
         {
@@ -639,7 +639,7 @@ public partial class MainWindowViewModel : ObservableObject
             var removing = new HashSet<PathEntry>(selected.Select(row => row.Entry));
             var updated = _entries.Where(entry => !removing.Contains(entry)).ToList();
 
-            Log.Info("remove paths", new { removed = selected.Count });
+            Log.Info("remove paths", new { removed = selected.Count, paths = selected.Select(row => row.Path) });
 
             var saveFailure = await TrySaveEntriesAsync(updated);
             if (saveFailure is not null)
@@ -674,6 +674,7 @@ public partial class MainWindowViewModel : ObservableObject
         DesiredVisibility desired) => MutateAsync(async () =>
     {
         var targets = TrackedTargets(paths);
+        Log.Info("set visibility", new { desired, count = targets.Count });
 
         // An empty target set has nothing to persist. Like a full successful
         // visibility change, it is quiet and leaves the standing summary intact.
@@ -730,6 +731,7 @@ public partial class MainWindowViewModel : ObservableObject
         return MutateAsync(async () =>
         {
             var targets = TrackedTargets(paths);
+            Log.Info("reapply all", new { count = targets.Count });
             var outcome = await ApplyDesiredStateAsync(targets);
             ShowApplyOutcome(outcome, targets.Select(row => row.Path));
             if (!outcome.HasProblems)
@@ -1582,7 +1584,14 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task<ApplyOutcome> ApplyAsync(List<PathRowViewModel> targets, CancellationToken token)
     {
-        Log.Info("apply: start", new { count = targets.Count });
+        // Which paths are to be hidden and which shown: the outcome names only the paths with problems,
+        // so these are the record of what every other path was changed to.
+        Log.Info("apply: start", new
+        {
+            count = targets.Count,
+            hide = targets.Where(row => row.Entry.DesiredVisibility == DesiredVisibility.Hidden).Select(row => row.Path),
+            show = targets.Where(row => row.Entry.DesiredVisibility == DesiredVisibility.Shown).Select(row => row.Path),
+        });
 
         // Settings stay open to the user while a batch runs; every path in it is hidden the same way.
         var hideMode = _settings.WindowsHideMode;

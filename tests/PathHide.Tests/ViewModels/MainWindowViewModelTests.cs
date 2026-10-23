@@ -35,7 +35,7 @@ namespace PathHide.Tests.ViewModels;
 /// </summary>
 public class MainWindowViewModelTests
 {
-    private static PathEntry Entry(string path) =>
+    internal static PathEntry Entry(string path) =>
         new() { Path = path, DesiredVisibility = DesiredVisibility.Hidden };
 
     /// <summary>
