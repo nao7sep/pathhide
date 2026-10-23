@@ -64,7 +64,7 @@ internal static class RecordFormat
         }
     }
 
-    /// <summary>A stored time as the list shows it: the date and time to the second, in the computer's zone.</summary>
+    /// <summary>A stored time as the list shows it: the date and time to the second, in the supplied display zone.</summary>
     internal static string ListTime(string stored, CultureInfo culture, TimeZoneInfo zone) =>
         Parse(stored, zone) is { } time ? time.ToString("G", culture) : stored;
 
