@@ -183,7 +183,7 @@ sealed class Program
             }
         }
 
-        Log.Start(results, StorageRoot.LogsDirectory);
+        Log.Start(results, StorageRoot.LogsDirectory, invocation?.Session);
         var clean = true;
         try
         {
@@ -194,6 +194,7 @@ sealed class Program
             Log.Info("startup", new
             {
                 mode = "apply",
+                parentPid = invocation?.Parent?.Id,
                 version = AppVersion(),
                 os = RuntimeInformation.OSDescription,
                 arch = RuntimeInformation.OSArchitecture,

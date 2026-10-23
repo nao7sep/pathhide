@@ -66,6 +66,12 @@ public static class ElevatedApplyCommand
     /// </remarks>
     public const string HomeOption = "--home";
 
+    /// <summary>
+    /// The launch the child works for, as its records name it: entries the GUI imports from the child
+    /// belong to the launch whose apply asked for them, so "this launch" shows them.
+    /// </summary>
+    public const string SessionOption = "--session";
+
     /// <summary>The three path lists the elevated child takes, in the order it takes them.</summary>
     public sealed record Buckets(
         IReadOnlyList<string> ToHide,
@@ -109,7 +115,7 @@ public static class ElevatedApplyCommand
     /// the batch: the paths are in the request file.
     /// </summary>
     public static IReadOnlyList<string> BuildArguments(string requestPath, string resultsPath, string storageRoot,
-        Parent? parent = null, string? requestDigest = null)
+        Parent? parent = null, string? requestDigest = null, string? session = null)
     {
         var arguments = new List<string> { Subcommand, RequestOption, requestPath, ResultsOption, resultsPath,
             HomeOption, storageRoot };
@@ -117,12 +123,14 @@ public static class ElevatedApplyCommand
             arguments.AddRange([ParentOption, parent.ToString()]);
         if (requestDigest is not null)
             arguments.AddRange([RequestDigestOption, requestDigest]);
+        if (session is not null)
+            arguments.AddRange([SessionOption, session]);
         return arguments;
     }
 
     /// <summary>What the elevated child was asked to do, as parsed from its command line.</summary>
     public sealed record Invocation(string RequestPath, string? ResultsPath, string? StorageRoot, Parent? Parent = null,
-        string? RequestDigest = null);
+        string? RequestDigest = null, DateTimeOffset? Session = null);
 
     /// <summary>
     /// Parses the child's command line, or returns null when it is not a valid apply invocation. The
@@ -136,7 +144,11 @@ public static class ElevatedApplyCommand
         var homeOpt = new Option<string?>(HomeOption);
         var parentOpt = new Option<string?>(ParentOption);
         var digestOpt = new Option<string?>(RequestDigestOption);
-        var applyCmd = new Command(Subcommand, "Apply file attributes in batch") { requestOpt, resultsOpt, homeOpt, parentOpt, digestOpt };
+        var sessionOpt = new Option<string?>(SessionOption);
+        var applyCmd = new Command(Subcommand, "Apply file attributes in batch")
+        {
+            requestOpt, resultsOpt, homeOpt, parentOpt, digestOpt, sessionOpt,
+        };
         var root = new RootCommand("PathHide apply mode") { applyCmd };
 
         var result = root.Parse(args);
@@ -160,9 +172,13 @@ public static class ElevatedApplyCommand
             return null;
         if (parent is not null && digest is null)
             return null;
+        DateTimeOffset? session = null;
+        if (result.GetValue(sessionOpt) is { } sessionText
+            && (session = Storage.FileTimestamp.ParseSerializedStamp(sessionText)) is null)
+            return null;
         return string.IsNullOrEmpty(request)
             ? null
-            : new Invocation(request, result.GetValue(resultsOpt), result.GetValue(homeOpt), parent, digest);
+            : new Invocation(request, result.GetValue(resultsOpt), result.GetValue(homeOpt), parent, digest, session);
     }
 
     /// <summary>The SHA-256 of request content, lowercase hex, as the command line carries it.</summary>

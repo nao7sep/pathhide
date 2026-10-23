@@ -35,6 +35,22 @@ public sealed class ApplyModeProcessTests : IDisposable
             Assert.False(File.Exists(request));
     }
 
+    // The GUI imports what the child logged; under the GUI's own session those records belong to the
+    // launch whose apply asked for them.
+    [Fact]
+    public void A_child_given_a_session_logs_every_record_under_it()
+    {
+        var request = Path.Combine(_dir, "request.json");
+        var results = Path.Combine(_dir, "results.jsonl");
+        const string session = "2026-10-23T01:02:03.456Z";
+
+        Assert.Equal(3, ApplyChildProcess.Run(request, results, Path.Combine(_dir, "root"), session: session));
+
+        var entries = ElevatedApplyResults.Parse(File.ReadAllText(results)).Entries;
+        Assert.NotEmpty(entries);
+        Assert.All(entries, entry => Assert.Equal(session, entry.Session));
+    }
+
     [Fact]
     public void ExistingResults_AreNotOverwrittenAndNoAttributesAreApplied()
     {

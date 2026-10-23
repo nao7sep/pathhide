@@ -54,8 +54,10 @@ public static class Log
     /// caller's thread, so a slow or locked sink never holds the interface. An entry the sink cannot
     /// take, or every entry when <paramref name="sink"/> is null, goes to the session's fallback file
     /// under <paramref name="logsDirectory"/>. A second call is ignored and closes the sink it was given.
+    /// <paramref name="session"/> names the session when this process works for another launch, as the
+    /// elevated child does for the GUI that started it.
     /// </summary>
-    public static void Start(ILogSink? sink, string logsDirectory)
+    public static void Start(ILogSink? sink, string logsDirectory, DateTimeOffset? session = null)
     {
         SessionLogger previous;
         lock (Gate)
@@ -68,7 +70,7 @@ public static class Log
                 _sessionEnding = false;
                 InstallCrashHooks();
                 previous = _logger;
-                _logger = new SessionLogger(SessionStart, sink, logsDirectory, IsDebugEnabled(), writeInBackground: true,
+                _logger = new SessionLogger(session ?? SessionStart, sink, logsDirectory, IsDebugEnabled(), writeInBackground: true,
                     stored: () => RecordStored?.Invoke());
             }
         }

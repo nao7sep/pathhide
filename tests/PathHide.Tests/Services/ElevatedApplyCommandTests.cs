@@ -120,6 +120,19 @@ public sealed class ElevatedApplyCommandTests
     }
 
     [Fact]
+    public void The_launching_session_round_trips_and_a_malformed_one_is_not_a_launch()
+    {
+        var session = PathHide.Storage.FileTimestamp.SerializedStamp(new DateTimeOffset(2026, 10, 23, 1, 2, 3, 456, TimeSpan.Zero));
+
+        var invocation = ElevatedApplyCommand.ParseArguments(
+            ElevatedApplyCommand.BuildArguments("/request", "/results", StorageRootArg, session: session));
+
+        Assert.Equal(session, PathHide.Storage.FileTimestamp.SerializedStamp(invocation!.Session!.Value));
+        Assert.Null(ElevatedApplyCommand.ParseArguments(
+            ElevatedApplyCommand.BuildArguments("/request", "/results", StorageRootArg, session: "yesterday")));
+    }
+
+    [Fact]
     public void A_request_is_read_only_when_it_matches_the_approved_digest()
     {
         var content = System.Text.Encoding.UTF8.GetBytes(

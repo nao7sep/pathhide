@@ -29,4 +29,9 @@ public static class FileTimestamp
     /// <summary>The serialized UTC form for a stored data value — a SQLite column, a JSON field.</summary>
     public static string SerializedStamp(DateTimeOffset value) =>
         value.ToUniversalTime().ToString(SerializedFormat, CultureInfo.InvariantCulture);
+
+    /// <summary>Reads back exactly what <see cref="SerializedStamp"/> writes, or null for anything else.</summary>
+    public static DateTimeOffset? ParseSerializedStamp(string text) =>
+        DateTimeOffset.TryParseExact(text, SerializedFormat, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var value) ? value : null;
 }

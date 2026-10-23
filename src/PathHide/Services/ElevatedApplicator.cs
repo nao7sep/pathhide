@@ -260,7 +260,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         try
         {
             child = await _launch(ElevatedApplyCommand.BuildArguments(files.RequestPath, files.ResultsPath,
-                _storageRoot, ElevatedApplyCommand.Parent.Current, requestDigest)).ConfigureAwait(false);
+                _storageRoot, ElevatedApplyCommand.Parent.Current, requestDigest, Log.Session)).ConfigureAwait(false);
         }
         catch (ElevationDeclinedException)
         {
