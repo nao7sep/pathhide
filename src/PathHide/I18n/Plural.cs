@@ -31,7 +31,7 @@ internal static class Plural
         // Singular and plural.
         "en" or "de" => [One, Other],
 
-        // A separate form for large round numbers ("1 000 000 de fișiere" in the Romance pattern).
+        // A separate form for large round numbers in these Romance languages.
         "es" or "fr" or "it" or "pt-BR" => [One, Many, Other],
 
         // Russian changes the noun at 1, at 2 to 4, and again above.
