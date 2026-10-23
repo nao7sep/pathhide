@@ -29,7 +29,7 @@ public class MenuLayoutTests : WindowTest
     [InlineData("ja")]
     public void the_menu_leaves_no_more_room_after_its_labels_than_before_them(string tag)
     {
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
         var window = Show(PopulatedMainWindow.Empty());
         var button = window.FindControl<Button>("MenuButton")!;
         var flyout = (MenuFlyout)button.Flyout!;

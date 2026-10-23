@@ -285,7 +285,7 @@ public sealed class RecordsWindowTests : WindowTest
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Records", window.Title);
 
-        using (Localizer.Speaking("ja"))
+        using (PathHide.Tests.I18n.TestLanguage.Speaking("ja"))
         {
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("ログ", window.Title);
@@ -305,7 +305,7 @@ public sealed class RecordsWindowTests : WindowTest
         var notified = 0;
         records.PropertyChanged += (_, _) => notified++;
 
-        using (Localizer.Speaking("ja"))
+        using (PathHide.Tests.I18n.TestLanguage.Speaking("ja"))
             Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(0, notified);
@@ -407,7 +407,7 @@ public sealed class RecordsWindowTests : WindowTest
     {
         // The closed filters may trim their choice with one drawn marker; opening one from the keyboard
         // (or by a tap) is the direct path to the complete labels (text-cleanup conventions, rule 4).
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
         _reader.Sessions = [ThisLaunch, "2026-10-03T21:45:10.000Z"];
         var (window, records) = ShowRecords(Owner());
         window.Width = RecordsLayout.MinWidth;

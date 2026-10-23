@@ -37,7 +37,7 @@ public sealed class MacMenuBarTests
         // The titles come from the catalogue, so macOS's own Edit items land in a menu titled in the
         // reader's language, and the Window menu is found by its role: a title compared to the English
         // word "Window" would silently stop macOS listing the open windows in any other language.
-        using var japanese = Localizer.Speaking("ja");
+        using var japanese = PathHide.Tests.I18n.TestLanguage.Speaking("ja");
         var layout = Layout("PathHide");
 
         Assert.Equal(new[] { MenuRole.App, MenuRole.Edit, MenuRole.Window }, layout.Select(menu => menu.Role));

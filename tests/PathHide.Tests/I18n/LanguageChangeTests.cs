@@ -27,6 +27,26 @@ namespace PathHide.Tests.I18n;
 public class LanguageChangeTests : WindowTest
 {
     [AvaloniaFact]
+    public void Test_language_restores_preference_system_and_formatting_when_a_handler_throws()
+    {
+        var preference = Localizer.Preference;
+        var system = Localizer.SystemLanguage;
+        var culture = Localizer.Current.Culture.Name;
+        var language = Localizer.Language;
+        void Fail() => throw new System.InvalidOperationException("handler failed");
+        Localizer.Changed += Fail;
+        try
+        {
+            Assert.Throws<System.InvalidOperationException>(() => TestLanguage.Speaking(language == "ja" ? "en" : "ja"));
+            Assert.Equal(preference, Localizer.Preference);
+            Assert.Equal(system, Localizer.SystemLanguage);
+            Assert.Equal(culture, Localizer.Current.Culture.Name);
+            Assert.Equal(language, Localizer.Language);
+        }
+        finally { Localizer.Changed -= Fail; }
+    }
+
+    [AvaloniaFact]
     public async Task the_main_window_follows_the_language_everywhere_it_shows_words()
     {
         var (window, viewModel) = PopulatedMainWindow.Create();
@@ -40,7 +60,7 @@ public class LanguageChangeTests : WindowTest
         var strip = viewModel.OperationalResults.Single();
         Assert.Equal(English.Of("actual.accessDenied"), denied.ActualStateText);
 
-        using (Localizer.Speaking("ja"))
+        using (PathHide.Tests.I18n.TestLanguage.Speaking("ja"))
         {
             Dispatcher.UIThread.RunJobs();
 
@@ -71,7 +91,7 @@ public class LanguageChangeTests : WindowTest
         var layout = window.FindControl<Control>("LayoutRoot")!;
         var toolbar = window.FindControl<Control>("Toolbar")!;
 
-        using (Localizer.Speaking("de"))
+        using (PathHide.Tests.I18n.TestLanguage.Speaking("de"))
         {
             Dispatcher.UIThread.RunJobs();
             toolbar.Measure(Avalonia.Size.Infinity);
@@ -90,7 +110,7 @@ public class LanguageChangeTests : WindowTest
         window.Close();
         Dispatcher.UIThread.RunJobs();
 
-        using (Localizer.Speaking("ru"))
+        using (PathHide.Tests.I18n.TestLanguage.Speaking("ru"))
         {
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(English.Of("grid.path"), header.Content);
@@ -108,7 +128,7 @@ public class LanguageChangeTests : WindowTest
             .Single(text => text.Text == English.Of("settings.theme"));
         var save = Button(dialog, English.Of("common.save"));
 
-        using (Localizer.Speaking("ru"))
+        using (PathHide.Tests.I18n.TestLanguage.Speaking("ru"))
         {
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(Localizer.T("settings.theme"), theme.Text);
@@ -131,7 +151,7 @@ public class LanguageChangeTests : WindowTest
 
         // Closed is not collected: the control is still in the retranslation table, and writing into
         // it now would reach template bindings and glyph runs that went with its window.
-        using (Localizer.Speaking("ja"))
+        using (PathHide.Tests.I18n.TestLanguage.Speaking("ja"))
         {
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(English.Of("common.close"), block.Text);
@@ -147,13 +167,13 @@ public class LanguageChangeTests : WindowTest
     {
         // Localization conventions, Translation: the word and the value both in the interface language;
         // a time-zone name appears as is.
-        using (Localizer.Speaking("en"))
+        using (PathHide.Tests.I18n.TestLanguage.Speaking("en"))
         {
             Assert.Equal("System (Japanese)", LanguageOption.All("ja")[0].Name);
             Assert.Equal("System (Dark)", SettingsDialog.SystemThemeLabel(PlatformThemeVariant.Dark));
             Assert.Equal("System (Asia/Tokyo)", Localizer.T("settings.timeZoneSystem", ("zone", "Asia/Tokyo")));
         }
-        using (Localizer.Speaking("ja"))
+        using (PathHide.Tests.I18n.TestLanguage.Speaking("ja"))
         {
             Assert.Equal("システム（日本語）", LanguageOption.All("ja")[0].Name);
             Assert.Equal("システム（ダーク）", SettingsDialog.SystemThemeLabel(PlatformThemeVariant.Dark));
@@ -165,7 +185,7 @@ public class LanguageChangeTests : WindowTest
     [MemberData(nameof(LabelFitTests.Tags), MemberType = typeof(LabelFitTests))]
     public void Every_interface_language_names_every_language_for_the_System_entry(string tag)
     {
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
         foreach (var language in Languages.Tags)
         {
             var name = Localizer.T(LanguageOption.NameKey(language));
@@ -223,7 +243,7 @@ public class LanguageChangeTests : WindowTest
             settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), (new FakeJsonStore<System.Collections.Generic.List<PathEntry>>()).Load().Value);
         // Speaking the current language is only the guard: it puts the language and the preference
         // back exactly when the test ends, whatever the save did to them.
-        using var restore = Localizer.Speaking(Localizer.Language);
+        using var restore = PathHide.Tests.I18n.TestLanguage.Speaking(Localizer.Language);
 
         Assert.Null(await viewModel.TryApplySettingsAsync("de", string.Empty, false, ThemePreference.System));
 

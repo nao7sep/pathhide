@@ -97,7 +97,7 @@ public class CatalogueTests
         var english = Read("en");
         foreach (var tag in Languages.Tags)
         {
-            var expected = Plural.CategoriesOf(tag).OrderBy(form => form, StringComparer.Ordinal).ToArray();
+            var expected = PluralExpectations.CategoriesOf(tag).OrderBy(form => form, StringComparer.Ordinal).ToArray();
             foreach (var (key, entry) in Read(tag))
             {
                 if (english[key].ValueKind != JsonValueKind.Object)

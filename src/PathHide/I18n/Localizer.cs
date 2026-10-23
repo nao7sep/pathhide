@@ -56,43 +56,4 @@ internal static class Localizer
     /// <summary>The words for a held message.</summary>
     internal static string Of(Message message) => s_translator.Of(message)!;
 
-    /// <summary>
-    /// Speaks a language for the duration of one test, and restores the previous one. Only tests use
-    /// this; the app changes its language through <see cref="Use"/>.
-    /// </summary>
-    internal static IDisposable Speaking(string tag)
-    {
-        var previous = s_translator;
-        var previousPreference = Preference;
-        void Undo()
-        {
-            s_translator = previous;
-            Preference = previousPreference;
-        }
-
-        s_translator = new Translator(tag, Languages.FormattingCulture(tag, CultureInfo.CurrentCulture));
-        Preference = tag;
-        try
-        {
-            Changed?.Invoke();
-        }
-        catch
-        {
-            // A handler that throws fails the test that switched, and must not leave every test after
-            // it speaking this language as well.
-            Undo();
-            throw;
-        }
-
-        return new Restore(() =>
-        {
-            Undo();
-            Changed?.Invoke();
-        });
-    }
-
-    private sealed class Restore(Action undo) : IDisposable
-    {
-        public void Dispose() => undo();
-    }
 }

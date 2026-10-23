@@ -82,7 +82,7 @@ public class TranslatorTests
         // Whatever the count, the form chosen must be one the catalogue is required to carry.
         foreach (var tag in Languages.Tags)
         {
-            var categories = Plural.CategoriesOf(tag);
+            var categories = PluralExpectations.CategoriesOf(tag);
             for (long count = 0; count <= 200; count++)
                 Assert.Contains(Plural.CategoryFor(tag, count), categories);
             foreach (var count in new long[] { 1_000_000, 2_000_000, 1_000_001, 999_999 })

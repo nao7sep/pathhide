@@ -192,7 +192,7 @@ public sealed class SettingsDialogTests
     [AvaloniaFact]
     public void CloseWindowShortcutOnADirtyDraftAsksLikeTheCloseButton()
     {
-        using var speaking = Localizer.Speaking("en");
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking("en");
         var (_, settings, owner, dialog) = OpenDirtySettings();
         try
         {
@@ -212,7 +212,7 @@ public sealed class SettingsDialogTests
     [AvaloniaFact]
     public async Task KeepEditingRetainsTheDraftAndDiscardClosesWithoutSaving()
     {
-        using var speaking = Localizer.Speaking("en");
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking("en");
         var (_, settings, owner, dialog) = OpenDirtySettings();
         try
         {

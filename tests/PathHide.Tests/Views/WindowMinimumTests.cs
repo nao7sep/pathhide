@@ -51,14 +51,14 @@ public sealed class WindowMinimumTests : WindowTest
     [AvaloniaFact]
     public void A_language_round_trip_moves_the_minimum_with_the_toolbar_and_keeps_every_button_whole()
     {
-        using var japanese = Localizer.Speaking("ja");
+        using var japanese = PathHide.Tests.I18n.TestLanguage.Speaking("ja");
         var window = Show(PopulatedMainWindow.Empty());
         var layout = window.FindControl<Control>("LayoutRoot")!;
         Settle(window);
         var japaneseMinimum = layout.MinWidth;
         Assert.True(japaneseMinimum >= ToolbarNeeds(window) - 0.5);
 
-        using (Localizer.Speaking("de"))
+        using (PathHide.Tests.I18n.TestLanguage.Speaking("de"))
         {
             Settle(window);
             Assert.True(layout.MinWidth > japaneseMinimum, "German's longer labels did not widen the minimum.");
@@ -77,7 +77,7 @@ public sealed class WindowMinimumTests : WindowTest
     [MemberData(nameof(LabelFitTests.Tags), MemberType = typeof(LabelFitTests))]
     public void The_minimum_covers_the_whole_toolbar_measured_independently(string tag)
     {
-        using var language = Localizer.Speaking(tag);
+        using var language = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
         var window = Show(PopulatedMainWindow.Empty());
         Settle(window);
         var minimum = window.FindControl<Control>("LayoutRoot")!.MinWidth;

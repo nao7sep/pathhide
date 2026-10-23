@@ -37,7 +37,7 @@ public class LabelFitTests : WindowTest
     [MemberData(nameof(Tags))]
     public void the_settings_dialog_clips_nothing(string tag)
     {
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
 
         var dialog = Show(new SettingsDialog(
             Languages.System, string.Empty, ThemePreference.System,
@@ -51,7 +51,7 @@ public class LabelFitTests : WindowTest
     [MemberData(nameof(Tags))]
     public void the_shortcuts_dialog_clips_nothing(string tag)
     {
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
 
         var owner = Show(new Window());
         var dialog = Show(new ShortcutsDialog(ShortcutCatalog.Build(owner)));
@@ -64,7 +64,7 @@ public class LabelFitTests : WindowTest
     [MemberData(nameof(Tags))]
     public void the_about_dialog_clips_nothing(string tag)
     {
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
 
         var dialog = Show(new AboutDialog(_ => true));
 
@@ -77,7 +77,7 @@ public class LabelFitTests : WindowTest
     [MemberData(nameof(Tags))]
     public void the_unsaved_quit_dialog_clips_nothing(string tag)
     {
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
 
         var dialog = Show(new UnsavedQuitDialog(
             [Message.Of("failure.pathListSave"), Message.Of("quit.unsavedMessage")]));
@@ -90,7 +90,7 @@ public class LabelFitTests : WindowTest
     [MemberData(nameof(Tags))]
     public async Task the_discard_question_clips_nothing(string tag)
     {
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
         var owner = Show(new Window());
         var pending = ConfirmDialog.ConfirmDestructiveAsync(owner,
             Message.Of("dialog.discardTitle"), Message.Of("dialog.discardMessage"),
@@ -109,7 +109,7 @@ public class LabelFitTests : WindowTest
     [MemberData(nameof(Tags))]
     public async Task the_main_window_clips_nothing_at_its_default_size(string tag)
     {
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
 
         var (window, viewModel) = PopulatedMainWindow.Create();
         Show(window);
@@ -125,7 +125,7 @@ public class LabelFitTests : WindowTest
     [MemberData(nameof(Tags))]
     public async Task an_empty_list_shows_one_message_in_the_list(string tag)
     {
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
         var window = Show(PopulatedMainWindow.Empty());
         var viewModel = (PathHide.ViewModels.MainWindowViewModel)window.DataContext!;
         await viewModel.ScanTask;
@@ -144,7 +144,7 @@ public class LabelFitTests : WindowTest
     {
         // The menu grows with its items up to a cap, past which an item would end in an ellipsis
         // (composite-control conventions); every command must stay below it in every language.
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
         var window = Show(PopulatedMainWindow.Empty());
         var flyout = (MenuFlyout)window.FindControl<Button>("MenuButton")!.Flyout!;
         flyout.ShowAt(window.FindControl<Button>("MenuButton")!);
@@ -176,7 +176,7 @@ public class LabelFitTests : WindowTest
     [MemberData(nameof(Tags))]
     public void the_toolbar_fits_the_windows_default_width(string tag)
     {
-        using var speaking = Localizer.Speaking(tag);
+        using var speaking = PathHide.Tests.I18n.TestLanguage.Speaking(tag);
 
         var window = Show(PopulatedMainWindow.Empty());
         var toolbar = window.FindControl<Control>("Toolbar")!;
