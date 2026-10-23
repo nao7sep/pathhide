@@ -36,12 +36,11 @@ namespace PathHide.Backup;
 /// </remarks>
 public static class BackupStore
 {
-    // Serialized ISO-8601 with exactly three fractional digits and a Z suffix (2026-07-06T04:05:12.345Z) —
-    // the timestamp conventions' stored-value form, NEVER the filename stamp.
-
     /// <summary>The one table. <c>content</c> keeps the exact published bytes. The unique
     /// <c>(path, session_id)</c> key keeps one version per path per launch; <c>(path, id)</c>
-    /// serves the latest-row lookup.</summary>
+    /// serves the latest-row lookup. <c>written_at_utc</c> is the stored-value form, ISO-8601 with
+    /// exactly three fractional digits and a Z suffix (2026-07-06T04:05:12.345Z), never the filename
+    /// stamp.</summary>
     private const string Schema = @"
 CREATE TABLE IF NOT EXISTS backups (
   id             INTEGER PRIMARY KEY,
