@@ -41,10 +41,6 @@ internal static class Languages
 
     internal static IReadOnlyList<string> Tags { get; } = All.Select(language => language.Tag).ToArray();
 
-    /// <summary>The name <paramref name="tag"/> is shown under, or the tag itself if it is not in the set.</summary>
-    internal static string NameOf(string tag) =>
-        All.FirstOrDefault(language => language.Tag == tag).Name ?? tag;
-
     /// <summary>
     /// A saved preference as the app should act on it: a tag in the set, or <see cref="System"/> for a
     /// missing, blank or unrecognized value, so a hand-edited file can never leave the app without a
