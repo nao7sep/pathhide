@@ -207,8 +207,12 @@ public sealed class ElevatedApplicator : IElevatedApplicator
             if (status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted or ElevatedApplyStatus.Declined)
             {
                 var exitCode = await run.ConfigureAwait(false);
-                if (status == ElevatedApplyStatus.Completed)
+                // 1 means some paths failed, 2 a refused launch, 3 a child that failed or could not report;
+                // its own records may not have reached this side, so the exit itself is the warning.
+                if (status == ElevatedApplyStatus.Completed && exitCode == 0)
                     Log.Info("elevated apply: exited", new { exitCode, reported = results.Count });
+                else if (status == ElevatedApplyStatus.Completed)
+                    Log.Warn("elevated apply: exited", new { exitCode, reported = results.Count });
                 return new ElevatedApplyOutcome(status, exitCode, results);
             }
 

@@ -156,3 +156,32 @@ public sealed class ElevatedApplicatorTests : IDisposable
         Assert.Empty(Directory.GetFiles(_temp));
     }
 }
+
+/// <summary>
+/// A child that ends badly may not have reported anything itself, so the parent's record of its exit
+/// carries the severity.
+/// </summary>
+[Collection(ProcessLogCollection.Name)]
+public sealed class ElevatedExitRecordTests : IDisposable
+{
+    private readonly string _temp = Directory.CreateTempSubdirectory("pathhide-elevated-exit-").FullName;
+
+    public void Dispose() => Directory.Delete(_temp, recursive: true);
+
+    [Theory]
+    [InlineData(0, "info")]
+    [InlineData(1, "warn")]
+    [InlineData(3, "warn")]
+    public async Task The_exit_is_a_warning_unless_the_child_succeeded(int exitCode, string level)
+    {
+        using var log = new StartupDiagnosticLog("elevated apply: exited");
+        var applicator = new ElevatedApplicator(
+            _ => Task.FromResult<Task<int>?>(Task.FromResult(exitCode)), _temp, "/storage-root");
+
+        await applicator.ApplyAsync(new(["/a"], [], []), CancellationToken.None);
+
+        var exited = await log.Reported.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.Equal(level, exited.Level);
+        Assert.Equal(exitCode, exited.Fields!["exitCode"]!.GetValue<int>());
+    }
+}
