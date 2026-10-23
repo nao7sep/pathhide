@@ -149,7 +149,7 @@ public sealed class SettingsDialog : DialogBase
         Localized.SetText(hideModeHint, "settings.hideModeHint");
         hideModeHint[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("TextSecondaryBrush");
 
-        // Language and appearance (theme, then UI font) lead; the Windows-only hide mode follows and
+        // Language, display time zone and appearance (theme, then UI font) lead; the Windows-only hide mode follows and
         // shows only where it applies, so the dialog is never cluttered with a setting that does
         // nothing here.
         // Each setting is a section - its heading, its control and its note 8px apart - and the
