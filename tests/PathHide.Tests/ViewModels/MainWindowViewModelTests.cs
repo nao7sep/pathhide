@@ -764,6 +764,33 @@ public class MainWindowViewModelTests
         }
     }
 
+    // Add checks every entry's identity; entries on volumes that stopped answering are waited on
+    // together, not one bound after another.
+    [Fact(Timeout = 10_000)]
+    public async Task Add_resolves_the_entries_identities_several_at_a_time()
+    {
+        using var gate = new ManualResetEventSlim(false);
+        var visibility = new FakeVisibilityService();
+        var stored = Enumerable.Range(0, BoundedVisibility.Width).Select(i => Entry($"/stored{i}")).ToList();
+        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = stored });
+        await vm.ScanTask;
+        visibility.ResolveGate = gate;
+
+        var add = vm.AddPathsCommand.ExecuteAsync(new[] { "/new" });
+        try
+        {
+            for (var i = 0; i < BoundedVisibility.Width; i++)
+                await visibility.ResolveEntries.WaitAsync(TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            gate.Set();
+            await add;
+        }
+
+        Assert.Contains(vm.Rows, row => row.Path == "/new");
+    }
+
     [Fact(Timeout = 10_000)]
     public async Task AddPaths_ReportsAnUnresponsivePathInTheAddResult()
     {

@@ -326,21 +326,31 @@ public partial class MainWindowViewModel : ObservableObject
         // One overall budget stops a large/offline list from delaying startup or Reload indefinitely.
         using var deadline = new CancellationTokenSource(IdentityWaitBound, Clock);
         using var waiting = CancellationTokenSource.CreateLinkedTokenSource(token, deadline.Token);
-        var identities = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var entry in entries)
+        var keys = entries.Select(entry =>
         {
-            token.ThrowIfCancellationRequested();
             PathNormalizer.TryNormalize(entry.Path, out var normalized, out var family);
-            var identity = normalized!;
-            if (!deadline.IsCancellationRequested)
+            return (Path: normalized!, Family: family);
+        }).ToList();
+
+        async Task<(string Path, string Identity)> ResolveAsync(string path)
+        {
+            try { return (path, await _visibility.ResolvePathAsync(path, waiting.Token) ?? path); }
+            catch (OperationCanceledException) when (deadline.IsCancellationRequested && !token.IsCancellationRequested)
             {
-                try { identity = await _visibility.ResolvePathAsync(identity, waiting.Token) ?? identity; }
-                catch (OperationCanceledException) when (deadline.IsCancellationRequested && !token.IsCancellationRequested)
-                {
-                    // The native read remains owned; its late result can never revise this admission.
-                }
+                // The native read remains owned; its late result can never revise this admission.
+                return (path, path);
             }
-            if (!identities.Add(PathNormalizer.IdentityKey(identity, family)))
+        }
+
+        var spellings = new Dictionary<string, string>(StringComparer.Ordinal);
+        await foreach (var (path, identity) in BoundedVisibility.InCompletionOrderAsync(
+            keys.Select(key => key.Path).Distinct(StringComparer.Ordinal), ResolveAsync))
+            spellings[path] = identity;
+
+        var identities = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (path, family) in keys)
+        {
+            if (!identities.Add(PathNormalizer.IdentityKey(spellings[path], family)))
                 throw new UnreadableStoreException("paths", Path.Combine(StorageRoot.Directory, PathListStore.FileName),
                     new JsonException("The path list holds aliases of the same local entry."));
         }
@@ -526,29 +536,26 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private async Task<List<string>?> ResolveIdentitiesAsync(List<string> paths, CancellationToken token)
     {
+        var keys = paths.Select(path =>
+        {
+            PathNormalizer.TryNormalize(path, out var normalized, out _);
+            return normalized ?? path;
+        }).ToList();
+        // A few at a time, so an entry on a volume that stopped answering holds back only itself.
         var resolved = new Dictionary<string, string>(StringComparer.Ordinal);
-        var identities = new List<string>(paths.Count);
         try
         {
-            foreach (var path in paths)
-            {
-                PathNormalizer.TryNormalize(path, out var normalized, out _);
-                normalized ??= path;
-                if (!resolved.TryGetValue(normalized, out var identity))
-                {
-                    token.ThrowIfCancellationRequested();
-                    identity = await _visibility.ResolvePathAsync(normalized, token) ?? normalized;
-                    resolved[normalized] = identity;
-                }
-                identities.Add(identity);
-            }
+            await foreach (var (key, identity) in BoundedVisibility.InCompletionOrderAsync(
+                keys.Distinct(StringComparer.Ordinal),
+                async key => (key, await _visibility.ResolvePathAsync(key, token) ?? key)))
+                resolved[key] = identity;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             Log.Info("add: cancelled while resolving paths; nothing was added");
             return null;
         }
-        return identities;
+        return [.. keys.Select(key => resolved[key])];
     }
 
     private void ShowPathAddResult(

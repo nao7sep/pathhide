@@ -70,6 +70,9 @@ public sealed class FakeVisibilityService : IVisibilityService
     public ManualResetEventSlim? ResolveGate { get; set; }
     public TaskCompletionSource ResolveEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <summary>Released once each time <see cref="ResolvePath"/> is entered.</summary>
+    public SemaphoreSlim ResolveEntries { get; } = new(0);
+
     public void Set(string path, ActualState state, ItemKind kind = ItemKind.File)
         => _byPath[path] = new PathInspection(state, kind);
 
@@ -91,6 +94,7 @@ public sealed class FakeVisibilityService : IVisibilityService
     {
         Resolved.Enqueue(path);
         ResolveEntered.TrySetResult();
+        ResolveEntries.Release();
         ResolveGate?.Wait();
         if (Aliases.TryGetValue(path, out var resolved))
             return resolved;
