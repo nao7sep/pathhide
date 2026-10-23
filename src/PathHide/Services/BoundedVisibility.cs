@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using PathHide.Models;
@@ -45,6 +46,45 @@ public sealed class BoundedVisibility
     }
 
     public TimeSpan Timeout { get; }
+
+    /// <summary>
+    /// How many paths are worked on at once, so independent paths do not queue behind one that stalls:
+    /// several unresponsive paths cost about one bound together, not one each in turn. Each call holds
+    /// a thread of its own while it runs, so the width follows the processors that serve them.
+    /// </summary>
+    public static int Width { get; } = Math.Max(2, Environment.ProcessorCount);
+
+    /// <summary>
+    /// Starts <paramref name="start"/> for each item, at most <see cref="Width"/> at once, and yields
+    /// each result as it finishes, in the caller's context, so the caller takes results one at a time.
+    /// When the caller stops early or a result throws, the work already started is waited for before
+    /// the enumeration ends.
+    /// </summary>
+    public static async IAsyncEnumerable<TResult> InCompletionOrderAsync<TItem, TResult>(
+        IEnumerable<TItem> items, Func<TItem, Task<TResult>> start)
+    {
+        var running = new List<Task<TResult>>(Width);
+        using var next = items.GetEnumerator();
+        try
+        {
+            while (true)
+            {
+                while (running.Count < Width && next.MoveNext())
+                    running.Add(start(next.Current));
+                if (running.Count == 0)
+                    yield break;
+
+                var finished = await Task.WhenAny(running);
+                running.Remove(finished);
+                yield return await finished;
+            }
+        }
+        finally
+        {
+            foreach (var task in running)
+                await ((Task)task).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        }
+    }
 
     /// <summary>
     /// Inspects <paramref name="path"/>. A path that does not answer in time is reported as

@@ -21,48 +21,46 @@ public sealed class PathScanner
     }
 
     /// <summary>
-    /// Inspects each entry in order, yielding one result per entry.
+    /// Inspects the entries a few at a time (<see cref="BoundedVisibility.Width"/>), yielding each
+    /// result as it arrives, so one stalled path does not hold back the rows after it.
     /// </summary>
     /// <remarks>
-    /// There is no progress callback: the results ARE the progress. A separate
-    /// <c>IProgress&lt;int&gt;</c> reported the same count through a second, asynchronous channel,
-    /// so a report could land after the consumer had already finished with the scan — which is
-    /// what forced the consumer to check whether each report was still current.
+    /// The results are the progress: a separate progress channel could report after the consumer had
+    /// finished with the scan.
     /// </remarks>
-    public async IAsyncEnumerable<ScanResult> ScanAsync(
-        IReadOnlyList<PathEntry> entries,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public IAsyncEnumerable<ScanResult> ScanAsync(
+        IReadOnlyList<PathEntry> entries, CancellationToken cancellationToken = default) =>
+        BoundedVisibility.InCompletionOrderAsync(entries, entry => ScanOneAsync(entry, cancellationToken));
+
+    private async Task<ScanResult> ScanOneAsync(PathEntry entry, CancellationToken cancellationToken)
     {
-        foreach (var entry in entries)
+        cancellationToken.ThrowIfCancellationRequested();
+
+        PathInspection inspection;
+        PathFamily family;
+
+        if (!PathNormalizer.TryNormalize(entry.Path, out _, out family))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            PathInspection inspection;
-            PathFamily family;
-
-            if (!PathNormalizer.TryNormalize(entry.Path, out _, out family))
-            {
-                // Path doesn't parse — treat as error
-                inspection = new PathInspection(ActualState.Error, ItemKind.Unknown);
-                family = default;
-            }
-            else
-            {
-                // Bounded, and abandoned on cancel: a stalled share reports the path unresponsive
-                // rather than holding the scan (and every command that pauses it) on one stat.
-                inspection = await _visibility.InspectAsync(entry.Path, cancellationToken);
-            }
-
-            // Per-item, scales with the path list — debug only.
-            Log.Debug("scanned", new
-            {
-                path = entry.Path,
-                actualState = inspection.ActualState,
-                itemKind = inspection.ItemKind,
-                family,
-            });
-
-            yield return new ScanResult(entry, inspection, family);
+            // Path doesn't parse — treat as error
+            inspection = new PathInspection(ActualState.Error, ItemKind.Unknown);
+            family = default;
         }
+        else
+        {
+            // Bounded, and abandoned on cancel: a stalled share reports the path unresponsive
+            // rather than holding the scan (and every command that pauses it) on one stat.
+            inspection = await _visibility.InspectAsync(entry.Path, cancellationToken);
+        }
+
+        // Per-item, scales with the path list — debug only.
+        Log.Debug("scanned", new
+        {
+            path = entry.Path,
+            actualState = inspection.ActualState,
+            itemKind = inspection.ItemKind,
+            family,
+        });
+
+        return new ScanResult(entry, inspection, family);
     }
 }

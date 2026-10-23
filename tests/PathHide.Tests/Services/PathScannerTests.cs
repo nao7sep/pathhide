@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using PathHide.Models;
@@ -71,6 +72,35 @@ public class PathScannerTests
         Assert.Equal(new[] { "/x" }, fake.Inspected);
     }
 
+    // A path that does not answer costs its own bound; the rows after it are inspected meanwhile.
+    [Fact(Timeout = 10_000)]
+    public async Task A_stalled_path_does_not_hold_back_the_results_after_it()
+    {
+        using var gate = new ManualResetEventSlim(initialState: false);
+        var visibility = new FakeVisibilityService
+        {
+            OnInspect = path =>
+            {
+                if (path == "/stuck")
+                    gate.Wait();
+                return null;
+            },
+        };
+        var scanner = new PathScanner(new BoundedVisibility(visibility));
+        var token = TestContext.Current.CancellationToken;
+
+        await using var results = scanner.ScanAsync([Entry("/stuck"), Entry("/b"), Entry("/c")], token).GetAsyncEnumerator(token);
+        var arrived = new List<string>();
+        for (var i = 0; i < 2; i++)
+        {
+            Assert.True(await results.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), token));
+            arrived.Add(results.Current.Entry.Path);
+        }
+        gate.Set();
+
+        Assert.Equal(["/b", "/c"], arrived.Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public async Task ScanAsync_CancelledToken_ThrowsOperationCanceled()
     {
@@ -97,7 +127,9 @@ public class PathScannerTests
         var scanner = new PathScanner(new BoundedVisibility(visibility));
         using var cts = new CancellationTokenSource();
 
-        var scan = CollectAsync(scanner, [Entry("/blocked"), Entry("/never-reached")], token: cts.Token);
+        // One path more than are inspected at once: the last is never started.
+        List<PathEntry> entries = [.. Enumerable.Range(0, BoundedVisibility.Width).Select(i => Entry($"/blocked{i}")), Entry("/never-reached")];
+        var scan = CollectAsync(scanner, entries, token: cts.Token);
 
         // Wait until the inspection is genuinely in-flight, then cancel while it is stuck.
         await visibility.InspectEntered.Task;

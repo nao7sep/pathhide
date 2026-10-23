@@ -15,7 +15,7 @@ namespace PathHide.Tests.Fakes;
 /// </summary>
 public sealed class FakeVisibilityService : IVisibilityService
 {
-    private readonly Dictionary<string, PathInspection> _byPath = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, PathInspection> _byPath = new(StringComparer.Ordinal);
 
     public PathInspection Default { get; set; } = new(ActualState.Visible, ItemKind.File);
 
@@ -56,6 +56,9 @@ public sealed class FakeVisibilityService : IVisibilityService
 
     /// <summary>Completes the first time <see cref="Hide"/> or <see cref="Show"/> is entered.</summary>
     public TaskCompletionSource WriteEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Released once each time <see cref="Hide"/> or <see cref="Show"/> is entered.</summary>
+    public SemaphoreSlim WriteEntries { get; } = new(0);
 
     /// <summary>Path resolutions <see cref="ResolvePath"/> answers with; any other resolves to null.</summary>
     public Dictionary<string, string> Aliases { get; } = new(StringComparer.Ordinal);
@@ -99,6 +102,7 @@ public sealed class FakeVisibilityService : IVisibilityService
     public void Hide(string path, WindowsHideMode mode)
     {
         WriteEntered.TrySetResult();
+        WriteEntries.Release();
         WriteGate?.Wait();
 
         var thrown = OnHide?.Invoke(path);
@@ -116,6 +120,7 @@ public sealed class FakeVisibilityService : IVisibilityService
     public void Show(string path)
     {
         WriteEntered.TrySetResult();
+        WriteEntries.Release();
         WriteGate?.Wait();
 
         Shown.Enqueue(path);

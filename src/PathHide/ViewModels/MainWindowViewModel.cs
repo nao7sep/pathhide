@@ -1597,115 +1597,101 @@ public partial class MainWindowViewModel : ObservableObject
             row.ActualState = ActualState.Unresponsive;
         }
 
-        for (var index = 0; index < targets.Count; index++)
+        // Paths are worked on a few at a time, so a stalled one costs its own bound rather than
+        // delaying every path behind it; each result is taken here, one at a time, on this thread.
+        var cancelled = 0;
+        var attempts = BoundedVisibility.InCompletionOrderAsync(targets, row => AttemptAsync(row, hideMode, token));
+        await foreach (var attempt in attempts)
         {
-            var row = targets[index];
-            var written = false;
-            try
+            var row = attempt.Row;
+            if (attempt.Cancelled)
             {
-                var inspection = await _visibility.InspectAsync(row.Path, token);
+                // A path whose write was under way may or may not have changed — the call was
+                // abandoned, not undone — so its row no longer claims a state. The rest were never
+                // written.
+                if (attempt.Written)
+                    row.ActualState = ActualState.Unknown;
+                problems[row.Path] = ApplyProblem.Cancelled;
+                cancelled++;
+                continue;
+            }
 
-                if (inspection.ActualState == ActualState.Unresponsive)
-                {
+            switch (attempt.Failure)
+            {
+                case TimeoutException:
                     MarkUnresponsive(row);
                     continue;
-                }
+                case UnauthorizedAccessException when ElevatedApplicator is not null:
+                    // Access-denied is recoverable via a single elevated retry (below).
+                    retryBucket.Add(row);
+                    continue;
+                case not null:
+                    problems[row.Path] = ApplyProblem.Error;
+                    row.ApplyScanResult(attempt.After!, row.PathFamily);
+                    continue;
+            }
 
-                if (inspection.ActualState == ActualState.Missing)
+            if (!attempt.Written)
+            {
+                var inspection = attempt.Before!;
+                if (inspection.ActualState == ActualState.Unresponsive)
+                    MarkUnresponsive(row);
+                else if (inspection.ActualState == ActualState.Missing)
                 {
                     problems[row.Path] = ApplyProblem.Missing;
                     row.ActualState = ActualState.Missing;
-                    continue;
                 }
-
-                // Access-denied at inspect time is the same recoverable condition as a
-                // denied Hide/Show write: a single elevated retry (drained below) may have
-                // the rights to read and change it, so it joins that bucket rather than the
-                // write attempt, which would only re-hit the same denial. Without an
-                // elevation step AccessDenied stays a terminal error alongside Error, which
-                // no elevation can fix. A genuinely absent path is Missing (handled above),
-                // never AccessDenied, so this never forces a futile elevation prompt.
-                if (inspection.ActualState == ActualState.AccessDenied && ElevatedApplicator is not null)
-                {
+                // Access-denied at inspect time is the same recoverable condition as a denied
+                // Hide/Show write: a single elevated retry (drained below) may have the rights to read
+                // and change it, so it joins that bucket rather than the write attempt, which would
+                // only re-hit the same denial. Without an elevation step AccessDenied stays a terminal
+                // error alongside Error, which no elevation can fix. A genuinely absent path is
+                // Missing (handled above), never AccessDenied, so this never forces a futile
+                // elevation prompt.
+                else if (inspection.ActualState == ActualState.AccessDenied && ElevatedApplicator is not null)
                     retryBucket.Add(row);
-                    continue;
-                }
-
-                if (inspection.ActualState is ActualState.AccessDenied or ActualState.Error)
+                else
                 {
                     problems[row.Path] = ApplyProblem.Error;
                     row.ActualState = inspection.ActualState;
-                    continue;
                 }
-
-                written = true;
-                await _visibility.WriteAsync(row.Path, row.Entry.DesiredVisibility, hideMode, token);
-
-                var updated = await _visibility.InspectAsync(row.Path, token);
-                if (updated.ActualState == ActualState.Unresponsive)
-                {
-                    MarkUnresponsive(row);
-                    continue;
-                }
-                row.ApplyScanResult(updated, row.PathFamily);
-
-                // Count what actually moved, not what was attempted. A write can
-                // run without changing the state the user asked for — on macOS a
-                // dot-prefixed path stays hidden by its name whatever the flags
-                // say, and this app cannot rename files. Reporting it as applied
-                // told the user a path had been revealed while it was still
-                // invisible in Finder. The row already shows the mismatch; this
-                // keeps the summary honest about it.
-                var desiredState = row.Entry.DesiredVisibility == DesiredVisibility.Hidden
-                    ? ActualState.Hidden
-                    : ActualState.Visible;
-                if (updated.ActualState == desiredState)
-                {
-                    applied++;
-                }
-                else
-                {
-                    problems[row.Path] = ApplyProblem.Unchanged;
-                    Log.Info("apply: state unchanged", new
-                    {
-                        path = row.Path,
-                        desired = desiredState,
-                        actual = updated.ActualState,
-                    });
-                }
+                continue;
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
-            {
-                // A path whose write was under way may or may not have changed — the call was
-                // abandoned, not undone — so its row no longer claims a state. The rest were
-                // never written.
-                if (written)
-                    row.ActualState = ActualState.Unknown;
-                var skipped = targets.Skip(index).ToList();
-                foreach (var skippedRow in skipped)
-                    problems[skippedRow.Path] = ApplyProblem.Cancelled;
-                Log.Info("apply: cancelled", new { skipped = skipped.Count });
-                break;
-            }
-            catch (TimeoutException)
+
+            var updated = attempt.After!;
+            if (updated.ActualState == ActualState.Unresponsive)
             {
                 MarkUnresponsive(row);
+                continue;
             }
-            catch (UnauthorizedAccessException) when (ElevatedApplicator is not null)
+            row.ApplyScanResult(updated, row.PathFamily);
+
+            // Count what actually moved, not what was attempted. A write can run without changing
+            // the state the user asked for: on macOS a dot-prefixed path stays hidden by its name
+            // whatever the flags say, and this app cannot rename files. The row already shows the
+            // mismatch; this keeps the summary honest about it.
+            var desiredState = row.Entry.DesiredVisibility == DesiredVisibility.Hidden
+                ? ActualState.Hidden
+                : ActualState.Visible;
+            if (updated.ActualState == desiredState)
             {
-                // Access-denied is recoverable via a single elevated retry (below). Without an
-                // elevation step the general handler counts it as a plain error.
-                retryBucket.Add(row);
+                applied++;
             }
-            catch (Exception ex)
+            else
             {
-                Log.Error("apply: failed", ex, new { path = row.Path });
-                problems[row.Path] = ApplyProblem.Error;
-                // Not cancellable, so it cannot throw out of this handler; still bounded.
-                var recheck = await _visibility.InspectAsync(row.Path, CancellationToken.None);
-                row.ApplyScanResult(recheck, row.PathFamily);
+                problems[row.Path] = ApplyProblem.Unchanged;
+                Log.Info("apply: state unchanged", new
+                {
+                    path = row.Path,
+                    desired = desiredState,
+                    actual = updated.ActualState,
+                });
             }
         }
+        if (cancelled > 0)
+            Log.Info("apply: cancelled", new { skipped = cancelled });
+        // Results arrive as paths answer; the elevated request keeps the list's order.
+        retryBucket = [.. targets.Intersect(retryBucket)];
 
         int? elevationExitCode = null;
 
@@ -1801,6 +1787,51 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(StatusBarText));
 
         return result;
+    }
+
+    /// <summary>
+    /// One target's file-system work in an apply: what it was before, whether it was written, and what
+    /// it is after, or how that ended. It touches no row, so several can run at once.
+    /// </summary>
+    private async Task<ApplyAttempt> AttemptAsync(PathRowViewModel row, WindowsHideMode hideMode, CancellationToken token)
+    {
+        var (path, desired) = (row.Path, row.Entry.DesiredVisibility);
+        var written = false;
+        try
+        {
+            var before = await _visibility.InspectAsync(path, token);
+            if (before.ActualState is ActualState.Unresponsive or ActualState.Missing
+                or ActualState.AccessDenied or ActualState.Error)
+                return new(row) { Before = before };
+
+            written = true;
+            await _visibility.WriteAsync(path, desired, hideMode, token);
+            return new(row) { Before = before, Written = true, After = await _visibility.InspectAsync(path, token) };
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            return new(row) { Written = written, Cancelled = true };
+        }
+        catch (Exception ex) when (ex is TimeoutException
+            || (ex is UnauthorizedAccessException && ElevatedApplicator is not null))
+        {
+            return new(row) { Written = written, Failure = ex };
+        }
+        catch (Exception ex)
+        {
+            Log.Error("apply: failed", ex, new { path });
+            // Not cancellable, so it cannot throw out of this handler; still bounded.
+            return new(row) { Written = written, Failure = ex, After = await _visibility.InspectAsync(path, CancellationToken.None) };
+        }
+    }
+
+    private sealed record ApplyAttempt(PathRowViewModel Row)
+    {
+        public PathInspection? Before { get; init; }
+        public bool Written { get; init; }
+        public PathInspection? After { get; init; }
+        public Exception? Failure { get; init; }
+        public bool Cancelled { get; init; }
     }
 
     private readonly record struct ApplyOutcome(int Applied, IReadOnlyDictionary<string, ApplyProblem> Problems)

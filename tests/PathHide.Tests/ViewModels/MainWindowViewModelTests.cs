@@ -100,14 +100,17 @@ public class MainWindowViewModelTests
     public async Task A_batch_hides_every_path_in_the_mode_it_started_with()
     {
         var visibility = new FakeVisibilityService();
-        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [Entry("/a"), Entry("/b")] });
+        // One path more than are written at once, so the last write starts after the change.
+        var all = Enumerable.Range(0, BoundedVisibility.Width + 1).Select(i => $"/p{i}").ToList();
+        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [.. all.Select(Entry)] });
         await vm.ScanTask;
         using var release = new ManualResetEventSlim();
         visibility.WriteGate = release;
         var hide = vm.HideAllCommand.ExecuteAsync(null);
         try
         {
-            await visibility.WriteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            for (var i = 0; i < BoundedVisibility.Width; i++)
+                await visibility.WriteEntries.WaitAsync(TestContext.Current.CancellationToken);
             Assert.Null(await vm.TryApplySettingsAsync("en", "", hiddenAndSystem: true, ThemePreference.System));
         }
         finally
@@ -116,8 +119,8 @@ public class MainWindowViewModelTests
             await hide;
         }
 
-        Assert.Equal(["/a", "/b"], visibility.Hidden);
-        Assert.Equal([WindowsHideMode.HiddenOnly, WindowsHideMode.HiddenOnly], visibility.HideModes);
+        Assert.Equal(all.Order(StringComparer.Ordinal), visibility.Hidden.Order(StringComparer.Ordinal));
+        Assert.All(visibility.HideModes, mode => Assert.Equal(WindowsHideMode.HiddenOnly, mode));
     }
 
     // While one list-changing command runs, every other one is unavailable rather than queueing out of
@@ -548,12 +551,9 @@ public class MainWindowViewModelTests
         // Run on the headless UI thread so the scan's continuations marshal as they do live.
         var gate = new ManualResetEventSlim(false);
         var visibility = new FakeVisibilityService { InspectGate = gate };
-        visibility.Set("/a", ActualState.Hidden);
-        visibility.Set("/b", ActualState.Visible);
-        var paths = new FakeJsonStore<List<PathEntry>>
-        {
-            Value = new List<PathEntry> { Entry("/a"), Entry("/b") },
-        };
+        // One path more than are inspected at once: the last is never reached.
+        var all = Enumerable.Range(0, BoundedVisibility.Width + 1).Select(i => $"/p{i}").ToList();
+        var paths = new FakeJsonStore<List<PathEntry>> { Value = [.. all.Select(Entry)] };
 
         // Initialize starts the background scan, which blocks inside the first entry's inspection.
         var vm = CreateViewModel(visibility, paths);
@@ -571,16 +571,15 @@ public class MainWindowViewModelTests
         await vm.ScanTask;
 
         Assert.False(vm.IsScanning);
-        // Cancellation took effect before the second entry: /a was inspected, /b never was.
-        Assert.Contains("/a", visibility.Inspected);
-        Assert.DoesNotContain("/b", visibility.Inspected);
+        // Cancellation took effect before the last entry: the first was inspected, the last never was.
+        Assert.Contains(all[0], visibility.Inspected);
+        Assert.DoesNotContain(all[^1], visibility.Inspected);
         // Progress is counted from the results as they arrive, so the number the status bar
-        // shows and the rows it describes can never disagree: /a's inspection was entered but
-        // abandoned when the cancel landed, so it yielded no result, moved no row, and counts
-        // for nothing. Deterministic here only because the count is now made in the consuming
-        // loop rather than posted to the dispatcher from a separate progress channel.
+        // shows and the rows it describes can never disagree: the inspections under way were
+        // abandoned when the cancel landed, so they yielded no result, moved no row, and count for
+        // nothing. Deterministic because the count is made in the consuming loop.
         Assert.Equal(0, vm.ScanProgress);
-        Assert.Equal(2, vm.ScanTotal);
+        Assert.Equal(all.Count, vm.ScanTotal);
         Assert.All(vm.Rows, r => Assert.Equal(ActualState.Unknown, r.ActualState));
     }
 
@@ -634,17 +633,18 @@ public class MainWindowViewModelTests
     {
         using var stalled = new ManualResetEventSlim(false);
         var visibility = new FakeVisibilityService();
-        var paths = new FakeJsonStore<List<PathEntry>>
-        {
-            Value = [Entry("/a"), Entry("/b")],
-        };
+        // One path more than are worked on at once: the last is never reached.
+        var all = Enumerable.Range(0, BoundedVisibility.Width + 1).Select(i => $"/p{i}").ToList();
+        var paths = new FakeJsonStore<List<PathEntry>> { Value = [.. all.Select(Entry)] };
         // The default bound (seconds), so only the cancel can end this apply inside the test.
         var vm = CreateViewModel(visibility, paths);
         await vm.ScanTask;
+        var scanned = visibility.Inspected.Count;
         visibility.WriteGate = stalled;
 
         var hideAll = ((IAsyncRelayCommand)vm.HideAllCommand).ExecuteAsync(null);
-        await visibility.WriteEntered.Task;
+        for (var i = 0; i < BoundedVisibility.Width; i++)
+            await visibility.WriteEntries.WaitAsync(TestContext.Current.CancellationToken);
         Assert.True(vm.IsApplying);
         Assert.True(vm.IsBusy);
 
@@ -653,15 +653,50 @@ public class MainWindowViewModelTests
 
         Assert.False(vm.IsApplying);
         Assert.False(vm.IsBusy);
-        // /a's write was under way and may yet land, so its row claims no state; /b was never touched.
-        Assert.Equal(ActualState.Unknown, vm.Rows.Single(r => r.Path == "/a").ActualState);
-        Assert.Equal(ActualState.Visible, vm.Rows.Single(r => r.Path == "/b").ActualState);
-        Assert.DoesNotContain("/b", visibility.Inspected.Skip(2));
+        // The writes under way may yet land, so their rows claim no state; the last path was never touched.
+        Assert.All(all[..^1], path => Assert.Equal(ActualState.Unknown, vm.Rows.Single(r => r.Path == path).ActualState));
+        Assert.Equal(ActualState.Visible, vm.Rows.Single(r => r.Path == all[^1]).ActualState);
+        Assert.DoesNotContain(all[^1], visibility.Inspected.Skip(scanned));
         var result = Assert.Single(vm.OperationalResults);
         Assert.False(result.IsError);
-        Assert.Equal("2 cancelled", English.Of(result.Message));
+        Assert.Equal($"{all.Count} cancelled", English.Of(result.Message));
 
         stalled.Set();
+    }
+
+    // A write that does not answer holds only its own path: the paths after it change meanwhile.
+    [Fact(Timeout = 10_000)]
+    public async Task A_stalled_write_does_not_hold_back_the_paths_after_it()
+    {
+        using var stalled = new ManualResetEventSlim(false);
+        var visibility = new FakeVisibilityService();
+        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [Entry("/stuck"), Entry("/b")] });
+        await vm.ScanTask;
+        visibility.OnHide = path =>
+        {
+            if (path == "/stuck")
+                stalled.Wait();
+            return null;
+        };
+        var other = vm.Rows.Single(r => r.Path == "/b");
+        var otherHidden = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        other.PropertyChanged += (_, _) =>
+        {
+            if (other.ActualState == ActualState.Hidden)
+                otherHidden.TrySetResult();
+        };
+
+        var hideAll = vm.HideAllCommand.ExecuteAsync(null);
+        try
+        {
+            await otherHidden.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            Assert.False(hideAll.IsCompleted);
+        }
+        finally
+        {
+            stalled.Set();
+            await hideAll;
+        }
     }
 
     [Fact(Timeout = 10_000)]
