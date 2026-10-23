@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using PathHide.Models;
 using PathHide.Services;
 using Xunit;
@@ -46,9 +47,53 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
 
     private string NewFile()
     {
-        var path = Path.Combine(_dir, "file.txt");
+        var path = Path.Combine(_dir, Guid.NewGuid().ToString("N") + ".txt");
         File.WriteAllText(path, "x");
         return path;
+    }
+
+    private sealed class BrokenReportStream : MemoryStream
+    {
+        public override void Write(byte[] buffer, int offset, int count) => throw new IOException("required report failed");
+        public override void Write(ReadOnlySpan<byte> buffer) => throw new IOException("required report failed");
+    }
+
+    [WindowsOnlyFact]
+    public void A_broken_required_report_stops_admission_and_never_claims_the_batch_succeeded()
+    {
+        var paths = System.Linq.Enumerable.Range(0, BoundedVisibility.Width * 3).Select(_ => NewFile()).ToArray();
+        var results = new ElevatedResultsWriter(new StreamWriter(new BrokenReportStream()));
+        Assert.Throws<AggregateException>(() => PathHide.Program.ApplyFileAttributes(paths, true, SystemBit.Keep, results, null));
+        Assert.InRange(paths.Count(path => File.GetAttributes(path).HasFlag(FileAttributes.Hidden)), 1, BoundedVisibility.Width);
+        try { results.Dispose(); } catch (IOException) { }
+    }
+
+    [WindowsOnlyFact]
+    public void Approval_for_a_replaced_object_cannot_change_its_replacement()
+    {
+        var path = NewFile();
+        using var approved = new WindowsAttributeTarget(path, writable: false);
+        var original = path + ".original";
+        File.Move(path, original);
+        File.WriteAllText(path, "replacement");
+        Assert.Throws<IOException>(() => WindowsFileVisibility.Set(path, true, SystemBit.Set, null, approved.Identity));
+        Assert.False(File.GetAttributes(path).HasFlag(FileAttributes.Hidden));
+        Assert.False(File.GetAttributes(original).HasFlag(FileAttributes.Hidden));
+    }
+
+    [WindowsOnlyFact]
+    public void A_pinned_handle_changes_its_object_after_its_path_is_renamed()
+    {
+        var path = NewFile();
+        using var target = new WindowsAttributeTarget(path, writable: true);
+        var renamed = path + ".renamed";
+        File.Move(path, renamed);
+        File.WriteAllText(path, "replacement");
+        using var alias = new WindowsAttributeTarget(renamed, writable: false);
+        Assert.Equal(target.Identity, alias.Identity);
+        Assert.True(target.Set(true, SystemBit.Set, target.Identity, null));
+        Assert.True(File.GetAttributes(renamed).HasFlag(FileAttributes.Hidden));
+        Assert.False(File.GetAttributes(path).HasFlag(FileAttributes.Hidden));
     }
 
     [WindowsOnlyFact]
@@ -113,14 +158,30 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         Assert.Equal(ActualState.Missing, Service().Inspect(missing).ActualState);
     }
 
-    // --- Reparse points must not be followed (security: TOCTOU redirection) ---
-    //
-    // Hide/Show — and the elevated apply pass, which uses the same File.SetAttributes call —
-    // must change the LINK's own attributes, never the target's. Otherwise a path swapped for
-    // a junction/symlink pointing into a sensitive location (e.g. C:\Windows) between the
-    // unelevated inspect and the elevated write could redirect that admin write onto the
-    // target. Windows measurement confirmed both Get/SetAttributes are no-follow; these lock
-    // that in so a future switch to a follow-based API is caught.
+    // Both ordinary and elevated writes preserve the final link itself through the no-follow handle.
+    [WindowsOnlyFact]
+    public void Replacing_an_approved_ancestor_with_a_junction_cannot_redirect_the_write()
+    {
+        var original = NewSubdir("original");
+        var replacement = NewSubdir("replacement");
+        var leaf = Path.Combine(original, "leaf");
+        var other = Path.Combine(replacement, "leaf");
+        File.WriteAllText(leaf, "original");
+        File.WriteAllText(other, "other");
+        using var approval = new WindowsAttributeTarget(leaf, writable: false);
+        Directory.Move(original, original + ".moved");
+        CreateJunction(original, replacement);
+        try
+        {
+            Assert.Throws<IOException>(() => WindowsFileVisibility.Set(leaf, true, SystemBit.Set, null, approval.Identity));
+            Assert.False(File.GetAttributes(other).HasFlag(FileAttributes.Hidden));
+            using var alias = new WindowsAttributeTarget(leaf, writable: false);
+            using var direct = new WindowsAttributeTarget(other, writable: false);
+            Assert.Equal(alias.Identity, direct.Identity);
+            Assert.Equal(AttributeWriteReservation.Name(alias.Identity), AttributeWriteReservation.Name(direct.Identity));
+        }
+        finally { Directory.Delete(original); }
+    }
 
     [WindowsOnlyFact]
     public void Hide_Junction_AffectsLinkNotTarget()

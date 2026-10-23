@@ -24,7 +24,7 @@ public static class Program
             _ = Console.ReadLine();
         try
         {
-            AttributeWriteReservation.Run(args[1], () =>
+            PathHide.OrderingProbe.Reservation.Run(args[1], () =>
             {
                 Console.WriteLine("entered");
                 if (args[4] == "inside")

@@ -129,7 +129,7 @@ public sealed class ElevatedResultsWriter : ILogSink
     private readonly StreamWriter _writer;
     private readonly object _gate = new();
 
-    private ElevatedResultsWriter(StreamWriter writer) => _writer = writer;
+    internal ElevatedResultsWriter(StreamWriter writer) => _writer = writer;
 
     public static ElevatedResultsWriter Create(string path) =>
         new(new StreamWriter(

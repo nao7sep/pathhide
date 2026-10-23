@@ -16,6 +16,43 @@ public class BoundedVisibilityTests
 {
     private static readonly TimeSpan Short = TimeSpan.FromMilliseconds(200);
 
+    [Fact(Timeout = 10_000)]
+    public async Task Timed_out_calls_hold_capacity_until_the_physical_work_returns()
+    {
+        using var release = new ManualResetEventSlim();
+        using var entered = new CountdownEvent(BoundedVisibility.Width);
+        var calls = 0;
+        var service = new FakeVisibilityService { OnInspect = _ =>
+        {
+            Interlocked.Increment(ref calls);
+            entered.Signal();
+            release.Wait();
+            return null;
+        }};
+        var visibility = new BoundedVisibility(service, Short);
+        var token = TestContext.Current.CancellationToken;
+        var first = Enumerable.Range(0, BoundedVisibility.Width)
+            .Select(i => visibility.InspectAsync($"/blocked/{i}", token)).ToArray();
+        try
+        {
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5), token));
+            await Task.WhenAll(first);
+            for (var batch = 0; batch < 2; batch++)
+                Assert.All(await Task.WhenAll(Enumerable.Range(0, BoundedVisibility.Width)
+                    .Select(i => visibility.InspectAsync($"/waiting/{batch}/{i}", token))),
+                    result => Assert.Equal(ActualState.Unresponsive, result.ActualState));
+            Assert.Equal(BoundedVisibility.Width, calls);
+            using var cancelled = new CancellationTokenSource();
+            var pending = visibility.InspectAsync("/cancelled", cancelled.Token);
+            cancelled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+            Assert.Equal(BoundedVisibility.Width, calls);
+        }
+        finally { release.Set(); }
+        service.OnInspect = null;
+        Assert.Equal(ActualState.Visible, (await visibility.InspectAsync("/available", token)).ActualState);
+    }
+
     // Where the system resolves no spelling, there is nothing to wait on: no call runs for it.
     [Fact]
     public async Task A_system_that_resolves_nothing_is_not_asked()

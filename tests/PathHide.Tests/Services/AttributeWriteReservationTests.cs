@@ -64,7 +64,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
         Mutex? abandoned = null;
         var owner = new Thread(() =>
         {
-            abandoned = new Mutex(false, AttributeWriteReservation.Name(path));
+            abandoned = new Mutex(false, PathHide.OrderingProbe.Reservation.Name(path));
             Assert.True(abandoned.WaitOne(TimeSpan.FromSeconds(5)));
         });
         owner.Start();
@@ -73,7 +73,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
         try
         {
             var wrote = false;
-            AttributeWriteReservation.Run(path, () => wrote = true, bound: TimeSpan.FromSeconds(5));
+            PathHide.OrderingProbe.Reservation.Run(path, () => wrote = true, bound: TimeSpan.FromSeconds(5));
             Assert.True(wrote);
         }
         finally { abandoned?.Dispose(); }
@@ -115,7 +115,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
 
         // A real held OS mutex proves no overlapping write, without relying on a sleep/race window.
         var wrote = false;
-        Assert.Throws<TimeoutException>(() => AttributeWriteReservation.Run(path, () => wrote = true,
+        Assert.Throws<TimeoutException>(() => PathHide.OrderingProbe.Reservation.Run(path, () => wrote = true,
             bound: TimeSpan.Zero));
         Assert.False(wrote);
         using var unrelated = new Probe("write", Path.Combine(_dir, "unrelated"), "independent", "none", "now");
@@ -144,7 +144,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
         gui.Release();
         Assert.Equal(0, await gui.ExitAsync());
 
-        Assert.Throws<TimeoutException>(() => AttributeWriteReservation.Run(path,
+        Assert.Throws<TimeoutException>(() => PathHide.OrderingProbe.Reservation.Run(path,
             () => File.WriteAllText(path, "new too soon"), bound: TimeSpan.Zero));
         using var restart = new Probe("write", path, "new", "none", "now");
         Assert.Equal("ready", await restart.ReadAsync());
@@ -170,16 +170,16 @@ public sealed class AttributeWriteReservationTests : IDisposable
         {
             await started.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
             await Assert.ThrowsAsync<TimeoutException>(() => write);
-            Assert.Throws<TimeoutException>(() => AttributeWriteReservation.Run(path,
+            Assert.Throws<TimeoutException>(() => PathHide.OrderingProbe.Reservation.Run(path,
                 () => File.WriteAllText(path, "new too soon"), bound: TimeSpan.Zero));
-            AttributeWriteReservation.Run(Path.Combine(_dir, "unrelated"), () => { }, bound: TimeSpan.Zero);
+            PathHide.OrderingProbe.Reservation.Run(Path.Combine(_dir, "unrelated"), () => { }, bound: TimeSpan.Zero);
         }
         finally
         {
             finish.Set();
             await settled.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
         }
-        AttributeWriteReservation.Run(path, () => File.WriteAllText(path, "new"), bound: TimeSpan.Zero);
+        PathHide.OrderingProbe.Reservation.Run(path, () => File.WriteAllText(path, "new"), bound: TimeSpan.Zero);
         Assert.Equal("new", File.ReadAllText(path));
     }
 
@@ -194,7 +194,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
         {
             try
             {
-                AttributeWriteReservation.Run(path, () =>
+                PathHide.OrderingProbe.Reservation.Run(path, () =>
                 {
                     started.SetResult();
                     if (!finish.Wait(TimeSpan.FromSeconds(15)))
@@ -242,7 +242,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
     {
         using var gui = new Probe("parent");
         var identity = await gui.ReadAsync();
-        var invocation = ElevatedApplyCommand.ParseArguments(["apply", "--request", "unused", "--parent", identity])!;
+        var invocation = ElevatedApplyCommand.ParseArguments(["apply", "--request", "unused", "--parent", identity, "--request-sha256", new string('a', 64)])!;
         using var parent = new ApplyParentProcess(invocation.Parent!);
         gui.Release();
         Assert.Equal(0, await gui.ExitAsync());
@@ -251,7 +251,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
         var second = Path.Combine(_dir, "second");
         File.WriteAllText(first, "keep");
         File.WriteAllText(second, "keep");
-        Assert.Throws<OperationCanceledException>(() => PathHide.Program.ApplyFileAttributes(
+        Assert.Throws<AggregateException>(() => PathHide.Program.ApplyFileAttributes(
             [first, second], hide: true, Models.SystemBit.Keep, results: null, parent));
         Assert.Equal((FileAttributes)0, File.GetAttributes(first) & FileAttributes.Hidden);
         Assert.Equal((FileAttributes)0, File.GetAttributes(second) & FileAttributes.Hidden);
@@ -261,15 +261,15 @@ public sealed class AttributeWriteReservationTests : IDisposable
     public void Dot_segments_and_trailing_separators_share_the_same_reservation()
     {
         var path = Path.Combine(_dir, "target");
-        Assert.Equal(AttributeWriteReservation.Name(path),
-            AttributeWriteReservation.Name(Path.Combine(_dir, "child", "..", "target") + Path.DirectorySeparatorChar));
+        Assert.Equal(PathHide.OrderingProbe.Reservation.Name(path),
+            PathHide.OrderingProbe.Reservation.Name(Path.Combine(_dir, "child", "..", "target") + Path.DirectorySeparatorChar));
     }
 
     [WindowsOnlyFact]
     public void Windows_case_and_separator_aliases_share_the_same_reservation()
     {
         var path = Path.Combine(_dir, "target");
-        Assert.Equal(AttributeWriteReservation.Name(path),
-            AttributeWriteReservation.Name(path.ToUpperInvariant().Replace('\\', '/')));
+        Assert.Equal(PathHide.OrderingProbe.Reservation.Name(path),
+            PathHide.OrderingProbe.Reservation.Name(path.ToUpperInvariant().Replace('\\', '/')));
     }
 }

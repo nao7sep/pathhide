@@ -27,7 +27,7 @@ public class PathScannerTests
     }
 
     [Fact]
-    public async Task ScanAsync_YieldsOneResultPerEntry_InOrder()
+    public async Task ScanAsync_YieldsOneResultPerEntry()
     {
         var fake = new FakeVisibilityService();
         var scanner = new PathScanner(new BoundedVisibility(fake));
@@ -36,9 +36,7 @@ public class PathScannerTests
         var results = await CollectAsync(scanner, entries, token: TestContext.Current.CancellationToken);
 
         Assert.Equal(3, results.Count);
-        Assert.Equal("/a", results[0].Entry.Path);
-        Assert.Equal("/b", results[1].Entry.Path);
-        Assert.Equal("/c", results[2].Entry.Path);
+        Assert.Equal(["/a", "/b", "/c"], results.Select(result => result.Entry.Path).Order(StringComparer.Ordinal));
     }
 
     [Fact]

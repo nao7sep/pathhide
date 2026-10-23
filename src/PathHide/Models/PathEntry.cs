@@ -7,8 +7,7 @@ public sealed class PathEntry
 
     /// <summary>
     /// Whether PathHide set the item's Windows System attribute itself, and so may clear it again; a
-    /// System attribute the item already had is left alone. Absent (null) in a list written before
-    /// PathHide recorded this, where the entry is treated as PathHide's, as every entry was then.
+    /// System attribute the item already had is left alone. Absent (null) means ownership is unknown and does not permit clearing System.
     /// </summary>
     public bool? SystemSetByPathHide { get; set; }
 }

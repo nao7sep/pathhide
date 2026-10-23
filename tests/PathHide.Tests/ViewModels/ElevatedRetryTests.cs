@@ -47,7 +47,7 @@ public sealed class ElevatedRetryTests : IDisposable
     }
 
     private ElevatedApplicator Applicator(TimeSpan? childTimeout = null) =>
-        new(_child.LaunchAsync, _temp, "/storage-root", childTimeout);
+        new(_child.LaunchAsync, _temp, "/storage-root", childTimeout) { BindWindowsTargets = false };
 
     private MainWindowViewModel ViewModel(
         ElevatedApplicator applicator, TimeSpan? shutdownBound = null, params string[] paths)
@@ -117,6 +117,7 @@ public sealed class ElevatedRetryTests : IDisposable
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var applicator = new ElevatedApplicator(_child.LaunchAsync, _temp, "/storage-root")
         {
+            BindWindowsTargets = false,
             WriteRequest = (path, content) =>
             {
                 entered.SetResult();
@@ -282,6 +283,40 @@ public sealed class ElevatedRetryTests : IDisposable
         }
     }
 
+    [Fact(Timeout = 10_000)]
+    public async Task Cancel_after_child_completion_stops_refresh_without_losing_reported_ownership()
+    {
+        var applicator = Applicator();
+        var vm = ViewModel(applicator, null, "/a", "/b");
+        await vm.ScanTask;
+        Assert.Null(await vm.TryApplySettingsAsync("en", "", true, ThemePreference.System));
+        var launch = _child.NextLaunch;
+        var hide = HideAll(vm);
+        var run = await launch;
+        using var release = new ManualResetEventSlim();
+        var refreshing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        _visibility.OnInspect = _ =>
+        {
+            Interlocked.Increment(ref calls);
+            refreshing.TrySetResult();
+            release.Wait();
+            return null;
+        };
+        run.Report("/a", systemSet: true);
+        run.Report("/b", systemSet: true);
+        run.Exit();
+        try
+        {
+            await refreshing.Task.WaitAsync(Generous, TestContext.Current.CancellationToken);
+            vm.CancelCommand.Execute(null);
+            await hide.WaitAsync(Generous, TestContext.Current.CancellationToken);
+            Assert.Equal(1, calls);
+            Assert.All(_paths.Value, entry => Assert.True(entry.SystemSetByPathHide));
+        }
+        finally { release.Set(); }
+    }
+
     [AvaloniaFact]
     public void ReadingAndRemovingTheHelpersFiles_RunsOffTheUiThread()
     {
@@ -317,7 +352,7 @@ public sealed class ElevatedRetryTests : IDisposable
             return fail
                 ? Task.FromException<Task<int>?>(new IOException("launch failed"))
                 : Task.FromResult<Task<int>?>(Task.FromResult(0));
-        }, _temp, "/storage-root");
+        }, _temp, "/storage-root") { BindWindowsTargets = false };
         var buckets = ElevatedApplyCommand.Partition([("/a", DesiredVisibility.Hidden, false)], WindowsHideMode.HiddenOnly);
 
         var apply = applicator.ApplyAsync(buckets, CancellationToken.None);

@@ -84,6 +84,8 @@ public static class ElevatedApplyCommand
         public IReadOnlyList<string> ToHideClearingSystem { get; init; } = [];
         public IReadOnlyList<string> ToShowClearingSystem { get; init; } = [];
 
+        public IReadOnlyDictionary<string, string> Identities { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
         [System.Text.Json.Serialization.JsonIgnore]
         public int Count => ToHide.Count + ToHideWithSystem.Count + ToShow.Count
             + ToHideClearingSystem.Count + ToShowClearingSystem.Count;
@@ -226,6 +228,7 @@ public static class ElevatedApplyCommand
         {
             ToHideClearingSystem = parsed.ToHideClearingSystem ?? [],
             ToShowClearingSystem = parsed.ToShowClearingSystem ?? [],
+            Identities = parsed.Identities ?? new Dictionary<string, string>(StringComparer.Ordinal),
         };
     }
 }

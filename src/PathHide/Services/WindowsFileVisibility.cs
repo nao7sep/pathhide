@@ -62,39 +62,20 @@ public static class WindowsFileVisibility
         _ => owned,
     };
 
-    /// <summary>Whether PathHide owns the entry's System bit; an entry from before this was recorded is.</summary>
-    public static bool OwnsSystem(PathEntry entry) => entry.SystemSetByPathHide ?? true;
+    /// <summary>Whether PathHide owns the entry's System bit; absent evidence never grants permission to clear it.</summary>
+    public static bool OwnsSystem(PathEntry entry) => entry.SystemSetByPathHide == true;
 
     /// <summary>
     /// Sets <paramref name="path"/>'s Hidden and System bits, writing only when they change. Returns
     /// whether this write turned System on, which makes it PathHide's.
     /// </summary>
-    /// <remarks>
-    /// <c>File.GetAttributes</c>/<c>File.SetAttributes</c> operate on the reparse point itself, not
-    /// its target (verified on Windows for symlinks and junctions, elevated and not). So a path
-    /// swapped for a junction between the unelevated inspect and the elevated write can only have its
-    /// own attributes changed — it cannot redirect an admin write onto the link's target. Keep both
-    /// calls path-based for that reason; do not switch to a follow-based API or add reparse-handle
-    /// machinery to "harden" a hazard that cannot occur.
-    /// </remarks>
     public static bool Set(string path, bool hide, SystemBit system)
         => Set(path, hide, system, parent: null);
 
-    internal static bool Set(string path, bool hide, SystemBit system, ApplyParentProcess? parent)
+    internal static bool Set(string path, bool hide, SystemBit system, ApplyParentProcess? parent,
+        string? approvedIdentity = null)
     {
-        path = PathNormalizer.RequireNativeAbsolutePath(path, windows: true);
-        var setNow = false;
-        AttributeWriteReservation.Run(path, () =>
-        {
-            var current = File.GetAttributes(path);
-            if (Change(current, hide, system) is not { } updated)
-                return;
-
-            // not recorded: this changes only external filesystem metadata; paths.json
-            // records the user's desired visibility, tracked-path identity and System ownership.
-            File.SetAttributes(path, updated);
-            setNow = !current.HasFlag(FileAttributes.System) && updated.HasFlag(FileAttributes.System);
-        }, parent);
-        return setNow;
+        using var target = new WindowsAttributeTarget(path, writable: true);
+        return target.Set(hide, system, approvedIdentity, parent);
     }
 }

@@ -4,7 +4,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
 using Microsoft.Win32.SafeHandles;
 
 namespace PathHide.Services;
@@ -12,68 +11,39 @@ namespace PathHide.Services;
 /// <summary>Exclude competing PathHide writes to one submitted path through physical settlement.</summary>
 internal static partial class AttributeWriteReservation
 {
-    internal static string Name(string path)
-    {
-        // Match the Windows writer's lexical path contract, without another filesystem query.
-        // GetFullPath removes dot segments; family normalization retains POSIX case in probes.
-        var full = Path.GetFullPath(path);
-        if (!PathNormalizer.TryNormalize(full, out var normalized, out var family))
-            throw new ArgumentException("The write path is not absolute.", nameof(path));
-        var key = PathNormalizer.IdentityKey(normalized, family);
-        return "Global\\PathHide.AttributeWrite." + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
-    }
+    internal static string Name(string identity) =>
+        "Global\\PathHide.AttributeWrite." + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
 
-    internal static void Run(string path, Action write, ApplyParentProcess? parent = null,
+    internal static void RunIdentity(string identity, Action write, ApplyParentProcess? parent = null,
         TimeSpan? bound = null, Action? waiting = null)
     {
-        var name = Name(path);
-        var wait = bound ?? BoundedVisibility.DefaultTimeout;
-        if (!OperatingSystem.IsWindows())
+        using var handle = CreateMutex(Name(identity));
+        bool Acquire(TimeSpan timeout)
         {
-            // Isolated cross-process tests exercise the same ownership/check order on the Mac.
-            using var mutex = new Mutex(false, name);
-            try
-            {
-                if (!mutex.WaitOne(TimeSpan.Zero))
-                {
-                    waiting?.Invoke(); // Test probes observe actual contention before releasing a producer.
-                    if (!mutex.WaitOne(wait))
-                        throw new TimeoutException("An earlier attribute write still owns this path.");
-                }
-            }
-            catch (AbandonedMutexException) { /* ownership was acquired; no saved value is trusted */ }
-            try
-            {
-                parent?.RequireRunning();
-                write();
-            }
-            finally { mutex.ReleaseMutex(); }
-            return;
+            var result = WaitForSingleObject(handle, checked((uint)timeout.TotalMilliseconds));
+            if (result == 0x102) return false;
+            if (result is not (0 or 0x80)) throw Failure();
+            return true;
         }
+        RunReserved(Acquire, () => { if (!ReleaseMutex(handle)) throw Failure(); }, write, parent, bound, waiting);
+    }
 
-        using var handle = CreateMutex(name);
-        var result = WaitForSingleObject(handle, 0);
-        if (result == 0x102)
+    // Shared sequencing; platform resources stay at the native edge and the portable test adapter.
+    internal static void RunReserved(Func<TimeSpan, bool> acquire, Action release, Action write,
+        ApplyParentProcess? parent, TimeSpan? bound, Action? waiting)
+    {
+        if (!acquire(TimeSpan.Zero))
         {
             waiting?.Invoke();
-            result = WaitForSingleObject(handle, checked((uint)wait.TotalMilliseconds));
+            if (!acquire(bound ?? BoundedVisibility.DefaultTimeout))
+                throw new TimeoutException("An earlier attribute write still owns this object.");
         }
-        if (result == 0x102) // WAIT_TIMEOUT: no ownership, and no write.
-            throw new TimeoutException("An earlier attribute write still owns this path.");
-        if (result is not (0 or 0x80)) // WAIT_OBJECT_0 / WAIT_ABANDONED both grant ownership.
-            throw Failure();
         try
         {
-            // This must follow the wait. A process check made before it can become stale while an
-            // older write stalls. If the GUI exits after this check, exclusion lasts through Set.
             parent?.RequireRunning();
             write();
         }
-        finally
-        {
-            if (!ReleaseMutex(handle))
-                throw Failure();
-        }
+        finally { release(); }
     }
 
     private static SafeWaitHandle CreateMutex(string name)

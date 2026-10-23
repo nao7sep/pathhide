@@ -25,7 +25,7 @@ public sealed class ElevatedApplicatorTests : IDisposable
         {
             invocation = ElevatedApplyCommand.ParseArguments(arguments);
             return Task.FromResult<Task<int>?>(Task.FromResult(0));
-        }, _temp, "/storage-root");
+        }, _temp, "/storage-root") { BindWindowsTargets = false };
         Assert.Equal(ElevatedApplyStatus.Completed,
             (await applicator.ApplyAsync(Buckets, CancellationToken.None)).Status);
         Assert.Equal(ElevatedApplyCommand.Parent.Current, invocation!.Parent);
@@ -45,7 +45,7 @@ public sealed class ElevatedApplicatorTests : IDisposable
             requestPath = ElevatedApplyCommand.ParseArguments(arguments)!.RequestPath;
             prompted.SetResult();
             return prompt.Task;
-        }, _temp, "/storage-root");
+        }, _temp, "/storage-root") { BindWindowsTargets = false };
         using var stop = new CancellationTokenSource();
 
         var apply = applicator.ApplyAsync(Buckets, stop.Token);
@@ -74,6 +74,7 @@ public sealed class ElevatedApplicatorTests : IDisposable
             return Task.FromResult<Task<int>?>(Task.FromResult(0));
         }, _temp, "/storage-root")
         {
+            BindWindowsTargets = false,
             FileWaitBound = cancel ? Generous : TimeSpan.FromMilliseconds(100),
             WriteRequest = (path, content) =>
             {
@@ -116,6 +117,7 @@ public sealed class ElevatedApplicatorTests : IDisposable
         var reads = 0;
         var applicator = new ElevatedApplicator(child.LaunchAsync, _temp, "/storage-root")
         {
+            BindWindowsTargets = false,
             FileWaitBound = TimeSpan.FromMilliseconds(100),
             ReadResults = files =>
             {
@@ -153,6 +155,7 @@ public sealed class ElevatedApplicatorTests : IDisposable
         var deletions = 0;
         var applicator = new ElevatedApplicator(child.LaunchAsync, _temp, "/storage-root")
         {
+            BindWindowsTargets = false,
             FileWaitBound = TimeSpan.FromMilliseconds(100),
             DeleteFiles = files =>
             {
@@ -203,7 +206,7 @@ public sealed class ElevatedExitRecordTests : IDisposable
     {
         using var log = new StartupDiagnosticLog("elevated apply: exited");
         var applicator = new ElevatedApplicator(
-            _ => Task.FromResult<Task<int>?>(Task.FromResult(exitCode)), _temp, "/storage-root");
+            _ => Task.FromResult<Task<int>?>(Task.FromResult(exitCode)), _temp, "/storage-root") { BindWindowsTargets = false };
 
         await applicator.ApplyAsync(new(["/a"], [], []), CancellationToken.None);
 

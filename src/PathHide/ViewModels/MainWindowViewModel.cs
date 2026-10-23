@@ -39,6 +39,7 @@ public partial class MainWindowViewModel : ObservableObject
     private AppState _state;
 
     private List<PathEntry> _entries = [];
+    private readonly Dictionary<string, bool> _pendingSystemOwnership = new(StringComparer.Ordinal);
 
     // Whether paths.json holds _entries. False after rejected Reload or uncertain save settlement;
     // a rejected Reload separately blocks saves until the repaired list is successfully read.
@@ -222,23 +223,51 @@ public partial class MainWindowViewModel : ObservableObject
 
     public string StatusBarText => Localizer.Of(Summary());
 
-    // The status bar counts the rows' states, so it is read again whenever a row joins, leaves or changes
-    // state, wherever that happens.
+    private readonly Dictionary<PathRowViewModel, ActualState> _rowStates = new();
+    private readonly Dictionary<ActualState, int> _stateCounts = new();
+
+    private void CountState(ActualState state, int delta) =>
+        _stateCounts[state] = _stateCounts.GetValueOrDefault(state) + delta;
+
     private void OnRowsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
-        foreach (PathRowViewModel row in e.OldItems ?? Array.Empty<PathRowViewModel>())
-            row.PropertyChanged -= OnRowChanged;
-        foreach (PathRowViewModel row in e.NewItems ?? Array.Empty<PathRowViewModel>())
-            row.PropertyChanged += OnRowChanged;
+        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+        {
+            foreach (var row in _rowStates.Keys) row.PropertyChanged -= OnRowChanged;
+            _rowStates.Clear();
+            _stateCounts.Clear();
+            foreach (var row in Rows) AddRow(row);
+        }
+        else
+        {
+            foreach (PathRowViewModel row in e.OldItems ?? Array.Empty<PathRowViewModel>())
+            {
+                row.PropertyChanged -= OnRowChanged;
+                if (_rowStates.Remove(row, out var state)) CountState(state, -1);
+            }
+            foreach (PathRowViewModel row in e.NewItems ?? Array.Empty<PathRowViewModel>()) AddRow(row);
+        }
         OnPropertyChanged(nameof(IsPathListEmpty));
         OnPropertyChanged(nameof(StatusBarText));
         SelectionOrListChanged();
     }
 
+    private void AddRow(PathRowViewModel row)
+    {
+        _rowStates.Add(row, row.ActualState);
+        CountState(row.ActualState, 1);
+        row.PropertyChanged += OnRowChanged;
+    }
+
     private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(PathRowViewModel.ActualState))
+        if (sender is PathRowViewModel row && e.PropertyName == nameof(PathRowViewModel.ActualState))
+        {
+            CountState(_rowStates[row], -1);
+            CountState(row.ActualState, 1);
+            _rowStates[row] = row.ActualState;
             OnPropertyChanged(nameof(StatusBarText));
+        }
         else if (e.PropertyName == nameof(PathRowViewModel.IsSelected))
             SelectionOrListChanged();
     }
@@ -261,11 +290,12 @@ public partial class MainWindowViewModel : ObservableObject
     internal Message Summary()
     {
         // An empty list explains itself inside the list; the bar only counts.
-        var hidden = Rows.Count(r => r.ActualState == ActualState.Hidden);
-        var visible = Rows.Count(r => r.ActualState == ActualState.Visible);
-        var missing = Rows.Count(r => r.ActualState == ActualState.Missing);
-        var pending = Rows.Count(r => r.ActualState == ActualState.Unknown);
-        var problems = Rows.Count(r => r.ActualState is ActualState.AccessDenied or ActualState.Error or ActualState.Unresponsive);
+        var hidden = _stateCounts.GetValueOrDefault(ActualState.Hidden);
+        var visible = _stateCounts.GetValueOrDefault(ActualState.Visible);
+        var missing = _stateCounts.GetValueOrDefault(ActualState.Missing);
+        var pending = _stateCounts.GetValueOrDefault(ActualState.Unknown);
+        var problems = _stateCounts.GetValueOrDefault(ActualState.AccessDenied)
+            + _stateCounts.GetValueOrDefault(ActualState.Error) + _stateCounts.GetValueOrDefault(ActualState.Unresponsive);
 
         var parts = new List<Message> { Message.Of("status.entries", ("count", Rows.Count)) };
         if (hidden > 0) parts.Add(Message.Of("status.hidden", ("count", hidden)));
@@ -495,10 +525,15 @@ public partial class MainWindowViewModel : ObservableObject
         // Cancel while identities are still being decided adds nothing: no entry is saved or hidden.
         if (identities is null)
             return;
-        var existing = identities.Take(_entries.Count).ToList();
+        static string Key(string path)
+        {
+            PathNormalizer.TryNormalize(path, out var normalized, out var family);
+            return PathNormalizer.IdentityKey(normalized!, family);
+        }
+        var existing = identities.Take(_entries.Count).Select(Key).ToHashSet(StringComparer.Ordinal);
         foreach (var candidate in identities.Skip(_entries.Count))
         {
-            if (existing.Any(path => PathNormalizer.AreEqual(path, candidate)))
+            if (!existing.Add(Key(candidate)))
             {
                 duplicates++;
                 duplicatePaths.Add(candidate);
@@ -514,11 +549,10 @@ public partial class MainWindowViewModel : ObservableObject
                 SystemSetByPathHide = false,
             });
             addedPaths.Add(candidate);
-            existing.Add(candidate);
             added++;
         }
 
-        Log.Info("add paths", new { added, duplicates, invalid, paths = addedPaths, duplicatePaths });
+        Log.Info("add paths: requested", new { requested = added, duplicates, invalid, paths = addedPaths, duplicatePaths });
 
         if (added == 0)
         {
@@ -535,6 +569,8 @@ public partial class MainWindowViewModel : ObservableObject
                 issuePaths: addedPaths);
             return;
         }
+
+        Log.Info("add paths: saved", new { added, paths = addedPaths });
 
         // Rows carry their entry's stored string, so an exact match finds the new ones.
         var addedSet = new HashSet<string>(addedPaths, StringComparer.Ordinal);
@@ -580,6 +616,9 @@ public partial class MainWindowViewModel : ObservableObject
         }
         return [.. keys.Select(key => resolved[key])];
     }
+
+    private sealed record AddFacts(int Added, int Applied, int Invalid, IReadOnlyCollection<string> Duplicates, IReadOnlyDictionary<string, ApplyProblem> Problems);
+    private AddFacts? _pathAddFacts;
 
     private void ShowPathAddResult(
         int added,
@@ -627,6 +666,7 @@ public partial class MainWindowViewModel : ObservableObject
             issuePaths: duplicatePaths.Concat(outcome.ProblemPaths),
             hasOpaqueIssues: invalid > 0,
             issuesAreTracked: true);
+        _pathAddFacts = new AddFacts(added, outcome.Applied, invalid, duplicatePaths.ToArray(), new Dictionary<string, ApplyProblem>(outcome.Problems));
     }
 
     private void SetPathAddResult(
@@ -636,6 +676,7 @@ public partial class MainWindowViewModel : ObservableObject
         bool hasOpaqueIssues = false,
         bool issuesAreTracked = false)
     {
+        _pathAddFacts = null;
         _pathAddResultIsPickerFailure = false;
         _pathAddIssuePaths.Clear();
         if (issuePaths is not null)
@@ -653,12 +694,16 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private void ResolvePathAddIssues(Func<string, bool> resolved)
     {
-        if (_pathAddHasOpaqueIssues || _pathAddIssuePaths.Count == 0)
+        if (_pathAddIssuePaths.Count == 0)
             return;
 
         _pathAddIssuePaths.RemoveAll(issue => resolved(issue));
-        if (_pathAddIssuePaths.Count == 0)
+        if (_pathAddIssuePaths.Count == 0 && !_pathAddHasOpaqueIssues)
             DismissPathAddResult();
+        else if (_pathAddFacts is { } facts)
+            ShowPathAddResult(facts.Added, facts.Duplicates.Where(path => !resolved(path)).ToArray(), facts.Invalid,
+                new ApplyOutcome(facts.Applied, facts.Problems.Where(pair => !resolved(pair.Key))
+                    .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)));
     }
 
     /// <summary>A path an apply reached without a problem settles the add result's issue about it.</summary>
@@ -671,6 +716,7 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void DismissPathAddResult()
     {
+        _pathAddFacts = null;
         _pathAddResultIsPickerFailure = false;
         _pathAddIssuePaths.Clear();
         _pathAddHasOpaqueIssues = false;
@@ -706,7 +752,7 @@ public partial class MainWindowViewModel : ObservableObject
             var removing = new HashSet<PathEntry>(selected.Select(row => row.Entry));
             var updated = _entries.Where(entry => !removing.Contains(entry)).ToList();
 
-            Log.Info("remove paths", new { removed = selected.Count, paths = selected.Select(row => row.Path) });
+            Log.Info("remove paths: requested", new { requested = selected.Count, paths = selected.Select(row => row.Path) });
 
             var saveFailure = await TrySaveEntriesAsync(updated);
             if (saveFailure is not null)
@@ -715,6 +761,7 @@ public partial class MainWindowViewModel : ObservableObject
                 return;
             }
 
+            Log.Info("remove paths: saved", new { removed = selected.Count, paths = selected.Select(row => row.Path) });
             ResolveOperationalResult(OperationalResultOwner.PathStore);
         });
     }
@@ -850,11 +897,11 @@ public partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        _entries = reloaded.Value;
+        _entries = WithKnownOwnership(reloaded.Value);
         _pathListReadFailure = null;
-        _entriesOnDisk = true;
+        _entriesOnDisk = _pendingSystemOwnership.Count == 0;
         lock (_userSavesGate)
-            _unsavedAtQuit.Remove(UserStore.PathList);
+            if (_pendingSystemOwnership.Count == 0) _unsavedAtQuit.Remove(UserStore.PathList);
         SyncRowsWithEntries();
         StartBackgroundScan();
     }));
@@ -1324,7 +1371,12 @@ public partial class MainWindowViewModel : ObservableObject
         _quitting = false;
         _shutdown = null;
         lock (_userSavesGate)
+        {
+            _unsavedAtQuit.TryGetValue(UserStore.PathList, out var pendingFacts);
             _unsavedAtQuit.Clear();
+            if (_pendingSystemOwnership.Count > 0 && pendingFacts is not null)
+                _unsavedAtQuit[UserStore.PathList] = pendingFacts;
+        }
         if (_quitHoldsGate)
         {
             _quitHoldsGate = false;
@@ -1405,9 +1457,10 @@ public partial class MainWindowViewModel : ObservableObject
 
         // Sort a snapshot so paths.json is diff-stable without imposing that order on the
         // live list. UI ordering is a separate concern handled by the DataGrid's own sort.
+        updated = WithKnownOwnership(updated);
         var snapshot = SortedForDisk(updated);
 
-        if (_entriesOnDisk && SameContent(snapshot, SortedForDisk(_entries)))
+        if (_pendingSystemOwnership.Count == 0 && _entriesOnDisk && SameContent(snapshot, SortedForDisk(_entries)))
         {
             Log.Debug("paths: unchanged, not saved");
             lock (_userSavesGate)
@@ -1436,6 +1489,7 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         _entries = updated;
+        _pendingSystemOwnership.Clear();
         _entriesOnDisk = true;
         SyncRowsWithEntries();
         return null;
@@ -1498,6 +1552,7 @@ public partial class MainWindowViewModel : ObservableObject
             .ToDictionary(group => group.Key, group => new Queue<PathRowViewModel>(group), StringComparer.Ordinal);
 
         var desiredRows = new List<PathRowViewModel>(_entries.Count);
+        var newRows = new HashSet<PathRowViewModel>();
 
         foreach (var entry in _entries)
         {
@@ -1510,6 +1565,7 @@ public partial class MainWindowViewModel : ObservableObject
             else
             {
                 row = new PathRowViewModel(entry);
+                newRows.Add(row);
             }
 
             if (PathNormalizer.TryNormalize(entry.Path, out _, out var family))
@@ -1533,7 +1589,7 @@ public partial class MainWindowViewModel : ObservableObject
             if (i < Rows.Count && ReferenceEquals(Rows[i], desiredRow))
                 continue;
 
-            var existingIndex = Rows.IndexOf(desiredRow);
+            var existingIndex = newRows.Contains(desiredRow) ? -1 : Rows.IndexOf(desiredRow);
             if (existingIndex >= 0)
                 Rows.Move(existingIndex, i);
             else
@@ -1564,6 +1620,7 @@ public partial class MainWindowViewModel : ObservableObject
         _scanCts = scanCts;
         var token = scanCts.Token;
         var entries = _entries.ToList();
+        var rowsByEntry = Rows.ToDictionary(row => row.Entry);
         var completed = false;
 
         IsScanning = true;
@@ -1574,7 +1631,7 @@ public partial class MainWindowViewModel : ObservableObject
         {
             await foreach (var result in _scanner.ScanAsync(entries, token))
             {
-                var row = Rows.FirstOrDefault(r => r.Entry == result.Entry);
+                rowsByEntry.TryGetValue(result.Entry, out var row);
                 row?.ApplyScanResult(result.Inspection, result.Family);
                 // The results ARE the progress: counting them here keeps the number the status
                 // bar shows in lockstep with the rows, instead of arriving on its own channel.
@@ -1809,7 +1866,7 @@ public partial class MainWindowViewModel : ObservableObject
                 // The user cancelled: a row the child reported takes its own verdict as it stands, and
                 // the next scan refreshes what it shows. Re-inspecting here could not be cancelled, and
                 // would keep the apply running row by row after Cancel.
-                if (reported && outcome.Status == ElevatedApplyStatus.Cancelled)
+                if (outcome.Status == ElevatedApplyStatus.Cancelled || token.IsCancellationRequested)
                 {
                     var desiredState = row.Entry.DesiredVisibility == DesiredVisibility.Hidden
                         ? ActualState.Hidden
@@ -1818,14 +1875,22 @@ public partial class MainWindowViewModel : ObservableObject
                     if (ok) applied++;
                     else
                     {
-                        problems[row.Path] = ApplyProblem.Error;
+                        problems[row.Path] = reported ? ApplyProblem.Error : ApplyProblem.Cancelled;
                     }
                     continue;
                 }
 
                 // Re-inspect only to refresh what the row shows; the success/error verdict
                 // comes from the elevated child's own per-path report (see DecideElevatedRow).
-                var recheck = await _visibility.InspectAsync(row.Path, CancellationToken.None);
+                PathInspection recheck;
+                try { recheck = await _visibility.InspectAsync(row.Path, token); }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    row.ActualState = ActualState.Unknown;
+                    if (ok) applied++;
+                    else problems[row.Path] = reported ? ApplyProblem.Error : ApplyProblem.Cancelled;
+                    continue;
+                }
 
                 // Refused while an earlier child still runs: nothing was attempted, so the row shows
                 // what is on disk and the summary says why.
@@ -1864,7 +1929,7 @@ public partial class MainWindowViewModel : ObservableObject
         var result = new ApplyOutcome(applied, problems);
         Log.Info("apply: done", new { applied, unchanged = result.Unchanged, missing = result.Missing,
             errors = result.Errors, unresponsive = result.Unresponsive, cancelled = result.Cancelled,
-            elevationBusy = result.ElevationBusy, elevationDeclined = result.ElevationDeclined, elevationExitCode });
+            elevationBusy = result.ElevationBusy, elevationDeclined = result.ElevationDeclined, elevationExitCode, problems });
 
         return result;
     }
@@ -1936,15 +2001,28 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private async Task RecordSystemOwnershipAsync(IReadOnlyDictionary<string, bool> ownership)
     {
-        if (!_entries.Any(entry => ownership.TryGetValue(entry.Path, out var owned) && entry.SystemSetByPathHide != owned))
-            return;
+        foreach (var entry in _entries)
+            if (ownership.TryGetValue(entry.Path, out var owned) && entry.SystemSetByPathHide != owned
+                && (owned || entry.SystemSetByPathHide is not null))
+                _pendingSystemOwnership[entry.Path] = owned;
+        if (_pendingSystemOwnership.Count == 0) return;
 
-        var updated = _entries.Select(entry => ownership.TryGetValue(entry.Path, out var owned) && entry.SystemSetByPathHide != owned
+        // These are observed external facts, not proposed user edits. A save failure cannot undo them.
+        _entries = WithKnownOwnership(_entries);
+        _entriesOnDisk = false;
+        SyncRowsWithEntries();
+        if (await TrySaveEntriesAsync(_entries) is { } failure)
+        {
+            lock (_userSavesGate)
+                _unsavedAtQuit[UserStore.PathList] = new UnsavedChange(failure, () => TrySaveEntriesAsync(_entries));
+            ShowOperationalResult(OperationalResultOwner.PathStore, failure, error: true);
+        }
+    }
+
+    private List<PathEntry> WithKnownOwnership(List<PathEntry> entries) => entries.Select(entry =>
+        _pendingSystemOwnership.TryGetValue(entry.Path, out var owned)
             ? new PathEntry { Path = entry.Path, DesiredVisibility = entry.DesiredVisibility, SystemSetByPathHide = owned }
             : entry).ToList();
-        if (await TrySaveEntriesAsync(updated) is { } failure)
-            ShowOperationalResult(OperationalResultOwner.PathStore, failure, error: true);
-    }
 
     private readonly record struct ApplyOutcome(int Applied, IReadOnlyDictionary<string, ApplyProblem> Problems)
     {

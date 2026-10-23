@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -104,6 +105,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
     private readonly string _storageRoot;
     private readonly TimeSpan _childTimeout;
 
+    internal bool BindWindowsTargets { get; init; } = OperatingSystem.IsWindows();
     internal TimeSpan FileWaitBound { get; init; } = BoundedStoreWork.DefaultBound;
     internal Action<string, byte[]> WriteRequest { get; init; } = File.WriteAllBytes;
     internal Func<ElevatedApplyFiles, IReadOnlyDictionary<string, PathApplyResult>> ReadResults { get; init; } = files => files.ReadResults();
@@ -140,8 +142,8 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         }
 
         var totalPaths = buckets.Count;
-        var request = System.Text.Encoding.UTF8.GetBytes(ElevatedApplyCommand.SerializeRequest(buckets));
-        var requestDigest = ElevatedApplyCommand.RequestDigest(request);
+        string requestDigest = string.Empty;
+        var targets = new List<WindowsAttributeTarget>();
         var files = ElevatedApplyFiles.Create(_tempDirectory);
         var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _outstanding = settled.Task; // Claim preparation too, before the first wait.
@@ -156,6 +158,29 @@ public sealed class ElevatedApplicator : IElevatedApplicator
                 // not recorded: transient IPC, never reloaded as managed state.
                 await fileWork.RunAsync(() =>
                 {
+                    if (BindWindowsTargets)
+                    {
+                        var identities = new Dictionary<string, string>(StringComparer.Ordinal);
+                        foreach (var path in buckets.ToHide.Concat(buckets.ToHideWithSystem)
+                            .Concat(buckets.ToHideClearingSystem).Concat(buckets.ToShow).Concat(buckets.ToShowClearingSystem))
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            try
+                            {
+                                var target = new WindowsAttributeTarget(path, writable: false);
+                                targets.Add(target); // Held until child and physical preparation settle.
+                                identities[path] = target.Identity;
+                            }
+                            catch (Exception ex)
+                            {
+                                // The child rejects this target without mutation; independent approved targets remain usable.
+                                Log.Warn("elevated apply: target identity unavailable", ex, new { path });
+                            }
+                        }
+                        buckets = buckets with { Identities = identities };
+                    }
+                    var request = System.Text.Encoding.UTF8.GetBytes(ElevatedApplyCommand.SerializeRequest(buckets));
+                    requestDigest = ElevatedApplyCommand.RequestDigest(request);
                     WriteRequest(files.RequestPath, request);
                     return true;
                 }, FileWaitBound, TimeProvider.System, cancellationToken, started: work => fileTail = work)
@@ -241,7 +266,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         {
             // Physical preparation/read, child exit and cleanup remain one lifetime. A timed-out
             // file operation is joined before deleting its files; no late evidence reaches the UI.
-            var cleanup = DeleteAfterSettlementAsync(run, fileTail, files, settled);
+            var cleanup = DeleteAfterSettlementAsync(run, fileTail, files, settled, targets);
             if ((status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted or ElevatedApplyStatus.Declined) && fileTail.IsCompleted)
             {
                 try { await cleanup.WaitAsync(FileWaitBound).ConfigureAwait(false); }
@@ -330,7 +355,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
     }
 
     private async Task DeleteAfterSettlementAsync(Task<int?>? run, Task fileTail,
-        ElevatedApplyFiles files, TaskCompletionSource settled)
+        ElevatedApplyFiles files, TaskCompletionSource settled, List<WindowsAttributeTarget> targets)
     {
         try
         {
@@ -345,6 +370,10 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         {
             Log.Warn("elevated apply: cleanup failed; the next launch retries", ex);
         }
-        finally { settled.TrySetResult(); }
+        finally
+        {
+            foreach (var target in targets) target.Dispose();
+            settled.TrySetResult();
+        }
     }
 }

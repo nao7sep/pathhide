@@ -19,7 +19,7 @@ public sealed class CommandRecordTests
     private static string[] Paths(LogEntry entry, string field) =>
         [.. entry.Fields![field]!.AsArray().Select(path => path!.GetValue<string>())];
 
-    [Fact]
+    [Fact(Timeout = 10_000)]
     public async Task Hide_and_Show_record_which_paths_each_was_to_change()
     {
         using var log = new StartupDiagnosticLog("apply: start");
@@ -43,10 +43,10 @@ public sealed class CommandRecordTests
         Assert.Equal(["/records/a", "/records/b"], Paths(hidden, "hide"));
     }
 
-    [Fact]
+    [Fact(Timeout = 10_000)]
     public async Task Remove_records_the_paths_it_stopped_tracking()
     {
-        using var log = new StartupDiagnosticLog("remove paths");
+        using var log = new StartupDiagnosticLog("remove paths: saved");
         var vm = CreateViewModel(new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>
         {
             Value = [Entry("/records/a"), Entry("/records/b")],

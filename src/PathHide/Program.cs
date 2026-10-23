@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using Avalonia;
 using PathHide.I18n;
@@ -240,11 +242,13 @@ sealed class Program
             // Each result is written and flushed the moment its path is done, so when the parent stops
             // waiting on a child stalled inside SetAttributes on a share that stopped answering, every
             // path already changed is still reported.
-            var failed = ApplyFileAttributes(request.ToHide, hide: true, SystemBit.Keep, results, parent)
-                | ApplyFileAttributes(request.ToHideWithSystem, hide: true, SystemBit.Set, results, parent)
-                | ApplyFileAttributes(request.ToHideClearingSystem, hide: true, SystemBit.Clear, results, parent)
-                | ApplyFileAttributes(request.ToShow, hide: false, SystemBit.Keep, results, parent)
-                | ApplyFileAttributes(request.ToShowClearingSystem, hide: false, SystemBit.Clear, results, parent);
+            var work = request.ToHide.Select(path => (path, hide: true, system: SystemBit.Keep))
+                .Concat(request.ToHideWithSystem.Select(path => (path, true, SystemBit.Set)))
+                .Concat(request.ToHideClearingSystem.Select(path => (path, true, SystemBit.Clear)))
+                .Concat(request.ToShow.Select(path => (path, false, SystemBit.Keep)))
+                .Concat(request.ToShowClearingSystem.Select(path => (path, false, SystemBit.Clear)));
+            var failed = ApplyTargets(work, results, parent, request.Identities, invocation.Parent is not null);
+
 
             // The per-path file is the authoritative channel; the exit code stays a coarse
             // 0 = all ok / 1 = some failed signal for callers and logs.
@@ -269,55 +273,45 @@ sealed class Program
     }
 
     /// <returns>Whether any path failed.</returns>
-    /// <remarks>
-    /// <see cref="WindowsFileVisibility.Set"/> is path-based and never follows a reparse point; its
-    /// remarks say why that matters for this elevated write.
-    /// </remarks>
     internal static bool ApplyFileAttributes(
-        IReadOnlyList<string> paths, bool hide, SystemBit system, ElevatedResultsWriter? results, ApplyParentProcess? parent)
+        IReadOnlyList<string> paths, bool hide, SystemBit system, ElevatedResultsWriter? results, ApplyParentProcess? parent) =>
+        ApplyTargets(paths.Select(path => (path, hide, system)), results, parent,
+            new Dictionary<string, string>(), requireApproval: false);
+
+    private static bool ApplyTargets(IEnumerable<(string Path, bool Hide, SystemBit System)> targets,
+        ElevatedResultsWriter? results, ApplyParentProcess? parent,
+        IReadOnlyDictionary<string, string> identities, bool requireApproval)
     {
-        if (paths.Count == 0)
-            return false;
-
-        // One info line for the intent, one for the outcome, and one error per failure, never one
-        // line per successful item, so a large apply stays readable in the records.
-        Log.Info("apply: start", new { count = paths.Count, hide, system });
-
         var failed = 0;
-        foreach (var path in paths)
+        // Parallel.ForEach owns all started synchronous work until it physically returns. Stop prevents
+        // subsequent admission after a required report breaks, without pretending running writes stopped.
+        Parallel.ForEach(targets, new ParallelOptions { MaxDegreeOfParallelism = BoundedVisibility.Width }, (target, loop) =>
         {
+            if (loop.IsStopped) return;
+            parent?.RequireRunning();
+            PathApplyResult verdict;
             try
             {
-                var systemSet = WindowsFileVisibility.Set(path, hide, system, parent);
-                WriteResult(results, new PathApplyResult(path, Ok: true, systemSet));
+                identities.TryGetValue(target.Path, out var approved);
+                if (requireApproval && approved is null)
+                    throw new InvalidDataException("The approved request has no filesystem object identity.");
+                var systemSet = WindowsFileVisibility.Set(target.Path, target.Hide, target.System, parent, approved);
+                verdict = new PathApplyResult(target.Path, Ok: true, systemSet);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (OperationCanceledException) { loop.Stop(); throw; }
+            catch (Exception ex)
             {
-                // These paths reached the elevated pass precisely because the
-                // unelevated attempt hit access-denied, so a failure here is
-                // unexpected and gets a full error — not a silent swallow.
-                Log.Error("apply: failed to set attributes", ex, new { path, hide, system });
-                WriteResult(results, new PathApplyResult(path, Ok: false));
-                failed++;
+                Log.Error("apply: failed to set attributes", ex, new { path = target.Path, hide = target.Hide, system = target.System });
+                verdict = new PathApplyResult(target.Path, Ok: false);
+                Interlocked.Exchange(ref failed, 1);
             }
-        }
-
-        Log.Info("apply: done", new { ok = paths.Count - failed, failed });
-        return failed > 0;
-    }
-
-    private static void WriteResult(ElevatedResultsWriter? results, PathApplyResult result)
-    {
-        if (results is null)
-            return;
-
-        try
-        {
-            results.Report(result);
-        }
-        catch (Exception ex)
-        {
-            Log.Error("apply: failed to write to the results file", ex);
-        }
+            try { results?.Report(verdict); }
+            catch
+            {
+                loop.Stop();
+                throw; // Required evidence failure is not a target failure and must fail the process.
+            }
+        });
+        return failed != 0;
     }
 }

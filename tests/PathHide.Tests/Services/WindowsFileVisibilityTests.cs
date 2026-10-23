@@ -100,7 +100,7 @@ public sealed class WindowsFileVisibilityTests
 
     // A list from before ownership was recorded keeps the behaviour it had: PathHide's to clear.
     [Theory]
-    [InlineData(null, true)]
+    [InlineData(null, false)]
     [InlineData(true, true)]
     [InlineData(false, false)]
     public void An_entry_without_a_record_counts_as_PathHides(bool? recorded, bool expected) =>

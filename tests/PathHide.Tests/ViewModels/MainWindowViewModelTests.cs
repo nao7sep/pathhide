@@ -177,6 +177,27 @@ public class MainWindowViewModelTests
         Assert.False(Assert.Single(paths.Value).SystemSetByPathHide);
     }
 
+    [Fact]
+    public async Task Known_System_ownership_survives_a_failed_save_and_reload_until_saved()
+    {
+        var visibility = new FakeVisibilityService();
+        var paths = new FakeJsonStore<List<PathEntry>> { Value = [Entry("/mine")] };
+        var vm = CreateViewModel(visibility, paths);
+        await vm.ScanTask;
+        Assert.Null(await vm.TryApplySettingsAsync("en", "", true, ThemePreference.System));
+        visibility.OnHide = _ => { paths.ThrowOnSave = true; return null; };
+        await vm.ReapplyAllCommand.ExecuteAsync(null);
+        Assert.True(vm.Rows.Single().Entry.SystemSetByPathHide);
+        Assert.False(paths.Value.Single().SystemSetByPathHide);
+        paths.ThrowOnSave = false;
+        await vm.ReloadCommand.ExecuteAsync(null);
+        await vm.ScanTask;
+        Assert.True(vm.Rows.Single().Entry.SystemSetByPathHide);
+        await vm.ShowAllCommand.ExecuteAsync(null);
+        Assert.Equal([SystemBit.Clear], visibility.ShowSystem);
+        Assert.False(paths.Value.Single().SystemSetByPathHide);
+    }
+
     // A System attribute the item already had is not PathHide's: hiding with System leaves it the
     // item's, and Show keeps it.
     [Fact]
@@ -199,10 +220,9 @@ public class MainWindowViewModelTests
         Assert.False(Assert.Single(paths.Value).SystemSetByPathHide);
     }
 
-    // An entry from a list written before ownership was recorded keeps the behaviour it had: Show
-    // clears System, after which the entry records that PathHide no longer owns it.
+    // Missing ownership evidence cannot authorize removing an external System bit.
     [Fact]
-    public async Task An_entry_from_before_ownership_records_is_treated_as_PathHides()
+    public async Task An_entry_without_ownership_evidence_preserves_System()
     {
         var visibility = new FakeVisibilityService();
         visibility.SystemOn["/old"] = true;
@@ -216,9 +236,9 @@ public class MainWindowViewModelTests
         vm.Rows.Single().IsSelected = true;
         await vm.ShowSelectedCommand.ExecuteAsync(null);
 
-        Assert.Equal([SystemBit.Clear], visibility.ShowSystem);
-        Assert.False(visibility.SystemOn["/old"]);
-        Assert.False(Assert.Single(paths.Value).SystemSetByPathHide);
+        Assert.Equal([SystemBit.Keep], visibility.ShowSystem);
+        Assert.True(visibility.SystemOn["/old"]);
+        Assert.Null(Assert.Single(paths.Value).SystemSetByPathHide);
     }
 
     // While one list-changing command runs, every other one is unavailable rather than queueing out of
@@ -502,6 +522,8 @@ public class MainWindowViewModelTests
         vm.Rows.Single(row => row.Path == "/gone/a").IsSelected = true;
         await vm.RemoveSelectedCommand.ExecuteAsync(null);
         Assert.NotNull(vm.PathAddResult);
+        Assert.Contains("1 added path is missing", English.Of(vm.PathAddResult.Message));
+        Assert.DoesNotContain("2 added paths are missing", English.Of(vm.PathAddResult.Message));
 
         vm.Rows.Single(row => row.Path == "/gone/b").IsSelected = true;
         await vm.RemoveSelectedCommand.ExecuteAsync(null);
@@ -556,6 +578,13 @@ public class MainWindowViewModelTests
         Assert.DoesNotContain("Error: ", result.Text, StringComparison.Ordinal);
         Assert.Equal(2, vm.Rows.Count);
         Assert.Equal(ActualState.Visible, vm.Rows.Single(row => row.Path == "/cannot-hide").ActualState);
+
+        visibility.OnHide = null;
+        vm.Rows.Single(row => row.Path == "/cannot-hide").IsSelected = true;
+        await vm.HideSelectedCommand.ExecuteAsync(null);
+        Assert.Equal(PathAddResultSeverity.Warning, vm.PathAddResult!.Severity);
+        Assert.DoesNotContain("could not be hidden", English.Of(vm.PathAddResult.Message));
+        Assert.Contains("unavailable or invalid", English.Of(vm.PathAddResult.Message));
     }
 
     [Fact]
