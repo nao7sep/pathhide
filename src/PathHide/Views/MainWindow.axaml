@@ -115,7 +115,7 @@
                         <!-- Remove is wired in code-behind (not Command-bound) so it shares the
                              grid's post-delete selection recovery with the Delete key. -->
                         <Button i18n:Localized.Content="common.remove" Classes="destructive" x:Name="RemoveButton"
-                                IsEnabled="{Binding CanStartCommand}"/>
+                                IsEnabled="{Binding CanActOnSelection}"/>
                         <Button i18n:Localized.Content="common.cancel" Classes="cancel"
                                 Command="{Binding CancelCommand}"
                                 IsVisible="{Binding IsBusy}"/>

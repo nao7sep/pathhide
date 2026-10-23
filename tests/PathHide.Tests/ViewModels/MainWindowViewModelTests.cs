@@ -123,6 +123,33 @@ public class MainWindowViewModelTests
         Assert.All(visibility.HideModes, mode => Assert.Equal(WindowsHideMode.HiddenOnly, mode));
     }
 
+    // A command with nothing to act on is unavailable instead of quietly doing nothing: the selected
+    // commands with nothing selected, the list-wide ones on an empty list. Reload stays, since it reads
+    // the list from disk.
+    [Fact]
+    public async Task Commands_with_nothing_to_act_on_are_unavailable()
+    {
+        var empty = CreateViewModel(new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>());
+        Assert.All([empty.HideAllCommand, empty.ShowAllCommand, empty.ReapplyAllCommand],
+            command => Assert.False(command.CanExecute(null)));
+        Assert.True(empty.ReloadCommand.CanExecute(null));
+
+        var vm = CreateViewModel(new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>> { Value = [Entry("/a")] });
+        await vm.ScanTask;
+        System.Windows.Input.ICommand[] selected = [vm.HideSelectedCommand, vm.ShowSelectedCommand, vm.RemoveSelectedCommand];
+        Assert.All([vm.HideAllCommand, vm.ShowAllCommand, vm.ReapplyAllCommand], command => Assert.True(command.CanExecute(null)));
+        Assert.All(selected, command => Assert.False(command.CanExecute(null)));
+        Assert.False(vm.CanActOnSelection);
+
+        var changed = 0;
+        vm.HideSelectedCommand.CanExecuteChanged += (_, _) => changed++;
+        vm.Rows[0].IsSelected = true;
+
+        Assert.True(changed > 0);
+        Assert.All(selected, command => Assert.True(command.CanExecute(null)));
+        Assert.True(vm.CanActOnSelection);
+    }
+
     // While one list-changing command runs, every other one is unavailable rather than queueing out of
     // sight, and Cancel stays available; they return once it finishes.
     [Fact]
@@ -131,6 +158,7 @@ public class MainWindowViewModelTests
         var visibility = new FakeVisibilityService();
         var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [Entry("/a")] });
         await vm.ScanTask;
+        vm.Rows[0].IsSelected = true;
         System.Windows.Input.ICommand[] others =
         [
             vm.AddPathsCommand, vm.RemoveSelectedCommand, vm.HideSelectedCommand, vm.ShowSelectedCommand,

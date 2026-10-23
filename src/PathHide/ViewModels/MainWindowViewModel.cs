@@ -117,7 +117,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// one runs the others are unavailable rather than queueing out of sight behind it; Cancel stays.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanStartCommand))]
+    [NotifyPropertyChangedFor(nameof(CanStartCommand), nameof(CanActOnSelection))]
     [NotifyCanExecuteChangedFor(nameof(AddPathsCommand), nameof(RemoveSelectedCommand), nameof(HideSelectedCommand),
         nameof(ShowSelectedCommand), nameof(HideAllCommand), nameof(ShowAllCommand), nameof(ReapplyAllCommand),
         nameof(ReloadCommand))]
@@ -125,6 +125,15 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Whether a list-changing command can start now.</summary>
     public bool CanStartCommand => !IsCommandRunning;
+
+    /// <summary>
+    /// Whether a command on the selected entries can start: not while another runs, and not with nothing
+    /// selected, when it would have nothing to do and is unavailable rather than silently doing nothing.
+    /// </summary>
+    public bool CanActOnSelection => CanStartCommand && Rows.Any(row => row.IsSelected);
+
+    /// <summary>Whether a command on every entry can start: an empty list gives it nothing to do.</summary>
+    public bool CanActOnAll => CanStartCommand && Rows.Count > 0;
 
     public ObservableCollection<OperationalResultViewModel> OperationalResults { get; } = [];
 
@@ -223,12 +232,26 @@ public partial class MainWindowViewModel : ObservableObject
             row.PropertyChanged += OnRowChanged;
         OnPropertyChanged(nameof(IsPathListEmpty));
         OnPropertyChanged(nameof(StatusBarText));
+        SelectionOrListChanged();
     }
 
     private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(PathRowViewModel.ActualState))
             OnPropertyChanged(nameof(StatusBarText));
+        else if (e.PropertyName == nameof(PathRowViewModel.IsSelected))
+            SelectionOrListChanged();
+    }
+
+    private void SelectionOrListChanged()
+    {
+        OnPropertyChanged(nameof(CanActOnSelection));
+        HideSelectedCommand.NotifyCanExecuteChanged();
+        ShowSelectedCommand.NotifyCanExecuteChanged();
+        RemoveSelectedCommand.NotifyCanExecuteChanged();
+        HideAllCommand.NotifyCanExecuteChanged();
+        ShowAllCommand.NotifyCanExecuteChanged();
+        ReapplyAllCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -658,7 +681,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// Drops the selected entries from the list and from <c>paths.json</c>. Each item's visibility is
     /// left exactly as it is.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(CanStartCommand))]
+    [RelayCommand(CanExecute = nameof(CanActOnSelection))]
     private Task RemoveSelectedAsync()
     {
         var paths = SelectedPaths();
@@ -753,19 +776,19 @@ public partial class MainWindowViewModel : ObservableObject
     private List<PathRowViewModel> TrackedTargets(IReadOnlySet<string> paths) =>
         Rows.Where(row => paths.Contains(row.Path)).ToList();
 
-    [RelayCommand(CanExecute = nameof(CanStartCommand))]
+    [RelayCommand(CanExecute = nameof(CanActOnSelection))]
     private Task HideSelectedAsync() => SetVisibilityAsync(SelectedPaths(), DesiredVisibility.Hidden);
 
-    [RelayCommand(CanExecute = nameof(CanStartCommand))]
+    [RelayCommand(CanExecute = nameof(CanActOnSelection))]
     private Task ShowSelectedAsync() => SetVisibilityAsync(SelectedPaths(), DesiredVisibility.Shown);
 
-    [RelayCommand(CanExecute = nameof(CanStartCommand))]
+    [RelayCommand(CanExecute = nameof(CanActOnAll))]
     private Task HideAllAsync() => SetVisibilityAsync(AllPaths(), DesiredVisibility.Hidden);
 
-    [RelayCommand(CanExecute = nameof(CanStartCommand))]
+    [RelayCommand(CanExecute = nameof(CanActOnAll))]
     private Task ShowAllAsync() => SetVisibilityAsync(AllPaths(), DesiredVisibility.Shown);
 
-    [RelayCommand(CanExecute = nameof(CanStartCommand))]
+    [RelayCommand(CanExecute = nameof(CanActOnAll))]
     private Task ReapplyAllAsync()
     {
         var paths = AllPaths();

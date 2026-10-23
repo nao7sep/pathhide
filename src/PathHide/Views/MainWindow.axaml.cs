@@ -650,7 +650,7 @@ public partial class MainWindow : Window
     // from it is a footgun.
     private void OnGridKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Delete && ViewModel.CanStartCommand)
+        if (e.Key == Key.Delete && ViewModel.CanActOnSelection)
         {
             e.Handled = true;
             _ = OwnViewActionAsync(RemoveSelectedWithRecoveryAsync);
