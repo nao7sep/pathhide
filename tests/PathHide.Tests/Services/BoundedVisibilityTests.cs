@@ -11,6 +11,7 @@ namespace PathHide.Tests.Services;
 
 // Timed throughout, because the failure mode is a HANG: an unbounded wait on a stalled path never
 // returns, so an untimed test would stall the suite instead of failing.
+[Collection(ProcessLogCollection.Name)]
 public class BoundedVisibilityTests
 {
     private static readonly TimeSpan Short = TimeSpan.FromMilliseconds(200);

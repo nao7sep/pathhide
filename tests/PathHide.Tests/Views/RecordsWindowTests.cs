@@ -48,6 +48,7 @@ public sealed class RecordsLayoutTests
     }
 }
 
+[Collection(ProcessLogCollection.Name)]
 public sealed class RecordsWindowTests : WindowTest
 {
     private const string ThisLaunch = "2026-10-04T08:00:00.000Z";

@@ -8,6 +8,7 @@ using Xunit;
 
 namespace PathHide.Tests;
 
+[Collection(ProcessLogCollection.Name)]
 public sealed class ProgramStartupTests
 {
     [Fact]

@@ -18,6 +18,7 @@ namespace PathHide.Tests.ViewModels;
 /// The records window's reading, paging, filtering and live updates, on the UI thread the window runs
 /// them on, against a reader whose answers the test gives.
 /// </summary>
+[Collection(ProcessLogCollection.Name)]
 public sealed class RecordsViewModelTests
 {
     private const string ThisLaunch = "2026-10-04T08:00:00.000Z";

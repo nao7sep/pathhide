@@ -8,6 +8,7 @@ using Xunit;
 
 namespace PathHide.Tests.Services;
 
+[Collection(ProcessLogCollection.Name)]
 public sealed class SingleInstanceLeaseTests
 {
     [MacOnlyFact]
