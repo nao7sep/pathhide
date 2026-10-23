@@ -112,6 +112,20 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Whether there is a scan or an apply for <see cref="CancelCommand"/> to stop.</summary>
     public bool IsBusy => IsScanning || IsApplying;
 
+    /// <summary>
+    /// Whether a list-changing command (Add, Hide, Show, Reapply, Reload or Remove) is running. While
+    /// one runs the others are unavailable rather than queueing out of sight behind it; Cancel stays.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanStartCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AddPathsCommand), nameof(RemoveSelectedCommand), nameof(HideSelectedCommand),
+        nameof(ShowSelectedCommand), nameof(HideAllCommand), nameof(ShowAllCommand), nameof(ReapplyAllCommand),
+        nameof(ReloadCommand))]
+    private bool _isCommandRunning;
+
+    /// <summary>Whether a list-changing command can start now.</summary>
+    public bool CanStartCommand => !IsCommandRunning;
+
     public ObservableCollection<OperationalResultViewModel> OperationalResults { get; } = [];
 
     public bool HasOperationalResults => OperationalResults.Count > 0;
@@ -202,9 +216,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     internal Message Summary()
     {
-        if (Rows.Count == 0)
-            return Message.Of("status.empty");
-
+        // An empty list explains itself inside the list; the bar only counts.
         var hidden = Rows.Count(r => r.ActualState == ActualState.Hidden);
         var visible = Rows.Count(r => r.ActualState == ActualState.Visible);
         var missing = Rows.Count(r => r.ActualState == ActualState.Missing);
@@ -329,6 +341,8 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Runs <paramref name="body"/> exclusive of every other mutating command.</summary>
     private async Task UnderMutationGateAsync(Func<Task> body)
     {
+        _commandsInFlight++;
+        IsCommandRunning = true;
         await _mutationGate.WaitAsync();
         try
         {
@@ -341,8 +355,12 @@ public partial class MainWindowViewModel : ObservableObject
         finally
         {
             _mutationGate.Release();
+            IsCommandRunning = --_commandsInFlight > 0;
         }
     }
+
+    // Commands that have reached the gate, waiting or running; touched on the UI thread only.
+    private int _commandsInFlight;
 
     /// <summary>
     /// The mutation protocol in one place: exclusive of every other mutating command, with the
@@ -368,7 +386,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     // Pickers and drag-drop share AddPathsCoreAsync; MutateAsync serializes two rapid drops or a
     // drop landing during a picker add.
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStartCommand))]
     private Task AddPathsAsync(IEnumerable<string> paths) => AddPathsCoreAsync(paths, unavailable: 0);
 
     public Task AddDroppedPathsAsync(IEnumerable<string> paths, int unavailable) =>
@@ -597,7 +615,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// Drops the selected entries from the list and from <c>paths.json</c>. Each item's visibility is
     /// left exactly as it is.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStartCommand))]
     private Task RemoveSelectedAsync()
     {
         var paths = SelectedPaths();
@@ -693,19 +711,19 @@ public partial class MainWindowViewModel : ObservableObject
     private List<PathRowViewModel> TrackedTargets(IReadOnlySet<string> paths) =>
         Rows.Where(row => paths.Contains(row.Path)).ToList();
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStartCommand))]
     private Task HideSelectedAsync() => SetVisibilityAsync(SelectedPaths(), DesiredVisibility.Hidden);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStartCommand))]
     private Task ShowSelectedAsync() => SetVisibilityAsync(SelectedPaths(), DesiredVisibility.Shown);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStartCommand))]
     private Task HideAllAsync() => SetVisibilityAsync(AllPaths(), DesiredVisibility.Hidden);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStartCommand))]
     private Task ShowAllAsync() => SetVisibilityAsync(AllPaths(), DesiredVisibility.Shown);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStartCommand))]
     private Task ReapplyAllAsync()
     {
         var paths = AllPaths();
@@ -719,7 +737,7 @@ public partial class MainWindowViewModel : ObservableObject
         });
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanStartCommand))]
     // Reload takes the gate like every other mutating command, but not MutateAsync's
     // pause-then-resume: it always ends by starting a fresh background scan of the reloaded
     // list, rather than putting back the one it interrupted. That scan runs after the gate is

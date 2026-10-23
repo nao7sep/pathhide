@@ -120,6 +120,24 @@ public class LabelFitTests : WindowTest
         AssertNothingClipped(window, tag, atLeast: 30);
     }
 
+    // An empty list explains itself once, inside the list; the status bar only counts.
+    [AvaloniaTheory]
+    [MemberData(nameof(Tags))]
+    public async Task an_empty_list_shows_one_message_in_the_list(string tag)
+    {
+        using var speaking = Localizer.Speaking(tag);
+        var window = Show(PopulatedMainWindow.Empty());
+        var viewModel = (PathHide.ViewModels.MainWindowViewModel)window.DataContext!;
+        await viewModel.ScanTask;
+        Dispatcher.UIThread.RunJobs();
+
+        var shown = window.GetVisualDescendants().OfType<TextBlock>()
+            .Where(text => text.IsEffectivelyVisible && text.Text == Localizer.T("grid.empty"))
+            .ToList();
+        Assert.Single(shown);
+        Assert.Equal(Localizer.T("status.entries", ("count", 0)), viewModel.StatusBarText);
+    }
+
     [AvaloniaTheory]
     [MemberData(nameof(Tags))]
     public void every_command_menu_item_fits_the_popup_cap_whole(string tag)

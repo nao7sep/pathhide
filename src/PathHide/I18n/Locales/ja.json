@@ -225,7 +225,6 @@
   "shortcuts.title": "キーボードショートカット",
   "startup.failedTitle": "PathHide を起動できませんでした",
   "startup.pathListTitle": "PathHide はパス一覧を読み取れませんでした",
-  "status.empty": "項目がありません — 始めるには、ファイルやフォルダをここにドロップしてください",
   "status.entries": {
     "other": "項目 {count} 件"
   },

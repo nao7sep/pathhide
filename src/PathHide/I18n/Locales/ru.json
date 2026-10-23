@@ -285,7 +285,6 @@
   "shortcuts.title": "Сочетания клавиш",
   "startup.failedTitle": "Не удалось запустить PathHide",
   "startup.pathListTitle": "PathHide не смог прочитать ваш список путей",
-  "status.empty": "Элементов нет\u00a0— перетащите сюда файлы или папки, чтобы начать",
   "status.entries": {
     "one": "{count} элемент",
     "few": "{count} элемента",

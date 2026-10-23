@@ -94,6 +94,43 @@ public class MainWindowViewModelTests
             Assert.Equal(["/a"], visibility.Shown);
     }
 
+    // While one list-changing command runs, every other one is unavailable rather than queueing out of
+    // sight, and Cancel stays available; they return once it finishes.
+    [Fact]
+    public async Task Other_commands_are_unavailable_while_one_runs_and_Cancel_stays()
+    {
+        var visibility = new FakeVisibilityService();
+        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [Entry("/a")] });
+        await vm.ScanTask;
+        System.Windows.Input.ICommand[] others =
+        [
+            vm.AddPathsCommand, vm.RemoveSelectedCommand, vm.HideSelectedCommand, vm.ShowSelectedCommand,
+            vm.HideAllCommand, vm.ShowAllCommand, vm.ReapplyAllCommand, vm.ReloadCommand,
+        ];
+        Assert.True(vm.CanStartCommand);
+        Assert.All(others, command => Assert.True(command.CanExecute(null)));
+
+        using var release = new ManualResetEventSlim();
+        visibility.WriteGate = release;
+        var hide = vm.HideAllCommand.ExecuteAsync(null);
+        try
+        {
+            await visibility.WriteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+            Assert.False(vm.CanStartCommand);
+            Assert.All(others, command => Assert.False(command.CanExecute(null)));
+            Assert.True(vm.CancelCommand.CanExecute(null));
+        }
+        finally
+        {
+            release.Set();
+            await hide;
+        }
+
+        Assert.True(vm.CanStartCommand);
+        Assert.All(others, command => Assert.True(command.CanExecute(null)));
+    }
+
     [Fact]
     public async Task Queued_all_keeps_its_submitted_scope_when_an_earlier_add_lands()
     {
@@ -924,7 +961,7 @@ public class MainWindowViewModelTests
         Assert.Empty(paths.Value);
         Assert.Empty(vm.Rows);
         Assert.True(vm.IsPathListEmpty);
-        Assert.Equal(English.Of("status.empty"), vm.StatusBarText);
+        Assert.Equal(English.Of("status.entries", ("count", 0)), vm.StatusBarText);
         Assert.Empty(vm.OperationalResults);
     }
 
@@ -1067,7 +1104,7 @@ public class MainWindowViewModelTests
     {
         var vm = CreateViewModel(new FakeVisibilityService(), new FakeJsonStore<List<PathEntry>>());
 
-        Assert.Equal(English.Of("status.empty"), vm.StatusBarText);
+        Assert.Equal(English.Of("status.entries", ("count", 0)), vm.StatusBarText);
     }
 
     // --- Construct / Initialize split (no I/O in the constructor) ---

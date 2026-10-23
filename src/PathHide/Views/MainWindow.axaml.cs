@@ -523,7 +523,8 @@ public partial class MainWindow : Window
 
     private void OnDragOver(object? sender, DragEventArgs e)
     {
-        var acceptsFiles = e.DataTransfer.Contains(DataFormat.File);
+        // While another command runs the list takes no drop, as the Add buttons are unavailable.
+        var acceptsFiles = ViewModel.CanStartCommand && e.DataTransfer.Contains(DataFormat.File);
         e.DragEffects = acceptsFiles ? DragDropEffects.Copy : DragDropEffects.None;
         SetPathDropActive(acceptsFiles);
         e.Handled = true;
@@ -536,7 +537,7 @@ public partial class MainWindow : Window
         e.Handled = true;
         SetPathDropActive(false);
         var items = e.DataTransfer.TryGetFiles();
-        if (items is null)
+        if (items is null || !ViewModel.CanStartCommand)
             return;
 
         var deliveredItems = items.ToArray();
@@ -595,8 +596,8 @@ public partial class MainWindow : Window
     // than running a view-model command.
     private bool RunViewAction(ShortcutAction action) => action switch
     {
-        ShortcutAction.AddFiles => Run(AddFilesAsync),
-        ShortcutAction.AddDirectories => Run(AddFoldersAsync),
+        ShortcutAction.AddFiles => ViewModel.CanStartCommand && Run(AddFilesAsync),
+        ShortcutAction.AddDirectories => ViewModel.CanStartCommand && Run(AddFoldersAsync),
         ShortcutAction.OpenSettings => Run(OpenSettingsAsync),
         ShortcutAction.ShowShortcuts => Run(ShowShortcutsAsync),
         // The same close as the window's close button, so it runs the app's quit (OnClosing).
@@ -649,7 +650,7 @@ public partial class MainWindow : Window
     // from it is a footgun.
     private void OnGridKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Delete)
+        if (e.Key == Key.Delete && ViewModel.CanStartCommand)
         {
             e.Handled = true;
             _ = OwnViewActionAsync(RemoveSelectedWithRecoveryAsync);

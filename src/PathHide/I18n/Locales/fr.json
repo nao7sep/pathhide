@@ -265,7 +265,6 @@
   "shortcuts.title": "Raccourcis clavier",
   "startup.failedTitle": "PathHide n’a pas pu démarrer",
   "startup.pathListTitle": "PathHide n’a pas pu lire votre liste de chemins",
-  "status.empty": "Aucune entrée — déposez des fichiers ou des dossiers ici pour commencer",
   "status.entries": {
     "one": "{count} entrée",
     "many": "{count} d’entrées",

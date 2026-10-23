@@ -265,7 +265,6 @@
   "shortcuts.title": "Atajos de teclado",
   "startup.failedTitle": "PathHide no pudo iniciarse",
   "startup.pathListTitle": "PathHide no pudo leer tu lista de rutas",
-  "status.empty": "No hay elementos — suelta archivos o carpetas aquí para empezar",
   "status.entries": {
     "one": "{count} elemento",
     "many": "{count} de elementos",

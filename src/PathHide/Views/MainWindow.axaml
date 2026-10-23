@@ -91,8 +91,10 @@
                             i18n:Localized.AutomationName="toolbar.actions"
                             KeyboardNavigation.TabNavigation="Once">
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,16,0">
-                        <Button i18n:Localized.Content="toolbar.addFiles" Classes="add" x:Name="AddFilesButton"/>
-                        <Button i18n:Localized.Content="toolbar.addDirectories" Classes="add" x:Name="AddFoldersButton"/>
+                        <Button i18n:Localized.Content="toolbar.addFiles" Classes="add" x:Name="AddFilesButton"
+                                IsEnabled="{Binding CanStartCommand}"/>
+                        <Button i18n:Localized.Content="toolbar.addDirectories" Classes="add" x:Name="AddFoldersButton"
+                                IsEnabled="{Binding CanStartCommand}"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,16,0">
@@ -112,7 +114,8 @@
                         <Button i18n:Localized.Content="toolbar.reapplyAll" Classes="reapply" Command="{Binding ReapplyAllCommand}"/>
                         <!-- Remove is wired in code-behind (not Command-bound) so it shares the
                              grid's post-delete selection recovery with the Delete key. -->
-                        <Button i18n:Localized.Content="common.remove" Classes="destructive" x:Name="RemoveButton"/>
+                        <Button i18n:Localized.Content="common.remove" Classes="destructive" x:Name="RemoveButton"
+                                IsEnabled="{Binding CanStartCommand}"/>
                         <Button i18n:Localized.Content="common.cancel" Classes="cancel"
                                 Command="{Binding CancelCommand}"
                                 IsVisible="{Binding IsBusy}"/>

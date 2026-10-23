@@ -245,7 +245,6 @@
   "shortcuts.title": "Tastenkombinationen",
   "startup.failedTitle": "PathHide konnte nicht starten",
   "startup.pathListTitle": "PathHide konnte Ihre Pfadliste nicht lesen",
-  "status.empty": "Keine Einträge – legen Sie Dateien oder Ordner hier ab, um zu beginnen",
   "status.entries": {
     "one": "{count} Eintrag",
     "other": "{count} Einträge"

@@ -225,7 +225,6 @@
   "shortcuts.title": "键盘快捷键",
   "startup.failedTitle": "PathHide 无法启动",
   "startup.pathListTitle": "PathHide 无法读取你的路径列表",
-  "status.empty": "暂无条目——将文件或文件夹拖放到这里即可开始",
   "status.entries": {
     "other": "{count} 个条目"
   },

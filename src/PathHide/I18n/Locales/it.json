@@ -265,7 +265,6 @@
   "shortcuts.title": "Scorciatoie da tastiera",
   "startup.failedTitle": "Impossibile avviare PathHide",
   "startup.pathListTitle": "PathHide non è riuscito a leggere il tuo elenco dei percorsi",
-  "status.empty": "Nessun elemento — trascina qui file o cartelle per iniziare",
   "status.entries": {
     "one": "{count} elemento",
     "many": "{count} di elementi",
