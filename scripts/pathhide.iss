@@ -22,6 +22,8 @@ OutputDir=dist
 OutputBaseFilename={#MyAppName}-{#MyAppVersion}-setup
 Compression=lzma2
 SolidCompression=yes
+; The published app is x64 only: refuse 32-bit Windows, and allow x64 and Arm64 (which runs x64).
+ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 SetupIconFile=src\PathHide\icon.ico

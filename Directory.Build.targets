@@ -64,6 +64,10 @@
          bundle so the publish directory holds only the .app. -->
     <Exec Command="/usr/bin/find &quot;$(_PublishRoot)&quot; -mindepth 1 -maxdepth 1 ! -name &quot;$(AssemblyName).app&quot; -exec rm -rf {} +" />
 
+    <!-- The declared minimum macOS must cover every shipped binary, or macOS starts the app on a
+         system it cannot run on instead of refusing it with its own message. -->
+    <Exec Command="/bin/bash &quot;$(MSBuildThisFileDirectory)scripts/check-macos-minimum.sh&quot; &quot;$(_MacBundle)&quot;" />
+
     <!-- Ad-hoc sign: an arm64 binary must carry at least an ad-hoc signature to
          launch. The deep flag re-signs Avalonia's pre-signed native dylibs so the
          whole bundle carries one identity. -->
