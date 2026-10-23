@@ -35,16 +35,16 @@ public sealed class FakeVisibilityService : IVisibilityService
 
     /// <summary>
     /// When set, <see cref="Inspect"/> blocks on this gate before returning, letting a test hold a
-    /// scan or apply pass mid-flight (the call runs on a thread-pool thread via the scanner/apply's
-    /// <c>Task.Run</c>, so blocking it does not stall the test thread).
+    /// scan or apply pass mid-flight (BoundedVisibility runs the call on a thread of its own, so
+    /// blocking it does not stall the test thread).
     /// </summary>
     public ManualResetEventSlim? InspectGate { get; set; }
 
     /// <summary>
     /// Completes the first time <see cref="Inspect"/> is entered — just before it parks on
     /// <see cref="InspectGate"/>. Lets a test wait until an inspection is genuinely in-flight before
-    /// acting, closing the race where the scanner's <c>Task.Run</c> has not yet been picked up by a
-    /// thread-pool thread (cancelling before then would skip the delegate and never inspect the path).
+    /// acting, closing the race where the call's thread has not started yet (cancelling before then
+    /// would skip the delegate and never inspect the path).
     /// </summary>
     public TaskCompletionSource InspectEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 

@@ -116,8 +116,11 @@ public sealed class BoundedVisibility
         }
 
         // Deliberately NOT given the token: it would only prevent a start, and a call that never
-        // begins is indistinguishable here from one that never returns.
-        var work = Task.Run(call, CancellationToken.None);
+        // begins is indistinguishable here from one that never returns. A thread of its own, not the
+        // shared pool: a call stuck for the network timeout would hold a pool thread the app's own
+        // continuations, saves and reads need, and enough of them would leave that work waiting on
+        // the pool's slow thread injection.
+        var work = Task.Factory.StartNew(call, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         if (!await EndsWithinAsync(work, bound.Token))
         {
             Abandon(path, identity, work);

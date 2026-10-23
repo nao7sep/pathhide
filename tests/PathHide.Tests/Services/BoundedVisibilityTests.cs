@@ -15,6 +15,26 @@ public class BoundedVisibilityTests
 {
     private static readonly TimeSpan Short = TimeSpan.FromMilliseconds(200);
 
+    // A stuck call holds its thread for the network timeout; on the shared pool, enough of them would
+    // delay the app's own continuations, saves and reads.
+    [Fact(Timeout = 10_000)]
+    public async Task A_file_system_call_runs_on_its_own_thread_not_the_shared_pool()
+    {
+        bool? onPool = null;
+        var service = new FakeVisibilityService
+        {
+            OnInspect = _ =>
+            {
+                onPool = Thread.CurrentThread.IsThreadPoolThread;
+                return null;
+            },
+        };
+
+        await new BoundedVisibility(service, Short).InspectAsync("/a", TestContext.Current.CancellationToken);
+
+        Assert.False(onPool);
+    }
+
     [Theory(Timeout = 10_000)]
     [InlineData(@"C:\Temp\a", @"c:/TEMP/A/")]
     [InlineData(@"\\server\share\a", @"\\SERVER\SHARE\A")]
