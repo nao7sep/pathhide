@@ -94,8 +94,7 @@ internal static class Languages
         if (string.IsNullOrWhiteSpace(candidate))
             return null;
 
-        // "ja-JP", "zh-Hant-TW" and "pt_BR" all arrive here; only the primary language subtag, and for
-        // Chinese the script, decide.
+        // "ja-JP", "zh-Hant-TW" and "pt_BR" all arrive here; only the primary language subtag decides.
         var parts = candidate.Trim().Replace('_', '-').Split('-', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0)
             return null;
