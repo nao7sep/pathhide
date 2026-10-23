@@ -58,6 +58,33 @@ public sealed class SettingsDialogTests
         Assert.All(footer.Children.OfType<Button>(), button => Assert.True(button.MinWidth >= 80));
     }
 
+    // A font entry that matches no installed family says so under the field, and Save stays available:
+    // the bundled font shows meanwhile, instead of the entry falling back silently.
+    [AvaloniaFact]
+    public void A_font_entry_with_no_installed_family_shows_a_note_and_still_saves()
+    {
+        var dialog = new SettingsDialog(Languages.System, "", ThemePreference.System,
+            false, false, DisplayZone.System, (_, _, _, _, _) => Task.FromResult<Message?>(null));
+        var font = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
+        var note = dialog.GetLogicalDescendants().OfType<TextBlock>().Single(block => block.Name == "UiFontMissing");
+        var save = dialog.GetLogicalDescendants().OfType<Button>().Single(button => Equals(button.Tag, "save"));
+        Assert.False(note.IsVisible);
+
+        font.Text = "No Such Font 99999, Also Missing";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(note.IsVisible);
+        Assert.Equal(English.Of("settings.uiFontMissing"), note.Text);
+        Assert.True(save.IsEnabled);
+
+        font.Text = $"No Such Font 99999, {FontManager.Current.SystemFonts.First().Name}";
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(note.IsVisible);
+        font.Text = "";
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(note.IsVisible);
+    }
+
     [AvaloniaFact]
     public async Task SuccessfulSaveKeepsNewerDraftOpenAndAdvancesSavedBaseline()
     {

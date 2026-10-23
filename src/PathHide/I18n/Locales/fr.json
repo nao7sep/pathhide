@@ -241,6 +241,7 @@
   "settings.title": "Paramètres",
   "settings.uiFont": "Police de l’interface",
   "settings.uiFontHint": "Liste séparée par des virgules\u00a0; la première famille installée est utilisée. Si ce champ reste vide, la police par défaut (Inter) est utilisée.",
+  "settings.uiFontMissing": "Aucune de ces polices n’est installée\u00a0; PathHide utilise sa police intégrée.",
   "settings.windowsHideMode": "Mode de masquage sous Windows",
   "shortcuts.addDirectories": "Ajouter des dossiers",
   "shortcuts.addFiles": "Ajouter des fichiers",

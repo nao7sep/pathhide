@@ -221,6 +221,7 @@
   "settings.title": "Einstellungen",
   "settings.uiFont": "Schriftart der Oberfläche",
   "settings.uiFontHint": "Durch Kommas getrennt; die erste installierte Schriftfamilie wird verwendet. Bleibt das Feld leer, wird die Standardschrift (Inter) verwendet.",
+  "settings.uiFontMissing": "Keine dieser Schriften ist installiert; PathHide verwendet seine integrierte Schrift.",
   "settings.windowsHideMode": "Verstecken unter Windows",
   "shortcuts.addDirectories": "Ordner hinzufügen",
   "shortcuts.addFiles": "Dateien hinzufügen",

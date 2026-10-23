@@ -241,6 +241,7 @@
   "settings.title": "Impostazioni",
   "settings.uiFont": "Font dell’interfaccia",
   "settings.uiFontHint": "Elenco separato da virgole; viene usata la prima famiglia installata. Se il campo è vuoto, viene usato il font predefinito (Inter).",
+  "settings.uiFontMissing": "Nessuno di questi font è installato; PathHide usa il proprio font integrato.",
   "settings.windowsHideMode": "Modalità di occultamento su Windows",
   "shortcuts.addDirectories": "Aggiungi cartelle",
   "shortcuts.addFiles": "Aggiungi file",

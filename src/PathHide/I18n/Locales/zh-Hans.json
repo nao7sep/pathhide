@@ -201,6 +201,7 @@
   "settings.title": "设置",
   "settings.uiFont": "界面字体",
   "settings.uiFontHint": "以英文逗号分隔；将使用其中第一个已安装的字体。如果留空，则使用默认字体（Inter）。",
+  "settings.uiFontMissing": "这些字体均未安装；PathHide 将使用其内置字体。",
   "settings.windowsHideMode": "Windows 隐藏模式",
   "shortcuts.addDirectories": "添加文件夹",
   "shortcuts.addFiles": "添加文件",

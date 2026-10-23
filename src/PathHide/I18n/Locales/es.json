@@ -241,6 +241,7 @@
   "settings.title": "Configuración",
   "settings.uiFont": "Fuente de la interfaz",
   "settings.uiFontHint": "Separadas por comas; se usa la primera familia instalada. Si se deja en blanco, se usa la predeterminada (Inter).",
+  "settings.uiFontMissing": "Ninguna de estas fuentes está instalada; PathHide usa su fuente integrada.",
   "settings.windowsHideMode": "Modo de ocultación en Windows",
   "shortcuts.addDirectories": "Agregar carpetas",
   "shortcuts.addFiles": "Agregar archivos",

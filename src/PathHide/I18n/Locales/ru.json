@@ -261,6 +261,7 @@
   "settings.title": "Настройки",
   "settings.uiFont": "Шрифт интерфейса",
   "settings.uiFontHint": "Через запятую; используется первое установленное семейство. Если поле пустое, применяется шрифт по умолчанию (Inter).",
+  "settings.uiFontMissing": "Ни один из этих шрифтов не установлен; PathHide использует встроенный шрифт.",
   "settings.windowsHideMode": "Режим скрытия в Windows",
   "shortcuts.addDirectories": "Добавить папки",
   "shortcuts.addFiles": "Добавить файлы",

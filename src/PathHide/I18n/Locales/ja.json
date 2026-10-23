@@ -201,6 +201,7 @@
   "settings.title": "設定",
   "settings.uiFont": "UI フォント",
   "settings.uiFontHint": "カンマ区切りで指定し、インストールされている最初のフォントを使用します。空欄の場合は既定のフォント（Inter）を使用します。",
+  "settings.uiFontMissing": "入力したフォントはいずれもインストールされていないため、PathHide の組み込みフォントを使用します。",
   "settings.windowsHideMode": "Windows の非表示モード",
   "shortcuts.addDirectories": "フォルダを追加します",
   "shortcuts.addFiles": "ファイルを追加します",

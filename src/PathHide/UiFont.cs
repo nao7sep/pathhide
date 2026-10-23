@@ -36,18 +36,16 @@ public static class UiFont
     /// <summary>
     /// The first requested family that is actually installed, or the bundled default when none match.
     /// </summary>
-    public static FontFamily Resolve(string? value)
-    {
-        foreach (var name in ParseFamilies(value))
-        {
-            if (IsInstalled(name))
-            {
-                return new FontFamily(name);
-            }
-        }
+    public static FontFamily Resolve(string? value) =>
+        FirstInstalled(value) is { } name ? new FontFamily(name) : new FontFamily(AppSettings.BundledUiFontUri);
 
-        return new FontFamily(AppSettings.BundledUiFontUri);
-    }
+    /// <summary>
+    /// Whether the value names families of which none is installed, so the bundled default shows instead.
+    /// A blank value asks for the default and falls back to nothing.
+    /// </summary>
+    public static bool FallsBack(string? value) => ParseFamilies(value).Any() && FirstInstalled(value) is null;
+
+    private static string? FirstInstalled(string? value) => ParseFamilies(value).FirstOrDefault(IsInstalled);
 
     private static bool IsInstalled(string name)
     {

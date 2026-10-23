@@ -201,6 +201,7 @@
   "settings.title": "설정",
   "settings.uiFont": "UI 글꼴",
   "settings.uiFontHint": "쉼표로 구분하며, 설치된 첫 번째 글꼴을 사용합니다. 비워 두면 기본값(Inter)을 사용합니다.",
+  "settings.uiFontMissing": "입력한 글꼴 중 설치된 글꼴이 없어 PathHide에 내장된 글꼴을 사용합니다.",
   "settings.windowsHideMode": "Windows 숨기기 모드",
   "shortcuts.addDirectories": "폴더 추가",
   "shortcuts.addFiles": "파일 추가",

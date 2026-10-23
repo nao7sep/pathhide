@@ -26,6 +26,7 @@ public sealed class SettingsDialog : DialogBase
     private readonly ComboBox _languageBox;
     private readonly ComboBox _timeZoneBox;
     private readonly ImeTextBox _uiFontBox;
+    private readonly TextBlock _uiFontMissing;
     private readonly CheckBox _hiddenAndSystemCheckBox;
     private readonly IReadOnlyList<RadioButton> _themeButtons;
     private string _originalLanguage;
@@ -141,6 +142,13 @@ public sealed class SettingsDialog : DialogBase
         Localized.SetText(fontHint, "settings.uiFontHint");
         fontHint[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("TextSecondaryBrush");
 
+        // Saving is still allowed: the entry may name a font installed later, and the note says what
+        // shows meanwhile instead of the fallback happening silently.
+        _uiFontMissing = new TextBlock { FontSize = 12, TextWrapping = TextWrapping.Wrap, Name = "UiFontMissing" };
+        Localized.SetText(_uiFontMissing, "settings.uiFontMissing");
+        _uiFontMissing[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("WarningTextBrush");
+        UpdateUiFontMissing();
+
         // The checkbox label only covers the setting's ON behaviour. Hiding with it OFF
         // CLEARS the System attribute, and showing clears it unconditionally — so a path that
         // carried System for its own reasons loses it, and PathHide keeps no record to put it
@@ -162,7 +170,7 @@ public sealed class SettingsDialog : DialogBase
                 Section("settings.language", _languageBox),
                 Section("settings.timeZone", _timeZoneBox, timeZoneHint),
                 Section("settings.theme", themeRow, themeHint),
-                Section("settings.uiFont", _uiFontBox, fontHint),
+                Section("settings.uiFont", _uiFontBox, _uiFontMissing, fontHint),
             },
         };
 
@@ -193,7 +201,11 @@ public sealed class SettingsDialog : DialogBase
         // run UpdateSaveState against a null button. Then seed the state.
         _languageBox.SelectionChanged += (_, _) => UpdateSaveState();
         _timeZoneBox.SelectionChanged += (_, _) => UpdateSaveState();
-        _uiFontBox.TextChanged += (_, _) => UpdateSaveState();
+        _uiFontBox.TextChanged += (_, _) =>
+        {
+            UpdateUiFontMissing();
+            UpdateSaveState();
+        };
         _hiddenAndSystemCheckBox.IsCheckedChanged += (_, _) => UpdateSaveState();
         foreach (var button in _themeButtons)
             button.IsCheckedChanged += (_, _) =>
@@ -283,6 +295,8 @@ public sealed class SettingsDialog : DialogBase
             return;
         }
     }
+
+    private void UpdateUiFontMissing() => _uiFontMissing.IsVisible = UiFont.FallsBack(_uiFontBox.Text);
 
     private static StackPanel Section(string headerKey, params Control[] children)
     {

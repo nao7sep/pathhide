@@ -221,6 +221,7 @@
   "settings.title": "Settings",
   "settings.uiFont": "UI font",
   "settings.uiFontHint": "Comma-separated; the first installed family is used. If left blank, the default (Inter) is used.",
+  "settings.uiFontMissing": "None of these fonts is installed; PathHide uses its built-in font.",
   "settings.windowsHideMode": "Windows Hide Mode",
   "shortcuts.addDirectories": "Add folders",
   "shortcuts.addFiles": "Add files",
