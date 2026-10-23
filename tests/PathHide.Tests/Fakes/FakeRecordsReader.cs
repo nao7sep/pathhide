@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using PathHide.Storage;
 
@@ -13,7 +14,7 @@ namespace PathHide.Tests.Fakes;
 /// </summary>
 public sealed class FakeRecordsReader : IRecordsReader
 {
-    public sealed record PendingPage(RecordsQuery Query, TaskCompletionSource<RecordsPage> Reply)
+    public sealed record PendingPage(RecordsQuery Query, TaskCompletionSource<RecordsPage> Reply, CancellationToken Token)
     {
         public void Answer(bool more, params RecordSummary[] records) => Reply.SetResult(new RecordsPage(records, more));
 
@@ -34,17 +35,17 @@ public sealed class FakeRecordsReader : IRecordsReader
 
     public IEnumerable<PendingPage> Unanswered => Pages.Where(page => !page.Reply.Task.IsCompleted);
 
-    public Task<RecordsPage> ReadPageAsync(RecordsQuery query)
+    public Task<RecordsPage> ReadPageAsync(RecordsQuery query, CancellationToken cancellationToken)
     {
-        var pending = new PendingPage(query, new TaskCompletionSource<RecordsPage>());
+        var pending = new PendingPage(query, new TaskCompletionSource<RecordsPage>(), cancellationToken);
         Pages.Add(pending);
         return pending.Reply.Task;
     }
 
-    public Task<RecordDetail?> ReadDetailAsync(long id) =>
+    public Task<RecordDetail?> ReadDetailAsync(long id, CancellationToken cancellationToken) =>
         Task.FromResult(Details.TryGetValue(id, out var record) ? record : null);
 
-    public Task<IReadOnlyList<string>> ReadSessionsAsync()
+    public Task<IReadOnlyList<string>> ReadSessionsAsync(CancellationToken cancellationToken)
     {
         SessionReads++;
         return FailSessions

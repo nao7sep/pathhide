@@ -323,7 +323,7 @@ public sealed class FormatVersionTests : IDisposable
         var bytes = File.ReadAllBytes(path);
 
         var store = RecordsStore.TryOpen(path, out var failure);
-        await Assert.ThrowsAsync<InvalidDataException>(() => new RecordsReader(path).ReadSessionsAsync());
+        await Assert.ThrowsAsync<InvalidDataException>(() => new RecordsReader(path).ReadSessionsAsync(TestContext.Current.CancellationToken));
 
         Assert.Null(store);
         Assert.IsType<InvalidDataException>(failure);
@@ -338,7 +338,7 @@ public sealed class FormatVersionTests : IDisposable
         using (var store = RecordsStore.TryOpen(path, out var failure) ?? throw failure!)
             store.Write(new LogEntry("2026-10-05T00:00:00.000Z", "2026-10-05T00:00:00.000Z", "info", "kept", null, null));
         Assert.Equal(FormatVersions.Records, UserVersion(path));
-        Assert.Equal("kept", Assert.Single((await new RecordsReader(path).ReadPageAsync(new RecordsQuery(null, null, "", null))).Records).Message);
+        Assert.Equal("kept", Assert.Single((await new RecordsReader(path).ReadPageAsync(new RecordsQuery(null, null, "", null), TestContext.Current.CancellationToken)).Records).Message);
     }
 
     [Fact]
@@ -349,7 +349,7 @@ public sealed class FormatVersionTests : IDisposable
             store.Write(new PathHide.Services.LogEntry("2026-10-05T00:00:00.000Z", "2026-10-05T00:00:00.000Z", "info", "kept", null, null));
 
         Assert.Equal(FormatVersions.Records, UserVersion(path));
-        Assert.Equal("kept", Assert.Single((await new RecordsReader(path).ReadPageAsync(new RecordsQuery(null, null, "", null))).Records).Message);
+        Assert.Equal("kept", Assert.Single((await new RecordsReader(path).ReadPageAsync(new RecordsQuery(null, null, "", null), TestContext.Current.CancellationToken)).Records).Message);
     }
 
     [Fact]
@@ -360,7 +360,7 @@ public sealed class FormatVersionTests : IDisposable
         var bytes = File.ReadAllBytes(path);
 
         var store = RecordsStore.TryOpen(path, out var failure);
-        await Assert.ThrowsAsync<NewerFormatException>(() => new RecordsReader(path).ReadSessionsAsync());
+        await Assert.ThrowsAsync<NewerFormatException>(() => new RecordsReader(path).ReadSessionsAsync(TestContext.Current.CancellationToken));
 
         Assert.Null(store);
         Assert.Equal(2, Assert.IsType<NewerFormatException>(failure).Version);

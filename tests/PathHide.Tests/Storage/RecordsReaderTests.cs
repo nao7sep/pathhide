@@ -42,6 +42,17 @@ public sealed class RecordsReaderTests : IDisposable
 
     private static RecordsQuery All(string search = "") => new(null, null, search, null);
 
+    // A read its caller no longer needs ends as cancelled, not as a failure the window would report.
+    [Fact]
+    public async Task A_cancelled_read_ends_as_cancelled()
+    {
+        Write(1, "first");
+        using var cancelled = new System.Threading.CancellationTokenSource();
+        cancelled.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => _reader.ReadPageAsync(All("first"), cancelled.Token));
+    }
+
     [Fact]
     public async Task A_page_lists_the_newest_first()
     {
@@ -49,7 +60,7 @@ public sealed class RecordsReaderTests : IDisposable
         Write(3, "third");
         Write(2, "second");
 
-        var page = await _reader.ReadPageAsync(All());
+        var page = await _reader.ReadPageAsync(All(), TestContext.Current.CancellationToken);
 
         Assert.Equal(["third", "second", "first"], page.Records.Select(record => record.Message));
         Assert.False(page.More);
@@ -68,7 +79,7 @@ public sealed class RecordsReaderTests : IDisposable
         var pages = 0;
         while (true)
         {
-            var page = await _reader.ReadPageAsync(All() with { After = after });
+            var page = await _reader.ReadPageAsync(All() with { After = after }, TestContext.Current.CancellationToken);
             pages++;
             seen.AddRange(page.Records);
             if (!page.More)
@@ -89,7 +100,7 @@ public sealed class RecordsReaderTests : IDisposable
         Write(1, "old launch", session: "2026-10-03T00:00:00.000Z");
         Write(2, "this launch", session: "2026-10-04T00:00:00.000Z");
 
-        var page = await _reader.ReadPageAsync(All() with { Session = "2026-10-03T00:00:00.000Z" });
+        var page = await _reader.ReadPageAsync(All() with { Session = "2026-10-03T00:00:00.000Z" }, TestContext.Current.CancellationToken);
 
         Assert.Equal("old launch", Assert.Single(page.Records).Message);
     }
@@ -102,8 +113,8 @@ public sealed class RecordsReaderTests : IDisposable
         Write(3, "i", "info");
         Write(4, "d", "debug");
 
-        var warningsAndErrors = await _reader.ReadPageAsync(All() with { Level = RecordLevelFilter.WarningsAndErrors });
-        var debug = await _reader.ReadPageAsync(All() with { Level = RecordLevelFilter.Debug });
+        var warningsAndErrors = await _reader.ReadPageAsync(All() with { Level = RecordLevelFilter.WarningsAndErrors }, TestContext.Current.CancellationToken);
+        var debug = await _reader.ReadPageAsync(All() with { Level = RecordLevelFilter.Debug }, TestContext.Current.CancellationToken);
 
         Assert.Equal(["w", "e"], warningsAndErrors.Records.Select(record => record.Message));
         Assert.Equal("d", Assert.Single(debug.Records).Message);
@@ -118,12 +129,12 @@ public sealed class RecordsReaderTests : IDisposable
         Write(4, "100% done");
         Write(5, "1000 done");
 
-        Assert.Equal("apply: start", Assert.Single((await _reader.ReadPageAsync(All("APPLY"))).Records).Message);
-        Assert.Equal("scan", Assert.Single((await _reader.ReadPageAsync(All("secret folder"))).Records).Message);
-        Assert.Equal("save failed", Assert.Single((await _reader.ReadPageAsync(All("  disk full  "))).Records).Message);
-        Assert.Equal("100% done", Assert.Single((await _reader.ReadPageAsync(All("0%"))).Records).Message);
-        Assert.Empty((await _reader.ReadPageAsync(All("1_0"))).Records);
-        Assert.Equal(5, (await _reader.ReadPageAsync(All("   "))).Records.Count);
+        Assert.Equal("apply: start", Assert.Single((await _reader.ReadPageAsync(All("APPLY"), TestContext.Current.CancellationToken)).Records).Message);
+        Assert.Equal("scan", Assert.Single((await _reader.ReadPageAsync(All("secret folder"), TestContext.Current.CancellationToken)).Records).Message);
+        Assert.Equal("save failed", Assert.Single((await _reader.ReadPageAsync(All("  disk full  "), TestContext.Current.CancellationToken)).Records).Message);
+        Assert.Equal("100% done", Assert.Single((await _reader.ReadPageAsync(All("0%"), TestContext.Current.CancellationToken)).Records).Message);
+        Assert.Empty((await _reader.ReadPageAsync(All("1_0"), TestContext.Current.CancellationToken)).Records);
+        Assert.Equal(5, (await _reader.ReadPageAsync(All("   "), TestContext.Current.CancellationToken)).Records.Count);
     }
 
     [Fact]
@@ -131,15 +142,15 @@ public sealed class RecordsReaderTests : IDisposable
     {
         Write(1, "save failed", "error", "s9",
             new JsonObject { ["label"] = "paths" }, new JsonObject { ["type"] = "System.IO.IOException" });
-        var id = Assert.Single((await _reader.ReadPageAsync(All())).Records).Id;
+        var id = Assert.Single((await _reader.ReadPageAsync(All(), TestContext.Current.CancellationToken)).Records).Id;
 
-        var record = await _reader.ReadDetailAsync(id);
+        var record = await _reader.ReadDetailAsync(id, TestContext.Current.CancellationToken);
 
         Assert.NotNull(record);
         Assert.Equal(("s9", At(1), "error", "save failed"), (record.Session, record.Time, record.Level, record.Message));
         Assert.Equal("{\"label\":\"paths\"}", record.Fields);
         Assert.Equal("{\"type\":\"System.IO.IOException\"}", record.Error);
-        Assert.Null(await _reader.ReadDetailAsync(id + 1));
+        Assert.Null(await _reader.ReadDetailAsync(id + 1, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -152,20 +163,20 @@ public sealed class RecordsReaderTests : IDisposable
 
         Assert.Equal(
             ["2026-10-04T00:00:00.000Z", "2026-10-03T00:00:00.000Z", "2026-10-02T00:00:00.000Z"],
-            await _reader.ReadSessionsAsync());
+            await _reader.ReadSessionsAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task Reading_writes_nothing_to_the_database()
     {
         Write(1, "only");
-        var id = Assert.Single((await _reader.ReadPageAsync(All())).Records).Id;
+        var id = Assert.Single((await _reader.ReadPageAsync(All(), TestContext.Current.CancellationToken)).Records).Id;
 
-        await _reader.ReadPageAsync(All("only"));
-        await _reader.ReadDetailAsync(id);
-        await _reader.ReadSessionsAsync();
+        await _reader.ReadPageAsync(All("only"), TestContext.Current.CancellationToken);
+        await _reader.ReadDetailAsync(id, TestContext.Current.CancellationToken);
+        await _reader.ReadSessionsAsync(TestContext.Current.CancellationToken);
 
-        Assert.Single((await _reader.ReadPageAsync(All())).Records);
+        Assert.Single((await _reader.ReadPageAsync(All(), TestContext.Current.CancellationToken)).Records);
     }
 
     [Fact]
@@ -173,7 +184,7 @@ public sealed class RecordsReaderTests : IDisposable
     {
         var missing = new RecordsReader(Path.Combine(_root, "missing", RecordsStore.FileName));
 
-        await Assert.ThrowsAsync<SqliteException>(() => missing.ReadPageAsync(All()));
+        await Assert.ThrowsAsync<SqliteException>(() => missing.ReadPageAsync(All(), TestContext.Current.CancellationToken));
         Assert.False(File.Exists(Path.Combine(_root, "missing", RecordsStore.FileName)));
     }
 
@@ -188,8 +199,8 @@ public sealed class RecordsReaderTests : IDisposable
         Write(4, "save failed", "error", error: new JsonObject { ["type"] = "System.IO.IOException", ["message"] = @"D:\Data is full" });
 
         async Task<long[]> Found(string search) =>
-            (await _reader.ReadPageAsync(All(search))).Records.Select(record => record.Id).Order().ToArray();
-        var ids = (await _reader.ReadPageAsync(All())).Records.Select(record => record.Id).Order().ToArray();
+            (await _reader.ReadPageAsync(All(search), TestContext.Current.CancellationToken)).Records.Select(record => record.Id).Order().ToArray();
+        var ids = (await _reader.ReadPageAsync(All(), TestContext.Current.CancellationToken)).Records.Select(record => record.Id).Order().ToArray();
 
         Assert.Equal([ids[0]], await Found(@"c:\users\ME"));
         Assert.Equal([ids[0]], await Found(@"""final"""));
@@ -207,13 +218,13 @@ public sealed class RecordsReaderTests : IDisposable
     {
         Write(1, "apply", fields: new JsonObject { ["path"] = @"C:\Users\me\a.txt", ["elevated"] = true, ["parent"] = null });
         Write(2, "scan", fields: new JsonObject { ["path"] = "/other" });
-        var id = (await _reader.ReadPageAsync(All())).Records.Single(record => record.Message == "apply").Id;
-        var detail = new PathHide.ViewModels.RecordDetailViewModel((await _reader.ReadDetailAsync(id))!, "s1");
+        var id = (await _reader.ReadPageAsync(All(), TestContext.Current.CancellationToken)).Records.Single(record => record.Message == "apply").Id;
+        var detail = new PathHide.ViewModels.RecordDetailViewModel((await _reader.ReadDetailAsync(id, TestContext.Current.CancellationToken))!, "s1");
 
         foreach (var line in detail.FieldsText!.Split('\n'))
         {
             var value = line[(line.IndexOf(": ", StringComparison.Ordinal) + 2)..];
-            Assert.Equal([id], (await _reader.ReadPageAsync(All(value))).Records.Select(record => record.Id).ToArray());
+            Assert.Equal([id], (await _reader.ReadPageAsync(All(value), TestContext.Current.CancellationToken)).Records.Select(record => record.Id).ToArray());
         }
     }
 
@@ -233,8 +244,8 @@ public sealed class RecordsReaderTests : IDisposable
             Assert.Equal(1, damage.ExecuteNonQuery());
         }
 
-        var found = await _reader.ReadPageAsync(All("findme"));
-        await _reader.ReadPageAsync(All("findme"));
+        var found = await _reader.ReadPageAsync(All("findme"), TestContext.Current.CancellationToken);
+        await _reader.ReadPageAsync(All("findme"), TestContext.Current.CancellationToken);
         Log.Info("records test: done");
         await log.Reported.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 

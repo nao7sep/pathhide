@@ -478,6 +478,25 @@ public sealed class RecordsViewModelTests
         Assert.Equal([1], vm.Rows.Select(row => row.Id));
     }
 
+    // A read the window no longer needs is cancelled, so the reader stops it inside the database
+    // rather than letting a superseded search scan the whole log in the background.
+    [AvaloniaFact]
+    public void A_superseded_read_is_cancelled_and_closing_cancels_the_rest()
+    {
+        var vm = Started();
+        var first = _reader.Unanswered.Single();
+
+        vm.SelectedLevel = vm.LevelOptions[1];
+        Settle();
+        var second = _reader.Unanswered.Last();
+
+        Assert.True(first.Token.IsCancellationRequested);
+        Assert.False(second.Token.IsCancellationRequested);
+
+        vm.Close();
+        Assert.True(second.Token.IsCancellationRequested);
+    }
+
     [AvaloniaFact]
     public void A_read_that_succeeds_writes_no_record_and_a_failed_one_writes_one()
     {

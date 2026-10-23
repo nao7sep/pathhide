@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PathHide.I18n;
@@ -61,6 +62,12 @@ public sealed partial class RecordsViewModel : ObservableObject
     private string _appliedSearch = string.Empty;
     // The record the detail pane was last asked for, so an older detail read is dropped.
     private long? _detailFor;
+    // Cancelled when what they were read for is no longer asked for, so the reader stops them inside
+    // the database: the list's reads with each new list query, the detail's with each new selection,
+    // and every read when the window closes.
+    private CancellationTokenSource _listReads = new();
+    private CancellationTokenSource _detailReads = new();
+    private readonly CancellationTokenSource _windowReads = new();
 
     /// <param name="reader">Where the records are read.</param>
     /// <param name="currentSession">This launch's session, which the launch filter names as this launch.</param>
@@ -179,7 +186,18 @@ public sealed partial class RecordsViewModel : ObservableObject
     }
 
     /// <summary>The window has closed: nothing read from now on applies.</summary>
-    public void Close() => _closed = true;
+    public void Close()
+    {
+        _closed = true;
+        _windowReads.Cancel();
+    }
+
+    private static CancellationTokenSource Renew(ref CancellationTokenSource reads, CancellationToken window)
+    {
+        reads.Cancel();
+        reads = CancellationTokenSource.CreateLinkedTokenSource(window);
+        return reads;
+    }
 
     /// <summary>The list scrolled: whether it is at its top, and whether it is within a screen of its end.</summary>
     public void OnListScrolled(bool atTop, bool nearEnd)
@@ -290,6 +308,7 @@ public sealed partial class RecordsViewModel : ObservableObject
         var query = Query(after: null);
         _listQuery = query;
         var generation = ++_generation;
+        var token = Renew(ref _listReads, _windowReads.Token).Token;
         _fetchingMore = false;
         _newestPending = false;
         var keep = SelectedRow?.Id;
@@ -302,7 +321,7 @@ public sealed partial class RecordsViewModel : ObservableObject
         RecordsPage page;
         try
         {
-            page = await _reader.ReadPageAsync(query);
+            page = await _reader.ReadPageAsync(query, token);
         }
         catch (Exception ex)
         {
@@ -335,6 +354,7 @@ public sealed partial class RecordsViewModel : ObservableObject
     private async Task ReadNewestAsync()
     {
         var generation = _generation;
+        var token = _listReads.Token;
         // Refresh through the loaded range before merging. Besides bursts larger than a page,
         // child records can arrive late with earlier event times inside an older displayed page.
         var boundary = Rows.LastOrDefault()?.Record;
@@ -342,7 +362,7 @@ public sealed partial class RecordsViewModel : ObservableObject
         RecordsPage page;
         try
         {
-            page = await _reader.ReadPageAsync(query);
+            page = await _reader.ReadPageAsync(query, token);
             var records = page.Records.ToList();
             while (boundary is not null && page.More && page.Records.Count > 0
                 && RecordFormat.NewestFirst(page.Records[^1], boundary) < 0)
@@ -350,7 +370,7 @@ public sealed partial class RecordsViewModel : ObservableObject
                 if (generation != _generation || _closed)
                     return;
                 query = query with { After = RecordFormat.CursorAfter(page.Records) };
-                page = await _reader.ReadPageAsync(query);
+                page = await _reader.ReadPageAsync(query, token);
                 records.AddRange(page.Records);
             }
             var loadedRange = boundary is null ? records
@@ -399,6 +419,7 @@ public sealed partial class RecordsViewModel : ObservableObject
 
         _fetchingMore = true;
         var generation = _generation;
+        var token = _listReads.Token;
         IsLoadingMore = true;
         MoreFailed = false;
         var query = _listQuery with { After = RecordFormat.CursorAfter(Rows.Select(row => row.Record).ToList()) };
@@ -406,7 +427,7 @@ public sealed partial class RecordsViewModel : ObservableObject
         RecordsPage page;
         try
         {
-            page = await _reader.ReadPageAsync(query);
+            page = await _reader.ReadPageAsync(query, token);
         }
         catch (Exception ex)
         {
@@ -436,7 +457,7 @@ public sealed partial class RecordsViewModel : ObservableObject
         IReadOnlyList<string> sessions;
         try
         {
-            sessions = await _reader.ReadSessionsAsync();
+            sessions = await _reader.ReadSessionsAsync(_windowReads.Token);
         }
         catch (Exception ex)
         {
@@ -460,6 +481,7 @@ public sealed partial class RecordsViewModel : ObservableObject
     private async Task ReadDetailAsync(long? id)
     {
         _detailFor = id;
+        var token = Renew(ref _detailReads, _windowReads.Token).Token;
         if (id is not { } recordId)
         {
             Detail = null;
@@ -471,7 +493,7 @@ public sealed partial class RecordsViewModel : ObservableObject
         RecordDetail? record;
         try
         {
-            record = await _reader.ReadDetailAsync(recordId);
+            record = await _reader.ReadDetailAsync(recordId, token);
         }
         catch (Exception ex)
         {

@@ -40,19 +40,23 @@ public sealed record RecordDetail(
 /// <summary>What the records window asks of the records database.</summary>
 public interface IRecordsReader
 {
-    Task<RecordsPage> ReadPageAsync(RecordsQuery query);
+    // Each read stops when its caller cancels it: a read the window no longer needs is interrupted
+    // inside the database rather than left to scan to its end.
+    Task<RecordsPage> ReadPageAsync(RecordsQuery query, CancellationToken cancellationToken);
 
     /// <summary>The record, or null when there is none with that id.</summary>
-    Task<RecordDetail?> ReadDetailAsync(long id);
+    Task<RecordDetail?> ReadDetailAsync(long id, CancellationToken cancellationToken);
 
     /// <summary>Every session that has records, newest first.</summary>
-    Task<IReadOnlyList<string>> ReadSessionsAsync();
+    Task<IReadOnlyList<string>> ReadSessionsAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>
 /// Reads <c>records.sqlite3</c> for the records window. Each read opens its own read-only connection on
 /// a worker thread, beside the logger's writing one, which the database's WAL journal lets run
-/// alongside it; the logger alone writes. A read waits at most <see cref="ReadBound"/> to keep the window responsive, and then fails while the read it gave up on finishes or fails on its own.
+/// alongside it; the logger alone writes. A read waits at most <see cref="ReadBound"/> to keep the
+/// window responsive; one that runs out of time, or that its caller cancels, is interrupted inside the
+/// database, so superseded searches over a large log do not pile up in the background.
 /// </summary>
 /// <remarks>
 /// A read logs nothing, but for one warning per reader the first time a search skips damaged records:
@@ -73,14 +77,21 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
     private const string Searched =
         "pathhide_contains(message, $search) OR pathhide_contains_json(fields, $search) OR pathhide_contains_json(error, $search)";
 
-    public Task<RecordsPage> ReadPageAsync(RecordsQuery query) => Read(connection => ReadPage(connection, query));
+    public Task<RecordsPage> ReadPageAsync(RecordsQuery query, CancellationToken cancellationToken) =>
+        Read(connection => ReadPage(connection, query), cancellationToken);
 
-    public Task<RecordDetail?> ReadDetailAsync(long id) => Read(connection => ReadDetail(connection, id));
+    public Task<RecordDetail?> ReadDetailAsync(long id, CancellationToken cancellationToken) =>
+        Read(connection => ReadDetail(connection, id), cancellationToken);
 
-    public Task<IReadOnlyList<string>> ReadSessionsAsync() => Read(ReadSessions);
+    public Task<IReadOnlyList<string>> ReadSessionsAsync(CancellationToken cancellationToken) =>
+        Read(ReadSessions, cancellationToken);
 
-    private Task<T> Read<T>(Func<SqliteConnection, T> read) =>
-        Task.Run(() =>
+    private async Task<T> Read<T>(Func<SqliteConnection, T> read, CancellationToken cancellationToken)
+    {
+        var bound = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        bound.CancelAfter(ReadBound);
+        var stop = bound.Token;
+        var work = Task.Run(() =>
         {
             // Pooling off, so a read leaves no handle on the file behind it.
             using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -90,6 +101,9 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
                 Pooling = false,
             }.ToString());
             connection.Open();
+            // Disposed before the connection, and waits for an interrupt already under way.
+            using var interrupt = stop.Register(() => SQLitePCL.raw.sqlite3_interrupt(connection.Handle));
+            stop.ThrowIfCancellationRequested();
             using (var pragma = connection.CreateCommand())
             {
                 pragma.CommandText = "PRAGMA busy_timeout = 5000;";
@@ -97,7 +111,24 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
             }
             FormatVersions.CheckDatabase(connection, databasePath, FormatVersions.Records);
             return read(connection);
-        }).WaitAsync(ReadBound);
+        }, CancellationToken.None);
+        // The source lives as long as the read: a wait that gave up may leave it still opening the file.
+        _ = work.ContinueWith(done =>
+        {
+            _ = done.Exception;
+            bound.Dispose();
+        }, TaskScheduler.Default);
+
+        try
+        {
+            return await work.WaitAsync(stop).ConfigureAwait(false);
+        }
+        catch (Exception) when (stop.IsCancellationRequested)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new TimeoutException($"The records read did not finish within {ReadBound.TotalSeconds:0} s.");
+        }
+    }
 
     private RecordsPage ReadPage(SqliteConnection connection, RecordsQuery query)
     {
