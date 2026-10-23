@@ -74,10 +74,17 @@ jobs:
       fail-fast: false # a Windows failure never cancels the macOS build
       matrix:
         include:
+          # Each job attaches only what its own OS packages, so every pattern it lists must match.
           - os: macos-latest
             package: bash scripts/package.sh
+            assets: |
+              dist/*.dmg
+              dist/*-mac.zip
           - os: windows-latest
             package: pwsh scripts/package.ps1
+            assets: |
+              dist/*-setup.exe
+              dist/*-win.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -109,8 +116,4 @@ jobs:
             These builds are unsigned, so the OS warns on first launch:
             - **macOS**: right-click the app → **Open** (or `xattr -dr com.apple.quarantine PathHide.app`)
             - **Windows**: SmartScreen → **More info** → **Run anyway**
-          files: |
-            dist/*.dmg
-            dist/*-setup.exe
-            dist/*-mac.zip
-            dist/*-win.zip
+          files: ${{ matrix.assets }}
