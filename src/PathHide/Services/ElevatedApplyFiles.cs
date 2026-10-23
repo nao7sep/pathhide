@@ -59,6 +59,12 @@ public sealed record ElevatedApplyFiles(string RequestPath, string ResultsPath)
     public bool TryDelete() => TryDelete(RequestPath) & TryRemoveResults(ResultsPath);
 
     /// <summary>
+    /// Removes the request before any child has read it, so a child the user approves later finds
+    /// nothing to apply. Returns whether it is gone.
+    /// </summary>
+    public bool TryWithdrawRequest() => TryDelete(RequestPath);
+
+    /// <summary>
     /// Deletes the files earlier runs left in <paramref name="directory"/>, but only those this host
     /// wrote from a process that has since exited. A file the child still holds open fails to delete
     /// and is left for the next launch.

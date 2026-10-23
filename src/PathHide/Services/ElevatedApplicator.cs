@@ -191,6 +191,12 @@ public sealed class ElevatedApplicator : IElevatedApplicator
             run = RunChildAsync(files, requestDigest, started, declined);
             status = await WaitAsync(run, started.Task, declined.Task, cancellationToken).ConfigureAwait(false);
 
+            // Cancelled while the approval prompt is still open: the prompt cannot be taken back, so the
+            // request is. A child approved later would otherwise apply an older change than the list
+            // may by then ask for.
+            if (status == ElevatedApplyStatus.Cancelled && !started.Task.IsCompleted && !files.TryWithdrawRequest())
+                Log.Warn("elevated apply: could not withdraw the request; a child approved later applies it");
+
             IReadOnlyDictionary<string, bool> results;
             try
             {
@@ -216,7 +222,9 @@ public sealed class ElevatedApplicator : IElevatedApplicator
                 return new ElevatedApplyOutcome(status, exitCode, results);
             }
 
-            if (status == ElevatedApplyStatus.Cancelled)
+            if (status == ElevatedApplyStatus.Cancelled && !started.Task.IsCompleted)
+                Log.Info("elevated apply: cancelled before the child started", new { totalPaths });
+            else if (status == ElevatedApplyStatus.Cancelled)
                 Log.Info("elevated apply: cancelled; the child finishes on its own", new { reported = results.Count, totalPaths });
             else
                 Log.Error("elevated apply: child did not exit within the timeout", new

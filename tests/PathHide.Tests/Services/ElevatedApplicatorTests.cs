@@ -32,6 +32,33 @@ public sealed class ElevatedApplicatorTests : IDisposable
         Assert.Equal(Log.Session, PathHide.Storage.FileTimestamp.SerializedStamp(invocation.Session!.Value));
     }
 
+    // The approval prompt cannot be taken back, so a cancel while it is open takes back the request: a
+    // child the user approves afterwards finds nothing to apply.
+    [Fact(Timeout = 10_000)]
+    public async Task Cancelling_while_the_prompt_is_open_withdraws_the_request()
+    {
+        var prompt = new TaskCompletionSource<Task<int>?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? requestPath = null;
+        var prompted = Signal();
+        var applicator = new ElevatedApplicator(arguments =>
+        {
+            requestPath = ElevatedApplyCommand.ParseArguments(arguments)!.RequestPath;
+            prompted.SetResult();
+            return prompt.Task;
+        }, _temp, "/storage-root");
+        using var stop = new CancellationTokenSource();
+
+        var apply = applicator.ApplyAsync(Buckets, stop.Token);
+        await prompted.Task.WaitAsync(Generous, TestContext.Current.CancellationToken);
+        Assert.True(File.Exists(requestPath));
+        await stop.CancelAsync();
+
+        Assert.Equal(ElevatedApplyStatus.Cancelled, (await apply.WaitAsync(Generous, TestContext.Current.CancellationToken)).Status);
+        Assert.False(File.Exists(requestPath));
+        prompt.SetResult(Task.FromResult(0));
+        await applicator.ReleaseAsync(Generous);
+    }
+
     [Theory(Timeout = 10_000)]
     [InlineData(false)]
     [InlineData(true)]

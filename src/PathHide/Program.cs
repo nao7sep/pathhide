@@ -228,6 +228,12 @@ sealed class Program
                 clean = false;
                 return 2;
             }
+            catch (FileNotFoundException) when (invocation.RequestDigest is not null)
+            {
+                // The GUI withdrew the request while the approval prompt was open: nothing to apply.
+                Log.Info("apply mode: the request was withdrawn before this run started");
+                return 0;
+            }
             using var parent = invocation.Parent is { } identity ? new ApplyParentProcess(identity) : null;
 
             // Each result is written and flushed the moment its path is done, so when the parent stops

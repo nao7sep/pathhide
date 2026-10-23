@@ -51,6 +51,23 @@ public sealed class ApplyModeProcessTests : IDisposable
         Assert.All(entries, entry => Assert.Equal(session, entry.Session));
     }
 
+    // An approved launch whose request the GUI withdrew while the prompt was open has nothing to apply,
+    // which is not a failure.
+    [Fact]
+    public void A_launch_whose_request_was_withdrawn_applies_nothing_and_fails_nothing()
+    {
+        var request = Path.Combine(_dir, "request.json");
+        var results = Path.Combine(_dir, "results.jsonl");
+
+        Assert.Equal(0, ApplyChildProcess.Run(request, results, Path.Combine(_dir, "root"),
+            requestDigest: ElevatedApplyCommand.RequestDigest([1, 2, 3])));
+
+        var report = ElevatedApplyResults.Parse(File.ReadAllText(results));
+        Assert.Empty(report.Results);
+        Assert.DoesNotContain(report.Entries, entry => entry.Level == "error");
+        Assert.Contains(report.Entries, entry => entry.Message == "apply mode: the request was withdrawn before this run started");
+    }
+
     [Fact]
     public void ExistingResults_AreNotOverwrittenAndNoAttributesAreApplied()
     {
