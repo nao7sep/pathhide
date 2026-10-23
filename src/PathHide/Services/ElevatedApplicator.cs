@@ -104,7 +104,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
     internal Func<ElevatedApplyFiles, bool> DeleteFiles { get; init; } = files => files.TryDelete();
 
     // The preparation-to-cleanup lifetime of the newest elevated operation. Completed when none
-    // is outstanding. Read and replaced only by ApplyAsync, which its caller serializes.
+    // is outstanding. ApplyAsync replaces it; HasRunningChild and ReleaseAsync observe it during quit.
     private Task _outstanding = Task.CompletedTask;
 
     public ElevatedApplicator(
