@@ -61,11 +61,15 @@ function run(args) {
 JXA
 )"
   if [[ ! "$pid" =~ ^[1-9][0-9]*$ ]]; then
+    # A new instance exits at once when another one already holds the app's single-instance lease.
+    if pgrep -f "$bundle/Contents/MacOS/" >/dev/null; then
+      echo "$label is already running outside these launchers; its window is brought forward instead."
+      return 0
+    fi
     echo "$label could not be opened." >&2
     return 1
   fi
   record_runtime "$repo_dir" "$pid"
-  echo "If $label was already running outside these launchers, its window is brought forward instead."
 }
 
 # Records the app process that the wrapper (dotnet run) starts, once it appears. Fails when the wrapper
