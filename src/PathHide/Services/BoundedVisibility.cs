@@ -33,7 +33,6 @@ public sealed class BoundedVisibility
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
     private readonly IVisibilityService _service;
-    private readonly SemaphoreSlim _physicalCapacity = new(Width, Width);
 
     // Physical ownership survives removal/replacement of a row. Windows/UNC spelling is normalized;
     // caller-observed native identities also join known Mac aliases without rewriting stored paths.
@@ -166,30 +165,8 @@ public sealed class BoundedVisibility
         // shared pool: a call stuck for the network timeout would hold a pool thread the app's own
         // continuations, saves and reads need, and enough of them would leave that work waiting on
         // the pool's slow thread injection.
-        try
-        {
-            await _physicalCapacity.WaitAsync(bound.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            throw new TimeoutException("Filesystem capacity is occupied by calls that have not returned.");
-        }
         var started = Stopwatch.GetTimestamp();
-        Task<T> work;
-        try
-        {
-            work = Task.Factory.StartNew(() =>
-            {
-                try { return call(); }
-                finally { _physicalCapacity.Release(); }
-            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        }
-        catch
-        {
-            _physicalCapacity.Release();
-            throw;
-        }
+        var work = Task.Factory.StartNew(call, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         if (!await EndsWithinAsync(work, bound.Token))
         {
             Abandon(path, operation, identity, work, started, timedOut: !cancellationToken.IsCancellationRequested);
