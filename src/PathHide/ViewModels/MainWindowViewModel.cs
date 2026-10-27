@@ -223,51 +223,23 @@ public partial class MainWindowViewModel : ObservableObject
 
     public string StatusBarText => Localizer.Of(Summary());
 
-    private readonly Dictionary<PathRowViewModel, ActualState> _rowStates = new();
-    private readonly Dictionary<ActualState, int> _stateCounts = new();
-
-    private void CountState(ActualState state, int delta) =>
-        _stateCounts[state] = _stateCounts.GetValueOrDefault(state) + delta;
-
+    // The status bar counts the rows' states, so it is read again whenever a row joins, leaves or changes
+    // state, wherever that happens.
     private void OnRowsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
     {
-        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
-        {
-            foreach (var row in _rowStates.Keys) row.PropertyChanged -= OnRowChanged;
-            _rowStates.Clear();
-            _stateCounts.Clear();
-            foreach (var row in Rows) AddRow(row);
-        }
-        else
-        {
-            foreach (PathRowViewModel row in e.OldItems ?? Array.Empty<PathRowViewModel>())
-            {
-                row.PropertyChanged -= OnRowChanged;
-                if (_rowStates.Remove(row, out var state)) CountState(state, -1);
-            }
-            foreach (PathRowViewModel row in e.NewItems ?? Array.Empty<PathRowViewModel>()) AddRow(row);
-        }
+        foreach (PathRowViewModel row in e.OldItems ?? Array.Empty<PathRowViewModel>())
+            row.PropertyChanged -= OnRowChanged;
+        foreach (PathRowViewModel row in e.NewItems ?? Array.Empty<PathRowViewModel>())
+            row.PropertyChanged += OnRowChanged;
         OnPropertyChanged(nameof(IsPathListEmpty));
         OnPropertyChanged(nameof(StatusBarText));
         SelectionOrListChanged();
     }
 
-    private void AddRow(PathRowViewModel row)
-    {
-        _rowStates.Add(row, row.ActualState);
-        CountState(row.ActualState, 1);
-        row.PropertyChanged += OnRowChanged;
-    }
-
     private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (sender is PathRowViewModel row && e.PropertyName == nameof(PathRowViewModel.ActualState))
-        {
-            CountState(_rowStates[row], -1);
-            CountState(row.ActualState, 1);
-            _rowStates[row] = row.ActualState;
+        if (e.PropertyName == nameof(PathRowViewModel.ActualState))
             OnPropertyChanged(nameof(StatusBarText));
-        }
         else if (e.PropertyName == nameof(PathRowViewModel.IsSelected))
             SelectionOrListChanged();
     }
@@ -290,12 +262,11 @@ public partial class MainWindowViewModel : ObservableObject
     internal Message Summary()
     {
         // An empty list explains itself inside the list; the bar only counts.
-        var hidden = _stateCounts.GetValueOrDefault(ActualState.Hidden);
-        var visible = _stateCounts.GetValueOrDefault(ActualState.Visible);
-        var missing = _stateCounts.GetValueOrDefault(ActualState.Missing);
-        var pending = _stateCounts.GetValueOrDefault(ActualState.Unknown);
-        var problems = _stateCounts.GetValueOrDefault(ActualState.AccessDenied)
-            + _stateCounts.GetValueOrDefault(ActualState.Error) + _stateCounts.GetValueOrDefault(ActualState.Unresponsive);
+        var hidden = Rows.Count(r => r.ActualState == ActualState.Hidden);
+        var visible = Rows.Count(r => r.ActualState == ActualState.Visible);
+        var missing = Rows.Count(r => r.ActualState == ActualState.Missing);
+        var pending = Rows.Count(r => r.ActualState == ActualState.Unknown);
+        var problems = Rows.Count(r => r.ActualState is ActualState.AccessDenied or ActualState.Error or ActualState.Unresponsive);
 
         var parts = new List<Message> { Message.Of("status.entries", ("count", Rows.Count)) };
         if (hidden > 0) parts.Add(Message.Of("status.hidden", ("count", hidden)));
