@@ -13,8 +13,6 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_NAME="$(sed -n 's:.*<Product>\(.*\)</Product>.*:\1:p' "$REPO_DIR/Directory.Build.props")"
 PROJECT_FILE="$REPO_DIR/src/PathHide/PathHide.csproj"
 APP_BUNDLE="$REPO_DIR/publish/$APP_NAME.app"
-APP_EXECUTABLE="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
-RUNTIME_TOKEN="rebuild-$$-$(date +%s)-$RANDOM"
 source "$SCRIPT_DIR/launcher-runtime.sh"
 
 # Apple Silicon only, matching what the fleet ships and what package.sh
@@ -64,7 +62,5 @@ log_step "Publishing $APP_NAME ($RID, Release, self-contained)"
 dotnet publish "$PROJECT_FILE" -c Release -r "$RID" --self-contained true -o "$REPO_DIR/publish"
 
 log_step "Launching the rebuilt app"
-claim_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
-stop_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE"
-open -n "$APP_BUNDLE" --args --launcher-repo "$REPO_DIR" --launcher-token "$RUNTIME_TOKEN"
-wait_for_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE" 30
+stop_recorded_runtime "$APP_NAME" "$REPO_DIR"
+launch_bundle "$APP_NAME" "$REPO_DIR" "$APP_BUNDLE"

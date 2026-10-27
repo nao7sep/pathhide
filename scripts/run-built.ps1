@@ -28,8 +28,6 @@ $repoDir = Split-Path -Parent $scriptDir
 # The app name as Directory.Build.props states it, read as plain text so launching stays instant.
 $appName = ([regex]::Match((Get-Content -LiteralPath (Join-Path $repoDir "Directory.Build.props") -Raw), '<Product>(.*?)</Product>')).Groups[1].Value
 $exePath = Join-Path $repoDir "publish-win/$appName.exe"
-$projectFile = Join-Path $repoDir "src/PathHide/PathHide.csproj"
-$runtimeToken = [guid]::NewGuid().ToString("N")
 
 try {
     Set-Utf8Console
@@ -45,14 +43,12 @@ try {
     }
 
     $builtAt = (Get-Item $exePath).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
-    Claim-LauncherRuntime -Token $runtimeToken -RepoDir $repoDir
-    Stop-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName $appName -BuiltExecutable $exePath
+    Stop-RecordedRuntime -Label $appName -RepoDir $repoDir
     Write-Step "Launching the existing build (built: $builtAt)"
     Write-Host "If you changed source since then, run rebuild instead."
 
     # GUI app: launch non-blocking via Start-Process.
-    Start-Process -FilePath $exePath -ArgumentList @('--launcher-repo', "`"$repoDir`"", '--launcher-token', $runtimeToken) | Out-Null
-    Wait-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile "" -ExecutableName $appName -BuiltExecutable $exePath -TimeoutSeconds 30
+    Start-RecordedRuntime -Label $appName -RepoDir $repoDir -Executable $exePath
 }
 catch {
     Write-Host ""

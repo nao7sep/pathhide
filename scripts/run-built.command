@@ -11,8 +11,6 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # The app name as Directory.Build.props states it, read as plain text so launching stays instant.
 APP_NAME="$(sed -n 's:.*<Product>\(.*\)</Product>.*:\1:p' "$REPO_DIR/Directory.Build.props")"
 APP_BUNDLE="$REPO_DIR/publish/$APP_NAME.app"
-APP_EXECUTABLE="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
-RUNTIME_TOKEN="run-built-$$-$(date +%s)-$RANDOM"
 source "$SCRIPT_DIR/launcher-runtime.sh"
 
 log_step() {
@@ -43,12 +41,10 @@ fi
 # Age tracks the actual build: rebuild resets Contents/MacOS, but never touches
 # the .app dir's own mtime — stat'ing the bundle root would report a stale date.
 built_at="$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S %Z' "$APP_BUNDLE/Contents/MacOS" 2>/dev/null || echo 'unknown')"
-claim_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
-stop_owned_runtime "$APP_NAME" "$REPO_DIR" "$REPO_DIR/src/PathHide/PathHide.csproj" "$APP_NAME" "$APP_EXECUTABLE"
+stop_recorded_runtime "$APP_NAME" "$REPO_DIR"
 log_step "Launching the existing build (built: $built_at)"
 echo "If you changed source since then, run rebuild instead."
 
-# `open` routes through Launch Services, which registers the bundle identity with
-# TCC and triggers permission prompts on first access.
-open -n "$APP_BUNDLE" --args --launcher-repo "$REPO_DIR" --launcher-token "$RUNTIME_TOKEN"
-wait_for_owned_runtime "$APP_NAME" "$REPO_DIR" "$REPO_DIR/src/PathHide/PathHide.csproj" "$APP_NAME" "$APP_EXECUTABLE" 30
+# The launch goes through Launch Services, which registers the bundle identity
+# with TCC and triggers permission prompts on first access.
+launch_bundle "$APP_NAME" "$REPO_DIR" "$APP_BUNDLE"

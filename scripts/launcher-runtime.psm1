@@ -1,91 +1,82 @@
 # Shared by the Windows launchers (run-dev, run-built, rebuild): one PathHide runtime per repository.
-# A launcher claims ownership, stops any PathHide it or another launcher started, waits for the new one
-# to appear, and releases ownership only if no later launcher has claimed it since.
+# The launcher that starts PathHide records its process ID and executable under .git; the next launcher
+# asks that process to close only while it still runs that executable. PathHide started any other way is
+# left to its single-instance behavior, which brings its window forward instead of opening a second one.
 
-function Get-LauncherOwnerFile {
+function Get-RuntimeRecordFile {
     param([Parameter(Mandatory = $true)][string]$RepoDir)
-    return Join-Path (Join-Path $RepoDir '.git') 'launcher-runtime-owner'
+    return Join-Path (Join-Path $RepoDir '.git') 'launcher-runtime-process'
 }
 
-function Claim-LauncherRuntime {
+function Save-RuntimeRecord {
     param(
-        [Parameter(Mandatory = $true)][string]$Token,
-        [Parameter(Mandatory = $true)][string]$RepoDir
+        [Parameter(Mandatory = $true)][string]$RepoDir,
+        [Parameter(Mandatory = $true)][System.Diagnostics.Process]$Process
     )
-    $ownerFile = Get-LauncherOwnerFile -RepoDir $RepoDir
-    $temporaryFile = "$ownerFile.$PID.$([guid]::NewGuid().ToString('N'))"
-    [System.IO.File]::WriteAllText($temporaryFile, "$Token`n", [System.Text.UTF8Encoding]::new($false))
-    Move-Item -LiteralPath $temporaryFile -Destination $ownerFile -Force
+    [System.IO.File]::WriteAllLines((Get-RuntimeRecordFile $RepoDir), [string[]]@($Process.Id, $Process.Path))
 }
 
-function Test-LauncherRuntimeOwner {
-    param(
-        [Parameter(Mandatory = $true)][string]$Token,
-        [Parameter(Mandatory = $true)][string]$RepoDir
-    )
-    $ownerFile = Get-LauncherOwnerFile -RepoDir $RepoDir
-    return (Test-Path -LiteralPath $ownerFile) -and
-        ((Get-Content -LiteralPath $ownerFile -Raw).Trim() -ceq $Token)
+# The recorded process, returned only while it still runs the recorded executable.
+function Get-RecordedRuntime {
+    param([Parameter(Mandatory = $true)][string]$RepoDir)
+    $file = Get-RuntimeRecordFile $RepoDir
+    if (-not (Test-Path -LiteralPath $file)) { return $null }
+    $lines = @(Get-Content -LiteralPath $file)
+    $processId = 0
+    if ($lines.Count -lt 2 -or -not [int]::TryParse($lines[0], [ref]$processId)) { return $null }
+    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+    if ($process -and $lines[1] -and $process.Path -eq $lines[1]) { return $process }
+    return $null
 }
 
-function Release-LauncherRuntime {
+# Asks the recorded PathHide to close its window as a user would, so it can still ask about unsaved work,
+# and stops with a message rather than force-closing it when it stays open.
+function Stop-RecordedRuntime {
     param(
-        [Parameter(Mandatory = $true)][string]$Token,
+        [Parameter(Mandatory = $true)][string]$Label,
         [Parameter(Mandatory = $true)][string]$RepoDir
     )
-    if (Test-LauncherRuntimeOwner -Token $Token -RepoDir $RepoDir) {
-        Remove-Item -LiteralPath (Get-LauncherOwnerFile -RepoDir $RepoDir) -Force -ErrorAction SilentlyContinue
+    $process = Get-RecordedRuntime $RepoDir
+    if (-not $process) { return }
+    Write-Host "Asking the running $Label (pid $($process.Id)) to close."
+    $null = $process.CloseMainWindow()
+    if (-not $process.WaitForExit(5000)) {
+        throw "$Label is still open. Finish or cancel its pending changes, then run this launcher again."
     }
 }
 
-function Get-RuntimeRecord {
-    param([string]$RepoDir)
-    $file = Join-Path (Join-Path $RepoDir '.git') 'launcher-runtime-child'
-    if (Test-Path -LiteralPath $file) {
-        try { return Get-Content -LiteralPath $file -Raw | ConvertFrom-Json } catch { return $null }
+function Start-RecordedRuntime {
+    param(
+        [Parameter(Mandatory = $true)][string]$Label,
+        [Parameter(Mandatory = $true)][string]$RepoDir,
+        [Parameter(Mandatory = $true)][string]$Executable
+    )
+    $process = Start-Process -FilePath $Executable -PassThru
+    Save-RuntimeRecord -RepoDir $RepoDir -Process $process
+    Write-Host "If $Label was already running outside these launchers, its window is brought forward instead."
+}
+
+# Records the app process that the wrapper (dotnet run) starts, once it appears, and returns it. Returns
+# nothing when the wrapper ends first, as it does when the build fails.
+function Save-WrappedRuntimeRecord {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoDir,
+        [Parameter(Mandatory = $true)][System.Diagnostics.Process]$Wrapper,
+        [Parameter(Mandatory = $true)][string]$ExecutableName
+    )
+    while (-not $Wrapper.HasExited) {
+        $child = Get-CimInstance Win32_Process -Filter "ParentProcessId = $($Wrapper.Id) AND Name = '$ExecutableName.exe'" |
+            Select-Object -First 1
+        if ($child) {
+            $process = Get-Process -Id $child.ProcessId -ErrorAction SilentlyContinue
+            if ($process) {
+                Save-RuntimeRecord -RepoDir $RepoDir -Process $process
+                return $process
+            }
+        }
+        Start-Sleep -Milliseconds 200
     }
     return $null
 }
 
-function Get-OwnedRuntimeProcess {
-    param([string]$RepoDir, [string]$ProjectFile, [string]$ExecutableName, [string]$BuiltExecutable)
-    $record = Get-RuntimeRecord $RepoDir
-    if (-not $record -or $record.state -ne 'running') { return }
-    $process = Get-Process -Id $record.pid -ErrorAction SilentlyContinue
-    if ($process -and $process.StartTime.ToUniversalTime().Ticks -eq $record.startTicks) { return $process }
-}
-
-function Stop-OwnedRuntime {
-    param([string]$Label, [string]$RepoDir, [string]$ProjectFile, [string]$ExecutableName, [string]$BuiltExecutable, [string]$ExpectedToken)
-    if ($ExpectedToken) {
-        $record = Get-RuntimeRecord $RepoDir
-        if (-not $record -or $record.token -cne $ExpectedToken) { return }
-    }
-    $process = Get-OwnedRuntimeProcess -RepoDir $RepoDir
-    if (-not $process) { return }
-    $null = $process.CloseMainWindow()
-    if (-not $process.WaitForExit(5000)) {
-        throw "$Label is still open. Finish or cancel its pending changes before replacing it."
-    }
-}
-
-function Wait-OwnedRuntime {
-    param([string]$Label, [string]$RepoDir, [string]$ProjectFile, [string]$ExecutableName,
-        [string]$BuiltExecutable, [int]$TimeoutSeconds = 30)
-    $token = (Get-Content -LiteralPath (Get-LauncherOwnerFile $RepoDir) -Raw).Trim()
-    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
-    do {
-        $record = Get-RuntimeRecord $RepoDir
-        if ($record -and $record.token -ceq $token) {
-            if ($record.state -eq 'activated') {
-                Write-Host "$Label activated an independently started instance; the selected launch mode did not replace it."
-                return
-            }
-            if (Get-OwnedRuntimeProcess -RepoDir $RepoDir) { return }
-        }
-        Start-Sleep -Milliseconds 100
-    } while ([DateTime]::UtcNow -lt $deadline)
-    throw "$Label did not start within ${TimeoutSeconds}s."
-}
-
-Export-ModuleMember -Function Claim-LauncherRuntime, Test-LauncherRuntimeOwner, Release-LauncherRuntime, Stop-OwnedRuntime, Wait-OwnedRuntime
+Export-ModuleMember -Function Get-RecordedRuntime, Stop-RecordedRuntime, Start-RecordedRuntime, Save-WrappedRuntimeRecord

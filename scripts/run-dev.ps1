@@ -50,8 +50,7 @@ $repoDir = Split-Path -Parent $scriptDir
 # The app name as Directory.Build.props states it, read as plain text so launching stays instant.
 $appName = ([regex]::Match((Get-Content -LiteralPath (Join-Path $repoDir "Directory.Build.props") -Raw), '<Product>(.*?)</Product>')).Groups[1].Value
 $projectFile = Join-Path $repoDir "src/PathHide/PathHide.csproj"
-$builtExecutable = Join-Path $repoDir "publish-win/$appName.exe"
-$runtimeToken = [guid]::NewGuid().ToString("N")
+$appProcess = $null
 
 try {
     Set-Utf8Console
@@ -61,16 +60,15 @@ try {
     Set-Location $repoDir
 
     Write-Step "Replacing any existing $appName runtime"
-    Claim-LauncherRuntime -Token $runtimeToken -RepoDir $repoDir
-    Stop-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName $appName -BuiltExecutable $builtExecutable
+    Stop-RecordedRuntime -Label $appName -RepoDir $repoDir
 
     Write-Step "Restoring packages required for launch"
     Invoke-Native -FilePath "dotnet" -ArgumentList @("restore", $projectFile)
 
     Write-Step "Starting $appName (Debug, from source)"
-    $devProcess = Start-Process -FilePath "dotnet" -ArgumentList @("run", "--project", "`"$projectFile`"", "--", "--launcher-repo", "`"$repoDir`"", "--launcher-token", $runtimeToken) -NoNewWindow -PassThru
-    Wait-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile "" -ExecutableName $appName -BuiltExecutable $builtExecutable -TimeoutSeconds 120
-    Write-Step "$appName is ready"
+    $devProcess = Start-Process -FilePath "dotnet" -ArgumentList @("run", "--project", "`"$projectFile`"") -NoNewWindow -PassThru
+    $appProcess = Save-WrappedRuntimeRecord -RepoDir $repoDir -Wrapper $devProcess -ExecutableName $appName
+    if ($appProcess) { Write-Step "$appName is ready" }
     $devProcess.WaitForExit()
     if ($devProcess.ExitCode -notin @(0, 130, -1073741510)) {
         throw "$appName development runtime failed with exit code $($devProcess.ExitCode)."
@@ -82,11 +80,12 @@ catch {
     $scriptExitCode = 1
 }
 finally {
-    if (Test-LauncherRuntimeOwner -Token $runtimeToken -RepoDir $repoDir) {
-        Stop-OwnedRuntime -Label $appName -RepoDir $repoDir -ProjectFile $projectFile -ExecutableName $appName -BuiltExecutable $builtExecutable -ExpectedToken $runtimeToken
-        Release-LauncherRuntime -Token $runtimeToken -RepoDir $repoDir
-        Read-Host "Press Enter to close" | Out-Null
+    # Closing this launcher closes the app it started, unless a later launcher has replaced it.
+    $recorded = Get-RecordedRuntime $repoDir
+    if ($appProcess -and $recorded -and $recorded.Id -eq $appProcess.Id) {
+        Stop-RecordedRuntime -Label $appName -RepoDir $repoDir
     }
+    Read-Host "Press Enter to close" | Out-Null
 }
 
 exit $scriptExitCode

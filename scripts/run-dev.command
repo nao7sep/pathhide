@@ -15,8 +15,7 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # The app name as Directory.Build.props states it, read as plain text so launching stays instant.
 APP_NAME="$(sed -n 's:.*<Product>\(.*\)</Product>.*:\1:p' "$REPO_DIR/Directory.Build.props")"
 PROJECT_FILE="$REPO_DIR/src/PathHide/PathHide.csproj"
-APP_EXECUTABLE="$REPO_DIR/publish/$APP_NAME.app/Contents/MacOS/$APP_NAME"
-RUNTIME_TOKEN="run-dev-$$-$(date +%s)-$RANDOM"
+APP_PID=""
 source "$SCRIPT_DIR/launcher-runtime.sh"
 
 log_step() {
@@ -42,9 +41,9 @@ pause_on_failure() {
 cleanup() {
   local status="$?"
   trap - EXIT
-  if is_launcher_runtime_owner "$RUNTIME_TOKEN" "$REPO_DIR"; then
-    stop_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE" "$RUNTIME_TOKEN" >/dev/null 2>&1 || true
-    release_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
+  # Closing this launcher closes the app it started, unless a later launcher has replaced it.
+  if [[ -n "$APP_PID" && "$(recorded_runtime_pid "$REPO_DIR")" == "$APP_PID" ]]; then
+    stop_recorded_runtime "$APP_NAME" "$REPO_DIR" >/dev/null 2>&1 || true
   fi
   pause_on_failure "$status"
   exit "$status"
@@ -57,15 +56,15 @@ require_command dotnet
 cd "$REPO_DIR"
 
 log_step "Replacing any existing $APP_NAME runtime"
-claim_launcher_runtime "$RUNTIME_TOKEN" "$REPO_DIR"
-stop_owned_runtime "$APP_NAME" "$REPO_DIR" "$PROJECT_FILE" "$APP_NAME" "$APP_EXECUTABLE"
+stop_recorded_runtime "$APP_NAME" "$REPO_DIR"
 
 log_step "Restoring packages required for launch"
 dotnet restore "$PROJECT_FILE"
 
 log_step "Starting $APP_NAME (Debug, from source)"
-dotnet run --project "$PROJECT_FILE" -- --launcher-repo "$REPO_DIR" --launcher-token "$RUNTIME_TOKEN" &
+dotnet run --project "$PROJECT_FILE" &
 DEV_PID=$!
-wait_for_owned_runtime "$APP_NAME" "$REPO_DIR" "" "$APP_NAME" "$APP_EXECUTABLE" 120
-log_step "$APP_NAME is ready"
+if APP_PID="$(record_wrapped_runtime "$REPO_DIR" "$DEV_PID" "$APP_NAME")"; then
+  log_step "$APP_NAME is ready"
+fi
 wait "$DEV_PID"
