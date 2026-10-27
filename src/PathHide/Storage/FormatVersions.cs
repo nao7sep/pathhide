@@ -59,14 +59,14 @@ public static class FormatVersions
     /// Opens the database at <paramref name="path"/>, creating it when absent, with one marker check. A
     /// database holding no schema objects is new: it receives <paramref name="schema"/> and its version
     /// in one transaction, so a failed initialization leaves an empty file that the next open
-    /// initializes again. Any other database must record a version this build reads; its
-    /// <paramref name="schema"/> statements then run as written, so they must be idempotent.
+    /// initializes again. Any other database is read as the current format unless it records a newer
+    /// version; its <paramref name="schema"/> statements then run as written, so they must be idempotent.
     /// </summary>
     /// <remarks>
     /// One GUI per data root is the only writer of a store (<see cref="Services.SingleInstanceLease"/>),
     /// so creation needs no claim against a concurrent creator.
     /// </remarks>
-    internal static SqliteConnection OpenDatabase(string path, int supported, string schema, Action<SqliteConnection>? validateUnmarked = null)
+    internal static SqliteConnection OpenDatabase(string path, int supported, string schema)
     {
         var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
@@ -84,19 +84,7 @@ public static class FormatVersions
             }
             var isNew = UserVersion(connection) == 0 && !HasSchema(connection);
             if (!isNew)
-            {
                 CheckDatabase(connection, path, supported);
-                if (UserVersion(connection) < 1)
-                {
-                    if (validateUnmarked is null)
-                        throw new InvalidDataException($"{path} has no current-schema validator.");
-                    validateUnmarked(connection);
-                    using var mark = connection.CreateCommand();
-                    mark.CommandText = $"PRAGMA user_version = {supported};";
-                    mark.ExecuteNonQuery();
-                    return connection; // No schema creation or repair on a populated unmarked database.
-                }
-            }
             using (var transaction = connection.BeginTransaction())
             {
                 using var initialize = connection.CreateCommand();

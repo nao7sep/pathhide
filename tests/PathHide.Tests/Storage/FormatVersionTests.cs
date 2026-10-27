@@ -301,53 +301,17 @@ public sealed class FormatVersionTests : IDisposable
 
     // --- records.sqlite3 ---
 
+    // An unmarked database is read as the current format, like one marked with it.
     [Theory]
+    [InlineData(FormatVersions.Records)]
     [InlineData(0)]
-    [InlineData(-1)]
-    public async Task Records_WithoutAVersion_AreUnreadableAndLeftByteIdentical(int version)
+    public async Task Records_CurrentOrUnmarkedCompleteMissingSchema(int version)
     {
         var path = PathOf(RecordsStore.FileName);
-        CreateDatabase(path, userVersion: version);
-        var bytes = File.ReadAllBytes(path);
-
-        var store = RecordsStore.TryOpen(path, out var failure);
-        await Assert.ThrowsAsync<SqliteException>(() => new RecordsReader(path).ReadSessionsAsync(TestContext.Current.CancellationToken));
-
-        Assert.Null(store);
-        Assert.IsType<SqliteException>(failure);
-        Assert.Equal(bytes, File.ReadAllBytes(path));
-    }
-
-    [Fact]
-    public async Task Unmarked_current_records_are_read_then_marked_by_the_writer_without_schema_repair()
-    {
-        var path = PathOf(RecordsStore.FileName);
-        using (var store = RecordsStore.TryOpen(path, out var failure) ?? throw failure!)
-            store.Write(new LogEntry("session", "2026-10-05T00:00:00.000Z", "info", "kept", null, null));
-        using (var connection = new SqliteConnection($"Data Source={path};Pooling=False"))
-        {
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = "PRAGMA user_version = 0;";
-            command.ExecuteNonQuery();
-        }
-        Assert.Equal("kept", Assert.Single((await new RecordsReader(path).ReadPageAsync(
-            new RecordsQuery(null, null, "", null), TestContext.Current.CancellationToken)).Records).Message);
-        Assert.Equal(0, UserVersion(path));
-        using var reopened = RecordsStore.TryOpen(path, out var error);
-        Assert.Null(error);
-        Assert.NotNull(reopened);
-        Assert.Equal(1, UserVersion(path));
-    }
-
-    [Fact]
-    public async Task Records_CompatibleMarkerCompletesMissingSchema()
-    {
-        var path = PathOf(RecordsStore.FileName);
-        CreateDatabase(path, FormatVersions.Records);
+        CreateDatabase(path, version);
         using (var store = RecordsStore.TryOpen(path, out var failure) ?? throw failure!)
             store.Write(new LogEntry("2026-10-05T00:00:00.000Z", "2026-10-05T00:00:00.000Z", "info", "kept", null, null));
-        Assert.Equal(FormatVersions.Records, UserVersion(path));
+        Assert.Equal(version, UserVersion(path));
         Assert.Equal("kept", Assert.Single((await new RecordsReader(path).ReadPageAsync(new RecordsQuery(null, null, "", null), TestContext.Current.CancellationToken)).Records).Message);
     }
 
@@ -391,26 +355,14 @@ public sealed class FormatVersionTests : IDisposable
     }
 
     [Theory]
+    [InlineData(FormatVersions.Backups)]
     [InlineData(0)]
-    [InlineData(-1)]
-    public void Backups_WithoutAVersion_AreUnreadableAndLeftByteIdentical(int version)
+    public void Backups_CurrentOrUnmarkedCompleteMissingSchema(int version)
     {
-        CreateDatabase(BackupsPath, userVersion: version);
-        var bytes = File.ReadAllBytes(BackupsPath);
-
+        CreateDatabase(BackupsPath, version);
         BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{}"));
         BackupStore.Close();
-
-        Assert.Equal(bytes, File.ReadAllBytes(BackupsPath));
-    }
-
-    [Fact]
-    public void Backups_CompatibleMarkerCompletesMissingSchema()
-    {
-        CreateDatabase(BackupsPath, FormatVersions.Backups);
-        BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{}"));
-        BackupStore.Close();
-        Assert.Equal(FormatVersions.Backups, UserVersion(BackupsPath));
+        Assert.Equal(version, UserVersion(BackupsPath));
         Assert.Equal(1, BackupRows());
     }
 

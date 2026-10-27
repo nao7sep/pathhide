@@ -47,7 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_log_entries_time_id ON log_entries (time, id);
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-            connection = FormatVersions.OpenDatabase(path, FormatVersions.Records, Schema, ValidateUnmarked);
+            connection = FormatVersions.OpenDatabase(path, FormatVersions.Records, Schema);
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;";
@@ -64,17 +64,6 @@ CREATE INDEX IF NOT EXISTS idx_log_entries_time_id ON log_entries (time, id);
             failure = ex;
             return null;
         }
-    }
-
-    private static void ValidateUnmarked(SqliteConnection connection)
-    {
-        using var command = connection.CreateCommand();
-        command.CommandText = "SELECT id, session, time, level, message, fields, error FROM log_entries LIMIT 0;";
-        using (var reader = command.ExecuteReader()) { }
-        // Live arrivals require the same automatically assigned integer identity as current writes.
-        command.CommandText = "SELECT COUNT(*) FROM pragma_table_info('log_entries') WHERE name = 'id' AND upper(type) = 'INTEGER' AND pk = 1;";
-        if ((long)command.ExecuteScalar()! != 1)
-            throw new InvalidDataException("The records table has no current integer primary key.");
     }
 
     public void Write(LogEntry entry)
