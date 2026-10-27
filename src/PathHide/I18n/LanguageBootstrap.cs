@@ -59,7 +59,9 @@ internal static class LanguageBootstrap
             if (!File.Exists(path))
                 return Languages.System;
 
-            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            // Parsed as the settings store parses it, so a repeated key means System here too.
+            using var document = JsonDocument.Parse(File.ReadAllText(path),
+                new JsonDocumentOptions { AllowDuplicateProperties = false });
             return document.RootElement.ValueKind == JsonValueKind.Object
                 && !(FormatVersions.Recorded(document.RootElement) > FormatVersions.Settings)
                 && document.RootElement.TryGetProperty(SettingsSets.Language, out var language)

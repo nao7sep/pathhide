@@ -192,6 +192,16 @@ public sealed class FormatVersionTests : IDisposable
     }
 
     [Fact]
+    public void Settings_WithARepeatedKey_AreUnreadableToTheStoreAndTheLanguageRead()
+    {
+        const string contents = """{ "formatVersion": 1, "language": "ja", "language": "de" }""";
+        File.WriteAllText(PathOf(AppSettings.FileName), contents);
+
+        Assert.True(new SettingsStore().Load().WasUnreadable);
+        Assert.Equal(Languages.System, LanguageBootstrap.SavedPreference());
+    }
+
+    [Fact]
     public void Settings_Newer_LoadBuiltInsAndRefuseSaves()
     {
         var bytes = WriteNewer(AppSettings.FileName, """{ "formatVersion": 2, "language": "ja", "theme": "dark" }""");
