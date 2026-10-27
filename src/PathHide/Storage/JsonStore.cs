@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -121,21 +120,14 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             {
                 return null;
             }
-            using var document = JsonDocument.Parse(bytes.AsMemory(bytes.AsSpan().StartsWith(new byte[] { 0xEF, 0xBB, 0xBF }) ? 3 : 0));
+            // A repeated property is ambiguous, not "last one wins": the parser refuses it.
+            using var document = JsonDocument.Parse(bytes.AsMemory(bytes.AsSpan().StartsWith(new byte[] { 0xEF, 0xBB, 0xBF }) ? 3 : 0),
+                new JsonDocumentOptions { AllowDuplicateProperties = false });
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
                 throw new JsonException($"The {_label} file must contain an object.");
-            RejectDuplicates(root, FormatVersions.JsonKey);
             if (FormatVersions.Recorded(root) is { } version && version > _formatVersion)
                 throw new NewerFormatException(_filePath, version, _formatVersion);
-            if (typeof(T) == typeof(PathListDocument))
-            {
-                RejectDuplicates(root, "paths");
-                if (root.TryGetProperty("paths", out var paths) && paths.ValueKind == JsonValueKind.Array)
-                    foreach (var entry in paths.EnumerateArray())
-                        if (entry.ValueKind == JsonValueKind.Object)
-                            RejectDuplicates(entry, "path", "desiredVisibility", "systemSetByPathHide");
-            }
             return root.Deserialize<T>(JsonOptions.Default)
                 ?? throw new JsonException($"The {_label} file could not be read as its document.");
         }
@@ -144,14 +136,6 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         {
             throw new UnreadableStoreException(_label, _filePath, ex);
         }
-    }
-
-    private static void RejectDuplicates(JsonElement value, params string[] critical)
-    {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var property in value.EnumerateObject())
-            if (Array.IndexOf(critical, property.Name) >= 0 && !seen.Add(property.Name))
-                throw new JsonException($"Repeated critical property: {property.Name}.");
     }
 
     private void WriteAtomically(byte[] bytes)

@@ -193,7 +193,10 @@ public sealed class SettingsStoreTests : IDisposable
     [InlineData("displayTimeZone", "9")]
     public void Load_InvalidSetUsesBuiltIn_LogsItsKey_AndKeepsTheFile(string key, string value)
     {
-        var original = "{ \"formatVersion\": 1, \"theme\": \"dark\", \"language\": \"ja\", \"" + key + "\": " + value + " }";
+        var theme = key == "theme" ? value : "\"dark\"";
+        var language = key == "language" ? value : "\"ja\"";
+        var other = key is "theme" or "language" ? "" : ", \"" + key + "\": " + value;
+        var original = "{ \"formatVersion\": 1, \"theme\": " + theme + ", \"language\": " + language + other + " }";
         File.WriteAllText(ConfigPath, original);
         Log.Start(RecordsStore.TryOpen(StorageRoot.RecordsFile, out _), StorageRoot.LogsDirectory);
 

@@ -90,7 +90,7 @@ public sealed class JsonStoreTests : IDisposable
     [InlineData("1.5")]
     public void Unrecognized_markers_use_current_shape_and_unknown_fields_are_allowed(string marker)
     {
-        File.WriteAllText(PathOf("paths.json"), "{\"formatVersion\":" + marker + ",\"paths\":[],\"extra\":1,\"extra\":2}");
+        File.WriteAllText(PathOf("paths.json"), "{\"formatVersion\":" + marker + ",\"paths\":[],\"extra\":1}");
         Assert.Empty(new PathListStore().Load().Value);
     }
 
