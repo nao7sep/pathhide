@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using Avalonia;
 using PathHide.I18n;
@@ -251,7 +249,6 @@ sealed class Program
                 .Concat(request.ToShowClearingSystem.Select(path => (path, false, SystemBit.Clear)));
             var failed = ApplyTargets(work, results, parent, request.Identities, invocation.Parent is not null);
 
-
             // The per-path file is the authoritative channel; the exit code stays a coarse
             // 0 = all ok / 1 = some failed signal for callers and logs.
             return failed ? 1 : 0;
@@ -284,12 +281,9 @@ sealed class Program
         ElevatedResultsWriter? results, ApplyParentProcess? parent,
         IReadOnlyDictionary<string, string> identities, bool requireApproval)
     {
-        var failed = 0;
-        // Parallel.ForEach owns all started synchronous work until it physically returns. Stop prevents
-        // subsequent admission after a required report breaks, without pretending running writes stopped.
-        Parallel.ForEach(targets, new ParallelOptions { MaxDegreeOfParallelism = BoundedVisibility.Width }, (target, loop) =>
+        var failed = false;
+        foreach (var target in targets)
         {
-            if (loop.IsStopped) return;
             parent?.RequireRunning();
             PathApplyResult verdict;
             try
@@ -300,20 +294,16 @@ sealed class Program
                 var systemSet = WindowsFileVisibility.Set(target.Path, target.Hide, target.System, parent, approved);
                 verdict = new PathApplyResult(target.Path, Ok: true, systemSet);
             }
-            catch (OperationCanceledException) { loop.Stop(); throw; }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 Log.Error("apply: failed to set attributes", ex, new { path = target.Path, hide = target.Hide, system = target.System });
                 verdict = new PathApplyResult(target.Path, Ok: false);
-                Interlocked.Exchange(ref failed, 1);
+                failed = true;
             }
-            try { results?.Report(verdict); }
-            catch
-            {
-                loop.Stop();
-                throw; // Required evidence failure is not a target failure and must fail the process.
-            }
-        });
-        return failed != 0;
+            // A result that cannot be recorded is not a target failure: it propagates and fails the
+            // process, so no further file is changed without evidence of it.
+            results?.Report(verdict);
+        }
+        return failed;
     }
 }

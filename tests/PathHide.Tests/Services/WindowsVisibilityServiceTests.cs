@@ -61,10 +61,10 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
     [WindowsOnlyFact]
     public void A_broken_required_report_stops_admission_and_never_claims_the_batch_succeeded()
     {
-        var paths = System.Linq.Enumerable.Range(0, BoundedVisibility.Width * 3).Select(_ => NewFile()).ToArray();
+        var paths = System.Linq.Enumerable.Range(0, 3).Select(_ => NewFile()).ToArray();
         var results = new ElevatedResultsWriter(new StreamWriter(new BrokenReportStream()));
-        Assert.Throws<AggregateException>(() => PathHide.Program.ApplyFileAttributes(paths, true, SystemBit.Keep, results, null));
-        Assert.InRange(paths.Count(path => File.GetAttributes(path).HasFlag(FileAttributes.Hidden)), 1, BoundedVisibility.Width);
+        Assert.Throws<IOException>(() => PathHide.Program.ApplyFileAttributes(paths, true, SystemBit.Keep, results, null));
+        Assert.Equal(1, paths.Count(path => File.GetAttributes(path).HasFlag(FileAttributes.Hidden)));
         try { results.Dispose(); } catch (IOException) { }
     }
 

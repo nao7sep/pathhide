@@ -251,7 +251,7 @@ public sealed class AttributeWriteReservationTests : IDisposable
         var second = Path.Combine(_dir, "second");
         File.WriteAllText(first, "keep");
         File.WriteAllText(second, "keep");
-        Assert.Throws<AggregateException>(() => PathHide.Program.ApplyFileAttributes(
+        Assert.Throws<OperationCanceledException>(() => PathHide.Program.ApplyFileAttributes(
             [first, second], hide: true, Models.SystemBit.Keep, results: null, parent));
         Assert.Equal((FileAttributes)0, File.GetAttributes(first) & FileAttributes.Hidden);
         Assert.Equal((FileAttributes)0, File.GetAttributes(second) & FileAttributes.Hidden);
