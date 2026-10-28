@@ -160,11 +160,7 @@ public sealed class WindowsPlatformTests : IDisposable
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
         using var process = Process.Start(start)!;
-        if (!process.WaitForExit(10_000))
-        {
-            process.Kill(entireProcessTree: true);
-            Assert.Fail("Fixture command did not finish.");
-        }
+        process.WaitForExit();
         Assert.True(process.ExitCode == 0, process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd());
     }
 

@@ -163,7 +163,7 @@ public sealed class MacBundleIdentityTests
             UseShellExecute = false,
         })!;
         var info = assetutil.StandardOutput.ReadToEnd();
-        Assert.True(assetutil.WaitForExit(TimeSpan.FromSeconds(30)), "assetutil did not answer.");
+        assetutil.WaitForExit();
 
         var names = System.Text.Json.JsonDocument.Parse(info).RootElement.EnumerateArray()
             .Select(asset => asset.TryGetProperty("Name", out var name) ? name.GetString() : null);

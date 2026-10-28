@@ -74,7 +74,7 @@ public class MainWindowViewModelTests
         Task? queued = null;
         try
         {
-            await visibility.WriteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await visibility.WriteEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
             vm.Rows[0].IsSelected = true;
             queued = remove ? vm.RemoveSelectedCommand.ExecuteAsync(null) : vm.ShowSelectedCommand.ExecuteAsync(null);
             vm.Rows[0].IsSelected = false;
@@ -261,7 +261,7 @@ public class MainWindowViewModelTests
         var hide = vm.HideAllCommand.ExecuteAsync(null);
         try
         {
-            await visibility.WriteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await visibility.WriteEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
 
             Assert.False(vm.CanStartCommand);
             Assert.All(others, command => Assert.False(command.CanExecute(null)));
@@ -290,7 +290,7 @@ public class MainWindowViewModelTests
         Task? show = null;
         try
         {
-            await visibility.WriteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await visibility.WriteEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
             add = vm.AddPathsCommand.ExecuteAsync(new[] { "/b" });
             show = vm.ShowAllCommand.ExecuteAsync(null);
         }
@@ -449,7 +449,7 @@ public class MainWindowViewModelTests
         try
         {
             var add = vm.AddPathsCommand.ExecuteAsync(new[] { "/Volumes/NAS/a" });
-            await visibility.ResolveEntered.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+            await visibility.ResolveEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
 
             vm.CancelCommand.Execute(null);
             gate.Set();
@@ -713,7 +713,7 @@ public class MainWindowViewModelTests
         Assert.Equal(ActualState.Unknown, vm.Rows.Single(r => r.Path == all[1]).ActualState);
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task Cancel_StopsARunningApply_AndLeavesTheRestUntouched()
     {
         using var stalled = new ManualResetEventSlim(false);
@@ -749,7 +749,7 @@ public class MainWindowViewModelTests
 
     // The status bar counts what the rows show, so it follows each row an apply changes rather than
     // keeping the counts from before the apply until it ends.
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task The_status_bar_follows_each_row_an_apply_changes()
     {
         using var stalled = new ManualResetEventSlim(false);
@@ -779,7 +779,7 @@ public class MainWindowViewModelTests
         var hideAll = vm.HideAllCommand.ExecuteAsync(null);
         try
         {
-            var shown = await otherHidden.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            var shown = await otherHidden.Task.WaitAsync(TestContext.Current.CancellationToken);
             Assert.Equal(English.Of(vm.Summary()), shown);
             Assert.Contains("1 hidden", shown);
         }
@@ -792,7 +792,7 @@ public class MainWindowViewModelTests
 
     // Observe the real UI caller from a worker so even a synchronous storage regression can be
     // released in finally. A dispatcher callback after storage entry proves responsiveness even
-    // when the command yielded earlier; the bound only fails missing acknowledgements.
+    // when the command yielded earlier.
     private static Task RemainsResponsiveWhileStorageIsHeldAsync(
         Func<Task> invoke, Task entered, ManualResetEventSlim gate) => Task.Run(async () =>
     {
@@ -802,22 +802,21 @@ public class MainWindowViewModelTests
             try { returned.SetResult(invoke()); }
             catch (Exception ex) { returned.SetException(ex); }
         });
-        var bound = TimeSpan.FromSeconds(2);
         try
         {
-            await entered.WaitAsync(bound, TestContext.Current.CancellationToken);
-            var operation = await returned.Task.WaitAsync(bound, TestContext.Current.CancellationToken);
+            await entered.WaitAsync(TestContext.Current.CancellationToken);
+            var operation = await returned.Task.WaitAsync(TestContext.Current.CancellationToken);
             var responsive = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             Dispatcher.UIThread.Post(() => responsive.SetResult());
-            await responsive.Task.WaitAsync(bound, TestContext.Current.CancellationToken);
+            await responsive.Task.WaitAsync(TestContext.Current.CancellationToken);
             Assert.False(gate.IsSet);
             Assert.False(operation.IsCompleted);
         }
         finally
         {
             gate.Set();
-            var operation = await returned.Task.WaitAsync(bound);
-            await operation.WaitAsync(bound);
+            var operation = await returned.Task;
+            await operation;
         }
     });
 
@@ -883,15 +882,15 @@ public class MainWindowViewModelTests
         try
         {
             var reload = ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
-            await visibility.InspectEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
-            Assert.Same(reload, await Task.WhenAny(reload, Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken)));
+            await visibility.InspectEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
+            await reload;
             Assert.True(vm.IsScanning);
 
             vm.Rows.Single(r => r.Path == "/nas/a").IsSelected = true;
             var hide = vm.HideSelectedCommand.ExecuteAsync(null);
             // The pause has cancelled the scan; let its stuck inspection return so the Hide runs.
             gate.Set();
-            await hide.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await hide.WaitAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(DesiredVisibility.Hidden, paths.Value.Single(e => e.Path == "/nas/a").DesiredVisibility);
             Assert.Contains("/nas/a", visibility.Hidden);

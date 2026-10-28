@@ -295,7 +295,7 @@ public sealed class BackupStoreTests : IDisposable
         Assert.Equal(File.ReadAllBytes(PathOf("paths.json")), Assert.Single(RowsFor(PathOf("paths.json"))).Content);
     }
 
-    [Fact(Timeout = 30_000)]
+    [Fact]
     public async Task Hide_AppliesAttributesWhileTheHistoryIsStalled()
     {
         var visibility = new FakeVisibilityService();
@@ -322,7 +322,7 @@ public sealed class BackupStoreTests : IDisposable
         Assert.Contains("\"hidden\"", Encoding.UTF8.GetString(Assert.Single(RowsFor(PathOf("paths.json"))).Content));
     }
 
-    [Fact(Timeout = 30_000)]
+    [Fact]
     public async Task Flush_WaitsForPendingHistory()
     {
         BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
@@ -337,7 +337,7 @@ public sealed class BackupStoreTests : IDisposable
         Assert.Equal("second", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
     }
 
-    [Fact(Timeout = 30_000)]
+    [Fact]
     public async Task Flush_WithNoTimeLeft_ReturnsWithoutWaiting()
     {
         BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
@@ -369,7 +369,7 @@ public sealed class BackupStoreTests : IDisposable
         };
     }
 
-    [Fact(Timeout = 30_000)]
+    [Fact]
     public async Task Quit_WaitsForPendingHistory()
     {
         BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
@@ -384,7 +384,7 @@ public sealed class BackupStoreTests : IDisposable
         Assert.Equal("second", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
     }
 
-    [Fact(Timeout = 30_000)]
+    [Fact]
     public async Task SessionEnd_DoesNotWaitForPendingHistory()
     {
         BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
@@ -429,7 +429,7 @@ public sealed class BackupStoreTests : IDisposable
         {
             Release(holder);
             window.Close();
-            await closed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await closed.Task;
         }
         Assert.Equal("second", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
     }

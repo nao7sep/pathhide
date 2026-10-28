@@ -62,10 +62,14 @@ public sealed class FakeDelays
 {
     public List<(TimeSpan Wait, TaskCompletionSource Done)> Pending { get; } = [];
 
+    /// <summary>Released once each time an interval starts.</summary>
+    public SemaphoreSlim Started { get; } = new(0);
+
     public Task Delay(TimeSpan wait)
     {
         var done = new TaskCompletionSource();
         Pending.Add((wait, done));
+        Started.Release();
         return done.Task;
     }
 

@@ -85,7 +85,7 @@ public sealed class SettingsStoreTests : IDisposable
         var settings = new AppSettings { DisplayTimeZone = "Europe/Paris" };
         _ = App.CreateMainViewModel((settings, new AppState(), new List<PathEntry>()));
 
-        var record = await log.Reported.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        var record = await log.Reported.Task.WaitAsync(TestContext.Current.CancellationToken);
         Assert.Equal(settings.DisplayTimeZone, record.Fields!["displayTimeZone"]!.GetValue<string>());
     }
 

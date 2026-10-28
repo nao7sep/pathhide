@@ -127,7 +127,7 @@ public sealed class RecordsWindowTests : WindowTest
         Settle(window);
         window.FindControl<GridSplitter>("Splitter")!.RaiseEvent(
             new VectorEventArgs { RoutedEvent = Thumb.DragCompletedEvent });
-        WaitFor(() => _stateStore.SaveCount == 1);
+        RunUntil(_stateStore.Saves.WaitAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(640, _stateStore.LastSaved!.RecordsListWidth);
         // A save of the records window's state keeps the main window's.
@@ -149,15 +149,15 @@ public sealed class RecordsWindowTests : WindowTest
         var splitter = window.FindControl<GridSplitter>("Splitter")!;
 
         Press(splitter, Avalonia.Input.Key.Right);
-        WaitFor(() => _stateStore.SaveCount == 1);
+        RunUntil(_stateStore.Saves.WaitAsync(TestContext.Current.CancellationToken));
         Assert.Equal(516, _stateStore.LastSaved!.RecordsListWidth);
 
         Press(splitter, Avalonia.Input.Key.Home);
-        WaitFor(() => _stateStore.SaveCount == 2);
+        RunUntil(_stateStore.Saves.WaitAsync(TestContext.Current.CancellationToken));
         Assert.Equal(RecordsLayout.ListMin, _stateStore.LastSaved!.RecordsListWidth);
 
         Press(splitter, Avalonia.Input.Key.End);
-        WaitFor(() => _stateStore.SaveCount == 3);
+        RunUntil(_stateStore.Saves.WaitAsync(TestContext.Current.CancellationToken));
         Assert.Equal(RecordsLayout.ListMax, _stateStore.LastSaved!.RecordsListWidth);
         Settle(window);
         Assert.Equal(RecordsLayout.ListMax, ListColumn(window).Width.Value);
@@ -239,7 +239,8 @@ public sealed class RecordsWindowTests : WindowTest
             Dispatcher.UIThread.RunJobs();
 
             Log.Info("a record");
-            WaitFor(() => _delays.Running(RecordsViewModel.LiveInterval) == 1);
+            while (_delays.Running(RecordsViewModel.LiveInterval) != 1)
+                RunUntil(_delays.Started.WaitAsync(TestContext.Current.CancellationToken));
 
             _delays.Elapse(RecordsViewModel.LiveInterval);
             Dispatcher.UIThread.RunJobs();
@@ -261,7 +262,7 @@ public sealed class RecordsWindowTests : WindowTest
             try
             {
                 Log.Info("after closing");
-                Assert.True(delivered.Wait(TimeSpan.FromSeconds(5)));
+                delivered.Wait();
             }
             finally
             {
@@ -329,18 +330,6 @@ public sealed class RecordsWindowTests : WindowTest
 
         Assert.Same(records.Rows[^1], records.SelectedRow);
         Assert.Equal(new RecordCursor(Record(401).Time, 401), Assert.Single(_reader.Unanswered).Query.After);
-    }
-
-    private static void WaitFor(Func<bool> condition)
-    {
-        var clock = Stopwatch.StartNew();
-        while (!condition())
-        {
-            if (clock.Elapsed > TimeSpan.FromSeconds(5))
-                throw new TimeoutException("The condition did not hold within five seconds.");
-            Dispatcher.UIThread.RunJobs();
-            Thread.Sleep(10);
-        }
     }
 
     [AvaloniaFact]

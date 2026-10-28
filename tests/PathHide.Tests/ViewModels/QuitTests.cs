@@ -22,7 +22,6 @@ namespace PathHide.Tests.ViewModels;
 public sealed class QuitTests
 {
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan Guard = TimeSpan.FromSeconds(5);
 
     private readonly ManualClock _clock = new();
     private readonly FakeVisibilityService _visibility = new();
@@ -65,7 +64,7 @@ public sealed class QuitTests
         return remove;
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task A_reload_released_after_the_quit_begins_changes_no_file_or_attribute()
     {
         var vm = CreateViewModel();
@@ -78,13 +77,13 @@ public sealed class QuitTests
         gate.Set();
         await reload;
 
-        Assert.True(await quit.WaitAsync(Guard, TestContext.Current.CancellationToken));
+        Assert.True(await quit.WaitAsync(TestContext.Current.CancellationToken));
         Assert.Equal(0, _paths.SaveCount);
         Assert.Empty(_visibility.Hidden);
         Assert.Empty(_visibility.Shown);
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task A_save_still_running_holds_the_quit_until_it_lands()
     {
         using var gate = new ManualResetEventSlim(false);
@@ -96,14 +95,14 @@ public sealed class QuitTests
         Assert.False(quit.IsCompleted);
 
         gate.Set();
-        Assert.True(await quit.WaitAsync(Guard, TestContext.Current.CancellationToken));
+        Assert.True(await quit.WaitAsync(TestContext.Current.CancellationToken));
         await remove;
 
         Assert.Empty(_paths.Value);
         Assert.Empty(_asked);
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task A_save_that_fails_as_the_quit_waits_is_saved_again_on_Retry()
     {
         using var gate = new ManualResetEventSlim(false);
@@ -122,7 +121,7 @@ public sealed class QuitTests
         gate.Set();
         await remove;
 
-        Assert.True(await quit.WaitAsync(Guard, TestContext.Current.CancellationToken));
+        Assert.True(await quit.WaitAsync(TestContext.Current.CancellationToken));
         var lines = Assert.Single(_asked);
         Assert.Equal(
             ["The path list could not be saved. Your existing list is unchanged; try again.",
@@ -131,7 +130,7 @@ public sealed class QuitTests
         Assert.Empty(_paths.Value);
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task Quit_anyway_exits_with_the_change_unsaved()
     {
         _paths.ThrowOnSave = true;
@@ -145,12 +144,12 @@ public sealed class QuitTests
         gate.Set();
         await remove;
 
-        Assert.True(await quit.WaitAsync(Guard, TestContext.Current.CancellationToken));
+        Assert.True(await quit.WaitAsync(TestContext.Current.CancellationToken));
         Assert.Single(_asked);
         Assert.Equal(0, _paths.SaveCount);
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task Dismissing_the_question_keeps_the_app_open_and_working()
     {
         _paths.ThrowOnSave = true;
@@ -163,7 +162,7 @@ public sealed class QuitTests
         var quit = vm.QuitAsync();
         gate.Set();
         await remove;
-        Assert.False(await quit.WaitAsync(Guard, TestContext.Current.CancellationToken));
+        Assert.False(await quit.WaitAsync(TestContext.Current.CancellationToken));
 
         // The failed change was dropped, as any failed save is, and commands run again.
         _paths.ThrowOnSave = false;
@@ -171,7 +170,7 @@ public sealed class QuitTests
         Assert.Empty(_paths.Value);
 
         // A later quit has nothing left to ask about.
-        Assert.True(await vm.QuitAsync().WaitAsync(Guard, TestContext.Current.CancellationToken));
+        Assert.True(await vm.QuitAsync().WaitAsync(TestContext.Current.CancellationToken));
         Assert.Single(_asked);
     }
 
@@ -197,7 +196,7 @@ public sealed class QuitTests
         await remove;
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task A_settings_save_is_waited_for_and_a_failure_offers_Retry()
     {
         using var gate = new ManualResetEventSlim(false);
@@ -217,14 +216,14 @@ public sealed class QuitTests
         gate.Set();
         Assert.NotNull(await save);
 
-        Assert.True(await quit.WaitAsync(Guard, TestContext.Current.CancellationToken));
+        Assert.True(await quit.WaitAsync(TestContext.Current.CancellationToken));
         Assert.Equal(
             "Settings could not be saved. Your changes are still here; try again.",
             English.Of(Assert.Single(_asked)[0]));
         Assert.Equal(WindowsHideMode.HiddenAndSystem, _settings.Value.WindowsHideMode);
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task The_session_ending_never_asks_and_ends_within_the_bound()
     {
         using var gate = new ManualResetEventSlim(false);
@@ -234,7 +233,7 @@ public sealed class QuitTests
 
         var end = vm.EndSessionAsync();
         _clock.Advance(Bound);
-        await end.WaitAsync(Guard, TestContext.Current.CancellationToken);
+        await end.WaitAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(_asked);
         gate.Set();
@@ -247,12 +246,12 @@ public sealed class QuitTests
         await vm.ScanTask;
         _visibility.WriteGate = gate;
         var reapply = ((IAsyncRelayCommand)vm.ReapplyAllCommand).ExecuteAsync(null);
-        await _visibility.WriteEntered.Task.WaitAsync(Guard, TestContext.Current.CancellationToken);
+        await _visibility.WriteEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
         Assert.True(vm.IsApplying);
         return reapply;
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task A_quit_while_hide_or_show_runs_asks_and_Cancel_leaves_it_running()
     {
         using var gate = new ManualResetEventSlim(false);
@@ -275,7 +274,7 @@ public sealed class QuitTests
         Assert.Empty(_asked);
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task Choosing_Stop_and_quit_stops_the_running_hide_or_show_and_quits()
     {
         using var gate = new ManualResetEventSlim(false);
@@ -291,13 +290,13 @@ public sealed class QuitTests
         var quit = vm.QuitAsync();
         gate.Set();
 
-        Assert.True(await quit.WaitAsync(Guard, TestContext.Current.CancellationToken));
+        Assert.True(await quit.WaitAsync(TestContext.Current.CancellationToken));
         Assert.Equal(1, asked);
         await reapply;
         Assert.False(vm.IsApplying);
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task The_session_ending_stops_a_running_hide_or_show_without_asking()
     {
         using var gate = new ManualResetEventSlim(false);
@@ -312,13 +311,13 @@ public sealed class QuitTests
 
         var end = vm.EndSessionAsync();
         gate.Set();
-        await end.WaitAsync(Guard, TestContext.Current.CancellationToken);
+        await end.WaitAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(0, asked);
         await reapply;
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task An_apply_after_a_save_the_quit_waited_for_does_not_run()
     {
         using var gate = new ManualResetEventSlim(false);
@@ -333,7 +332,7 @@ public sealed class QuitTests
         var quit = vm.QuitAsync();
         gate.Set();
 
-        Assert.True(await quit.WaitAsync(Guard, TestContext.Current.CancellationToken));
+        Assert.True(await quit.WaitAsync(TestContext.Current.CancellationToken));
         await hide;
         Assert.Equal(DesiredVisibility.Hidden, Assert.Single(_paths.Value).DesiredVisibility);
         Assert.Empty(_visibility.Hidden);

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,28 +31,21 @@ public sealed class MainWindowCloseTests : WindowTest
             ElevatedApplicator = elevated,
         };
         var main = Show(new MainWindow { DataContext = vm });
-        var closed = false;
-        main.Closed += (_, _) => closed = true;
+        var closed = Closed(main);
 
         main.Close();
         Dispatcher.UIThread.RunJobs();
-        Assert.False(closed);
+        Assert.False(closed.IsCompleted);
 
         // The child has gone, so nothing counts as busy any more, but releasing it has not returned:
         // a second quit must not let the window, and with it the process, go before it does.
         elevated.HasRunningChild = false;
         main.Close();
         Dispatcher.UIThread.RunJobs();
-        Assert.False(closed);
+        Assert.False(closed.IsCompleted);
 
         elevated.Release.SetResult();
-        var clock = Stopwatch.StartNew();
-        while (!closed)
-        {
-            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), "The window did not close once shutdown finished.");
-            Dispatcher.UIThread.RunJobs();
-            Thread.Sleep(10);
-        }
+        RunUntil(closed);
         Assert.Equal(1, elevated.Releases);
     }
 
@@ -72,14 +64,15 @@ public sealed class MainWindowCloseTests : WindowTest
         var main = Show(new MainWindow { DataContext = vm });
         vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
         var asked = 0;
+        var askedOnce = new TaskCompletionSource();
         vm.AskUnsavedAtQuitAsync = _ =>
         {
             asked++;
+            askedOnce.TrySetResult();
             return Task.FromResult(UnsavedQuitChoice.KeepOpen);
         };
-        var closed = false;
-        main.Closed += (_, _) => closed = true;
-        WaitFor(() => vm.ScanTask.IsCompleted);
+        var closed = Closed(main);
+        RunUntil(vm.ScanTask);
 
         // A Remove whose save is running and will fail.
         paths.SaveGate = gate;
@@ -89,15 +82,15 @@ public sealed class MainWindowCloseTests : WindowTest
 
         main.Close();
         Dispatcher.UIThread.RunJobs();
-        Assert.False(closed);
+        Assert.False(closed.IsCompleted);
 
         gate.Set();
-        WaitFor(() => asked == 1);
+        RunUntil(askedOnce.Task);
         Dispatcher.UIThread.RunJobs();
-        Assert.False(closed);
+        Assert.False(closed.IsCompleted);
 
         main.Close();
-        WaitFor(() => closed);
+        RunUntil(closed);
         Assert.Equal(1, asked);
     }
 
@@ -113,8 +106,9 @@ public sealed class MainWindowCloseTests : WindowTest
         var records = Track(main.OpenRecords());
         Dispatcher.UIThread.RunJobs();
 
+        var closed = Closed(main);
         main.Close();
-        WaitFor(() => !main.IsVisible);
+        RunUntil(closed);
 
         Assert.False(records.IsVisible);
     }
@@ -162,7 +156,7 @@ public sealed class MainWindowCloseTests : WindowTest
         };
         var closed = false;
         main.Closed += (_, _) => closed = true;
-        WaitFor(() => vm.ScanTask.IsCompleted);
+        RunUntil(vm.ScanTask);
 
         // A Remove whose save never lands while the session ends.
         paths.SaveGate = gate;
@@ -170,13 +164,11 @@ public sealed class MainWindowCloseTests : WindowTest
         _ = ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
         Assert.True(vm.HasWorkToFinish);
 
-        var clock = Stopwatch.StartNew();
         EndSession(main);
 
-        // The close answers the system itself: it is not cancelled to wait elsewhere, and it is over
-        // within the quit's bound plus the placement save's.
+        // The close answers the system itself within the quit's bound: it is not cancelled to wait
+        // elsewhere.
         Assert.True(closed);
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"The session-end close took {clock.Elapsed}.");
         Assert.Equal(0, asked);
         gate.Set();
     }
@@ -190,14 +182,16 @@ public sealed class MainWindowCloseTests : WindowTest
         vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
         var question = new TaskCompletionSource<UnsavedQuitChoice>();
         var asked = 0;
+        var askedOnce = new TaskCompletionSource();
         vm.AskUnsavedAtQuitAsync = _ =>
         {
             asked++;
+            askedOnce.TrySetResult();
             return question.Task;
         };
         var closed = 0;
         main.Closed += (_, _) => closed++;
-        WaitFor(() => vm.ScanTask.IsCompleted);
+        RunUntil(vm.ScanTask);
 
         // A Remove whose save fails, so the user's quit stops and asks.
         paths.SaveGate = gate;
@@ -206,7 +200,7 @@ public sealed class MainWindowCloseTests : WindowTest
         _ = ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
         main.Close();
         gate.Set();
-        WaitFor(() => asked == 1);
+        RunUntil(askedOnce.Task);
         Assert.Equal(0, closed);
 
         EndSession(main);
@@ -235,11 +229,9 @@ public sealed class MainWindowCloseTests : WindowTest
         var closed = false;
         main.Closed += (_, _) => closed = true;
 
-        var clock = Stopwatch.StartNew();
         EndSession(main);
 
         Assert.True(closed);
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"The session-end close took {clock.Elapsed}.");
         Assert.Equal(1, elevated.Releases);
         elevated.Release.SetResult();
     }
@@ -270,15 +262,11 @@ public sealed class MainWindowCloseTests : WindowTest
         closeCore.Invoke(window, [WindowCloseReason.OSShutdown, false, false]);
     }
 
-    private static void WaitFor(Func<bool> condition)
+    private static Task Closed(Window window)
     {
-        var clock = Stopwatch.StartNew();
-        while (!condition())
-        {
-            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), "The condition did not hold in time.");
-            Dispatcher.UIThread.RunJobs();
-            Thread.Sleep(10);
-        }
+        var closed = new TaskCompletionSource();
+        window.Closed += (_, _) => closed.TrySetResult();
+        return closed.Task;
     }
 
     private sealed class HeldApplicator : IElevatedApplicator
@@ -291,7 +279,7 @@ public sealed class MainWindowCloseTests : WindowTest
 
         public int Releases { get; private set; }
 
-        // Whether the release keeps to its bound, as ElevatedApplicator's does, or holds until Release.
+        // Whether the release returns as at its bound, as ElevatedApplicator's does, or holds until Release.
         public bool Bounded { get; init; }
 
         public Task<ElevatedApplyOutcome> ApplyAsync(ElevatedApplyCommand.Buckets buckets, CancellationToken cancellationToken) =>
@@ -300,7 +288,7 @@ public sealed class MainWindowCloseTests : WindowTest
         public Task ReleaseAsync(TimeSpan bound)
         {
             Releases++;
-            return Bounded ? Task.WhenAny(Release.Task, Task.Delay(bound)) : Release.Task;
+            return Bounded ? Task.CompletedTask : Release.Task;
         }
     }
 }

@@ -146,7 +146,7 @@ public sealed class SingleInstanceLeaseTests
                 {
                     try
                     {
-                        while (!stopSending.Wait(100))
+                        while (!stopSending.IsSet)
                             hog.GetStream().Write("xxxxxxxx"u8);
                     }
                     catch (IOException)

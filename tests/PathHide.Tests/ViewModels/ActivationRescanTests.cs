@@ -55,7 +55,7 @@ public class ActivationRescanTests
         var vm = MainWindowViewModelTests.CreateViewModel(visibility, List("/a"), clock: new ManualClock());
         try
         {
-            await visibility.InspectEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await visibility.InspectEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
             var initialScan = vm.ScanTask;
 
             Assert.False(vm.RescanOnActivation());
@@ -64,7 +64,7 @@ public class ActivationRescanTests
         finally
         {
             gate.Set();
-            await vm.ScanTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await vm.ScanTask.WaitAsync(TestContext.Current.CancellationToken);
         }
 
         Assert.Single(visibility.Inspected);
@@ -82,7 +82,7 @@ public class ActivationRescanTests
         var show = vm.ShowSelectedCommand.ExecuteAsync(null);
         try
         {
-            await visibility.WriteEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await visibility.WriteEntered.Task.WaitAsync(TestContext.Current.CancellationToken);
 
             Assert.False(vm.RescanOnActivation());
             Assert.False(vm.IsScanning);
@@ -93,7 +93,7 @@ public class ActivationRescanTests
         finally
         {
             gate.Set();
-            await show.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await show.WaitAsync(TestContext.Current.CancellationToken);
         }
 
         // Once the command is done, the next activation rescans.

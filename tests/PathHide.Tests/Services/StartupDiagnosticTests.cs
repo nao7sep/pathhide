@@ -19,13 +19,13 @@ public sealed class StartupDiagnosticTests
         var report = Log.ReportStartup("startup: test failure", new InvalidOperationException("diagnostic sentinel"), logger);
         try
         {
-            await began.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+            await began.Task.WaitAsync(TestContext.Current.CancellationToken);
             Assert.False(report.IsCompleted);
         }
         finally
         {
             release.Set();
-            await report.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
+            await report;
         }
         Assert.Equal("startup: test failure", sink.Stored?.Message);
         Assert.Contains("diagnostic sentinel", sink.Stored?.Error?.ToJsonString(), StringComparison.Ordinal);

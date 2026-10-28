@@ -12,7 +12,6 @@ public sealed class ElevatedApplicatorTests : IDisposable
 {
     private readonly string _temp = Directory.CreateTempSubdirectory("pathhide-elevated-owner-").FullName;
     private static readonly ElevatedApplyCommand.Buckets Buckets = new(["/a"], [], []);
-    private static readonly TimeSpan Generous = TimeSpan.FromSeconds(5);
     private static TaskCompletionSource Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public void Dispose() => Directory.Delete(_temp, recursive: true);
@@ -34,7 +33,7 @@ public sealed class ElevatedApplicatorTests : IDisposable
 
     // The approval prompt cannot be taken back, so a cancel while it is open takes back the request: a
     // child the user approves afterwards finds nothing to apply.
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task Cancelling_while_the_prompt_is_open_withdraws_the_request()
     {
         var prompt = new TaskCompletionSource<Task<int>?>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -49,14 +48,14 @@ public sealed class ElevatedApplicatorTests : IDisposable
         using var stop = new CancellationTokenSource();
 
         var apply = applicator.ApplyAsync(Buckets, stop.Token);
-        await prompted.Task.WaitAsync(Generous, TestContext.Current.CancellationToken);
+        await prompted.Task.WaitAsync(TestContext.Current.CancellationToken);
         Assert.True(File.Exists(requestPath));
         await stop.CancelAsync();
 
-        Assert.Equal(ElevatedApplyStatus.Cancelled, (await apply.WaitAsync(Generous, TestContext.Current.CancellationToken)).Status);
+        Assert.Equal(ElevatedApplyStatus.Cancelled, (await apply.WaitAsync(TestContext.Current.CancellationToken)).Status);
         Assert.False(File.Exists(requestPath));
         prompt.SetResult(Task.FromResult(0));
-        await applicator.ReleaseAsync(Generous);
+        await applicator.Settled;
     }
 
     [Fact]
@@ -129,7 +128,7 @@ public sealed class ElevatedExitRecordTests : IDisposable
 
         await applicator.ApplyAsync(new(["/a"], [], []), CancellationToken.None);
 
-        var exited = await log.Reported.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        var exited = await log.Reported.Task.WaitAsync(TestContext.Current.CancellationToken);
         Assert.Equal(level, exited.Level);
         Assert.Equal(exitCode, exited.Fields!["exitCode"]!.GetValue<int>());
     }

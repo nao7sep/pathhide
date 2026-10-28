@@ -44,6 +44,9 @@ public class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
     /// <summary>Signals entry into a save held by <see cref="SaveGate"/>.</summary>
     public TaskCompletionSource SaveEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <summary>Released once after each save that landed.</summary>
+    public SemaphoreSlim Saves { get; } = new(0);
+
     public void Save(T value)
     {
         if (SaveGate is not null)
@@ -56,5 +59,6 @@ public class FakeJsonStore<T> : IJsonStore<T> where T : class, new()
         SaveCount++;
         LastSaved = value;
         Value = value;
+        Saves.Release();
     }
 }

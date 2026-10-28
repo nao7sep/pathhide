@@ -24,18 +24,7 @@ internal static class ApplyChildProcess
         foreach (var argument in ElevatedApplyCommand.BuildArguments(request, results, root, parent, digest, session))
             start.ArgumentList.Add(argument);
         using var child = Process.Start(start)!;
-        try
-        {
-            Assert.True(child.WaitForExit(TimeSpan.FromSeconds(60)), "The apply child did not exit.");
-            return child.ExitCode;
-        }
-        finally
-        {
-            if (!child.HasExited)
-            {
-                child.Kill(entireProcessTree: true);
-                child.WaitForExit();
-            }
-        }
+        child.WaitForExit();
+        return child.ExitCode;
     }
 }

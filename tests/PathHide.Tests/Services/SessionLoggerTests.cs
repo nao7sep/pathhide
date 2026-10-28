@@ -305,24 +305,19 @@ public sealed class SessionLoggerTests
         var sink = new BlockingSink();
         var log = new SessionLogger(SessionStart, sink, fallbackDirectory: null, debugEnabled: true, writeInBackground: true);
 
-        Task? second = null;
-        var returned = false;
         try
         {
             log.Info("first");
-            Assert.True(sink.Entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
-            second = Task.Run(() => log.Info("second"), TestContext.Current.CancellationToken);
-            returned = await Task.WhenAny(second, Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)) == second;
+            sink.Entered.Wait(TestContext.Current.CancellationToken);
+            // Returns while the sink still holds "first".
+            await Task.Run(() => log.Info("second"), TestContext.Current.CancellationToken);
         }
         finally
         {
             sink.Release.Set();
-            if (second is not null)
-                await second.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             log.Dispose();
         }
 
-        Assert.True(returned);
         Assert.Equal(["first", "second"], sink.Messages);
         Assert.True(sink.Disposed);
     }

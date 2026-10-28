@@ -48,12 +48,10 @@ public sealed class GridInteractionTests : WindowTest
         grid.SelectedIndex = 0;
         grid.Focus(NavigationMethod.Tab);
 
+        var reported = new System.Threading.Tasks.TaskCompletionSource();
+        viewModel.OperationalResults.CollectionChanged += (_, _) => reported.TrySetResult();
         Press(window, Key.Delete);
-        for (var turn = 0; turn < 100 && viewModel.OperationalResults.Count == 0; turn++)
-        {
-            await System.Threading.Tasks.Task.Delay(10);
-            Dispatcher.UIThread.RunJobs();
-        }
+        await reported.Task;
 
         Assert.True(Assert.Single(viewModel.OperationalResults).IsError);
         Assert.Equal(count, viewModel.Rows.Count);
@@ -74,12 +72,10 @@ public sealed class GridInteractionTests : WindowTest
         var removed = (PathHide.ViewModels.PathRowViewModel)grid.SelectedItem!;
         grid.Focus(NavigationMethod.Tab);
 
+        var changed = new System.Threading.Tasks.TaskCompletionSource();
+        viewModel.Rows.CollectionChanged += (_, _) => changed.TrySetResult();
         Press(window, Key.Delete);
-        for (var turn = 0; turn < 100 && viewModel.Rows.Count == count; turn++)
-        {
-            await System.Threading.Tasks.Task.Delay(10);
-            Dispatcher.UIThread.RunJobs();
-        }
+        await changed.Task;
 
         Assert.Equal(count - 1, viewModel.Rows.Count);
         Assert.DoesNotContain(removed, viewModel.Rows);

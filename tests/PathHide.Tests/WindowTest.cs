@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
 
@@ -39,6 +40,21 @@ public abstract class WindowTest : IDisposable
     {
         _shown.Add(window);
         return window;
+    }
+
+    /// <summary>
+    /// Runs the dispatcher until <paramref name="task"/> ends, so the work's continuations on the UI
+    /// thread run meanwhile, then rethrows its failure.
+    /// </summary>
+    protected static void RunUntil(Task task)
+    {
+        if (!task.IsCompleted)
+        {
+            var frame = new DispatcherFrame();
+            task.ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
+            Dispatcher.UIThread.PushFrame(frame);
+        }
+        task.GetAwaiter().GetResult();
     }
 
     /// <summary>Closes what the test showed, newest first, so an owner outlives what it owns.</summary>

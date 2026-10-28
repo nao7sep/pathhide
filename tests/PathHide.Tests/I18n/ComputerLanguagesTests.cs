@@ -56,7 +56,7 @@ public sealed class ComputerLanguagesTests
             UseShellExecute = false,
         })!;
         var output = process.StandardOutput.ReadToEnd();
-        Assert.True(process.WaitForExit(TimeSpan.FromSeconds(10)), "defaults did not answer.");
+        process.WaitForExit();
         Assert.Equal(0, process.ExitCode);
 
         var languages = Regex.Matches(output, @"^\s*""?([A-Za-z0-9-]+)""?,?\s*$", RegexOptions.Multiline)

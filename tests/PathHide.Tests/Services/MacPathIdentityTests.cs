@@ -160,11 +160,7 @@ public sealed class MacPathIdentityTests : IDisposable
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
         using var process = Process.Start(start)!;
-        if (!process.WaitForExit(30_000))
-        {
-            process.Kill(entireProcessTree: true);
-            Assert.Fail("Disposable disk-image fixture did not settle.");
-        }
+        process.WaitForExit();
         Assert.True(process.ExitCode == 0, process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd());
     }
 

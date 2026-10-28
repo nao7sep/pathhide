@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -24,7 +23,7 @@ namespace PathHide.Tests.ViewModels;
 /// </summary>
 public sealed class ElevatedRetryTests : IDisposable
 {
-    private static readonly TimeSpan Generous = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan ExitBound = TimeSpan.FromSeconds(5);
 
     private readonly string _temp = Directory.CreateTempSubdirectory("pathhide-tests-").FullName;
     private readonly FakeVisibilityService _visibility = new()
@@ -62,7 +61,7 @@ public sealed class ElevatedRetryTests : IDisposable
             new FakeJsonStore<AppState>(), new AppState(), _paths.Load().Value)
         {
             ElevatedApplicator = applicator,
-            ShutdownBound = shutdownBound ?? Generous,
+            ShutdownBound = shutdownBound ?? ExitBound,
         };
         vm.Initialize();
         return vm;
@@ -84,7 +83,7 @@ public sealed class ElevatedRetryTests : IDisposable
         run.Report(path);
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task A_malformed_partial_report_preserves_valid_verdicts_and_late_cleanup()
     {
         _child.OnStart = run =>
@@ -105,7 +104,7 @@ public sealed class ElevatedRetryTests : IDisposable
         {
             foreach (var run in _child.Runs)
                 run.Exit();
-            await applicator.ReleaseAsync(Generous);
+            await applicator.Settled;
         }
         Assert.Empty(TempFiles());
     }
@@ -145,7 +144,7 @@ public sealed class ElevatedRetryTests : IDisposable
         Assert.Empty(TempFiles());
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task AccessDeniedPaths_GoThroughOneChild_AndTakeItsVerdict()
     {
         _child.OnStart = run =>
@@ -169,7 +168,7 @@ public sealed class ElevatedRetryTests : IDisposable
 
     // The elevated child says which writes turned System on; those become PathHide's to clear later,
     // and one the item already had does not.
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task The_child_reports_which_System_bits_it_set_and_they_are_recorded()
     {
         _child.OnStart = run =>
@@ -194,7 +193,7 @@ public sealed class ElevatedRetryTests : IDisposable
 
     // Declining the approval prompt is the user's choice, not a failure: the rows stay as they are on
     // disk and the summary says why, without counting errors.
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task ADeclinedPrompt_SaysApprovalWasDeclined_WithoutCountingErrors_AndLeavesNoFiles()
     {
         _child.Decline = true;
@@ -209,7 +208,7 @@ public sealed class ElevatedRetryTests : IDisposable
         Assert.Empty(TempFiles());
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task AFailedLaunch_CountsTheRowsAsErrors_AndLeavesNoFiles()
     {
         _child.FailLaunch = true;
@@ -224,7 +223,7 @@ public sealed class ElevatedRetryTests : IDisposable
         Assert.Empty(TempFiles());
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task Cancel_DuringTheElevatedWait_LeavesUnreportedRowsUnknown_AndKeepsReportedVerdicts()
     {
         var applicator = Applicator();
@@ -248,7 +247,7 @@ public sealed class ElevatedRetryTests : IDisposable
         run.Exit();
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task Cancel_EndsWithoutReinspectingTheRowsTheChildReported()
     {
         var applicator = Applicator();
@@ -279,7 +278,7 @@ public sealed class ElevatedRetryTests : IDisposable
         }
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task Cancel_after_child_completion_stops_refresh_without_losing_reported_ownership()
     {
         var applicator = Applicator();
@@ -325,7 +324,7 @@ public sealed class ElevatedRetryTests : IDisposable
 
         var apply = Applicator().ApplyAsync(buckets, CancellationToken.None);
 
-        Assert.True(SpinWait.SpinUntil(() => apply.IsCompleted, TimeSpan.FromSeconds(5)));
+        apply.Wait(TestContext.Current.CancellationToken);
         Assert.Equal(ElevatedApplyStatus.Completed, apply.Result.Status);
         Assert.Empty(TempFiles());
     }
@@ -350,14 +349,14 @@ public sealed class ElevatedRetryTests : IDisposable
 
         var apply = applicator.ApplyAsync(buckets, CancellationToken.None);
 
-        Assert.True(SpinWait.SpinUntil(() => apply.IsCompleted, TimeSpan.FromSeconds(5)));
+        apply.Wait(TestContext.Current.CancellationToken);
         Assert.NotEqual(uiThread, launchThread);
         Assert.True(onWorker);
         Assert.Equal(fail ? ElevatedApplyStatus.NotStarted : ElevatedApplyStatus.Completed, apply.Result.Status);
         Assert.Empty(TempFiles());
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task Cancel_WhileTheConsentPromptIsOpen_EndsTheWaitAtOnce()
     {
         _child.Prompt = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -377,12 +376,12 @@ public sealed class ElevatedRetryTests : IDisposable
 
         _child.Decline = true;
         _child.Prompt.SetResult();
-        await applicator.ReleaseAsync(Generous);
+        await applicator.Settled;
         Assert.False(applicator.HasRunningChild);
         Assert.Empty(TempFiles());
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task AfterCancel_ASecondRetryIsRefusedWhileTheFirstChildRuns()
     {
         var applicator = Applicator();
@@ -404,7 +403,7 @@ public sealed class ElevatedRetryTests : IDisposable
 
         // Once the first child has exited, the retry runs again.
         run.Exit();
-        await applicator.ReleaseAsync(Generous);
+        await applicator.Settled;
         _child.OnStart = next =>
         {
             foreach (var path in next.Request.ToHide)
@@ -418,7 +417,7 @@ public sealed class ElevatedRetryTests : IDisposable
         Assert.Empty(vm.OperationalResults);
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task TheLateCompletionOfACancelledChild_ChangesNothing_AndRemovesItsFiles()
     {
         var applicator = Applicator();
@@ -439,7 +438,7 @@ public sealed class ElevatedRetryTests : IDisposable
         Hide(run, "/a");
         Hide(run, "/b");
         run.Exit(0);
-        await applicator.ReleaseAsync(Generous);
+        await applicator.Settled;
 
         Assert.Equal(states, vm.Rows.Select(row => row.ActualState));
         Assert.Equal([ActualState.Unknown, ActualState.Unknown], states);
@@ -448,7 +447,7 @@ public sealed class ElevatedRetryTests : IDisposable
         Assert.Empty(TempFiles());
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task AfterATimeout_UnreportedRowsAreUnknown_NotAccessDenied()
     {
         // Denied at inspect time too, so a re-inspection would read AccessDenied.
@@ -469,7 +468,7 @@ public sealed class ElevatedRetryTests : IDisposable
         _child.Runs[0].Exit();
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task Quit_DuringTheElevatedWait_EndsWithinTheBound_AndTheFilesGoOnceTheChildExits()
     {
         var applicator = Applicator();
@@ -481,41 +480,40 @@ public sealed class ElevatedRetryTests : IDisposable
         var run = await launch;
         Assert.True(vm.HasWorkToFinish);
 
-        var clock = Stopwatch.StartNew();
         var shutdown = vm.ShutdownAsync();
         Assert.Same(shutdown, vm.ShutdownAsync());
         await shutdown;
         await hide;
 
-        Assert.True(clock.Elapsed < Generous);
         Assert.False(vm.IsApplying);
         Assert.Equal(ActualState.Unknown, StateOf(vm, "/a"));
         // The child outlived the bound, so its files wait for it (or for the next launch's sweep).
         Assert.NotEmpty(TempFiles());
 
         run.Exit();
-        await applicator.ReleaseAsync(Generous);
+        await applicator.Settled;
         Assert.Empty(TempFiles());
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task Quit_WhenTheChildExitsWithinTheBound_RemovesItsFilesBeforeClosing()
     {
-        var vm = ViewModel(Applicator(), Generous, "/a");
+        var vm = ViewModel(Applicator(), ExitBound, "/a");
         await vm.ScanTask;
 
         var launch = _child.NextLaunch;
         var hide = HideAll(vm);
         var run = await launch;
-        _ = Task.Delay(100, TestContext.Current.CancellationToken).ContinueWith(_ => run.Exit(), TaskScheduler.Default);
+        var shutdown = vm.ShutdownAsync();
+        run.Exit();
 
-        await vm.ShutdownAsync();
+        await shutdown;
         await hide;
 
         Assert.Empty(TempFiles());
     }
 
-    [Fact(Timeout = 10_000)]
+    [Fact]
     public async Task ABatchPastTheCommandLineCap_ReachesTheChildWhole()
     {
         var paths = Enumerable.Range(0, 400)

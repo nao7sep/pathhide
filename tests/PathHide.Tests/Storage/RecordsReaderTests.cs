@@ -268,7 +268,7 @@ public sealed class RecordsReaderTests : IDisposable
         var found = await _reader.ReadPageAsync(All("findme"), TestContext.Current.CancellationToken);
         await _reader.ReadPageAsync(All("findme"), TestContext.Current.CancellationToken);
         Log.Info("records test: done");
-        await log.Reported.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        await log.Reported.Task.WaitAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal("scan", Assert.Single(found.Records).Message);
         Assert.Single(log.Written, entry => entry.Message == "records: search skipped records whose details cannot be read");
