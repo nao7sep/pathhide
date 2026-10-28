@@ -5,6 +5,7 @@ internal enum ApplyProblem
     Unchanged,
     Missing,
     Error,
+    // The elevated helper did not exit within its timeout.
     Unresponsive,
     Cancelled,
     ElevationBusy,

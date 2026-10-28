@@ -15,7 +15,7 @@ public sealed class ShortcutRouterTests
     {
         var settingsStore = new FakeSettingsStore();
         return new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()),
+            new VisibilityCalls(new FakeVisibilityService()),
             new FakeJsonStore<List<PathEntry>>(),
             settingsStore,
             settingsStore.Load().Value,

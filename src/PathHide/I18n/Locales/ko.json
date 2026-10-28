@@ -12,7 +12,6 @@
   "actual.hidden": "숨김",
   "actual.missing": "찾을 수 없음",
   "actual.unknown": "미확인",
-  "actual.unresponsive": "응답 없음",
   "actual.visible": "보임",
   "apply.applied": {
     "other": "적용됨 {count}개"
@@ -121,7 +120,6 @@
   "nativeMenu.zoom": "확대/축소",
   "quit.quitAnyway": "저장하지 않고 종료",
   "quit.retry": "다시 시도",
-  "quit.stillSaving": "마지막 변경 사항을 아직 저장하는 중입니다.",
   "quit.stopAndQuit": "중지하고 종료",
   "quit.stopMessage": "PathHide가 아직 파일을 숨기거나 표시하는 중입니다. 지금 종료하면 작업이 중지되고, 아직 처리하지 않은 파일은 다시 적용할 때까지 현재 표시 상태를 유지합니다.",
   "quit.stopTitle": "숨기기 및 표시 작업을 중지할까요?",

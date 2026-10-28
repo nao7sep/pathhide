@@ -152,7 +152,7 @@ public sealed class SettingsDialogTests
     private static (MainWindowViewModel Vm, FakeSettingsStore Settings, Window Owner, SettingsDialog Dialog) OpenDirtySettings()
     {
         var settings = new FakeSettingsStore();
-        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()),
+        var vm = new MainWindowViewModel(new VisibilityCalls(new FakeVisibilityService()),
             new FakeJsonStore<System.Collections.Generic.List<PathEntry>>(), settings, settings.Load().Value,
             new FakeJsonStore<AppState>(), new AppState(), (new FakeJsonStore<System.Collections.Generic.List<PathEntry>>()).Load().Value);
         var owner = new Window();

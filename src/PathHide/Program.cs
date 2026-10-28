@@ -39,11 +39,7 @@ sealed class Program
         // root, and outside the try below so a bad root can never reach the UI.
         try
         {
-            BoundedStartupWork.RunAsync(() =>
-            {
-                StorageRoot.EnsureExists();
-                return true;
-            }).GetAwaiter().GetResult();
+            StorageRoot.EnsureExists();
         }
         catch (Exception ex)
         {
@@ -120,27 +116,8 @@ sealed class Program
         }
     }
 
-    internal static (ILogSink? Store, Exception? Failure) OpenRecordsForStartup(
-        Func<(ILogSink? Store, Exception? Failure)>? open = null, TimeSpan? bound = null)
-    {
-        try
-        {
-            return BoundedStartupWork.RunAsync(open ?? OpenRecords,
-                abandoned: opened =>
-                {
-                    if (opened.Failure is not null)
-                        _ = Log.ReportStartup("startup: abandoned records open failed", opened.Failure, warning: true);
-                    opened.Store?.Dispose();
-                }, bound: bound).GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            // Records are optional: the logger retains its ordinary file/console fallback.
-            return (null, ex);
-        }
-    }
-
-    private static (ILogSink? Store, Exception? Failure) OpenRecords()
+    // Records are optional: on failure the logger keeps its ordinary file/console fallback.
+    private static (ILogSink? Store, Exception? Failure) OpenRecordsForStartup()
     {
         var store = RecordsStore.TryOpen(StorageRoot.RecordsFile, out var failure);
         return (store, failure);
@@ -289,7 +266,7 @@ sealed class Program
                 identities.TryGetValue(target.Path, out var approved);
                 if (requireApproval && approved is null)
                     throw new InvalidDataException("The approved request has no filesystem object identity.");
-                var systemSet = WindowsFileVisibility.Set(target.Path, target.Hide, target.System, parent, approved);
+                var systemSet = WindowsFileVisibility.Set(target.Path, target.Hide, target.System, approved);
                 verdict = new PathApplyResult(target.Path, Ok: true, systemSet);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

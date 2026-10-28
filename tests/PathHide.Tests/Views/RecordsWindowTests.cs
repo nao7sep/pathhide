@@ -61,7 +61,7 @@ public sealed class RecordsWindowTests : WindowTest
     {
         var settings = new FakeSettingsStore();
         return new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
             settings.Load().Value, _stateStore, state ?? new AppState(), []);
     }
 

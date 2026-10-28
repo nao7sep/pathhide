@@ -149,8 +149,7 @@ public sealed class WindowsPlatformTests : IDisposable
         using (owner)
         {
             SingleInstanceLease.RegisterOwnerActivationHandler(() => { });
-            Assert.False(SingleInstanceLease.TryAcquire(root.ToUpperInvariant(), out var duplicate));
-            Assert.Null(duplicate);
+            Assert.False(SingleInstanceLeaseTests.ClaimFromAnotherThread(root.ToUpperInvariant()));
         }
     }
 
@@ -176,8 +175,7 @@ public sealed class WindowsPlatformTests : IDisposable
         using (owner)
         {
             SingleInstanceLease.RegisterOwnerActivationHandler(() => { });
-            Assert.False(SingleInstanceLease.TryAcquire(alias, out var duplicate));
-            Assert.Null(duplicate);
+            Assert.False(SingleInstanceLeaseTests.ClaimFromAnotherThread(alias));
         }
     }
 

@@ -58,7 +58,7 @@ public sealed class ElevatedRetryTests : IDisposable
         }).ToList();
         var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(_visibility), _paths, settingsStore, settingsStore.Load().Value,
+            new VisibilityCalls(_visibility), _paths, settingsStore, settingsStore.Load().Value,
             new FakeJsonStore<AppState>(), new AppState(), _paths.Load().Value)
         {
             ElevatedApplicator = applicator,
@@ -110,42 +110,38 @@ public sealed class ElevatedRetryTests : IDisposable
         Assert.Empty(TempFiles());
     }
 
-    [Fact(Timeout = 10_000)]
-    public async Task Cancelled_preparation_releases_the_command_reservation_for_ordinary_Show()
+    // While a child still lives after its command ended, the paths it may change are its own: Hide,
+    // Show and Reapply wait for it to exit (developer decision), and the list's other commands stay.
+    [Fact]
+    public async Task Hide_Show_and_Reapply_are_unavailable_until_a_child_still_running_after_a_cancel_exits()
     {
-        using var release = new ManualResetEventSlim();
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var applicator = new ElevatedApplicator(_child.LaunchAsync, _temp, "/storage-root")
-        {
-            BindWindowsTargets = false,
-            WriteRequest = (path, content) =>
-            {
-                entered.SetResult();
-                release.Wait();
-                File.WriteAllBytes(path, content);
-            },
-        };
+        var applicator = Applicator();
         var vm = ViewModel(applicator, null, "/a");
         await vm.ScanTask;
+        var launch = _child.NextLaunch;
         var hide = HideAll(vm);
-        try
+        var run = await launch;
+        vm.CancelCommand.Execute(null);
+        await hide;
+        vm.Rows[0].IsSelected = true;
+
+        Assert.True(vm.IsElevatedChildRunning);
+        Assert.All([vm.HideSelectedCommand, vm.ShowSelectedCommand, vm.HideAllCommand, vm.ShowAllCommand, vm.ReapplyAllCommand],
+            command => Assert.False(command.CanExecute(null)));
+        Assert.True(vm.RemoveSelectedCommand.CanExecute(null));
+        Assert.True(vm.ReloadCommand.CanExecute(null));
+
+        var available = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        vm.PropertyChanged += (_, e) =>
         {
-            await entered.Task.WaitAsync(Generous, TestContext.Current.CancellationToken);
-            vm.CancelCommand.Execute(null);
-            await hide.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
-            Assert.True(applicator.HasRunningChild);
-            vm.Rows[0].IsSelected = true;
-            await vm.ShowSelectedCommand.ExecuteAsync(null).WaitAsync(Generous, TestContext.Current.CancellationToken);
-            Assert.Equal(["/a"], _visibility.Shown);
-            Assert.Equal(ActualState.Visible, vm.Rows[0].ActualState);
-        }
-        finally
-        {
-            release.Set();
-            await hide;
-            await applicator.ReleaseAsync(Generous);
-        }
-        Assert.Equal(0, _child.LaunchCount);
+            if (e.PropertyName == nameof(vm.IsElevatedChildRunning) && !vm.IsElevatedChildRunning)
+                available.TrySetResult();
+        };
+        run.Exit();
+        await available.Task;
+
+        Assert.All([vm.HideSelectedCommand, vm.ShowSelectedCommand, vm.HideAllCommand, vm.ShowAllCommand, vm.ReapplyAllCommand],
+            command => Assert.True(command.CanExecute(null)));
         Assert.Empty(TempFiles());
     }
 
@@ -264,7 +260,7 @@ public sealed class ElevatedRetryTests : IDisposable
         var run = await launch;
         Hide(run, "/a");
         // Any inspection from here on waits for this gate: a re-inspection after the cancel would hold the
-        // apply until its bound and leave the row unresponsive instead of taking the child's verdict.
+        // apply until the gate opens instead of taking the child's verdict.
         using var gate = new ManualResetEventSlim(false);
         _visibility.InspectGate = gate;
         vm.CancelCommand.Execute(null);
@@ -306,15 +302,12 @@ public sealed class ElevatedRetryTests : IDisposable
         run.Report("/a", systemSet: true);
         run.Report("/b", systemSet: true);
         run.Exit();
-        try
-        {
-            await refreshing.Task.WaitAsync(Generous, TestContext.Current.CancellationToken);
-            vm.CancelCommand.Execute(null);
-            await hide.WaitAsync(Generous, TestContext.Current.CancellationToken);
-            Assert.Equal(1, calls);
-            Assert.All(_paths.Value, entry => Assert.True(entry.SystemSetByPathHide));
-        }
-        finally { release.Set(); }
+        await refreshing.Task;
+        vm.CancelCommand.Execute(null);
+        release.Set();
+        await hide;
+        Assert.Equal(1, calls);
+        Assert.All(_paths.Value, entry => Assert.True(entry.SystemSetByPathHide));
     }
 
     [AvaloniaFact]

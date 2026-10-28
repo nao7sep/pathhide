@@ -239,7 +239,7 @@ public class LanguageChangeTests : WindowTest
     {
         var settings = new FakeSettingsStore();
         var viewModel = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<System.Collections.Generic.List<PathEntry>>(),
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<System.Collections.Generic.List<PathEntry>>(),
             settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), (new FakeJsonStore<System.Collections.Generic.List<PathEntry>>()).Load().Value);
         // Speaking the current language is only the guard: it puts the language and the preference
         // back exactly when the test ends, whatever the save did to them.

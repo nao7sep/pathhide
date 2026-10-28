@@ -59,28 +59,29 @@ public sealed class RecordsViewModelTests
         Settle();
     }
 
+    // Reads run one at a time, and a new selection cancels the detail read for the old one.
     [AvaloniaFact]
     public void An_older_A_request_cannot_replace_the_current_A_detail_or_its_loading_note()
     {
         var pending = new List<TaskCompletionSource<RecordDetail?>>();
-        _reader.DetailRead = (_, _) =>
+        _reader.DetailRead = (_, token) =>
         {
             var reply = new TaskCompletionSource<RecordDetail?>();
+            token.Register(() => reply.TrySetCanceled(token));
             pending.Add(reply);
             return reply.Task;
         };
         var vm = Started();
         Answer(false, Record(2), Record(1));
         vm.SelectedRow = vm.Rows[1];
+        Settle();
         vm.SelectedRow = vm.Rows[0];
         vm.SelectedRow = vm.Rows[1];
+        Settle();
         Assert.Equal(English.Of("records.loading"), vm.DetailNote);
-        pending[0].SetException(new IOException("old A failure"));
-        Settle();
+        Assert.All(pending[..^1], reply => Assert.True(reply.Task.IsCanceled));
         Assert.Equal(RecordDetailStatus.Loading, vm.DetailStatus);
-        pending[2].SetResult(new RecordDetail(1, ThisLaunch, Record(1).Time, "info", "current A", null, null));
-        Settle();
-        pending[1].SetResult(null);
+        pending[^1].SetResult(new RecordDetail(1, ThisLaunch, Record(1).Time, "info", "current A", null, null));
         Settle();
         Assert.Equal("current A", vm.Detail!.Message);
         Assert.Equal(RecordDetailStatus.Ready, vm.DetailStatus);
@@ -456,9 +457,12 @@ public sealed class RecordsViewModelTests
     public void Nothing_read_applies_after_it_closes()
     {
         var vm = Started();
+        var first = _reader.LastPage;
         vm.Close();
+        Settle();
 
-        Answer(false, Record(1));
+        Assert.True(first.Token.IsCancellationRequested);
+        first.Answer(false, Record(1));
         Signal(vm);
 
         Assert.Empty(vm.Rows);

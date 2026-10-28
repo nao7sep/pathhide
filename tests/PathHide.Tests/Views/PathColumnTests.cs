@@ -42,7 +42,7 @@ public sealed class PathColumnTests : WindowTest
             ],
         };
         var settings = new FakeSettingsStore();
-        var viewModel = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settings,
+        var viewModel = new MainWindowViewModel(new VisibilityCalls(visibility), paths, settings,
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value);
         var window = Show(new MainWindow { DataContext = viewModel, Width = 900, Height = 500 });
         await viewModel.ScanTask;

@@ -47,12 +47,11 @@ public class MainWindowViewModelTests
         FakeVisibilityService visibility,
         FakeJsonStore<List<PathEntry>> paths,
         FakeSettingsStore? settings = null,
-        TimeSpan? responseTimeout = null,
         TimeProvider? clock = null)
     {
         var settingsStore = settings ?? new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(visibility, responseTimeout), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value)
+            new VisibilityCalls(visibility), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value)
         {
             Clock = clock ?? TimeProvider.System,
         };
@@ -100,8 +99,8 @@ public class MainWindowViewModelTests
     public async Task A_batch_hides_every_path_in_the_mode_it_started_with()
     {
         var visibility = new FakeVisibilityService();
-        // One path more than are written at once, so the last write starts after the change.
-        var all = Enumerable.Range(0, BoundedVisibility.Width + 1).Select(i => $"/p{i}").ToList();
+        // The second write starts after the change.
+        var all = new List<string> { "/p0", "/p1" };
         var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [.. all.Select(Entry)] });
         await vm.ScanTask;
         using var release = new ManualResetEventSlim();
@@ -109,8 +108,7 @@ public class MainWindowViewModelTests
         var hide = vm.HideAllCommand.ExecuteAsync(null);
         try
         {
-            for (var i = 0; i < BoundedVisibility.Width; i++)
-                await visibility.WriteEntries.WaitAsync(TestContext.Current.CancellationToken);
+            await visibility.WriteEntries.WaitAsync(TestContext.Current.CancellationToken);
             Assert.Null(await vm.TryApplySettingsAsync("en", "", hiddenAndSystem: true, ThemePreference.System));
         }
         finally
@@ -441,25 +439,6 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public async Task AddPaths_UnderAnUnresponsiveParentKeepsTheGivenSpellingWithinTheBound()
-    {
-        using var gate = new ManualResetEventSlim(false);
-        var visibility = new FakeVisibilityService { ResolveGate = gate };
-        var paths = new FakeJsonStore<List<PathEntry>>();
-        var vm = CreateViewModel(visibility, paths, responseTimeout: TimeSpan.FromMilliseconds(100));
-        try
-        {
-            await vm.AddPathsCommand.ExecuteAsync(new[] { "/Volumes/NAS/a" });
-
-            Assert.Equal("/Volumes/NAS/a", Assert.Single(paths.Value).Path);
-        }
-        finally
-        {
-            gate.Set();
-        }
-    }
-
-    [Fact]
     public async Task AddPaths_CancelledWhileIdentitiesAreDecidedAddsNothing()
     {
         using var gate = new ManualResetEventSlim(false);
@@ -473,7 +452,8 @@ public class MainWindowViewModelTests
             await visibility.ResolveEntered.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
             vm.CancelCommand.Execute(null);
-            await add.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+            gate.Set();
+            await add;
 
             Assert.Empty(paths.Value);
             Assert.Empty(vm.Rows);
@@ -701,8 +681,8 @@ public class MainWindowViewModelTests
         // Run on the headless UI thread so the scan's continuations marshal as they do live.
         var gate = new ManualResetEventSlim(false);
         var visibility = new FakeVisibilityService { InspectGate = gate };
-        // One path more than are inspected at once: the last is never reached.
-        var all = Enumerable.Range(0, BoundedVisibility.Width + 1).Select(i => $"/p{i}").ToList();
+        // The scan stops before the second path.
+        var all = new List<string> { "/p0", "/p1" };
         var paths = new FakeJsonStore<List<PathEntry>> { Value = [.. all.Select(Entry)] };
 
         // Initialize starts the background scan, which blocks inside the first entry's inspection.
@@ -725,57 +705,12 @@ public class MainWindowViewModelTests
         Assert.Contains(all[0], visibility.Inspected);
         Assert.DoesNotContain(all[^1], visibility.Inspected);
         // Progress is counted from the results as they arrive, so the number the status bar
-        // shows and the rows it describes can never disagree: the inspections under way were
-        // abandoned when the cancel landed, so they yielded no result, moved no row, and count for
-        // nothing. Deterministic because the count is made in the consuming loop.
-        Assert.Equal(0, vm.ScanProgress);
+        // shows and the rows it describes can never disagree: the inspection under way ran to its end
+        // and counts; the path after it was never inspected and its row claims nothing.
+        Assert.Equal(1, vm.ScanProgress);
         Assert.Equal(all.Count, vm.ScanTotal);
-        Assert.All(vm.Rows, r => Assert.Equal(ActualState.Unknown, r.ActualState));
-    }
-
-    // Timed, because the failure mode is a HANG: an apply that waits on a stalled path with no
-    // bound holds the mutation gate forever, so an untimed test would stall the suite.
-    [Fact(Timeout = 10_000)]
-    public async Task HideSelected_OnAPathThatNeverAnswers_ReportsItUnresponsiveAndFreesTheGate()
-    {
-        using var stalled = new ManualResetEventSlim(false);
-        var visibility = new FakeVisibilityService();
-        var paths = new FakeJsonStore<List<PathEntry>>
-        {
-            Value = [Entry("/share/stuck"), Entry("/local/fine")],
-        };
-        var vm = CreateViewModel(visibility, paths, responseTimeout: TimeSpan.FromMilliseconds(200));
-        await vm.ScanTask;
-
-        // The share stalls: every stat on it blocks, as it does for the OS network timeout.
-        visibility.OnInspect = path =>
-        {
-            if (path == "/share/stuck")
-                stalled.Wait();
-            return null;
-        };
-        foreach (var row in vm.Rows)
-            row.IsSelected = true;
-
-        await ((IAsyncRelayCommand)vm.HideSelectedCommand).ExecuteAsync(null);
-
-        var stuck = vm.Rows.Single(r => r.Path == "/share/stuck");
-        var fine = vm.Rows.Single(r => r.Path == "/local/fine");
-        Assert.Equal(ActualState.Unresponsive, stuck.ActualState);
-        Assert.Equal(ActualState.Hidden, fine.ActualState);
-        Assert.DoesNotContain("/share/stuck", visibility.Hidden);
-        var result = Assert.Single(vm.OperationalResults);
-        Assert.True(result.IsError);
-        Assert.Equal("1 applied, 1 not responding", English.Of(result.Message));
-        Assert.Contains("1 problem", vm.StatusBarText);
-
-        // The gate is free: the next command runs rather than queueing behind the stuck path.
-        fine.IsSelected = true;
-        stuck.IsSelected = false;
-        await ((IAsyncRelayCommand)vm.RemoveSelectedCommand).ExecuteAsync(null);
-        Assert.Equal(["/share/stuck"], vm.Rows.Select(r => r.Path));
-
-        stalled.Set();
+        Assert.Equal(ActualState.Visible, vm.Rows.Single(r => r.Path == all[0]).ActualState);
+        Assert.Equal(ActualState.Unknown, vm.Rows.Single(r => r.Path == all[1]).ActualState);
     }
 
     [Fact(Timeout = 10_000)]
@@ -783,70 +718,33 @@ public class MainWindowViewModelTests
     {
         using var stalled = new ManualResetEventSlim(false);
         var visibility = new FakeVisibilityService();
-        // One path more than are worked on at once: the last is never reached.
-        var all = Enumerable.Range(0, BoundedVisibility.Width + 1).Select(i => $"/p{i}").ToList();
+        // The apply stops before the second path.
+        var all = new List<string> { "/p0", "/p1" };
         var paths = new FakeJsonStore<List<PathEntry>> { Value = [.. all.Select(Entry)] };
-        // The default bound (seconds), so only the cancel can end this apply inside the test.
         var vm = CreateViewModel(visibility, paths);
         await vm.ScanTask;
         var scanned = visibility.Inspected.Count;
         visibility.WriteGate = stalled;
 
         var hideAll = ((IAsyncRelayCommand)vm.HideAllCommand).ExecuteAsync(null);
-        for (var i = 0; i < BoundedVisibility.Width; i++)
-            await visibility.WriteEntries.WaitAsync(TestContext.Current.CancellationToken);
+        await visibility.WriteEntries.WaitAsync(TestContext.Current.CancellationToken);
         Assert.True(vm.IsApplying);
         Assert.True(vm.IsBusy);
 
         vm.CancelCommand.Execute(null);
+        stalled.Set();
         await hideAll;
 
         Assert.False(vm.IsApplying);
         Assert.False(vm.IsBusy);
-        // The writes under way may yet land, so their rows claim no state; the last path was never touched.
-        Assert.All(all[..^1], path => Assert.Equal(ActualState.Unknown, vm.Rows.Single(r => r.Path == path).ActualState));
+        // The write under way ran to its end without being inspected again, so its row claims no state;
+        // the last path was never touched.
+        Assert.Equal(ActualState.Unknown, vm.Rows.Single(r => r.Path == all[0]).ActualState);
         Assert.Equal(ActualState.Visible, vm.Rows.Single(r => r.Path == all[^1]).ActualState);
         Assert.DoesNotContain(all[^1], visibility.Inspected.Skip(scanned));
         var result = Assert.Single(vm.OperationalResults);
         Assert.False(result.IsError);
         Assert.Equal($"{all.Count} cancelled", English.Of(result.Message));
-
-        stalled.Set();
-    }
-
-    // A write that does not answer holds only its own path: the paths after it change meanwhile.
-    [Fact(Timeout = 10_000)]
-    public async Task A_stalled_write_does_not_hold_back_the_paths_after_it()
-    {
-        using var stalled = new ManualResetEventSlim(false);
-        var visibility = new FakeVisibilityService();
-        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [Entry("/stuck"), Entry("/b")] });
-        await vm.ScanTask;
-        visibility.OnHide = path =>
-        {
-            if (path == "/stuck")
-                stalled.Wait();
-            return null;
-        };
-        var other = vm.Rows.Single(r => r.Path == "/b");
-        var otherHidden = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        other.PropertyChanged += (_, _) =>
-        {
-            if (other.ActualState == ActualState.Hidden)
-                otherHidden.TrySetResult();
-        };
-
-        var hideAll = vm.HideAllCommand.ExecuteAsync(null);
-        try
-        {
-            await otherHidden.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
-            Assert.False(hideAll.IsCompleted);
-        }
-        finally
-        {
-            stalled.Set();
-            await hideAll;
-        }
     }
 
     // The status bar counts what the rows show, so it follows each row an apply changes rather than
@@ -856,7 +754,7 @@ public class MainWindowViewModelTests
     {
         using var stalled = new ManualResetEventSlim(false);
         var visibility = new FakeVisibilityService();
-        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [Entry("/stuck"), Entry("/b")] });
+        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = [Entry("/b"), Entry("/stuck")] });
         await vm.ScanTask;
         visibility.OnHide = path =>
         {
@@ -890,51 +788,6 @@ public class MainWindowViewModelTests
             stalled.Set();
             await hideAll;
         }
-    }
-
-    // Add checks every entry's identity; entries on volumes that stopped answering are waited on
-    // together, not one bound after another.
-    [Fact(Timeout = 10_000)]
-    public async Task Add_resolves_the_entries_identities_several_at_a_time()
-    {
-        using var gate = new ManualResetEventSlim(false);
-        var visibility = new FakeVisibilityService();
-        var stored = Enumerable.Range(0, BoundedVisibility.Width).Select(i => Entry($"/stored{i}")).ToList();
-        var vm = CreateViewModel(visibility, new FakeJsonStore<List<PathEntry>> { Value = stored });
-        await vm.ScanTask;
-        visibility.ResolveGate = gate;
-
-        var add = vm.AddPathsCommand.ExecuteAsync(new[] { "/new" });
-        try
-        {
-            for (var i = 0; i < BoundedVisibility.Width; i++)
-                await visibility.ResolveEntries.WaitAsync(TestContext.Current.CancellationToken);
-        }
-        finally
-        {
-            gate.Set();
-            await add;
-        }
-
-        Assert.Contains(vm.Rows, row => row.Path == "/new");
-    }
-
-    [Fact(Timeout = 10_000)]
-    public async Task AddPaths_ReportsAnUnresponsivePathInTheAddResult()
-    {
-        using var stalled = new ManualResetEventSlim(false);
-        var visibility = new FakeVisibilityService { InspectGate = stalled };
-        var paths = new FakeJsonStore<List<PathEntry>>();
-        var vm = CreateViewModel(visibility, paths, responseTimeout: TimeSpan.FromMilliseconds(200));
-
-        await vm.AddPathsCommand.ExecuteAsync(new[] { "/share/new" });
-
-        var result = Assert.IsType<PathAddResultViewModel>(vm.PathAddResult);
-        Assert.Equal(PathAddResultSeverity.Error, result.Severity);
-        Assert.Equal("Added 1 path to the list; 1 path did not respond.", English.Of(result.Message));
-        Assert.Equal(ActualState.Unresponsive, Assert.Single(vm.Rows).ActualState);
-
-        stalled.Set();
     }
 
     // Observe the real UI caller from a worker so even a synchronous storage regression can be
@@ -989,7 +842,7 @@ public class MainWindowViewModelTests
         var settingsStore = new FakeSettingsStore { SaveGate = gate };
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
         Task<Message?>? save = null;
 
         await RemainsResponsiveWhileStorageIsHeldAsync(
@@ -1056,7 +909,7 @@ public class MainWindowViewModelTests
         var paths = new FakeJsonStore<List<PathEntry>>();
         var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(visibility),
+            new VisibilityCalls(visibility),
             paths,
             settingsStore,
             settingsStore.Load().Value,
@@ -1127,7 +980,7 @@ public class MainWindowViewModelTests
         var paths = new FakeJsonStore<List<PathEntry>>();
         var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(visibility),
+            new VisibilityCalls(visibility),
             paths,
             settingsStore,
             settingsStore.Load().Value,
@@ -1398,7 +1251,7 @@ public class MainWindowViewModelTests
             Value = new List<PathEntry> { Entry("/a"), Entry("/b") },
         };
         var settingsStore = new FakeSettingsStore();
-        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Value);
+        var vm = new MainWindowViewModel(new VisibilityCalls(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Value);
 
         Assert.Equal(2, vm.Rows.Count);
         Assert.Equal(0, paths.LoadCount);
@@ -1417,7 +1270,7 @@ public class MainWindowViewModelTests
             Value = new List<PathEntry> { Entry("/a") },
         };
         var settingsStore = new FakeSettingsStore();
-        var vm = new MainWindowViewModel(new BoundedVisibility(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value);
+        var vm = new MainWindowViewModel(new VisibilityCalls(new FakeVisibilityService()), paths, settingsStore, settingsStore.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value);
 
         vm.Initialize();
         var initialScan = vm.ScanTask;
@@ -1437,7 +1290,7 @@ public class MainWindowViewModelTests
         var settings = settingsStore.Load().Value;
         var stateStore = new FakeJsonStore<AppState>();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings,
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings,
             stateStore, new AppState { WindowPositionX = -1200, WindowWidth = 1100 }, []);
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
@@ -1465,7 +1318,7 @@ public class MainWindowViewModelTests
         var settingsStore = new FakeSettingsStore();
         var stateStore = new FakeJsonStore<AppState>();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value,
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value,
             stateStore, new AppState(), []);
 
         vm.SaveWindowPlacement(-900, 40, 1180.5, 700.25, maximized: true);
@@ -1490,7 +1343,7 @@ public class MainWindowViewModelTests
     {
         var settingsStore = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value,
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settingsStore.Load().Value,
             new FakeJsonStore<AppState> { ThrowOnSave = true }, new AppState(), []);
 
         Assert.Throws<IOException>(() => vm.SaveWindowPlacement(10, 20, 1000, 700, maximized: true));
@@ -1509,7 +1362,7 @@ public class MainWindowViewModelTests
         var settings = settingsStore.Load().Value;
         Assert.Equal(ThemePreference.System, settings.Theme);
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
         var changed = new List<string?>();
         vm.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
 
@@ -1529,7 +1382,7 @@ public class MainWindowViewModelTests
         var settingsStore = new FakeSettingsStore();
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
 
         var failure = await vm.TryApplySettingsAsync(Languages.System, string.Empty, hiddenAndSystem: false, ThemePreference.System);
 
@@ -1543,7 +1396,7 @@ public class MainWindowViewModelTests
         var settingsStore = new FakeSettingsStore { ThrowOnSave = true };
         var settings = settingsStore.Load().Value;
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settingsStore, settings, new FakeJsonStore<AppState>(), new AppState(), []);
 
         var failure = await vm.TryApplySettingsAsync(Languages.System, "Menlo", hiddenAndSystem: true, ThemePreference.Dark);
 

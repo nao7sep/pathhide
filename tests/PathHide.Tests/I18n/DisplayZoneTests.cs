@@ -96,7 +96,7 @@ public sealed class DisplayZoneChangeTests : WindowTest
     private const string ThisLaunch = "2026-10-04T08:00:00.000Z";
 
     private static MainWindowViewModel Owner(FakeSettingsStore settings) =>
-        new(new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+        new(new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
 
     [Fact]

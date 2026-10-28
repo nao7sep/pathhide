@@ -40,7 +40,7 @@ public sealed class FakeVisibilityService : IVisibilityService
 
     /// <summary>
     /// When set, <see cref="Inspect"/> blocks on this gate before returning, letting a test hold a
-    /// scan or apply pass mid-flight (BoundedVisibility runs the call on a thread of its own, so
+    /// scan or apply pass mid-flight (VisibilityCalls runs the call on a thread of its own, so
     /// blocking it does not stall the test thread).
     /// </summary>
     public ManualResetEventSlim? InspectGate { get; set; }

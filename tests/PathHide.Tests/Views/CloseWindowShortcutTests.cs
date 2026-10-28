@@ -36,7 +36,7 @@ public sealed class CloseWindowShortcutTests : WindowTest
     {
         var settings = new FakeSettingsStore();
         return new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
     }
 

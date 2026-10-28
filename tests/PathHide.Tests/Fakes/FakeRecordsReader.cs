@@ -9,16 +9,16 @@ namespace PathHide.Tests.Fakes;
 
 /// <summary>
 /// An <see cref="IRecordsReader"/> whose page reads wait until the test answers them, so a test sees
-/// what the window shows while a read is out and decides how each one ends. Launches and records are
-/// answered at once.
+/// what the window shows while a read is out and decides how each one ends; a cancelled page read
+/// ends cancelled, as the real reader's interrupted read does. Launches and records are answered at once.
 /// </summary>
 public sealed class FakeRecordsReader : IRecordsReader
 {
     public sealed record PendingPage(RecordsQuery Query, TaskCompletionSource<RecordsPage> Reply, CancellationToken Token)
     {
-        public void Answer(bool more, params RecordSummary[] records) => Reply.SetResult(new RecordsPage(records, more) { UpperId = Query.ThroughId ?? records.Select(record => record.Id).DefaultIfEmpty(Query.InsertedAfter ?? 0).Max() });
+        public void Answer(bool more, params RecordSummary[] records) => Reply.TrySetResult(new RecordsPage(records, more) { UpperId = Query.ThroughId ?? records.Select(record => record.Id).DefaultIfEmpty(Query.InsertedAfter ?? 0).Max() });
 
-        public void Fail() => Reply.SetException(new InvalidOperationException("SQLite Error 11: 'database disk image is malformed'."));
+        public void Fail() => Reply.TrySetException(new InvalidOperationException("SQLite Error 11: 'database disk image is malformed'."));
     }
 
     public List<PendingPage> Pages { get; } = [];
@@ -39,6 +39,7 @@ public sealed class FakeRecordsReader : IRecordsReader
     {
         var pending = new PendingPage(query, new TaskCompletionSource<RecordsPage>(), cancellationToken);
         Pages.Add(pending);
+        cancellationToken.Register(() => pending.Reply.TrySetCanceled(cancellationToken));
         return pending.Reply.Task;
     }
 

@@ -37,7 +37,7 @@ public sealed class MacPathIdentityTests : IDisposable
     }
 
     private static MainWindowViewModel Model(FakeJsonStore<List<PathEntry>> paths) =>
-        new(new BoundedVisibility(new MacVisibilityService()), paths, new FakeSettingsStore(), new AppSettings(),
+        new(new VisibilityCalls(new MacVisibilityService()), paths, new FakeSettingsStore(), new AppSettings(),
             new FakeJsonStore<AppState>(), new AppState(), paths.Value);
 
     [MacOnlyFact]
@@ -80,7 +80,7 @@ public sealed class MacPathIdentityTests : IDisposable
             var file = Path.Combine(_root, PathListStore.FileName);
             var before = File.ReadAllBytes(file);
             var loaded = store.Load().Value;
-            var vm = new MainWindowViewModel(new BoundedVisibility(new MacVisibilityService()), store,
+            var vm = new MainWindowViewModel(new VisibilityCalls(new MacVisibilityService()), store,
                 new FakeSettingsStore(), new AppSettings(), new FakeJsonStore<AppState>(), new AppState(), loaded);
             await Assert.ThrowsAsync<UnreadableStoreException>(() => vm.ValidateLoadedPathsAsync());
             Assert.Equal(before, File.ReadAllBytes(file));
@@ -122,7 +122,7 @@ public sealed class MacPathIdentityTests : IDisposable
         Directory.CreateSymbolicLink(alias, original);
         var service = new MacVisibilityService();
         var store = new PathListStore();
-        var vm = new MainWindowViewModel(new BoundedVisibility(service), store,
+        var vm = new MainWindowViewModel(new VisibilityCalls(service), store,
             new FakeSettingsStore(), new AppSettings(), new FakeJsonStore<AppState>(), new AppState(), []);
         try
         {

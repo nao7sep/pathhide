@@ -45,6 +45,9 @@ public interface IElevatedApplicator
     /// <summary>Whether an earlier elevated operation still owns preparation, a child or file cleanup.</summary>
     bool HasRunningChild { get; }
 
+    /// <summary>Completes once no elevated operation owns preparation, a child or file cleanup.</summary>
+    Task Settled { get; }
+
     /// <summary>
     /// Applies <paramref name="buckets"/> through an elevated child, or refuses with
     /// <see cref="ElevatedApplyStatus.Busy"/> while an earlier elevated operation still owns work. Returns once; nothing
@@ -71,7 +74,7 @@ public sealed class ElevationDeclinedException() : Exception("The administrator 
 
 /// <summary>
 /// The platform-neutral half of the elevated retry: writes the request, launches the child through an
-/// <see cref="ElevatedChildLauncher"/>, bounds foreground file/child waits, reads the results, and owns the
+/// <see cref="ElevatedChildLauncher"/>, bounds the wait for the child, reads the results, and owns the
 /// temp files and the one child that may outlive a call.
 /// </summary>
 /// <remarks>
@@ -79,10 +82,9 @@ public sealed class ElevationDeclinedException() : Exception("The administrator 
 /// so a cancel or a timeout only ends the wait. At most one child runs: while one is outstanding, a new
 /// apply is refused instead of launched, because two children writing the same paths let the older
 /// one's late write undo the newer one (hide a path the user has just shown) behind the list's back.</para>
-/// <para>Across a GUI restart, the shared Windows writer reserves each submitted path through the
-/// actual attribute write. The child checks its original GUI process after acquiring that reservation:
-/// it finishes an already admitted write before the restarted GUI can enter, and refuses later writes
-/// once its GUI has exited. This needs no persistent job state or change to the consent flow.</para>
+/// <para>While the child lives the GUI writes none of the paths it may change: Hide, Show and Reapply wait
+/// for <see cref="Settled"/>. The child checks its original GUI process before each path and refuses
+/// further writes once that GUI has exited, so a restarted GUI cannot race it either.</para>
 /// <para>The first worker await always yields to the thread pool, even if it already completed;
 /// subsequent awaits do not capture the caller's context. Reading results and removing temp files
 /// touch the OS temp volume, which antivirus or a slow disk can stall, so none of it runs on the
@@ -106,7 +108,6 @@ public sealed class ElevatedApplicator : IElevatedApplicator
     private readonly TimeSpan _childTimeout;
 
     internal bool BindWindowsTargets { get; init; } = OperatingSystem.IsWindows();
-    internal TimeSpan FileWaitBound { get; init; } = BoundedStoreWork.DefaultBound;
     internal Action<string, byte[]> WriteRequest { get; init; } = File.WriteAllBytes;
     internal Func<ElevatedApplyFiles, IReadOnlyDictionary<string, PathApplyResult>> ReadResults { get; init; } = files => files.ReadResults();
     internal Func<ElevatedApplyFiles, bool> DeleteFiles { get; init; } = files => files.TryDelete();
@@ -129,6 +130,8 @@ public sealed class ElevatedApplicator : IElevatedApplicator
 
     public bool HasRunningChild => !_outstanding.IsCompleted;
 
+    public Task Settled => _outstanding;
+
     public async Task<ElevatedApplyOutcome> ApplyAsync(
         ElevatedApplyCommand.Buckets buckets, CancellationToken cancellationToken)
     {
@@ -147,8 +150,6 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         var files = ElevatedApplyFiles.Create(_tempDirectory);
         var settled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _outstanding = settled.Task; // Claim preparation too, before the first wait.
-        var fileWork = new BoundedStoreWork();
-        Task fileTail = Task.CompletedTask;
         Task<int?>? run = null;
         var status = ElevatedApplyStatus.NotStarted;
         try
@@ -156,7 +157,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
             try
             {
                 // not recorded: transient IPC, never reloaded as managed state.
-                await fileWork.RunAsync(() =>
+                await Task.Run(() =>
                 {
                     if (BindWindowsTargets)
                     {
@@ -182,9 +183,7 @@ public sealed class ElevatedApplicator : IElevatedApplicator
                     var request = System.Text.Encoding.UTF8.GetBytes(ElevatedApplyCommand.SerializeRequest(buckets));
                     requestDigest = ElevatedApplyCommand.RequestDigest(request);
                     WriteRequest(files.RequestPath, request);
-                    return true;
-                }, FileWaitBound, TimeProvider.System, cancellationToken, started: work => fileTail = work)
-                    .ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+                }, CancellationToken.None).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -227,13 +226,12 @@ public sealed class ElevatedApplicator : IElevatedApplicator
             IReadOnlyDictionary<string, PathApplyResult> results;
             try
             {
-                // Cancel still collects already-flushed verdicts, within a separate file-read bound.
-                results = await fileWork.RunAsync(() => ReadResults(files), FileWaitBound, TimeProvider.System,
-                    started: work => fileTail = work).ConfigureAwait(false);
+                // Cancel still collects already-flushed verdicts.
+                results = await Task.Run(() => ReadResults(files)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                Log.Warn("elevated apply: results unavailable within the file wait", ex);
+                Log.Warn("elevated apply: results unavailable", ex);
                 results = EmptyResults;
             }
 
@@ -264,17 +262,11 @@ public sealed class ElevatedApplicator : IElevatedApplicator
         }
         finally
         {
-            // Physical preparation/read, child exit and cleanup remain one lifetime. A timed-out
-            // file operation is joined before deleting its files; no late evidence reaches the UI.
-            var cleanup = DeleteAfterSettlementAsync(run, fileTail, files, settled, targets);
-            if ((status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted or ElevatedApplyStatus.Declined) && fileTail.IsCompleted)
-            {
-                try { await cleanup.WaitAsync(FileWaitBound).ConfigureAwait(false); }
-                catch (TimeoutException)
-                {
-                    Log.Warn("elevated apply: cleanup still running; the outcome is already known");
-                }
-            }
+            // Preparation, child exit and cleanup remain one lifetime; no late evidence reaches the UI.
+            // Cleanup is awaited once no child can still be running.
+            var cleanup = DeleteAfterSettlementAsync(run, files, settled, targets);
+            if (status is ElevatedApplyStatus.Completed or ElevatedApplyStatus.NotStarted or ElevatedApplyStatus.Declined)
+                await cleanup.ConfigureAwait(false);
         }
     }
 
@@ -354,15 +346,13 @@ public sealed class ElevatedApplicator : IElevatedApplicator
              : ElevatedApplyStatus.TimedOut;
     }
 
-    private async Task DeleteAfterSettlementAsync(Task<int?>? run, Task fileTail,
+    private async Task DeleteAfterSettlementAsync(Task<int?>? run,
         ElevatedApplyFiles files, TaskCompletionSource settled, List<WindowsAttributeTarget> targets)
     {
         try
         {
             if (run is not null)
                 await run.ConfigureAwait(false);
-            // Observe a failed physical operation too; cleanup starts only after it really ends.
-            await fileTail.ContinueWith(_ => { }, TaskScheduler.Default).ConfigureAwait(false);
             if (!await Task.Run(() => DeleteFiles(files)).ConfigureAwait(false))
                 Log.Warn("elevated apply: could not remove the finished operation's files; the next launch retries");
         }

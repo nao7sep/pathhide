@@ -26,7 +26,7 @@ public sealed class MainWindowCloseTests : WindowTest
         var elevated = new HeldApplicator { HasRunningChild = true };
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), [])
         {
             ElevatedApplicator = elevated,
@@ -67,7 +67,7 @@ public sealed class MainWindowCloseTests : WindowTest
         };
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), paths, settings,
+            new VisibilityCalls(new FakeVisibilityService()), paths, settings,
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value);
         var main = Show(new MainWindow { DataContext = vm });
         vm.ConfirmDestructiveAsync = _ => Task.FromResult(true);
@@ -106,7 +106,7 @@ public sealed class MainWindowCloseTests : WindowTest
     {
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
         var main = Show(new MainWindow { DataContext = vm });
         main.RecordsReader = () => new FakeRecordsReader();
@@ -124,7 +124,7 @@ public sealed class MainWindowCloseTests : WindowTest
     {
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
         var main = Show(new MainWindow { DataContext = vm });
         main.WindowState = WindowState.Minimized;
@@ -225,7 +225,7 @@ public sealed class MainWindowCloseTests : WindowTest
         var elevated = new HeldApplicator { HasRunningChild = true, Bounded = true };
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), [])
         {
             ElevatedApplicator = elevated,
@@ -252,7 +252,7 @@ public sealed class MainWindowCloseTests : WindowTest
         };
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), paths, settings,
+            new VisibilityCalls(new FakeVisibilityService()), paths, settings,
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value)
         {
             ShutdownBound = shutdownBound,
@@ -286,6 +286,8 @@ public sealed class MainWindowCloseTests : WindowTest
         public bool HasRunningChild { get; set; }
 
         public TaskCompletionSource Release { get; } = new();
+
+        public Task Settled => Release.Task;
 
         public int Releases { get; private set; }
 

@@ -29,25 +29,10 @@ internal static class LanguageBootstrap
     internal static System.Collections.Generic.IReadOnlyList<string> Start()
     {
         var computerLanguages = ComputerLanguages.Read();
-        var preference = ReadPreferenceForStartup(SavedPreference);
+        var preference = SavedPreference();
         Localizer.Use(preference, computerLanguages);
         AlignAppKit(Localizer.Language);
         return computerLanguages;
-    }
-
-    internal static string ReadPreferenceForStartup(Func<string> read, TimeSpan? bound = null)
-    {
-        try
-        {
-            return BoundedStartupWork.RunAsync(read, bound: bound).GetAwaiter().GetResult();
-        }
-        catch (TimeoutException ex)
-        {
-            // The unresolved required configuration cannot admit the normal shell.
-            _ = Log.ReportStartup("startup: the saved language preference did not answer", ex);
-            App.StartupFailureMessage = ViewModels.FailurePresentation.StartupStorage();
-            return Languages.System;
-        }
     }
 
     /// <summary>The language preference in <c>config.json</c>, or System when there is none to read.</summary>

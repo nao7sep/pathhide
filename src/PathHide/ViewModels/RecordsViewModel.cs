@@ -28,15 +28,16 @@ public enum RecordDetailStatus
 
 /// <summary>
 /// The records window: a filtered list of <c>records.sqlite3</c>, newest first, read a page at a time,
-/// and the selected record whole. Every method runs on the UI thread; the reads run on the reader's
-/// worker, and a result applies only while what it was read for is still what the window asks for.
+/// and the selected record whole. Every method runs on the UI thread, and the window's reads run one
+/// at a time, each after the one before it ends. A new list query or selection cancels the reads for
+/// the old one, and a cancelled read applies nothing.
 /// </summary>
 /// <remarks>
-/// Live updates: each record the database stores signals <see cref="OnRecordStored"/>, and the newest
-/// page is read again at most once per <see cref="LiveInterval"/>. It joins the list at once while the
-/// list is at its top, and otherwise waits until the list is back there, so the list never moves under
-/// the reader. A failed read is itself logged as a record, whose signal would start the next read, so
-/// signals are ignored after a failure until a read succeeds.
+/// Live updates: each record the database stores signals <see cref="OnRecordStored"/>, which marks the
+/// newest records wanted and, after <see cref="LiveInterval"/>, reads them once the current read ends.
+/// They join the list at once while the list is at its top, and otherwise wait until the list is back
+/// there, so the list never moves under the reader. A failed read is itself logged as a record, whose
+/// signal would start the next read, so signals are ignored after a failure until a read succeeds.
 /// </remarks>
 public sealed partial class RecordsViewModel : ObservableObject
 {
@@ -49,27 +50,23 @@ public sealed partial class RecordsViewModel : ObservableObject
 
     // The query the list was read for, its After left empty; live reads and later pages use it.
     private RecordsQuery _listQuery;
-    // Raised with each new list query, so a page read for an older one is dropped.
-    private int _generation;
-    // The busy claim for the next page, taken before its read starts.
-    private bool _fetchingMore;
-    private bool _newestPending;
+    // A record was stored since the newest were last read.
+    private bool _newestWanted;
     private bool _liveSuspended;
-    private bool _liveScheduled;
     private bool _atTop = true;
-    private bool _closed;
     private int _searchVersion;
     private string _appliedSearch = string.Empty;
-    // The record the detail pane was last asked for, so an older detail read is dropped.
-    private int _detailGeneration;
     private long _insertedThrough;
-    private bool _readingNewest;
+    // The window's reads, one after another: each queued read starts when the one before it ends.
+    private Task _reads = Task.CompletedTask;
     // Cancelled when what they were read for is no longer asked for, so the reader stops them inside
     // the database: the list's reads with each new list query, the detail's with each new selection,
     // and every read when the window closes.
     private CancellationTokenSource _listReads = new();
     private CancellationTokenSource _detailReads = new();
     private readonly CancellationTokenSource _windowReads = new();
+
+    private bool Closed => _windowReads.IsCancellationRequested;
 
     /// <param name="reader">Where the records are read.</param>
     /// <param name="currentSession">This launch's session, which the launch filter names as this launch.</param>
@@ -184,40 +181,43 @@ public sealed partial class RecordsViewModel : ObservableObject
     /// </summary>
     public void Start()
     {
+        Queue(ReadSessionsAsync);
         Reload();
-        _ = ReadSessionsAsync();
     }
 
     /// <summary>The window has closed: nothing read from now on applies.</summary>
     public void Close()
     {
-        if (_closed) return;
-        _closed = true;
+        if (Closed) return;
         _windowReads.Cancel();
         _listReads.Cancel();
         _detailReads.Cancel();
-        _listReads.Dispose();
-        _detailReads.Dispose();
-        _windowReads.Dispose();
     }
 
-    private static CancellationTokenSource Renew(ref CancellationTokenSource reads, CancellationToken window)
+    private static CancellationToken Renew(ref CancellationTokenSource reads, CancellationToken window)
     {
         reads.Cancel();
         reads.Dispose();
         reads = CancellationTokenSource.CreateLinkedTokenSource(window);
-        return reads;
+        return reads.Token;
+    }
+
+    // Each read handles its own failure and applies nothing once its token is cancelled.
+    private void Queue(Func<Task> read) => _reads = AfterAsync(_reads, read);
+
+    private async Task AfterAsync(Task previous, Func<Task> read)
+    {
+        await previous;
+        if (Closed) return;
+        await read();
+        ReadNewestIfWanted();
     }
 
     /// <summary>The list scrolled: whether it is at its top, and whether it is within a screen of its end.</summary>
     public void OnListScrolled(bool atTop, bool nearEnd)
     {
         _atTop = atTop;
-        if (_newestPending && atTop)
-        {
-            _newestPending = false;
-            _ = ReadNewestAsync();
-        }
+        ReadNewestIfWanted();
         if (nearEnd)
             LoadMore();
     }
@@ -236,30 +236,35 @@ public sealed partial class RecordsViewModel : ObservableObject
     /// Reads the next page after the last row, unless one is being read or none follows. A failed page
     /// is read again when this is called again.
     /// </summary>
-    public void LoadMore() => _ = LoadMoreAsync();
+    public void LoadMore()
+    {
+        if (Closed || ListStatus != RecordsListStatus.Ready || !HasMore || IsLoadingMore)
+            return;
+        IsLoadingMore = true;
+        MoreFailed = false;
+        var token = _listReads.Token;
+        Queue(() => LoadMoreAsync(token));
+    }
 
     /// <summary>The database stored a record. Called on the UI thread.</summary>
     public async void OnRecordStored()
     {
-        if (_closed || _liveScheduled || _liveSuspended)
+        if (Closed || _newestWanted || _liveSuspended)
             return;
 
-        _liveScheduled = true;
-        try
-        {
-            await _delay(LiveInterval);
-        }
-        finally
-        {
-            _liveScheduled = false;
-        }
+        _newestWanted = true;
+        await _delay(LiveInterval);
+        ReadNewestIfWanted();
+    }
 
-        if (_closed)
+    // The newest records join while the list is ready and at its top, after the read under way.
+    private void ReadNewestIfWanted()
+    {
+        if (!_newestWanted || Closed || _liveSuspended || !_atTop || ListStatus != RecordsListStatus.Ready)
             return;
-        if (_atTop)
-            _ = ReadNewestAsync();
-        else
-            _newestPending = true;
+        _newestWanted = false;
+        var token = _listReads.Token;
+        Queue(() => ReadNewestAsync(token));
     }
 
     /// <summary>Brings every word the window holds into the current language.</summary>
@@ -294,7 +299,7 @@ public sealed partial class RecordsViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string value) => _ = ApplySearchAsync();
 
-    partial void OnSelectedRowChanged(RecordRowViewModel? value) => _ = ReadDetailAsync(value?.Id);
+    partial void OnSelectedRowChanged(RecordRowViewModel? value) => ReadDetail(value?.Id);
 
     private RecordsQuery Query(RecordCursor? after) =>
         new(SelectedLaunch.Session, SelectedLevel.Level, _appliedSearch, after);
@@ -303,7 +308,7 @@ public sealed partial class RecordsViewModel : ObservableObject
     {
         var version = ++_searchVersion;
         await _delay(SearchDelay);
-        if (_closed || version != _searchVersion || SearchText == _appliedSearch)
+        if (Closed || version != _searchVersion || SearchText == _appliedSearch)
             return;
 
         _appliedSearch = SearchText;
@@ -311,24 +316,25 @@ public sealed partial class RecordsViewModel : ObservableObject
     }
 
     // The list read again from its first page for the filters as they are now.
-    private void Reload() => _ = ReloadAsync();
-
-    private async Task ReloadAsync()
+    private void Reload()
     {
-        if (_closed) return;
+        if (Closed) return;
         var query = Query(after: null);
         _listQuery = query;
-        var generation = ++_generation;
-        var token = Renew(ref _listReads, _windowReads.Token).Token;
-        _fetchingMore = false;
-        _newestPending = false;
+        var token = Renew(ref _listReads, _windowReads.Token);
         var keep = SelectedRow?.Id;
         IsLoadingMore = false;
         MoreFailed = false;
         HasMore = false;
         Rows.Clear();
         ListStatus = RecordsListStatus.Loading;
+        Queue(() => ReadFirstPageAsync(query, keep, token));
+    }
 
+    private async Task ReadFirstPageAsync(RecordsQuery query, long? keep, CancellationToken token)
+    {
+        if (token.IsCancellationRequested)
+            return;
         RecordsPage page;
         try
         {
@@ -336,18 +342,14 @@ public sealed partial class RecordsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            if (generation != _generation || _closed || ListStatus == RecordsListStatus.Ready)
+            if (token.IsCancellationRequested)
                 return;
             Fail("page", ex);
             ListStatus = RecordsListStatus.Failed;
             return;
         }
 
-        if (generation != _generation || _closed)
-            return;
-        // A live read may have installed a newer snapshot (and pagination) while this initial read
-        // waited. Keep it, including its selection, instead of replacing it with the older page.
-        if (ListStatus == RecordsListStatus.Ready)
+        if (token.IsCancellationRequested)
             return;
         _liveSuspended = false;
         foreach (var record in page.Records)
@@ -359,33 +361,21 @@ public sealed partial class RecordsViewModel : ObservableObject
         if (keep is { } id && Rows.FirstOrDefault(row => row.Id == id) is { } kept)
             SelectedRow = kept;
         PageApplied?.Invoke();
-        if (_newestPending)
-        {
-            _newestPending = false;
-            _ = ReadNewestAsync();
-        }
     }
 
     // Read only newly inserted records, including late events within the displayed time range.
     // Existing rows and selection remain in place while bounded pages of additions arrive.
-    private async Task ReadNewestAsync()
+    private async Task ReadNewestAsync(CancellationToken token)
     {
-        if (_closed) return;
-        if (_readingNewest || ListStatus != RecordsListStatus.Ready)
-        {
-            _newestPending = true;
+        if (token.IsCancellationRequested)
             return;
-        }
-        _readingNewest = true;
-        var generation = _generation;
-        var token = _listReads.Token;
         try
         {
             var query = _listQuery with { InsertedAfter = _insertedThrough };
             while (true)
             {
                 var page = await _reader.ReadPageAsync(query, token);
-                if (generation != _generation || _closed) return;
+                if (token.IsCancellationRequested) return;
                 var boundary = Rows.LastOrDefault()?.Record;
                 var additions = boundary is null ? page.Records
                     : page.Records.Where(record => RecordFormat.NewestFirst(record, boundary) <= 0).ToList();
@@ -407,29 +397,14 @@ public sealed partial class RecordsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            if (generation == _generation && !_closed) Fail("newest", ex);
-        }
-        finally
-        {
-            _readingNewest = false;
-            if (_newestPending && !_closed && !_liveSuspended && ListStatus == RecordsListStatus.Ready)
-            {
-                _newestPending = false;
-                _ = ReadNewestAsync();
-            }
+            if (!token.IsCancellationRequested) Fail("newest", ex);
         }
     }
 
-    private async Task LoadMoreAsync()
+    private async Task LoadMoreAsync(CancellationToken token)
     {
-        if (_closed || ListStatus != RecordsListStatus.Ready || !HasMore || _fetchingMore)
+        if (token.IsCancellationRequested)
             return;
-
-        _fetchingMore = true;
-        var generation = _generation;
-        var token = _listReads.Token;
-        IsLoadingMore = true;
-        MoreFailed = false;
         var query = _listQuery with { After = RecordFormat.CursorAfter(Rows.Select(row => row.Record).ToList()) };
 
         RecordsPage page;
@@ -439,18 +414,16 @@ public sealed partial class RecordsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            if (generation != _generation || _closed)
+            if (token.IsCancellationRequested)
                 return;
-            _fetchingMore = false;
             Fail("next page", ex);
             IsLoadingMore = false;
             MoreFailed = true;
             return;
         }
 
-        if (generation != _generation || _closed)
+        if (token.IsCancellationRequested)
             return;
-        _fetchingMore = false;
         _liveSuspended = false;
         var shown = Rows.Select(row => row.Id).ToHashSet();
         foreach (var record in page.Records.Where(record => !shown.Contains(record.Id)))
@@ -469,12 +442,12 @@ public sealed partial class RecordsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            if (!_closed)
+            if (!Closed)
                 Fail("launches", ex);
             return;
         }
 
-        if (_closed)
+        if (Closed)
             return;
         // Records are never deleted, so a launch once listed stays; the new ones join in order.
         var listed = LaunchOptions.Skip(1).Select(option => option.Session).ToHashSet();
@@ -486,11 +459,10 @@ public sealed partial class RecordsViewModel : ObservableObject
         }
     }
 
-    private async Task ReadDetailAsync(long? id)
+    private void ReadDetail(long? id)
     {
-        if (_closed) return;
-        var generation = ++_detailGeneration;
-        var token = Renew(ref _detailReads, _windowReads.Token).Token;
+        if (Closed) return;
+        var token = Renew(ref _detailReads, _windowReads.Token);
         if (id is not { } recordId)
         {
             Detail = null;
@@ -499,22 +471,29 @@ public sealed partial class RecordsViewModel : ObservableObject
         }
 
         DetailStatus = RecordDetailStatus.Loading;
+        Queue(() => ReadDetailAsync(recordId, token));
+    }
+
+    private async Task ReadDetailAsync(long id, CancellationToken token)
+    {
+        if (token.IsCancellationRequested)
+            return;
         RecordDetail? record;
         try
         {
-            record = await _reader.ReadDetailAsync(recordId, token);
+            record = await _reader.ReadDetailAsync(id, token);
         }
         catch (Exception ex)
         {
-            if (generation != _detailGeneration || _closed)
+            if (token.IsCancellationRequested)
                 return;
-            Log.Error("records window: a read failed", ex, new { read = "record", id = recordId });
+            Log.Error("records window: a read failed", ex, new { read = "record", id });
             Detail = null;
             DetailStatus = RecordDetailStatus.Failed;
             return;
         }
 
-        if (generation != _detailGeneration || _closed)
+        if (token.IsCancellationRequested)
             return;
         Detail = record is null ? null : new RecordDetailViewModel(record, _currentSession);
         DetailStatus = record is null ? RecordDetailStatus.Failed : RecordDetailStatus.Ready;

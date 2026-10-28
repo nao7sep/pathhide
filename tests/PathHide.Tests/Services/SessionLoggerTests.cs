@@ -343,62 +343,52 @@ public sealed class SessionLoggerTests
     }
 
     [Fact]
-    public void Closing_past_the_bound_sends_the_queued_entries_to_the_fallback_file()
+    public void Closing_past_the_bound_returns_and_leaves_the_stalled_sink_to_its_writer()
     {
-        using var temp = new TempDirectory();
         var sink = new BlockingSink();
-        var log = new SessionLogger(SessionStart, sink, temp.Path, debugEnabled: true, writeInBackground: true);
+        var log = new SessionLogger(SessionStart, sink, fallbackDirectory: null, debugEnabled: true, writeInBackground: true);
 
         try
         {
             log.Info("stuck");
-            Assert.True(sink.Entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+            sink.Entered.Wait(TestContext.Current.CancellationToken);
             log.Info("queued");
-            log.Close(TimeSpan.FromMilliseconds(50));
-            var path = Path.Combine(temp.Path, "20261002-093015-utc.log");
-            Assert.True(SpinWait.SpinUntil(() => File.Exists(path) && File.ReadAllLines(path).Length == 2,
-                TimeSpan.FromSeconds(5)));
-            var lines = File.ReadAllLines(path);
-            Assert.Equal("queued", JsonNode.Parse(lines[0])!["message"]!.GetValue<string>());
-            var note = JsonNode.Parse(lines[1])!;
-            Assert.Equal("error", note["level"]!.GetValue<string>());
-            Assert.Equal(1, note["fields"]!["left"]!.GetValue<int>());
+            log.Close(TimeSpan.Zero);
             Assert.False(sink.Disposed);
         }
         finally
         {
             sink.Release.Set();
-            Assert.True(SpinWait.SpinUntil(() => sink.Disposed, TimeSpan.FromSeconds(5)));
         }
+        sink.DisposedSignal.Wait(TestContext.Current.CancellationToken);
+        Assert.Equal(["stuck", "queued"], sink.Messages);
     }
 
+    // Log queues carry no cap (developer decision): every entry a stalled sink held back is written
+    // once it answers.
     [Fact]
-    public void A_stalled_sink_holds_a_bounded_queue_and_the_writer_says_how_many_it_dropped()
+    public void A_stalled_sink_loses_no_queued_entry_once_it_answers()
     {
-        using var temp = new TempDirectory();
         var sink = new BlockingSink();
-        var log = new SessionLogger(SessionStart, sink, temp.Path, debugEnabled: true, writeInBackground: true);
+        var log = new SessionLogger(SessionStart, sink, fallbackDirectory: null, debugEnabled: true, writeInBackground: true);
         try
         {
             log.Info("stuck");
-            Assert.True(sink.Entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
-            for (var i = 0; i < SessionLogger.QueueCapacity + 5; i++)
+            sink.Entered.Wait(TestContext.Current.CancellationToken);
+            for (var i = 0; i < 1500; i++)
                 log.Info("queued");
-
-            sink.Release.Set();
-            log.Close(TimeSpan.FromSeconds(10));
-
-            Assert.Equal(1 + SessionLogger.QueueCapacity, sink.Messages.Count(message => message is "stuck" or "queued"));
-            Assert.Contains("logger: entries dropped while the sink was busy", sink.Messages);
         }
         finally
         {
             sink.Release.Set();
         }
+        log.Dispose();
+
+        Assert.Equal(1501, sink.Messages.Count);
     }
 
     [Fact]
-    public void An_entry_after_a_background_logger_closes_goes_to_the_fallback_file()
+    public void An_entry_after_a_background_logger_closes_reaches_the_console()
     {
         using var temp = new TempDirectory();
         var sink = new BlockingSink();
@@ -406,11 +396,20 @@ public sealed class SessionLoggerTests
         var log = new SessionLogger(SessionStart, sink, temp.Path, debugEnabled: true, writeInBackground: true);
         log.Dispose();
 
-        log.Info("late");
+        var originalErr = Console.Error;
+        var console = new StringWriter();
+        Console.SetError(console);
+        try
+        {
+            log.Info("late");
+        }
+        finally
+        {
+            Console.SetError(originalErr);
+        }
 
         Assert.Empty(sink.Messages);
-        var line = Assert.Single(File.ReadAllLines(Path.Combine(temp.Path, "20261002-093015-utc.log")));
-        Assert.Equal("late", JsonNode.Parse(line)!["message"]!.GetValue<string>());
+        Assert.Contains("late", console.ToString());
     }
 
     [Fact]
@@ -457,7 +456,7 @@ public sealed class SessionLoggerTests
     }
 
     [Fact]
-    public void ClosingIncludesAStalledSinkDisposeWithinTheBound()
+    public void Closing_returns_while_a_stalled_sink_is_still_closing()
     {
         using var entered = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
@@ -466,17 +465,15 @@ public sealed class SessionLoggerTests
             null, true, writeInBackground: true);
         try
         {
-            var started = System.Diagnostics.Stopwatch.StartNew();
-            logger.Close(TimeSpan.FromMilliseconds(50));
-            Assert.True(entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+            logger.Close(TimeSpan.Zero);
+            entered.Wait(TestContext.Current.CancellationToken);
             Assert.False(settled.IsSet);
-            Assert.True(started.Elapsed < TimeSpan.FromSeconds(2));
         }
         finally
         {
             release.Set();
-            Assert.True(settled.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         }
+        settled.Wait(TestContext.Current.CancellationToken);
     }
 
     private sealed class BlockingCloseSink(ManualResetEventSlim entered, ManualResetEventSlim release,
@@ -497,7 +494,8 @@ public sealed class SessionLoggerTests
 
         public ManualResetEventSlim Entered { get; } = new();
         public ManualResetEventSlim Release { get; } = new();
-        public bool Disposed { get; private set; }
+        public ManualResetEventSlim DisposedSignal { get; } = new();
+        public bool Disposed => DisposedSignal.IsSet;
 
         public IReadOnlyList<string> Messages
         {
@@ -516,7 +514,7 @@ public sealed class SessionLoggerTests
                 _messages.Add(entry.Message);
         }
 
-        public void Dispose() => Disposed = true;
+        public void Dispose() => DisposedSignal.Set();
     }
 
     private sealed class ThrowingSink : ILogSink

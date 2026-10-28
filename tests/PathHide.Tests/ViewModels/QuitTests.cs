@@ -16,8 +16,8 @@ namespace PathHide.Tests.ViewModels;
 
 /// <summary>
 /// The quit's waits for the user's own saves (unsaved-edits-conventions, Quitting): a save still
-/// running is waited for, one that fails or does not land in time stops a quit the user started with
-/// Retry or Quit anyway, and the session ending never asks. Bounds run on a controlled clock.
+/// running is waited for, one that fails stops a quit the user started with Retry or Quit anyway, and
+/// the session ending never asks. The exit's bound runs on a controlled clock.
 /// </summary>
 public sealed class QuitTests
 {
@@ -39,7 +39,7 @@ public sealed class QuitTests
     private MainWindowViewModel CreateViewModel(FakeJsonStore<AppState>? state = null)
     {
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(_visibility), _paths, _settings, _settings.Load().Value,
+            new VisibilityCalls(_visibility), _paths, _settings, _settings.Load().Value,
             state ?? new FakeJsonStore<AppState>(), new AppState(), _paths.Load().Value)
         {
             Clock = _clock,
@@ -175,31 +175,26 @@ public sealed class QuitTests
         Assert.Single(_asked);
     }
 
-    [Fact(Timeout = 10_000)]
-    public async Task A_save_still_running_at_the_bound_stops_the_quit_then_Retry_waits_again()
+    // The exit is bounded: a save still running at the bound has not failed, so the quit asks nothing,
+    // and the save's atomic replacement leaves either the old list or the new one.
+    [Fact]
+    public async Task A_save_still_running_at_the_bound_does_not_hold_the_quit()
     {
         using var gate = new ManualResetEventSlim(false);
         _paths.SaveGate = gate;
-        _answers.Enqueue(() => UnsavedQuitChoice.Retry);
         var vm = CreateViewModel();
         var remove = await StartRemoveAsync(vm);
 
         var quit = vm.QuitAsync();
         _clock.Advance(Bound - TimeSpan.FromTicks(1));
         Assert.False(quit.IsCompleted);
-        Assert.Empty(_asked);
 
         _clock.Advance(TimeSpan.FromTicks(1));
-        await WaitUntilAsync(() => _asked.Count == 1);
-        Assert.Equal(
-            ["Your latest change is still being saved.", "If you quit now, your changes will be lost."],
-            _asked[0].Select(English.Of));
+        Assert.True(await quit);
+        Assert.Empty(_asked);
 
-        // Retry waits again, and the save lands within it.
         gate.Set();
-        Assert.True(await quit.WaitAsync(Guard, TestContext.Current.CancellationToken));
         await remove;
-        Assert.Empty(_paths.Value);
     }
 
     [Fact(Timeout = 10_000)]
@@ -342,31 +337,5 @@ public sealed class QuitTests
         await hide;
         Assert.Equal(DesiredVisibility.Hidden, Assert.Single(_paths.Value).DesiredVisibility);
         Assert.Empty(_visibility.Hidden);
-    }
-
-    [Fact(Timeout = 10_000)]
-    public async Task A_placement_save_holds_a_close_for_its_bound_only()
-    {
-        using var gate = new ManualResetEventSlim(false);
-        var state = new FakeJsonStore<AppState> { SaveGate = gate };
-        var vm = CreateViewModel(state);
-
-        var save = Task.Run(() => vm.SaveWindowPlacement(1, 2, 800, 600, maximized: false),
-            TestContext.Current.CancellationToken);
-        await WaitUntilAsync(() => _clock.HasTimers);
-        _clock.Advance(vm.PlacementSaveBound);
-
-        await Assert.ThrowsAsync<TimeoutException>(() => save.WaitAsync(Guard, TestContext.Current.CancellationToken));
-        gate.Set();
-    }
-
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        var deadline = DateTime.UtcNow + Guard;
-        while (!condition())
-        {
-            Assert.True(DateTime.UtcNow < deadline, "The condition did not hold in time.");
-            await Task.Delay(5, TestContext.Current.CancellationToken);
-        }
     }
 }

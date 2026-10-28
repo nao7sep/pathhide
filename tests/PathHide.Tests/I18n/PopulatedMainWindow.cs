@@ -23,7 +23,6 @@ internal static class PopulatedMainWindow
         visibility.Set("/missing", ActualState.Missing, ItemKind.Unknown);
         visibility.Set("/denied-link", ActualState.AccessDenied, ItemKind.Symlink);
         visibility.Set("/broken-other", ActualState.Error, ItemKind.Other);
-        visibility.Set("/stalled-share", ActualState.Unresponsive, ItemKind.Unknown);
 
         var paths = new FakeJsonStore<List<PathEntry>>
         {
@@ -34,13 +33,12 @@ internal static class PopulatedMainWindow
                 new PathEntry { Path = "/missing", DesiredVisibility = DesiredVisibility.Hidden },
                 new PathEntry { Path = "/denied-link", DesiredVisibility = DesiredVisibility.Hidden },
                 new PathEntry { Path = "/broken-other", DesiredVisibility = DesiredVisibility.Shown },
-                new PathEntry { Path = "/stalled-share", DesiredVisibility = DesiredVisibility.Hidden },
                 new PathEntry { Path = @"C:\windows-path", DesiredVisibility = DesiredVisibility.Hidden },
                 new PathEntry { Path = @"\\server\share", DesiredVisibility = DesiredVisibility.Hidden },
             ],
         };
         var settings = new FakeSettingsStore();
-        var viewModel = new MainWindowViewModel(new BoundedVisibility(visibility), paths, settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value);
+        var viewModel = new MainWindowViewModel(new VisibilityCalls(visibility), paths, settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value);
         return (new MainWindow { DataContext = viewModel }, viewModel);
     }
 
@@ -49,7 +47,7 @@ internal static class PopulatedMainWindow
     {
         var settings = new FakeSettingsStore();
         var viewModel = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings, settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
         return new MainWindow { DataContext = viewModel };
     }
 

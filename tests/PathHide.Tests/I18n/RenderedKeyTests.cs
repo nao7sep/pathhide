@@ -70,7 +70,7 @@ public class RenderedKeyTests : WindowTest
         var records = new RecordsViewModel(reader, "2026-10-04T08:00:00.000Z", _ => Task.CompletedTask);
         var settings = new FakeSettingsStore();
         var owner = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
         var window = Show(new RecordsWindow(records, owner));
         reader.LastPage.Answer(false);
@@ -101,7 +101,7 @@ public class RenderedKeyTests : WindowTest
         var records = new RecordsViewModel(reader, "s", _ => Task.CompletedTask);
         var settings = new FakeSettingsStore();
         var owner = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
+            new VisibilityCalls(new FakeVisibilityService()), new FakeJsonStore<List<PathEntry>>(), settings,
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
         var window = Show(new RecordsWindow(records, owner));
 

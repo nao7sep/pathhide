@@ -85,11 +85,9 @@ public partial class App : Application
             MainWindowViewModel viewModel;
             try
             {
-                // Required reads settle before the normal shell exists. Build the view model on
-                // the dispatcher only after the bounded worker has prepared all persisted values.
+                // Required reads settle, off the UI thread, before the normal shell exists.
                 base.OnFrameworkInitializationCompleted();
-                var loaded = await new BoundedStoreWork().RunAsync(ReadStartupStores,
-                    BoundedStoreWork.DefaultBound, TimeProvider.System);
+                var loaded = await Task.Run(ReadStartupStores);
                 viewModel = CreateMainViewModel(loaded);
                 await viewModel.ValidateLoadedPathsAsync();
             }
@@ -164,7 +162,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Prepare every persisted value on the bounded startup worker before the normal shell exists.
+    /// Prepare every persisted value before the normal shell exists.
     /// </summary>
     internal static (AppSettings Settings, AppState State, List<PathEntry> Paths) ReadStartupStores()
     {
@@ -212,7 +210,7 @@ public partial class App : Application
         var (visibilityService, elevatedApplicator) =
             CreatePlatformServices(OperatingSystem.IsWindows());
 
-        return new MainWindowViewModel(new BoundedVisibility(visibilityService), pathListStore, settingsStore, settings, stateStore, state, loaded.Paths)
+        return new MainWindowViewModel(new VisibilityCalls(visibilityService), pathListStore, settingsStore, settings, stateStore, state, loaded.Paths)
         {
             ComputerLanguages = ComputerLanguages,
             ElevatedApplicator = elevatedApplicator,

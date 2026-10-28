@@ -106,8 +106,11 @@ public static class Log
             previous = _logger;
             _logger = CreateConsoleLogger();
         }
-        previous.Close(_sessionEnding ? SessionLogger.SessionEndDrainBound : SessionLogger.DrainBound);
+        previous.Close(DrainBound);
     }
+
+    /// <summary>How long shutdown waits for the queued entries: shorter when the OS is ending the session.</summary>
+    internal static TimeSpan DrainBound => _sessionEnding ? SessionLogger.SessionEndDrainBound : SessionLogger.DrainBound;
 
     /// <summary>Writes entries another process logged and handed back, as it logged them.</summary>
     public static void Import(IEnumerable<LogEntry> entries) => _logger.Import(entries);

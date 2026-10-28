@@ -55,7 +55,6 @@ public partial class PathRowViewModel : ObservableObject
         ActualState.AccessDenied => "actual.accessDenied",
         ActualState.Error => "actual.error",
         ActualState.Unknown => "actual.unknown",
-        ActualState.Unresponsive => "actual.unresponsive",
         _ => throw new ArgumentOutOfRangeException(nameof(ActualState), ActualState, null),
     });
 

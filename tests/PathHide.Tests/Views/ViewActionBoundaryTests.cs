@@ -19,7 +19,7 @@ public sealed class ViewActionBoundaryTests
     {
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()),
+            new VisibilityCalls(new FakeVisibilityService()),
             new FakeJsonStore<List<PathEntry>>(),
             settings,
             settings.Load().Value,

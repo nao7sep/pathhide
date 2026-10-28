@@ -12,7 +12,6 @@
   "actual.hidden": "Oculto",
   "actual.missing": "Ausente",
   "actual.unknown": "Não verificado",
-  "actual.unresponsive": "Não responde",
   "actual.visible": "Visível",
   "apply.applied": {
     "one": "{count} aplicada",
@@ -137,7 +136,6 @@
   "nativeMenu.zoom": "Zoom",
   "quit.quitAnyway": "Encerrar mesmo assim",
   "quit.retry": "Tentar novamente",
-  "quit.stillSaving": "Sua última alteração ainda está sendo salva.",
   "quit.stopAndQuit": "Parar e encerrar",
   "quit.stopMessage": "O PathHide ainda está ocultando ou mostrando arquivos. Se você encerrar agora, a operação para, e os arquivos ainda não processados mantêm a visibilidade atual até você reaplicar.",
   "quit.stopTitle": "Parar de ocultar e mostrar?",

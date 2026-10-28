@@ -6,7 +6,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace PathHide.Services;
 
-/// <summary>A no-follow leaf handle binds approval, exclusion and mutation to one filesystem object.</summary>
+/// <summary>A no-follow leaf handle binds approval and mutation to one filesystem object.</summary>
 internal sealed partial class WindowsAttributeTarget : IDisposable
 {
     private readonly SafeFileHandle _handle;
@@ -26,23 +26,18 @@ internal sealed partial class WindowsAttributeTarget : IDisposable
         catch { _handle.Dispose(); throw; }
     }
 
-    internal bool Set(bool hide, Models.SystemBit system, string? approved, ApplyParentProcess? parent)
+    internal bool Set(bool hide, Models.SystemBit system, string? approved)
     {
         if (approved is not null && !string.Equals(approved, Identity, StringComparison.Ordinal))
             throw new IOException("The approved filesystem object has changed.");
-        var setNow = false;
-        AttributeWriteReservation.RunIdentity(Identity, () =>
-        {
-            if (!GetBasic(_handle, 0, out var basic, (uint)Marshal.SizeOf<BasicInfo>())) throw Failure();
-            var current = (FileAttributes)basic.Attributes;
-            if (WindowsFileVisibility.Change(current, hide, system) is not { } updated) return;
-            // Zero timestamps preserve the file's times; a zero attribute mask means 'no change',
-            // so NORMAL represents the absence of settable bits.
-            var write = new BasicInfo { Attributes = (uint)(updated == 0 ? FileAttributes.Normal : updated) };
-            if (!SetBasic(_handle, 0, ref write, (uint)Marshal.SizeOf<BasicInfo>())) throw Failure();
-            setNow = !current.HasFlag(FileAttributes.System) && updated.HasFlag(FileAttributes.System);
-        }, parent);
-        return setNow;
+        if (!GetBasic(_handle, 0, out var basic, (uint)Marshal.SizeOf<BasicInfo>())) throw Failure();
+        var current = (FileAttributes)basic.Attributes;
+        if (WindowsFileVisibility.Change(current, hide, system) is not { } updated) return false;
+        // Zero timestamps preserve the file's times; a zero attribute mask means 'no change',
+        // so NORMAL represents the absence of settable bits.
+        var write = new BasicInfo { Attributes = (uint)(updated == 0 ? FileAttributes.Normal : updated) };
+        if (!SetBasic(_handle, 0, ref write, (uint)Marshal.SizeOf<BasicInfo>())) throw Failure();
+        return !current.HasFlag(FileAttributes.System) && updated.HasFlag(FileAttributes.System);
     }
 
     public void Dispose() => _handle.Dispose();

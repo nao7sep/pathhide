@@ -27,23 +27,22 @@ public class PathScannerTests
     }
 
     [Fact]
-    public async Task ScanAsync_YieldsOneResultPerEntry()
+    public async Task ScanAsync_YieldsOneResultPerEntryInOrder()
     {
         var fake = new FakeVisibilityService();
-        var scanner = new PathScanner(new BoundedVisibility(fake));
+        var scanner = new PathScanner(new VisibilityCalls(fake));
         var entries = new[] { Entry("/a"), Entry("/b"), Entry("/c") };
 
         var results = await CollectAsync(scanner, entries, token: TestContext.Current.CancellationToken);
 
-        Assert.Equal(3, results.Count);
-        Assert.Equal(["/a", "/b", "/c"], results.Select(result => result.Entry.Path).Order(StringComparer.Ordinal));
+        Assert.Equal(["/a", "/b", "/c"], results.Select(result => result.Entry.Path));
     }
 
     [Fact]
     public async Task ScanAsync_UnparseablePath_ReportsErrorWithoutInspecting()
     {
         var fake = new FakeVisibilityService();
-        var scanner = new PathScanner(new BoundedVisibility(fake));
+        var scanner = new PathScanner(new VisibilityCalls(fake));
 
         var results = await CollectAsync(scanner, new[] { Entry("not-absolute") }, token: TestContext.Current.CancellationToken);
 
@@ -59,7 +58,7 @@ public class PathScannerTests
     {
         var fake = new FakeVisibilityService();
         fake.Set("/x", ActualState.Hidden, ItemKind.Directory);
-        var scanner = new PathScanner(new BoundedVisibility(fake));
+        var scanner = new PathScanner(new VisibilityCalls(fake));
 
         var results = await CollectAsync(scanner, new[] { Entry("/x") }, token: TestContext.Current.CancellationToken);
 
@@ -70,40 +69,11 @@ public class PathScannerTests
         Assert.Equal(new[] { "/x" }, fake.Inspected);
     }
 
-    // A path that does not answer costs its own bound; the rows after it are inspected meanwhile.
-    [Fact(Timeout = 10_000)]
-    public async Task A_stalled_path_does_not_hold_back_the_results_after_it()
-    {
-        using var gate = new ManualResetEventSlim(initialState: false);
-        var visibility = new FakeVisibilityService
-        {
-            OnInspect = path =>
-            {
-                if (path == "/stuck")
-                    gate.Wait();
-                return null;
-            },
-        };
-        var scanner = new PathScanner(new BoundedVisibility(visibility));
-        var token = TestContext.Current.CancellationToken;
-
-        await using var results = scanner.ScanAsync([Entry("/stuck"), Entry("/b"), Entry("/c")], token).GetAsyncEnumerator(token);
-        var arrived = new List<string>();
-        for (var i = 0; i < 2; i++)
-        {
-            Assert.True(await results.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), token));
-            arrived.Add(results.Current.Entry.Path);
-        }
-        gate.Set();
-
-        Assert.Equal(["/b", "/c"], arrived.Order(StringComparer.Ordinal));
-    }
-
     [Fact]
     public async Task ScanAsync_CancelledToken_ThrowsOperationCanceled()
     {
         var fake = new FakeVisibilityService();
-        var scanner = new PathScanner(new BoundedVisibility(fake));
+        var scanner = new PathScanner(new VisibilityCalls(fake));
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
@@ -111,34 +81,21 @@ public class PathScannerTests
             () => CollectAsync(scanner, new[] { Entry("/a") }, token: cts.Token));
     }
 
-    // Timed, because the failure mode is a HANG: without the fix the scan waits on the blocked
-    // inspection forever, so an untimed test would stall the suite instead of reporting.
-    [Fact(Timeout = 10_000)]
-    public async Task Cancelling_AbandonsAnInspectionThatIsAlreadyBlocked()
+    // An inspection is a blocking stat nothing can interrupt, so a cancel stops the scan before the next one.
+    [Fact]
+    public async Task Cancelling_stops_before_the_next_entry()
     {
-        // The token can only stop a work item from STARTING. Inspect is a blocking stat, and on
-        // an unreachable UNC server or a stale mount it blocks for tens of seconds - so Cancel
-        // did nothing observable until the current item returned, and every mutating command sat
-        // dead behind it, since each pauses the scan and then awaits it with no timeout.
         using var gate = new ManualResetEventSlim(initialState: false);
         var visibility = new FakeVisibilityService { InspectGate = gate };
-        var scanner = new PathScanner(new BoundedVisibility(visibility));
+        var scanner = new PathScanner(new VisibilityCalls(visibility));
         using var cts = new CancellationTokenSource();
 
-        // One path more than are inspected at once: the last is never started.
-        List<PathEntry> entries = [.. Enumerable.Range(0, BoundedVisibility.Width).Select(i => Entry($"/blocked{i}")), Entry("/never-reached")];
-        var scan = CollectAsync(scanner, entries, token: cts.Token);
-
-        // Wait until the inspection is genuinely in-flight, then cancel while it is stuck.
+        var scan = CollectAsync(scanner, [Entry("/blocked"), Entry("/never-reached")], token: cts.Token);
         await visibility.InspectEntered.Task;
         await cts.CancelAsync();
+        gate.Set();
 
-        // The scan gives up on the wait rather than sitting on it.
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scan);
-
-        // And the second path was never started.
         Assert.DoesNotContain("/never-reached", visibility.Inspected);
-
-        gate.Set(); // let the abandoned probe finish on its own thread
     }
 }

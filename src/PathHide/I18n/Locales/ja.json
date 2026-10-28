@@ -12,7 +12,6 @@
   "actual.hidden": "非表示",
   "actual.missing": "見つからない",
   "actual.unknown": "未確認",
-  "actual.unresponsive": "応答なし",
   "actual.visible": "表示",
   "apply.applied": {
     "other": "適用済み {count} 件"
@@ -121,7 +120,6 @@
   "nativeMenu.zoom": "拡大/縮小",
   "quit.quitAnyway": "保存せずに終了",
   "quit.retry": "再試行",
-  "quit.stillSaving": "最後の変更をまだ保存しています。",
   "quit.stopAndQuit": "停止して終了",
   "quit.stopMessage": "PathHide はまだファイルを非表示または表示にしています。今終了すると処理は止まり、まだ処理していないファイルは、再適用するまで今の表示状態のままです。",
   "quit.stopTitle": "非表示・表示の処理を停止しますか？",

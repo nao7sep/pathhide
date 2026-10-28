@@ -69,13 +69,9 @@ public static class WindowsFileVisibility
     /// Sets <paramref name="path"/>'s Hidden and System bits, writing only when they change. Returns
     /// whether this write turned System on, which makes it PathHide's.
     /// </summary>
-    public static bool Set(string path, bool hide, SystemBit system)
-        => Set(path, hide, system, parent: null);
-
-    internal static bool Set(string path, bool hide, SystemBit system, ApplyParentProcess? parent,
-        string? approvedIdentity = null)
+    public static bool Set(string path, bool hide, SystemBit system, string? approvedIdentity = null)
     {
         using var target = new WindowsAttributeTarget(path, writable: true);
-        return target.Set(hide, system, approvedIdentity, parent);
+        return target.Set(hide, system, approvedIdentity);
     }
 }

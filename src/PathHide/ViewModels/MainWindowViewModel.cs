@@ -23,12 +23,8 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IJsonStore<List<PathEntry>> _pathListStore;
     private readonly ISettingsStore _settingsStore;
     private readonly IJsonStore<AppState> _stateStore;
-    private readonly BoundedVisibility _visibility;
+    private readonly VisibilityCalls _visibility;
     private readonly PathScanner _scanner;
-    private readonly BoundedStoreWork _pathWork = new();
-    private readonly BoundedStoreWork _settingsWork = new();
-    private readonly BoundedStoreWork _stateWork = new();
-    internal TimeSpan StorageWaitBound { get; init; } = BoundedStoreWork.DefaultBound;
 
     // The same AppSettings instance the Windows visibility service closes over (wired in
     // App's composition root). Mutate its fields in place; never reassign the reference,
@@ -41,16 +37,13 @@ public partial class MainWindowViewModel : ObservableObject
     private List<PathEntry> _entries = [];
     private readonly Dictionary<string, bool> _pendingSystemOwnership = new(StringComparer.Ordinal);
 
-    // Whether paths.json holds _entries. False after rejected Reload or uncertain save settlement;
-    // a rejected Reload separately blocks saves until the repaired list is successfully read.
+    // Whether paths.json holds _entries. False after a rejected Reload or while observed System
+    // ownership waits to be saved; a rejected Reload separately blocks saves until the repaired list
+    // is successfully read.
     private bool _entriesOnDisk = true;
     // A rejected Reload must not let old rows overwrite an unreadable/ambiguous hand edit.
     // The supported repair workflow is edit, then successfully Reload before another action.
     private Exception? _pathListReadFailure;
-    internal TimeSpan IdentityWaitBound { get; init; } = TimeSpan.FromSeconds(2);
-    // False after a Settings save failed or timed out: it may still have landed, so the settings held in
-    // memory no longer prove what config.json holds, and the next Settings save writes whatever it holds.
-    private bool _settingsOnDisk = true;
 
     private CancellationTokenSource? _scanCts;
     private CancellationTokenSource? _applyCts;
@@ -136,6 +129,20 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Whether a command on every entry can start: an empty list gives it nothing to do.</summary>
     public bool CanActOnAll => CanStartCommand && Rows.Count > 0;
 
+    /// <summary>
+    /// Whether an elevated child still lives after the command that started it returned (a cancel or a
+    /// timeout ends only the wait). Until it exits the paths it may change are its own, so Hide, Show
+    /// and Reapply are unavailable; the GUI and the child never write at once. Developer decision.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(HideSelectedCommand), nameof(ShowSelectedCommand), nameof(HideAllCommand),
+        nameof(ShowAllCommand), nameof(ReapplyAllCommand))]
+    private bool _isElevatedChildRunning;
+
+    private bool CanChangeSelection => CanActOnSelection && !IsElevatedChildRunning;
+
+    private bool CanChangeAll => CanActOnAll && !IsElevatedChildRunning;
+
     public ObservableCollection<OperationalResultViewModel> OperationalResults { get; } = [];
 
     public bool HasOperationalResults => OperationalResults.Count > 0;
@@ -190,16 +197,10 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// How long a quit waits, in all, for a running command, the user's saves, pending backup history and
-    /// an elevated child. After it come <see cref="PlacementSaveBound"/> for each window, then, once the
-    /// window has gone, the session log's drain (<see cref="SessionLogger.DrainBound"/>, or
-    /// <see cref="SessionLogger.SessionEndDrainBound"/> when the OS is ending the session) and the
-    /// single-instance lease's release (at most 2 s, normally immediate). At logout the whole stays near
-    /// 3 s plus placement plus 1 s (unsaved-edits-conventions, Quitting).
+    /// an elevated child. After it come each window's placement save, then, once the window has gone,
+    /// the session log's drain, which draws on the same exit (unsaved-edits-conventions, Quitting).
     /// </summary>
     internal TimeSpan ShutdownBound { get; init; } = TimeSpan.FromSeconds(3);
-
-    /// <summary>How long a window's placement save may hold its close.</summary>
-    internal TimeSpan PlacementSaveBound { get; init; } = TimeSpan.FromMilliseconds(500);
 
     /// <summary>The clock the activation rescan's quiet period is measured on; tests replace it.</summary>
     internal TimeProvider Clock { get; init; } = TimeProvider.System;
@@ -266,7 +267,7 @@ public partial class MainWindowViewModel : ObservableObject
         var visible = Rows.Count(r => r.ActualState == ActualState.Visible);
         var missing = Rows.Count(r => r.ActualState == ActualState.Missing);
         var pending = Rows.Count(r => r.ActualState == ActualState.Unknown);
-        var problems = Rows.Count(r => r.ActualState is ActualState.AccessDenied or ActualState.Error or ActualState.Unresponsive);
+        var problems = Rows.Count(r => r.ActualState is ActualState.AccessDenied or ActualState.Error);
 
         var parts = new List<Message> { Message.Of("status.entries", ("count", Rows.Count)) };
         if (hidden > 0) parts.Add(Message.Of("status.hidden", ("count", hidden)));
@@ -306,7 +307,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// once the view is ready to start scanning; persisted values must already be prepared.
     /// </remarks>
     public MainWindowViewModel(
-        BoundedVisibility visibility,
+        VisibilityCalls visibility,
         IJsonStore<List<PathEntry>> pathListStore,
         ISettingsStore settingsStore,
         AppSettings settings,
@@ -344,32 +345,18 @@ public partial class MainWindowViewModel : ObservableObject
 
     internal Task ValidateLoadedPathsAsync() => ValidateLoadedPathsAsync(_entries, CancellationToken.None);
 
+    // Native identities refuse a loaded list holding two aliases of one entry; each is resolved in turn.
     private async Task ValidateLoadedPathsAsync(List<PathEntry> entries, CancellationToken token)
     {
-        // Native identities are optional evidence, independent of the required local-store worker.
-        // One overall budget stops a large/offline list from delaying startup or Reload indefinitely.
-        using var deadline = new CancellationTokenSource(IdentityWaitBound, Clock);
-        using var waiting = CancellationTokenSource.CreateLinkedTokenSource(token, deadline.Token);
         var keys = entries.Select(entry =>
         {
             PathNormalizer.TryNormalize(entry.Path, out var normalized, out var family);
             return (Path: normalized!, Family: family);
         }).ToList();
 
-        async Task<(string Path, string Identity)> ResolveAsync(string path)
-        {
-            try { return (path, await _visibility.ResolvePathAsync(path, waiting.Token) ?? path); }
-            catch (OperationCanceledException) when (deadline.IsCancellationRequested && !token.IsCancellationRequested)
-            {
-                // The native read remains owned; its late result can never revise this admission.
-                return (path, path);
-            }
-        }
-
         var spellings = new Dictionary<string, string>(StringComparer.Ordinal);
-        await foreach (var (path, identity) in BoundedVisibility.InCompletionOrderAsync(
-            keys.Select(key => key.Path).Distinct(StringComparer.Ordinal), ResolveAsync))
-            spellings[path] = identity;
+        foreach (var path in keys.Select(key => key.Path).Distinct(StringComparer.Ordinal))
+            spellings[path] = await _visibility.ResolvePathAsync(path, token) ?? path;
 
         var identities = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (path, family) in keys)
@@ -401,11 +388,7 @@ public partial class MainWindowViewModel : ObservableObject
         await _mutationGate.WaitAsync();
         try
         {
-            // A command that reaches the gate once a quit has begun does not start; the quit takes it.
-            if (_quitting)
-                return;
-
-            await body();
+                await body();
         }
         finally
         {
@@ -558,11 +541,11 @@ public partial class MainWindowViewModel : ObservableObject
     }));
 
     /// <summary>
-    /// Resolve incoming and existing references at Add's bounded native boundary. This recognizes
-    /// old alias spellings without rewriting stored entries, and distinguishes case-only Mac files.
-    /// A path whose identity cannot be read in time (an unavailable volume) keeps its normalized
-    /// spelling; later comparisons remain pure. Null when the user cancelled before every identity was
-    /// decided, so Add stops before saving anything.
+    /// Resolve incoming and existing references at Add's native boundary, one after another. This
+    /// recognizes old alias spellings without rewriting stored entries, and distinguishes case-only Mac
+    /// files. A path whose identity cannot be read keeps its normalized spelling; later comparisons
+    /// remain pure. Null when the user cancelled before every identity was decided, so Add stops before
+    /// saving anything.
     /// </summary>
     private async Task<List<string>?> ResolveIdentitiesAsync(List<string> paths, CancellationToken token)
     {
@@ -571,14 +554,12 @@ public partial class MainWindowViewModel : ObservableObject
             PathNormalizer.TryNormalize(path, out var normalized, out _);
             return normalized ?? path;
         }).ToList();
-        // A few at a time, so an entry on a volume that stopped answering holds back only itself.
         var resolved = new Dictionary<string, string>(StringComparer.Ordinal);
         try
         {
-            await foreach (var (key, identity) in BoundedVisibility.InCompletionOrderAsync(
-                keys.Distinct(StringComparer.Ordinal),
-                async key => (key, await _visibility.ResolvePathAsync(key, token) ?? key)))
-                resolved[key] = identity;
+            foreach (var key in keys.Distinct(StringComparer.Ordinal))
+                resolved[key] = await _visibility.ResolvePathAsync(key, token) ?? key;
+            token.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -751,11 +732,12 @@ public partial class MainWindowViewModel : ObservableObject
     /// <para>Desired visibility in <c>paths.json</c> is authoritative; the rows show the actual attribute
     /// state. There is no transaction or rollback between the two: the save lands first, so an apply that
     /// fails, is cancelled or is cut short by a quit leaves desired state ahead of the attributes. The next
-    /// scan shows the difference, and applying again repairs it.</para>
+    /// scan shows the difference, and applying again repairs it. Save and apply are one cancellable
+    /// operation, so a Cancel or quit during the save stops the apply before its first path.</para>
     /// </remarks>
     private Task SetVisibilityAsync(
         IReadOnlySet<string> paths,
-        DesiredVisibility desired) => MutateAsync(async () =>
+        DesiredVisibility desired) => MutateAsync(() => RunCancellableAsync(async token =>
     {
         var targets = TrackedTargets(paths);
         Log.Info("set visibility", new { desired, count = targets.Count });
@@ -782,10 +764,10 @@ public partial class MainWindowViewModel : ObservableObject
             ResolveOperationalResult(OperationalResultOwner.PathStore);
         }
 
-        var outcome = await ApplyDesiredStateAsync(targets);
+        var outcome = await ApplyAsync(targets, token);
         ShowApplyOutcome(outcome, targets.Select(row => row.Path));
         ResolvePathAddIssues(targets, outcome);
-    });
+    }));
 
     private HashSet<string> SelectedPaths() => Rows.Where(row => row.IsSelected)
         .Select(row => row.Path).ToHashSet(StringComparer.Ordinal);
@@ -795,19 +777,19 @@ public partial class MainWindowViewModel : ObservableObject
     private List<PathRowViewModel> TrackedTargets(IReadOnlySet<string> paths) =>
         Rows.Where(row => paths.Contains(row.Path)).ToList();
 
-    [RelayCommand(CanExecute = nameof(CanActOnSelection))]
+    [RelayCommand(CanExecute = nameof(CanChangeSelection))]
     private Task HideSelectedAsync() => SetVisibilityAsync(SelectedPaths(), DesiredVisibility.Hidden);
 
-    [RelayCommand(CanExecute = nameof(CanActOnSelection))]
+    [RelayCommand(CanExecute = nameof(CanChangeSelection))]
     private Task ShowSelectedAsync() => SetVisibilityAsync(SelectedPaths(), DesiredVisibility.Shown);
 
-    [RelayCommand(CanExecute = nameof(CanActOnAll))]
+    [RelayCommand(CanExecute = nameof(CanChangeAll))]
     private Task HideAllAsync() => SetVisibilityAsync(AllPaths(), DesiredVisibility.Hidden);
 
-    [RelayCommand(CanExecute = nameof(CanActOnAll))]
+    [RelayCommand(CanExecute = nameof(CanChangeAll))]
     private Task ShowAllAsync() => SetVisibilityAsync(AllPaths(), DesiredVisibility.Shown);
 
-    [RelayCommand(CanExecute = nameof(CanActOnAll))]
+    [RelayCommand(CanExecute = nameof(CanChangeAll))]
     private Task ReapplyAllAsync()
     {
         var paths = AllPaths();
@@ -838,7 +820,7 @@ public partial class MainWindowViewModel : ObservableObject
         LoadedStore<List<PathEntry>> reloaded;
         try
         {
-            reloaded = await _pathWork.RunAsync(_pathListStore.Load, StorageWaitBound, Clock, token);
+            reloaded = await Task.Run(_pathListStore.Load, token);
             await ValidateLoadedPathsAsync(reloaded.Value, token);
         }
         catch (Exception ex) when (ex is NewerFormatException or UnreadableStoreException)
@@ -871,8 +853,8 @@ public partial class MainWindowViewModel : ObservableObject
         _entries = WithKnownOwnership(reloaded.Value);
         _pathListReadFailure = null;
         _entriesOnDisk = _pendingSystemOwnership.Count == 0;
-        lock (_userSavesGate)
-            if (_pendingSystemOwnership.Count == 0) _unsavedAtQuit.Remove(UserStore.PathList);
+        if (_pendingSystemOwnership.Count == 0)
+            _unsavedAtQuit.Remove(UserStore.PathList);
         SyncRowsWithEntries();
         StartBackgroundScan();
     }));
@@ -887,16 +869,15 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public bool RescanOnActivation()
     {
-        if (!_initialized || IsScanning)
+        if (!_initialized || IsScanning || _shutdown is not null)
             return false;
 
         var now = Clock.GetTimestamp();
         if (_lastActivationRescan is { } last && Clock.GetElapsedTime(last, now) < ActivationRescanQuietPeriod)
             return false;
 
-        // Taken without waiting: a command holding the gate (a quit included, which keeps it until the
-        // app exits or the quit is called off) means this is no moment to scan, and the command starts
-        // its own scan when it is done.
+        // Taken without waiting: a command holding the gate (a quit's waits included) means this is no
+        // moment to scan, and the command starts its own scan when it is done.
         if (!_mutationGate.Wait(0))
             return false;
         try
@@ -918,8 +899,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// Saves the Settings draft atomically, off the UI thread, and publishes the draft only after
     /// disk agrees. Returns what to tell the reader when the save failed, or null when it landed.
-    /// The draft is compared with the settings held in memory, or always written after a save whose
-    /// outcome is unknown; <c>config.json</c> is not read.
+    /// The draft is compared with the settings held in memory; <c>config.json</c> is not read.
     /// </summary>
     public async Task<Message?> TryApplySettingsAsync(
         string language, string family, bool hiddenAndSystem, ThemePreference theme, string? timeZone = null)
@@ -941,17 +921,15 @@ public partial class MainWindowViewModel : ObservableObject
         {
             changed = await RunUserSaveAsync(
                 UserStore.Settings,
-                () => _settingsStore.SaveChanges(_settingsOnDisk ? previous : null, candidate),
+                () => _settingsStore.SaveChanges(previous, candidate),
                 FailurePresentation.SettingsSave,
                 () => TryApplySettingsAsync(language, family, hiddenAndSystem, theme, timeZone));
         }
         catch (Exception ex)
         {
             Log.Error("settings: save failed", ex);
-            _settingsOnDisk = false;
             return FailurePresentation.SettingsSave(ex);
         }
-        _settingsOnDisk = true;
 
         if (!changed && previous.Language == candidate.Language
             && previous.UiFontFamily == candidate.UiFontFamily
@@ -989,9 +967,8 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// Saves the window placement to the state store, never the settings. It holds the close on
     /// purpose: the write must finish before the process exits, or it would be cut off and the
-    /// placement lost when the app quits. It holds it for at most <see cref="PlacementSaveBound"/>.
-    /// An unchanged placement writes nothing; a failed or unfinished save throws and leaves the live
-    /// placement untouched.
+    /// placement lost when the app quits. An unchanged placement writes nothing; a failed save throws
+    /// and leaves the live placement untouched.
     /// </summary>
     public void SaveWindowPlacement(int x, int y, double width, double height, bool maximized) =>
         SaveStateForClose(state => state with
@@ -1031,22 +1008,28 @@ public partial class MainWindowViewModel : ObservableObject
     /// the window is in use, not as it closes. A failed save faults the task and changes nothing.
     /// </summary>
     public Task SaveRecordsListWidthAsync(double width) =>
-        SaveStateAsync(state => state with { RecordsListWidth = width }, StorageWaitBound);
+        SaveStateAsync(state => state with { RecordsListWidth = width });
 
-    // Window-state operations share physical ordering, including after a close abandons its wait.
     private void SaveStateForClose(Func<AppState, AppState> change) =>
-        SaveStateAsync(change, PlacementSaveBound).GetAwaiter().GetResult();
+        SaveStateAsync(change).GetAwaiter().GetResult();
 
-    private Task<bool> SaveStateAsync(Func<AppState, AppState> change, TimeSpan bound) =>
-        _stateWork.RunAsync(() =>
+    // The window state's saves, one after another on the pool, each starting from the state the one
+    // before it left; a failed save does not stop the next.
+    private Task _stateSaves = Task.CompletedTask;
+
+    private Task SaveStateAsync(Func<AppState, AppState> change)
+    {
+        var save = _stateSaves.ContinueWith(_ =>
         {
             var candidate = change(_state);
             if (candidate == _state)
-                return false;
+                return;
             _stateStore.Save(candidate);
             _state = candidate;
-            return true;
-        }, bound, Clock);
+        }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        _stateSaves = save;
+        return save;
+    }
 
     private AppSettings CopySettings() => new()
     {
@@ -1079,23 +1062,19 @@ public partial class MainWindowViewModel : ObservableObject
 
     // --- Quitting (unsaved-edits-conventions, Quitting) ---
 
+    // The quit's current round of waits, which a session end arriving during it joins; set from a quit's
+    // start until the app exits or the user calls the quit off.
     private Task<bool>? _shutdown;
-
-    // From a quit's start until the app exits or the user calls the quit off: no command starts, an apply
-    // that starts is cancelled at once, and a save of the user's that fails is kept for Retry.
-    private volatile bool _quitting;
-
-    // Whether the quit holds the mutation gate. It keeps it, so nothing starts behind it, until the app
-    // exits or the quit is called off.
-    private bool _quitHoldsGate;
 
     private bool _sessionEnding;
 
-    // The user's own saves still running (the path list's and the settings'), which a quit waits for, and
-    // each one that failed while a quit waited, kept with what to tell the user so Retry can save it again.
-    private readonly object _userSavesGate = new();
-    private readonly HashSet<Task> _userSaves = [];
+    // Each save of the user's that failed while a quit waited, kept with what to tell the user so Retry
+    // can save it again.
     private readonly Dictionary<UserStore, UnsavedChange> _unsavedAtQuit = [];
+
+    // Each store's one current save, which a quit waits for.
+    private Task _pathSave = Task.CompletedTask;
+    private Task _settingsSave = Task.CompletedTask;
 
     private enum UserStore { PathList, Settings }
 
@@ -1105,39 +1084,24 @@ public partial class MainWindowViewModel : ObservableObject
     /// Whether closing has work to finish first: a scan or apply, a save of the user's, pending backup
     /// history, or an elevated child still running.
     /// </summary>
-    public bool HasWorkToFinish => IsBusy || UserSavesRunning || HasUnsavedChanges
-        || BackupStore.HasPendingWrites || ElevatedApplicator?.HasRunningChild == true;
-
-    private bool HasUnsavedChanges
-    {
-        get { lock (_userSavesGate) return _unsavedAtQuit.Count > 0; }
-    }
-
-    private bool UserSavesRunning
-    {
-        get
-        {
-            lock (_userSavesGate)
-                return _userSaves.Count > 0;
-        }
-    }
+    public bool HasWorkToFinish => IsBusy || !_pathSave.IsCompleted || !_settingsSave.IsCompleted
+        || _unsavedAtQuit.Count > 0 || BackupStore.HasPendingWrites || ElevatedApplicator?.HasRunningChild == true;
 
     /// <summary>
     /// The waits every quit runs, within <see cref="ShutdownBound"/> in all: cancels the scan and the
-    /// apply, takes the mutation gate so no command starts after it, saves again what a save that failed
-    /// during an earlier round of this quit left unsaved, waits for the user's saves still running, gives
+    /// apply, takes its turn at the command gate like any command, waits for each store's current save,
+    /// saves again what a save that failed during an earlier round of this quit left unsaved, gives
     /// pending backup history the rest of the bound unless the OS session is ending, and gives a
     /// still-running elevated child the chance to exit so its temp files are removed now rather
-    /// than by the next launch. It never asks anything. Returns whether everything of the user's is on
-    /// disk. Idempotent while it runs: a second close joins the first.
+    /// than by the next launch. It never asks anything. Returns whether everything of the user's that
+    /// failed to save has been saved. Idempotent while it runs: a second close joins the first.
     /// </summary>
     public Task<bool> ShutdownAsync() => _shutdown ??= ShutdownCoreAsync();
 
     /// <summary>
     /// The quit the user started: menu Quit, Cmd+Q, Dock Quit, or closing the main window. When a save of
-    /// the user's failed or is still running at the bound, the quit stops and the user chooses Retry or
-    /// Quit anyway; dismissing that question calls the quit off and keeps the app open. Returns true
-    /// when the app may exit.
+    /// the user's failed, the quit stops and the user chooses Retry or Quit anyway; dismissing that
+    /// question calls the quit off and keeps the app open. Returns true when the app may exit.
     /// </summary>
     public async Task<bool> QuitAsync()
     {
@@ -1225,113 +1189,86 @@ public partial class MainWindowViewModel : ObservableObject
             return left > TimeSpan.Zero ? left : TimeSpan.Zero;
         }
 
-        _quitting = true;
-        KeyValuePair<UserStore, UnsavedChange>[] saveAgain;
-        lock (_userSavesGate)
-            saveAgain = [.. _unsavedAtQuit];
-
-        Log.Info("shutdown: finishing work in flight",
-            new { busy = IsBusy, saving = UserSavesRunning, saveAgain = saveAgain.Length });
-        Cancel();
-
-        if (!_quitHoldsGate)
+        // Whether the save ended within what remains of the bound; a failed save has logged itself.
+        async Task<bool> EndedAsync(Task save)
         {
-            _quitHoldsGate = await TakeGateAsync(Remaining());
-            if (!_quitHoldsGate)
-                Log.Warn("shutdown: a command did not finish within the bound");
-        }
-        _scanCts?.Cancel();
-
-        foreach (var (store, change) in saveAgain)
-        {
-            // The path list saves only under the gate; while a command still holds it, the change stays
-            // unsaved and the user is asked again.
-            if (store == UserStore.PathList && !_quitHoldsGate)
-                continue;
-
             try
             {
-                await change.SaveAgain().WaitAsync(Remaining(), Clock);
+                await save.WaitAsync(Remaining(), Clock);
             }
             catch (TimeoutException)
             {
-                // Still running, and waited for below.
+                Log.Warn("shutdown: a save did not finish within the bound");
+                return false;
             }
-        }
-
-        await WaitForUserSavesAsync(Remaining());
-
-        // Backup history is best effort: an ordinary quit gives pending history what remains of the bound,
-        // and the end of the OS session does not wait for it (data-backup-conventions).
-        if (!_sessionEnding)
-            await BackupStore.FlushAsync(Remaining(), Clock);
-
-        if (ElevatedApplicator is { } elevated)
-            await elevated.ReleaseAsync(Remaining());
-
-        lock (_userSavesGate)
-            return _userSaves.Count == 0 && _unsavedAtQuit.Count == 0;
-    }
-
-    private async Task<bool> TakeGateAsync(TimeSpan bound)
-    {
-        if (bound <= TimeSpan.Zero)
-            return _mutationGate.Wait(0);
-
-        using var timeout = new CancellationTokenSource(bound, Clock);
-        try
-        {
-            await _mutationGate.WaitAsync(timeout.Token);
+            catch (Exception)
+            {
+            }
             return true;
         }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
-    }
 
-    private async Task WaitForUserSavesAsync(TimeSpan bound)
-    {
-        Task[] running;
-        lock (_userSavesGate)
-            running = [.. _userSaves];
-        if (running.Length == 0)
-            return;
+        Log.Info("shutdown: finishing work in flight", new { busy = IsBusy, saveAgain = _unsavedAtQuit.Count });
+        Cancel();
 
+        // The quit takes its turn like any command, which also keeps commands unavailable while it waits.
+        _commandsInFlight++;
+        IsCommandRunning = true;
+        var hasTurn = false;
         try
         {
-            await Task.WhenAll(running).WaitAsync(bound, Clock);
+            using (var turn = new CancellationTokenSource(Remaining(), Clock))
+            {
+                try
+                {
+                    await _mutationGate.WaitAsync(turn.Token);
+                    hasTurn = true;
+                }
+                catch (OperationCanceledException)
+                {
+                    Log.Warn("shutdown: a command did not finish within the bound");
+                }
+            }
+            // An activation rescan may have started while the quit waited for its turn.
+            _scanCts?.Cancel();
+
+            var pathSaveEnded = await EndedAsync(_pathSave);
+            var settingsSaveEnded = await EndedAsync(_settingsSave);
+            foreach (var (store, change) in _unsavedAtQuit.ToArray())
+            {
+                // The path list saves only in the quit's turn, and no store's save starts while its
+                // previous one still runs.
+                if (store == UserStore.PathList ? hasTurn && pathSaveEnded : settingsSaveEnded)
+                    await EndedAsync(change.SaveAgain());
+            }
+
+            // Backup history is best effort: an ordinary quit gives pending history what remains of the
+            // bound, and the end of the OS session does not wait for it (data-backup-conventions).
+            if (!_sessionEnding)
+                await BackupStore.FlushAsync(Remaining(), Clock);
+
+            if (ElevatedApplicator is { } elevated)
+                await elevated.ReleaseAsync(Remaining());
+
+            return _unsavedAtQuit.Count == 0;
         }
-        catch (TimeoutException)
+        finally
         {
-            Log.Warn("shutdown: a save did not finish within the bound", new { running = running.Length });
-        }
-        catch (Exception)
-        {
-            // Each failed save has logged itself and, as the quit waited, kept its change for Retry.
+            if (hasTurn)
+                _mutationGate.Release();
+            IsCommandRunning = --_commandsInFlight > 0;
         }
     }
 
-    /// <summary>What the quit's question tells the user: each failed save, any still running, and what quitting costs.</summary>
+    /// <summary>What the quit's question tells the user: each failed save, and what quitting costs.</summary>
     internal IReadOnlyList<Message> UnsavedAtQuitLines()
     {
-        var lines = new List<Message>();
-        lock (_userSavesGate)
-        {
-            lines.AddRange(_unsavedAtQuit.OrderBy(pair => pair.Key).Select(pair => pair.Value.Failure));
-            if (_userSaves.Count > 0)
-                lines.Add(Message.Of("quit.stillSaving"));
-        }
-
+        var lines = _unsavedAtQuit.OrderBy(pair => pair.Key).Select(pair => pair.Value.Failure).ToList();
         lines.Add(Message.Of("quit.unsavedMessage"));
         return lines;
     }
 
-    private object UnsavedAtQuitFields()
-    {
-        lock (_userSavesGate)
-            return new { unsaved = _unsavedAtQuit.Keys.Select(store => store.ToString()).ToArray(), running = _userSaves.Count };
-    }
+    private object UnsavedAtQuitFields() =>
+        new { unsaved = _unsavedAtQuit.Keys.Select(store => store.ToString()).ToArray() };
 
     // The user dismissed the question: the app stays open as it was before the quit. A change whose save
     // failed is dropped, as any failed save is; the window already shows its failure.
@@ -1339,67 +1276,38 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void CallOffQuit()
     {
-        _quitting = false;
         _shutdown = null;
-        lock (_userSavesGate)
-        {
-            _unsavedAtQuit.TryGetValue(UserStore.PathList, out var pendingFacts);
-            _unsavedAtQuit.Clear();
-            if (_pendingSystemOwnership.Count > 0 && pendingFacts is not null)
-                _unsavedAtQuit[UserStore.PathList] = pendingFacts;
-        }
-        if (_quitHoldsGate)
-        {
-            _quitHoldsGate = false;
-            _mutationGate.Release();
-        }
+        _unsavedAtQuit.TryGetValue(UserStore.PathList, out var pendingFacts);
+        _unsavedAtQuit.Clear();
+        if (_pendingSystemOwnership.Count > 0 && pendingFacts is not null)
+            _unsavedAtQuit[UserStore.PathList] = pendingFacts;
 
         Log.Info("quit: called off; the app stays open");
     }
 
     /// <summary>
-    /// Runs one of the user's own saves off the UI thread, tracked while it runs so a quit waits for it.
-    /// A save that fails while a quit waits keeps its change, with what to tell the user, for Retry; the
-    /// record is made before the task ends, so a quit that has waited for the task sees it.
+    /// Runs one of the user's own saves off the UI thread as its store's current save, which a quit
+    /// waits for. A save that fails while a quit waits keeps its change, with what to tell the user,
+    /// for Retry.
     /// </summary>
-    private Task<T> RunUserSaveAsync<T>(
+    private async Task<T> RunUserSaveAsync<T>(
         UserStore store, Func<T> save, Func<Exception, Message> describe, Func<Task> saveAgain)
     {
-        var wait = RunUserSaveCoreAsync(store, save, describe, saveAgain);
-        TrackUserSave(wait);
-        return wait;
-    }
-
-    private void TrackUserSave(Task task)
-    {
-        lock (_userSavesGate)
-            _userSaves.Add(task);
-        _ = task.ContinueWith(done =>
-        {
-            lock (_userSavesGate)
-                _userSaves.Remove(done);
-        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-    }
-
-    private async Task<T> RunUserSaveCoreAsync<T>(
-        UserStore store, Func<T> save, Func<Exception, Message> describe, Func<Task> saveAgain)
-    {
-        var owner = store == UserStore.PathList ? _pathWork : _settingsWork;
+        var work = Task.Run(save);
+        if (store == UserStore.PathList)
+            _pathSave = work;
+        else
+            _settingsSave = work;
         try
         {
-            var result = await owner.RunAsync(save, StorageWaitBound, Clock, started: TrackUserSave);
-            lock (_userSavesGate)
-                _unsavedAtQuit.Remove(store);
+            var result = await work;
+            _unsavedAtQuit.Remove(store);
             return result;
         }
         catch (Exception ex)
         {
-            // A timeout leaves an unknown physical outcome, retained for Reload/Retry and quit.
-            lock (_userSavesGate)
-            {
-                if (_quitting || ex is TimeoutException || _unsavedAtQuit.ContainsKey(store))
-                    _unsavedAtQuit[store] = new UnsavedChange(describe(ex), saveAgain);
-            }
+            if (_shutdown is not null || _unsavedAtQuit.ContainsKey(store))
+                _unsavedAtQuit[store] = new UnsavedChange(describe(ex), saveAgain);
             throw;
         }
     }
@@ -1434,8 +1342,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (_pendingSystemOwnership.Count == 0 && _entriesOnDisk && SameContent(snapshot, SortedForDisk(_entries)))
         {
             Log.Debug("paths: unchanged, not saved");
-            lock (_userSavesGate)
-                _unsavedAtQuit.Remove(UserStore.PathList);
+            _unsavedAtQuit.Remove(UserStore.PathList);
             return null;
         }
 
@@ -1453,8 +1360,6 @@ public partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            if (ex is TimeoutException)
-                _entriesOnDisk = false;
             Log.Error("paths: save failed", ex);
             return FailurePresentation.PathListSave(ex);
         }
@@ -1632,12 +1537,6 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// Applies each target's desired visibility, cancellable through <see cref="CancelCommand"/>.
     /// </summary>
-    /// <remarks>
-    /// Every file-system call goes through <see cref="BoundedVisibility"/>, so one stalled network
-    /// share or half-ejected volume costs its path a bounded wait and an Unresponsive verdict, never
-    /// the whole command: the caller holds the mutation gate throughout, and an unbounded stat here
-    /// would keep every other command queued behind it until the app was force-quit.
-    /// </remarks>
     private Task<ApplyOutcome> ApplyDesiredStateAsync(List<PathRowViewModel> targets) =>
         RunCancellableAsync(token => ApplyAsync(targets, token));
 
@@ -1649,9 +1548,6 @@ public partial class MainWindowViewModel : ObservableObject
     {
         using var applyCts = new CancellationTokenSource();
         _applyCts = applyCts;
-        // An apply that follows a save the quit waited for stops at once.
-        if (_quitting)
-            applyCts.Cancel();
         IsApplying = true;
         try
         {
@@ -1691,28 +1587,20 @@ public partial class MainWindowViewModel : ObservableObject
         var problems = new Dictionary<string, ApplyProblem>(StringComparer.Ordinal);
         var retryBucket = new List<PathRowViewModel>();
 
-        void MarkUnresponsive(PathRowViewModel row)
-        {
-            problems[row.Path] = ApplyProblem.Unresponsive;
-            row.ActualState = ActualState.Unresponsive;
-        }
-
-        // Paths are worked on a few at a time, so a stalled one costs its own bound rather than
-        // delaying every path behind it; each result is taken here, one at a time, on this thread.
+        // Paths are worked on one after another; a cancel stops before the next one.
         var cancelled = 0;
         // Which entries' System bit PathHide owns after the writes that landed, saved once at the end.
         var systemOwnership = new Dictionary<string, bool>(StringComparer.Ordinal);
-        var attempts = BoundedVisibility.InCompletionOrderAsync(targets, row => AttemptAsync(row, hideMode, token));
-        await foreach (var attempt in attempts)
+        foreach (var target in targets)
         {
+            var attempt = await AttemptAsync(target, hideMode, token);
             var row = attempt.Row;
             if (attempt.SystemSet is { } systemSet)
                 systemOwnership[row.Path] = OwnershipAfter(row, hideMode, systemSet);
             if (attempt.Cancelled)
             {
-                // A path whose write was under way may or may not have changed — the call was
-                // abandoned, not undone — so its row no longer claims a state. The rest were never
-                // written.
+                // A path written before the cancel was not inspected again, so its row no longer claims
+                // a state. The rest were never written.
                 if (attempt.Written)
                     row.ActualState = ActualState.Unknown;
                 problems[row.Path] = ApplyProblem.Cancelled;
@@ -1722,9 +1610,6 @@ public partial class MainWindowViewModel : ObservableObject
 
             switch (attempt.Failure)
             {
-                case TimeoutException:
-                    MarkUnresponsive(row);
-                    continue;
                 case UnauthorizedAccessException when ElevatedApplicator is not null:
                     // Access-denied is recoverable via a single elevated retry (below).
                     retryBucket.Add(row);
@@ -1738,9 +1623,7 @@ public partial class MainWindowViewModel : ObservableObject
             if (!attempt.Written)
             {
                 var inspection = attempt.Before!;
-                if (inspection.ActualState == ActualState.Unresponsive)
-                    MarkUnresponsive(row);
-                else if (inspection.ActualState == ActualState.Missing)
+                if (inspection.ActualState == ActualState.Missing)
                 {
                     problems[row.Path] = ApplyProblem.Missing;
                     row.ActualState = ActualState.Missing;
@@ -1763,11 +1646,6 @@ public partial class MainWindowViewModel : ObservableObject
             }
 
             var updated = attempt.After!;
-            if (updated.ActualState == ActualState.Unresponsive)
-            {
-                MarkUnresponsive(row);
-                continue;
-            }
             row.ApplyScanResult(updated, row.PathFamily);
 
             // Count what actually moved, not what was attempted. A write can run without changing
@@ -1794,8 +1672,6 @@ public partial class MainWindowViewModel : ObservableObject
         }
         if (cancelled > 0)
             Log.Info("apply: cancelled", new { skipped = cancelled });
-        // Results arrive as paths answer; the elevated request keeps the list's order.
-        retryBucket = [.. targets.Intersect(retryBucket)];
 
         int? elevationExitCode = null;
 
@@ -1816,6 +1692,8 @@ public partial class MainWindowViewModel : ObservableObject
             // timeout never reports again, so its late writes cannot reach these rows.
             var outcome = await elevated.ApplyAsync(buckets, token);
             elevationExitCode = outcome.ExitCode;
+            if (!elevated.Settled.IsCompleted)
+                _ = HoldVisibilityCommandsUntilAsync(elevated.Settled);
 
             foreach (var row in retryBucket)
             {
@@ -1907,7 +1785,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// One target's file-system work in an apply: what it was before, whether it was written, and what
-    /// it is after, or how that ended. It touches no row, so several can run at once.
+    /// it is after, or how that ended.
     /// </summary>
     private async Task<ApplyAttempt> AttemptAsync(PathRowViewModel row, WindowsHideMode hideMode, CancellationToken token)
     {
@@ -1919,8 +1797,7 @@ public partial class MainWindowViewModel : ObservableObject
         try
         {
             var before = await _visibility.InspectAsync(path, token);
-            if (before.ActualState is ActualState.Unresponsive or ActualState.Missing
-                or ActualState.AccessDenied or ActualState.Error)
+            if (before.ActualState is ActualState.Missing or ActualState.AccessDenied or ActualState.Error)
                 return new(row) { Before = before };
 
             written = true;
@@ -1934,15 +1811,14 @@ public partial class MainWindowViewModel : ObservableObject
         {
             return new(row) { Written = written, SystemSet = systemSet, Cancelled = true };
         }
-        catch (Exception ex) when (ex is TimeoutException
-            || (ex is UnauthorizedAccessException && ElevatedApplicator is not null))
+        catch (UnauthorizedAccessException ex) when (ElevatedApplicator is not null)
         {
             return new(row) { Written = written, Failure = ex };
         }
         catch (Exception ex)
         {
             Log.Error("apply: failed", ex, new { path });
-            // Not cancellable, so it cannot throw out of this handler; still bounded.
+            // Not cancellable, so it cannot throw out of this handler.
             return new(row) { Written = written, Failure = ex, After = await _visibility.InspectAsync(path, CancellationToken.None) };
         }
     }
@@ -1956,6 +1832,13 @@ public partial class MainWindowViewModel : ObservableObject
         public PathInspection? After { get; init; }
         public Exception? Failure { get; init; }
         public bool Cancelled { get; init; }
+    }
+
+    private async Task HoldVisibilityCommandsUntilAsync(Task settled)
+    {
+        IsElevatedChildRunning = true;
+        await settled;
+        IsElevatedChildRunning = false;
     }
 
     /// <summary>Whether PathHide owns the row's System bit after a write for it landed.</summary>
@@ -1984,8 +1867,7 @@ public partial class MainWindowViewModel : ObservableObject
         SyncRowsWithEntries();
         if (await TrySaveEntriesAsync(_entries) is { } failure)
         {
-            lock (_userSavesGate)
-                _unsavedAtQuit[UserStore.PathList] = new UnsavedChange(failure, () => TrySaveEntriesAsync(_entries));
+            _unsavedAtQuit[UserStore.PathList] = new UnsavedChange(failure, () => TrySaveEntriesAsync(_entries));
             ShowOperationalResult(OperationalResultOwner.PathStore, failure, error: true);
         }
     }

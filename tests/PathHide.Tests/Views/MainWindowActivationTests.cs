@@ -25,7 +25,7 @@ public sealed class MainWindowActivationTests : WindowTest
             Value = [new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }],
         };
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(visibility), paths, settings, settings.Load().Value,
+            new VisibilityCalls(visibility), paths, settings, settings.Load().Value,
             new FakeJsonStore<AppState>(), new AppState(), paths.Load().Value)
         {
             Clock = clock,

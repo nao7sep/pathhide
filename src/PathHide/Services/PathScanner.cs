@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using PathHide.Models;
@@ -13,24 +14,27 @@ public sealed record ScanResult(
 
 public sealed class PathScanner
 {
-    private readonly BoundedVisibility _visibility;
+    private readonly VisibilityCalls _visibility;
 
-    public PathScanner(BoundedVisibility visibility)
+    public PathScanner(VisibilityCalls visibility)
     {
         _visibility = visibility;
     }
 
     /// <summary>
-    /// Inspects the entries a few at a time (<see cref="BoundedVisibility.Width"/>), yielding each
-    /// result as it arrives, so one stalled path does not hold back the rows after it.
+    /// Inspects the entries one after another, yielding each result as it arrives; a cancel stops
+    /// before the next entry.
     /// </summary>
     /// <remarks>
     /// The results are the progress: a separate progress channel could report after the consumer had
     /// finished with the scan.
     /// </remarks>
-    public IAsyncEnumerable<ScanResult> ScanAsync(
-        IReadOnlyList<PathEntry> entries, CancellationToken cancellationToken = default) =>
-        BoundedVisibility.InCompletionOrderAsync(entries, entry => ScanOneAsync(entry, cancellationToken));
+    public async IAsyncEnumerable<ScanResult> ScanAsync(
+        IReadOnlyList<PathEntry> entries, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in entries)
+            yield return await ScanOneAsync(entry, cancellationToken);
+    }
 
     private async Task<ScanResult> ScanOneAsync(PathEntry entry, CancellationToken cancellationToken)
     {
@@ -47,8 +51,6 @@ public sealed class PathScanner
         }
         else
         {
-            // Bounded, and abandoned on cancel: a stalled share reports the path unresponsive
-            // rather than holding the scan (and every command that pauses it) on one stat.
             inspection = await _visibility.InspectAsync(entry.Path, cancellationToken);
         }
 

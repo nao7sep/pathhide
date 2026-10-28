@@ -7,41 +7,8 @@ using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace PathHide.Services;
-
-internal sealed class ActivationRequestRouter
-{
-    private readonly object _gate = new();
-    private Action? _handler;
-    private bool _pending;
-
-    public void Register(Action handler)
-    {
-        var invoke = false;
-        lock (_gate)
-        {
-            _handler = handler;
-            invoke = _pending;
-            _pending = false;
-        }
-        if (invoke)
-            handler();
-    }
-
-    public void Request()
-    {
-        Action? handler;
-        lock (_gate)
-        {
-            handler = _handler;
-            if (handler is null)
-                _pending = true;
-        }
-        handler?.Invoke();
-    }
-}
 
 /// <summary>
 /// Owns one PathHide storage root and routes a second GUI launch to the owner's window.
@@ -52,95 +19,26 @@ internal sealed class SingleInstanceLease : IDisposable
     private const string EndpointFileName = "instance.endpoint";
     private static readonly byte[] ActivationRequest = Encoding.ASCII.GetBytes("activate");
     private static readonly TimeSpan NotifyTimeout = TimeSpan.FromSeconds(2);
-    private static readonly object CurrentGate = new();
     private static SingleInstanceLease? _current;
 
     private Mutex? _mutex;
     private readonly TcpListener _listener;
-    private readonly Thread _listenerThread;
-    private readonly ActivationRequestRouter _activationRouter = new();
-    private volatile bool _disposed;
-    private Thread? _ownerThread;
-    private ManualResetEventSlim? _ownerStop;
-    private int _disposeRequested;
+    private readonly CancellationTokenSource _stopping = new();
+    private Thread? _listenerThread;
+    private Action? _activate;
 
     private SingleInstanceLease(Mutex mutex, TcpListener listener)
     {
         _mutex = mutex;
         _listener = listener;
-        _listenerThread = new Thread(ListenForActivation)
-        {
-            IsBackground = true,
-            Name = "PathHide activation",
-        };
-        _listenerThread.Start();
     }
 
-    public static bool TryAcquire(string root, out SingleInstanceLease? lease) =>
-        TryAcquire(root, out lease, BoundedStoreWork.DefaultBound, PublishEndpoint);
-
-    // A Mutex must be acquired and released on the same OS thread. This owner retains that
-    // physical claim through a timed-out endpoint write (transaction-and-external-effect-conventions).
-    internal static bool TryAcquire(string root, out SingleInstanceLease? lease, TimeSpan bound,
-        Action<string, int> publishEndpoint)
-    {
-        var stop = new ManualResetEventSlim();
-        var result = new TaskCompletionSource<SingleInstanceLease?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var owner = new Thread(() =>
-        {
-            SingleInstanceLease? acquired = null;
-            try
-            {
-                if (!TryAcquireCore(root, out acquired, publishEndpoint))
-                {
-                    result.TrySetResult(null);
-                    return;
-                }
-                acquired!._ownerThread = Thread.CurrentThread;
-                acquired._ownerStop = stop;
-                result.TrySetResult(acquired);
-                stop.Wait();
-            }
-            catch (Exception ex)
-            {
-                if (!result.TrySetException(ex))
-                    _ = Log.ReportStartup("instance: ownership worker failed after acquisition", ex,
-                        warning: true);
-            }
-            finally
-            {
-                try { acquired?.DisposeCore(); }
-                catch (Exception ex) { Log.Warn("instance: ownership cleanup failed", ex); }
-                stop.Dispose();
-            }
-        }) { IsBackground = true, Name = "PathHide instance owner" };
-        owner.Start();
-        try
-        {
-            lease = result.Task.WaitAsync(bound).GetAwaiter().GetResult();
-            return lease is not null;
-        }
-        catch (Exception waitFailure)
-        {
-            // A late acquisition immediately retires itself, on the same thread that owns its Mutex.
-            try { stop.Set(); }
-            catch (ObjectDisposedException) { }
-            _ = result.Task.ContinueWith(done =>
-            {
-                if (done.IsFaulted)
-                {
-                    var error = done.Exception!;
-                    if (waitFailure is TimeoutException)
-                        _ = Log.ReportStartup("instance: ownership worker failed after startup wait ended", error,
-                            warning: true);
-                }
-            }, TaskScheduler.Default);
-            throw;
-        }
-    }
-
-    private static bool TryAcquireCore(string root, out SingleInstanceLease? lease,
-        Action<string, int> publishEndpoint)
+    /// <summary>
+    /// Claims <paramref name="root"/> for this process, or, when another PathHide holds it, asks that one
+    /// to bring its window forward and returns false. The claim is held on the calling thread, which a
+    /// mutex requires, until <see cref="Dispose"/> on that same thread.
+    /// </summary>
+    public static bool TryAcquire(string root, out SingleInstanceLease? lease)
     {
         var endpointPath = Path.Combine(root, EndpointFileName);
         var mutex = new Mutex(initiallyOwned: false, MutexName(root));
@@ -166,14 +64,14 @@ internal sealed class SingleInstanceLease : IDisposable
         TcpListener? listener = null;
         try
         {
+            // Listening from here on: a second launch that connects before the window registers its
+            // handler waits in the listener's backlog until then.
             listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
-            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-            publishEndpoint(endpointPath, port);
+            PublishEndpoint(endpointPath, ((IPEndPoint)listener.LocalEndpoint).Port);
 
             lease = new SingleInstanceLease(mutex, listener);
-            lock (CurrentGate)
-                _current = lease;
+            _current = lease;
             return true;
         }
         catch
@@ -204,12 +102,21 @@ internal sealed class SingleInstanceLease : IDisposable
         return (OperatingSystem.IsWindows() ? @"Global\PathHide-" : "PathHide-") + Convert.ToHexString(hash);
     }
 
+    /// <summary>
+    /// Gives the claim its window's activation and starts accepting second launches, once; activations
+    /// that arrived earlier are waiting for it.
+    /// </summary>
     public static void RegisterOwnerActivationHandler(Action handler)
     {
-        SingleInstanceLease? current;
-        lock (CurrentGate)
-            current = _current;
-        current?._activationRouter.Register(handler);
+        if (_current is not { } current || current._listenerThread is not null)
+            return;
+        current._activate = handler;
+        current._listenerThread = new Thread(current.ListenForActivation)
+        {
+            IsBackground = true,
+            Name = "PathHide activation",
+        };
+        current._listenerThread.Start();
     }
 
     private static void PublishEndpoint(string path, int port)
@@ -250,8 +157,9 @@ internal sealed class SingleInstanceLease : IDisposable
 
     private void ListenForActivation()
     {
+        var stopping = _stopping.Token;
         var failures = 0;
-        while (!_disposed)
+        while (!stopping.IsCancellationRequested)
         {
             try
             {
@@ -262,13 +170,9 @@ internal sealed class SingleInstanceLease : IDisposable
                     failures = 0;
                 }
                 if (ReadsActivation(client.GetStream()))
-                    _activationRouter.Request();
+                    _activate!();
             }
-            catch (SocketException) when (_disposed)
-            {
-                return;
-            }
-            catch (ObjectDisposedException) when (_disposed)
+            catch (Exception ex) when (ex is SocketException or ObjectDisposedException or InvalidOperationException && stopping.IsCancellationRequested)
             {
                 return;
             }
@@ -283,7 +187,7 @@ internal sealed class SingleInstanceLease : IDisposable
                 // persists must not spin this thread: each retry waits twice as long, up to 5 s.
                 if (failures++ == 0)
                     Log.Warn("instance: activation listener could not accept a connection; retrying", ex);
-                Thread.Sleep(TimeSpan.FromMilliseconds(Math.Min(100 << Math.Min(failures - 1, 6), 5000)));
+                stopping.WaitHandle.WaitOne(TimeSpan.FromMilliseconds(Math.Min(100 << Math.Min(failures - 1, 6), 5000)));
             }
         }
     }
@@ -314,38 +218,22 @@ internal sealed class SingleInstanceLease : IDisposable
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposeRequested, 1) != 0)
+        if (_mutex is not { } mutex)
             return;
-        try { _ownerStop!.Set(); }
-        catch (ObjectDisposedException) { }
-        _ownerThread!.Join(NotifyTimeout);
-    }
-
-    private void DisposeCore()
-    {
-        if (_disposed)
-            return;
-        _disposed = true;
-
-        lock (CurrentGate)
-        {
-            if (ReferenceEquals(_current, this))
-                _current = null;
-        }
+        _mutex = null;
+        if (ReferenceEquals(_current, this))
+            _current = null;
 
         try
         {
+            _stopping.Cancel();
             _listener.Stop();
-            _listenerThread.Join(NotifyTimeout);
+            _listenerThread?.Join(NotifyTimeout);
         }
         finally
         {
-            var mutex = Interlocked.Exchange(ref _mutex, null);
-            if (mutex is not null)
-            {
-                try { mutex.ReleaseMutex(); }
-                finally { mutex.Dispose(); }
-            }
+            try { mutex.ReleaseMutex(); }
+            finally { mutex.Dispose(); }
         }
     }
 }

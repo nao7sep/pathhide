@@ -76,7 +76,7 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         var original = path + ".original";
         File.Move(path, original);
         File.WriteAllText(path, "replacement");
-        Assert.Throws<IOException>(() => WindowsFileVisibility.Set(path, true, SystemBit.Set, null, approved.Identity));
+        Assert.Throws<IOException>(() => WindowsFileVisibility.Set(path, true, SystemBit.Set, approved.Identity));
         Assert.False(File.GetAttributes(path).HasFlag(FileAttributes.Hidden));
         Assert.False(File.GetAttributes(original).HasFlag(FileAttributes.Hidden));
     }
@@ -91,7 +91,7 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         File.WriteAllText(path, "replacement");
         using var alias = new WindowsAttributeTarget(renamed, writable: false);
         Assert.Equal(target.Identity, alias.Identity);
-        Assert.True(target.Set(true, SystemBit.Set, target.Identity, null));
+        Assert.True(target.Set(true, SystemBit.Set, target.Identity));
         Assert.True(File.GetAttributes(renamed).HasFlag(FileAttributes.Hidden));
         Assert.False(File.GetAttributes(path).HasFlag(FileAttributes.Hidden));
     }
@@ -173,12 +173,11 @@ public sealed class WindowsVisibilityServiceTests : IDisposable
         CreateJunction(original, replacement);
         try
         {
-            Assert.Throws<IOException>(() => WindowsFileVisibility.Set(leaf, true, SystemBit.Set, null, approval.Identity));
+            Assert.Throws<IOException>(() => WindowsFileVisibility.Set(leaf, true, SystemBit.Set, approval.Identity));
             Assert.False(File.GetAttributes(other).HasFlag(FileAttributes.Hidden));
             using var alias = new WindowsAttributeTarget(leaf, writable: false);
             using var direct = new WindowsAttributeTarget(other, writable: false);
             Assert.Equal(alias.Identity, direct.Identity);
-            Assert.Equal(AttributeWriteReservation.Name(alias.Identity), AttributeWriteReservation.Name(direct.Identity));
         }
         finally { Directory.Delete(original); }
     }

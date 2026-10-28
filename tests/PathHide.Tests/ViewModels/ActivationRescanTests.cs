@@ -127,7 +127,7 @@ public class ActivationRescanTests
     {
         var settings = new FakeSettingsStore();
         var vm = new MainWindowViewModel(
-            new BoundedVisibility(new FakeVisibilityService()), List("/a"), settings, settings.Load().Value,
+            new VisibilityCalls(new FakeVisibilityService()), List("/a"), settings, settings.Load().Value,
             new FakeJsonStore<AppState>(), new AppState(), (List("/a")).Load().Value);
 
         Assert.False(vm.RescanOnActivation());
