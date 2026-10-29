@@ -376,6 +376,12 @@ public sealed partial class RecordsViewModel : ObservableObject
             {
                 var page = await _reader.ReadPageAsync(query, token);
                 if (token.IsCancellationRequested) return;
+                // Scrolled down while the read ran: the list stays put, and the records wait for the top.
+                if (!_atTop)
+                {
+                    _newestWanted = true;
+                    return;
+                }
                 var boundary = Rows.LastOrDefault()?.Record;
                 var additions = boundary is null ? page.Records
                     : page.Records.Where(record => RecordFormat.NewestFirst(record, boundary) <= 0).ToList();

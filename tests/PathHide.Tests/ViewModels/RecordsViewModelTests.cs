@@ -380,6 +380,29 @@ public sealed class RecordsViewModelTests
         Assert.Equal(301, vm.Rows[0].Id);
     }
 
+    // A read for new records that was under way when the user scrolled down applies nothing, so the list
+    // does not move under the reader; the records join once it is back at the top.
+    [AvaloniaFact]
+    public void New_records_read_before_scrolling_down_wait_for_the_top()
+    {
+        var vm = Started();
+        Answer(true, Newest(300, RecordsReader.PageSize));
+        Signal(vm);
+        ElapseLive();
+        var newest = _reader.Unanswered.Single();
+
+        vm.OnListScrolled(atTop: false, nearEnd: false);
+        newest.Answer(false, Record(301));
+        Settle();
+        Assert.Equal(300, vm.Rows[0].Id);
+        Assert.Empty(_reader.Unanswered);
+
+        vm.OnListScrolled(atTop: true, nearEnd: false);
+        Settle();
+        Answer(false, Record(301));
+        Assert.Equal(301, vm.Rows[0].Id);
+    }
+
     [AvaloniaFact]
     public void The_selected_record_stays_selected_through_an_update()
     {

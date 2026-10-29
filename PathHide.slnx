@@ -3,6 +3,7 @@
     <Project Path="src/PathHide/PathHide.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/PathHide.RecordsDemo/PathHide.RecordsDemo.csproj" />
     <Project Path="tests/PathHide.Tests/PathHide.Tests.csproj" />
   </Folder>
 </Solution>
