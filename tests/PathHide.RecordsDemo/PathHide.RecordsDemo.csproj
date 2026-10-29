@@ -4,9 +4,12 @@
     <OutputType>Exe</OutputType>
     <ImplicitUsings>disable</ImplicitUsings>
     <IsPackable>false</IsPackable>
-    <IsPublishable>false</IsPublishable>
     <!-- The app is a WinExe; referencing it warns about the mismatch. -->
     <NoWarn>$(NoWarn);NU1702</NoWarn>
+    <!-- Avalonia.Native starts only in a bundle opened through Launch Services, so run.command publishes
+         the demo as its own bundle with the app's bundle assembly (Directory.Build.targets). -->
+    <RuntimeIdentifiers>osx-arm64</RuntimeIdentifiers>
+    <MacInfoPlist>$(MSBuildThisFileDirectory)Info.plist</MacInfoPlist>
   </PropertyGroup>
 
   <ItemGroup>
