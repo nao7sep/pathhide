@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
+using PathHide.Services;
 
 namespace PathHide.Storage;
 
@@ -56,17 +57,16 @@ public interface IRecordsReader
 }
 
 /// <summary>
-/// Reads <c>records.sqlite3</c> for one records window, which runs its reads one at a time. Each read
-/// opens a read-only connection on a pool thread, beside the logger's writing one, which the database's
-/// WAL journal lets run alongside it; the logger alone writes. A read its caller cancels is interrupted
-/// inside the database, so a superseded search over a large log stops at once.
+/// Reads <c>records.sqlite3</c> for one records window, which runs its reads one at a time. Each read is a
+/// command to the session log's writer thread, which owns the database's one connection and runs it in
+/// turn with the entries it writes (<see cref="SessionLogger.ReadAsync{T}"/>).
 /// </summary>
 /// <remarks>
 /// A read logs nothing, but for one warning per reader the first time a search skips damaged records:
 /// every record the database stores signals the records window to read again, so a read that logged
 /// each time would keep an open window reading forever. The caller reports a failed read.
 /// </remarks>
-public sealed class RecordsReader(string databasePath) : IRecordsReader
+public sealed class RecordsReader(SessionLogger owner) : IRecordsReader
 {
     public const int PageSize = 100;
 
@@ -87,44 +87,15 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
     public Task<IReadOnlyList<string>> ReadSessionsAsync(CancellationToken cancellationToken) =>
         Read(ReadSessions, cancellationToken);
 
-    private Task<T> Read<T>(Func<SqliteConnection, T> read, CancellationToken cancellationToken) => Task.Run(() =>
-    {
-        // Pooling off, so a read leaves no handle on the file behind it.
-        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
-        {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadOnly,
-            Pooling = false,
-        }.ToString());
-        connection.Open();
-        // Disposed before the connection, and waits for an interrupt already under way.
-        using var interrupt = cancellationToken.Register(() => SQLitePCL.raw.sqlite3_interrupt(connection.Handle));
-        cancellationToken.ThrowIfCancellationRequested();
-        try
-        {
-            using (var pragma = connection.CreateCommand())
-            {
-                pragma.CommandText = "PRAGMA busy_timeout = 5000;";
-                pragma.ExecuteNonQuery();
-            }
-            FormatVersions.CheckDatabase(connection, databasePath, FormatVersions.Records);
-            return read(connection);
-        }
-        catch (SqliteException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw new OperationCanceledException(cancellationToken);
-        }
-    }, cancellationToken);
+    private Task<T> Read<T>(Func<SqliteConnection, T> read, CancellationToken cancellationToken) =>
+        owner.ReadAsync((sink, token) => ((RecordsStore)sink).Read(read, token), cancellationToken);
 
     private RecordsPage ReadPage(SqliteConnection connection, RecordsQuery query)
     {
-        using var snapshot = connection.BeginTransaction(deferred: true);
         using var upper = connection.CreateCommand();
-        upper.Transaction = snapshot;
         upper.CommandText = "SELECT COALESCE(MAX(id), 0) FROM log_entries";
         var upperId = query.ThroughId ?? (long)upper.ExecuteScalar()!;
         using var command = connection.CreateCommand();
-        command.Transaction = snapshot;
         var where = new List<string> { "id <= $upper" };
         command.Parameters.AddWithValue("$upper", upperId);
         if (query.InsertedAfter is { } insertedAfter)
@@ -195,7 +166,7 @@ public sealed class RecordsReader(string databasePath) : IRecordsReader
         if (damaged > 0 && !_reportedDamaged)
         {
             _reportedDamaged = true;
-            PathHide.Services.Log.Warn("records: search skipped records whose details cannot be read", new { count = damaged });
+            Log.Warn("records: search skipped records whose details cannot be read", new { count = damaged });
         }
 
         var more = records.Count > PageSize;

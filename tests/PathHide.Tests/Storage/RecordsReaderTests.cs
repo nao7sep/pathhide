@@ -11,24 +11,27 @@ using Xunit;
 
 namespace PathHide.Tests.Storage;
 
-/// <summary>The records window's reads, against a real records database written by <see cref="RecordsStore"/>.</summary>
+/// <summary>
+/// The records window's reads, against a real records database written by <see cref="RecordsStore"/>,
+/// through the session logger that owns its connection, as in the app.
+/// </summary>
 [Collection(ProcessLogCollection.Name)]
 public sealed class RecordsReaderTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "pathhide-records-reader-tests", Guid.NewGuid().ToString("N"));
-    private readonly RecordsStore _store;
+    private readonly SessionLogger _owner;
     private readonly RecordsReader _reader;
 
     public RecordsReaderTests()
     {
-        var path = Path.Combine(_root, RecordsStore.FileName);
-        _store = RecordsStore.TryOpen(path, out var failure) ?? throw failure!;
-        _reader = new RecordsReader(path);
+        var store = RecordsStore.TryOpen(Path.Combine(_root, RecordsStore.FileName), out var failure) ?? throw failure!;
+        _owner = new SessionLogger(DateTimeOffset.UtcNow, store, null, debugEnabled: false, writeInBackground: true);
+        _reader = new RecordsReader(_owner);
     }
 
     public void Dispose()
     {
-        _store.Dispose();
+        _owner.Dispose();
         try { Directory.Delete(_root, recursive: true); }
         catch (IOException) { /* best-effort cleanup */ }
     }
@@ -38,7 +41,7 @@ public sealed class RecordsReaderTests : IDisposable
 
     private void Write(int second, string message, string level = "info", string session = "s1",
         JsonObject? fields = null, JsonObject? error = null) =>
-        _store.Write(new LogEntry(session, At(second), level, message, fields, error));
+        _owner.Import([new LogEntry(session, At(second), level, message, fields, error)]);
 
     private static RecordsQuery All(string search = "") => new(null, null, search, null);
 
@@ -200,13 +203,14 @@ public sealed class RecordsReaderTests : IDisposable
         Assert.Single((await _reader.ReadPageAsync(All(), TestContext.Current.CancellationToken)).Records);
     }
 
+    // A session whose records database did not open logs to its fallback file and has nothing to read.
     [Fact]
-    public async Task A_database_that_is_not_there_fails_the_read()
+    public async Task Without_a_records_database_the_read_fails()
     {
-        var missing = new RecordsReader(Path.Combine(_root, "missing", RecordsStore.FileName));
+        using var owner = new SessionLogger(DateTimeOffset.UtcNow, null, null, debugEnabled: false, writeInBackground: true);
 
-        await Assert.ThrowsAsync<SqliteException>(() => missing.ReadPageAsync(All(), TestContext.Current.CancellationToken));
-        Assert.False(File.Exists(Path.Combine(_root, "missing", RecordsStore.FileName)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new RecordsReader(owner).ReadPageAsync(All(), TestContext.Current.CancellationToken));
     }
 
     // The search matches what the detail pane shows, not the JSON escapes underneath it, without case
@@ -257,7 +261,8 @@ public sealed class RecordsReaderTests : IDisposable
         using var log = new StartupDiagnosticLog("records test: done");
         Write(1, "scan", fields: new JsonObject { ["path"] = "/findme" });
         Write(2, "scan", fields: new JsonObject { ["path"] = "/damaged" });
-        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + Path.Combine(_root, RecordsStore.FileName)))
+        await _reader.ReadSessionsAsync(TestContext.Current.CancellationToken); // the writes have landed
+        using (var connection = new SqliteConnection("Data Source=" + Path.Combine(_root, RecordsStore.FileName) + ";Pooling=False"))
         {
             connection.Open();
             using var damage = connection.CreateCommand();

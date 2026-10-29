@@ -44,18 +44,6 @@ public static class FormatVersions
             : null;
 
     /// <summary>
-    /// Refuses a database whose <c>PRAGMA user_version</c> records a version newer than
-    /// <paramref name="supported"/>.
-    /// </summary>
-    /// <exception cref="NewerFormatException">The database is newer than <paramref name="supported"/>.</exception>
-    internal static void CheckDatabase(SqliteConnection connection, string path, int supported)
-    {
-        var recorded = UserVersion(connection);
-        if (recorded > supported)
-            throw new NewerFormatException(path, (int)recorded, supported);
-    }
-
-    /// <summary>
     /// Opens the database at <paramref name="path"/>, creating it when absent, with one marker check. A
     /// database holding no schema objects is new: it receives <paramref name="schema"/> and its version
     /// in one transaction, so a failed initialization leaves an empty file that the next open
@@ -66,6 +54,7 @@ public static class FormatVersions
     /// One GUI per data root is the only writer of a store (<see cref="Services.SingleInstanceLease"/>),
     /// so creation needs no claim against a concurrent creator.
     /// </remarks>
+    /// <exception cref="NewerFormatException">The database records a version newer than <paramref name="supported"/>.</exception>
     internal static SqliteConnection OpenDatabase(string path, int supported, string schema)
     {
         var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -76,15 +65,12 @@ public static class FormatVersions
         }.ToString());
         try
         {
+            // No busy timeout: each database has one connection in the app, its owner's.
             connection.Open();
-            using (var command = connection.CreateCommand())
-            {
-                command.CommandText = "PRAGMA busy_timeout = 5000;";
-                command.ExecuteNonQuery();
-            }
-            var isNew = UserVersion(connection) == 0 && !HasSchema(connection);
-            if (!isNew)
-                CheckDatabase(connection, path, supported);
+            var recorded = UserVersion(connection);
+            var isNew = recorded == 0 && !HasSchema(connection);
+            if (recorded > supported)
+                throw new NewerFormatException(path, (int)recorded, supported);
             using (var transaction = connection.BeginTransaction())
             {
                 using var initialize = connection.CreateCommand();

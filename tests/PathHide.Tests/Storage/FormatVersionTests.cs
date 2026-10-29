@@ -322,7 +322,16 @@ public sealed class FormatVersionTests : IDisposable
         using (var store = RecordsStore.TryOpen(path, out var failure) ?? throw failure!)
             store.Write(new LogEntry("2026-10-05T00:00:00.000Z", "2026-10-05T00:00:00.000Z", "info", "kept", null, null));
         Assert.Equal(version, UserVersion(path));
-        Assert.Equal("kept", Assert.Single((await new RecordsReader(path).ReadPageAsync(new RecordsQuery(null, null, "", null), TestContext.Current.CancellationToken)).Records).Message);
+        Assert.Equal("kept", await ReadOnlyMessage(path));
+    }
+
+    /// <summary>The one record a records database holds, read through the store's owner as the app reads it.</summary>
+    private static async Task<string> ReadOnlyMessage(string path)
+    {
+        using var owner = new SessionLogger(DateTimeOffset.UtcNow, RecordsStore.TryOpen(path, out var failure) ?? throw failure!,
+            null, debugEnabled: false, writeInBackground: true);
+        var page = await new RecordsReader(owner).ReadPageAsync(new RecordsQuery(null, null, "", null), TestContext.Current.CancellationToken);
+        return Assert.Single(page.Records).Message;
     }
 
     [Fact]
@@ -333,18 +342,17 @@ public sealed class FormatVersionTests : IDisposable
             store.Write(new PathHide.Services.LogEntry("2026-10-05T00:00:00.000Z", "2026-10-05T00:00:00.000Z", "info", "kept", null, null));
 
         Assert.Equal(FormatVersions.Records, UserVersion(path));
-        Assert.Equal("kept", Assert.Single((await new RecordsReader(path).ReadPageAsync(new RecordsQuery(null, null, "", null), TestContext.Current.CancellationToken)).Records).Message);
+        Assert.Equal("kept", await ReadOnlyMessage(path));
     }
 
     [Fact]
-    public async Task Records_Newer_AreRefusedAndLeftByteIdentical()
+    public void Records_Newer_AreRefusedAndLeftByteIdentical()
     {
         var path = PathOf(RecordsStore.FileName);
         CreateDatabase(path, userVersion: 2);
         var bytes = File.ReadAllBytes(path);
 
         var store = RecordsStore.TryOpen(path, out var failure);
-        await Assert.ThrowsAsync<NewerFormatException>(() => new RecordsReader(path).ReadSessionsAsync(TestContext.Current.CancellationToken));
 
         Assert.Null(store);
         Assert.Equal(2, Assert.IsType<NewerFormatException>(failure).Version);

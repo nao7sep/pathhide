@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using System.IO;
 using System.Security.Cryptography;
@@ -27,9 +26,8 @@ namespace PathHide.Backup;
 /// <para>Recording is best effort, including latency. <see cref="Record"/> only queues: one writer task at
 /// a time owns the connection and applies pending writes on its own thread, so a locked, slow or broken
 /// store can neither delay nor fail the save that already landed, and a failure is logged and
-/// swallowed. Pending writes are kept per path, newest only: a session keeps one row per path, so an
-/// intermediate version would be replaced anyway, and the pending set stays as small as the protected
-/// files. A crash or forced exit may omit the session's latest version while the file itself stays
+/// swallowed. Pending writes are applied in save order, one per save, so an earlier write never replaces
+/// a later one. A crash or forced exit may omit the session's latest version while the file itself stays
 /// saved.</para>
 ///
 /// <para>A successful record logs nothing; a line per save would flood the log.</para>
@@ -55,11 +53,11 @@ CREATE INDEX IF NOT EXISTS idx_backups_path_id ON backups (path, id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_path_session ON backups (path, session_id);
 ";
 
-    private readonly record struct PendingWrite(byte[] Bytes, DateTimeOffset WrittenAt);
+    private readonly record struct PendingWrite(string Path, byte[] Bytes, DateTimeOffset WrittenAt);
 
     // Guards the pending writes and whether a writer task is running; never held during I/O.
     private static readonly object PendingGate = new();
-    private static readonly Dictionary<string, PendingWrite> Pending = new(StringComparer.Ordinal);
+    private static readonly Queue<PendingWrite> Pending = new();
     private static bool _writing;
     private static Task _writer = Task.CompletedTask;
 
@@ -90,10 +88,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_path_session ON backups (path, ses
     /// </summary>
     public static void Record(string absolutePath, byte[] bytes)
     {
-        var write = new PendingWrite(bytes, DateTimeOffset.UtcNow);
+        var write = new PendingWrite(absolutePath, bytes, DateTimeOffset.UtcNow);
         lock (PendingGate)
         {
-            Pending[absolutePath] = write;
+            Pending.Enqueue(write);
             if (_writing)
                 return;
             _writing = true;
@@ -101,7 +99,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_path_session ON backups (path, ses
         }
     }
 
-    /// <summary>Whether ordinary window close still owes the history writer its bounded wait.</summary>
+    /// <summary>Whether ordinary window close still owes the history writer its wait within the exit deadline.</summary>
     public static bool HasPendingWrites
     {
         get
@@ -112,8 +110,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_path_session ON backups (path, ses
     }
 
     /// <summary>
-    /// Waits up to <paramref name="bound"/> for the pending writes, for an ordinary quit. Whatever is still
-    /// pending at the bound is left to the exiting process, with one warning. Never throws.
+    /// Waits up to <paramref name="bound"/>, what remains of the quit's exit deadline, for the pending
+    /// writes, for an ordinary quit. Whatever is still pending then is left to the exiting process, with
+    /// one warning. Never throws.
     /// </summary>
     public static async Task FlushAsync(TimeSpan bound, TimeProvider clock)
     {
@@ -134,30 +133,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_path_session ON backups (path, ses
     {
         while (true)
         {
-            string path;
             PendingWrite write;
             lock (PendingGate)
             {
-                if (Pending.Count == 0)
+                if (!Pending.TryDequeue(out write))
                 {
                     _writing = false;
                     return;
                 }
-                (path, write) = Pending.First();
-                Pending.Remove(path);
             }
-            Write(path, write);
+            Write(write);
         }
     }
 
     /// <summary>
-    /// Records one write as this session's row for <paramref name="path"/>: inserted by the session's first
+    /// Records one write as this session's row for its path: inserted by the session's first
     /// save of the path, replaced by later ones. Content equal to the path's latest row writes nothing, so a
     /// session whose first save repeats an earlier session's last version adds no row. Rows of earlier
     /// sessions are never changed.
     /// </summary>
-    private static void Write(string path, PendingWrite write)
+    private static void Write(PendingWrite write)
     {
+        var path = write.Path;
         try
         {
             var connection = EnsureOpen();

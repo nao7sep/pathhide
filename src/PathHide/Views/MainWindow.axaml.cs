@@ -44,8 +44,7 @@ public partial class MainWindow : Window
     private bool _pickerOpen;
 
     /// <summary>Where the records window reads; tests replace it.</summary>
-    internal Func<IRecordsReader> RecordsReader { get; set; } =
-        () => new RecordsReader(StorageRoot.RecordsFile);
+    internal Func<IRecordsReader> RecordsReader { get; set; } = Log.CreateRecordsReader;
 
     private MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
 
@@ -120,6 +119,9 @@ public partial class MainWindow : Window
         {
             _closed = true;
             Localizer.Changed -= OnLanguageChanged;
+            // The session log's drain, the last step of the exit, gets what remains of the quit's deadline.
+            if (DataContext is MainWindowViewModel vm)
+                Log.DrainWithin(vm.ExitRemaining());
             // Closing this window ends the app, and every other window goes with it
             // (window-conventions); Records goes here rather than waiting on the lifetime's shutdown.
             _recordsWindow?.Close();

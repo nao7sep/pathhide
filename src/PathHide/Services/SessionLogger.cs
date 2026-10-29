@@ -31,18 +31,12 @@ public sealed class SessionLogger : IDisposable
         Converters = { new JsonStringEnumConverter() },
     };
 
-    // How long closing waits for the queued entries, inside the exit. After the window has gone, an
-    // ordinary quit can afford it; when the OS is ending the session the quit has already spent its
-    // bound, so the drain gets only a moment. A sink that misses it loses the entries still queued
-    // (logging-conventions: a stalled sink may lose recent diagnostics at exit).
-    internal static readonly TimeSpan DrainBound = TimeSpan.FromSeconds(5);
-    internal static readonly TimeSpan SessionEndDrainBound = TimeSpan.FromSeconds(1);
-
     private readonly DateTimeOffset _sessionStart;
     private readonly string _session;
     private readonly ILogSink? _sink;
     private readonly string? _fallbackDirectory;
-    private readonly BlockingCollection<LogEntry>? _queue;
+    // The writer's commands, in order: each entry's write, and each read a records window sends.
+    private readonly BlockingCollection<Action>? _queue;
     private readonly Thread? _writer;
     // Orders the writes of a logger without a writer thread, whose callers write on their own threads.
     private readonly object _writeGate = new();
@@ -55,7 +49,7 @@ public sealed class SessionLogger : IDisposable
     /// no sink, is appended to the session's file under <paramref name="fallbackDirectory"/>, and goes to
     /// the console when that fails too or there is none. When <paramref name="debugEnabled"/> is false,
     /// <c>debug</c> calls are dropped. When <paramref name="writeInBackground"/> is true, entries are
-    /// written in order by the logger's own thread, and closing waits a bounded time for them.
+    /// written in order by the logger's own thread, which also runs the sink's reads in turn with them.
     /// <paramref name="stored"/> is called, on the thread that wrote it, after each entry the sink took;
     /// an entry that went to the fallback file calls nothing.
     /// </summary>
@@ -76,7 +70,7 @@ public sealed class SessionLogger : IDisposable
 
         if (writeInBackground)
         {
-            _queue = new BlockingCollection<LogEntry>();
+            _queue = new BlockingCollection<Action>();
             // A background thread, so a sink that never returns cannot keep the process alive.
             _writer = new Thread(WriteQueued) { IsBackground = true, Name = "PathHide log writer" };
             _writer.Start();
@@ -132,8 +126,36 @@ public sealed class SessionLogger : IDisposable
             Submit(entry);
     }
 
-    /// <summary>Writes what is queued, within the bound, and closes the sink.</summary>
-    public void Dispose() => Close(DrainBound);
+    /// <summary>Writes what is queued and closes the sink.</summary>
+    public void Dispose() => Close(Timeout.InfiniteTimeSpan);
+
+    /// <summary>
+    /// Runs <paramref name="read"/> against the sink on the writer thread, in turn with the entries, so the
+    /// sink's one connection serves the records window too. A read its caller cancelled before its turn
+    /// does not run; the read itself stops on <paramref name="cancellationToken"/> once it runs.
+    /// </summary>
+    internal Task<T> ReadAsync<T>(Func<ILogSink, CancellationToken, T> read, CancellationToken cancellationToken)
+    {
+        var result = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _queue!.Add(() =>
+        {
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                result.SetResult(read(_sink ?? throw new InvalidOperationException("This session has no sink to read."),
+                    cancellationToken));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                result.SetCanceled(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                result.SetException(ex);
+            }
+        });
+        return result.Task;
+    }
 
     /// <summary>
     /// Closes the logger, waiting at most <paramref name="drainBound"/> for the queued entries. A sink still
@@ -179,7 +201,7 @@ public sealed class SessionLogger : IDisposable
 
         try
         {
-            _queue.Add(entry);
+            _queue.Add(() => Write(entry));
         }
         catch (InvalidOperationException)
         {
@@ -192,8 +214,8 @@ public sealed class SessionLogger : IDisposable
     {
         try
         {
-            foreach (var entry in _queue!.GetConsumingEnumerable())
-                Write(entry);
+            foreach (var command in _queue!.GetConsumingEnumerable())
+                command();
         }
         finally { CloseSink(); }
     }

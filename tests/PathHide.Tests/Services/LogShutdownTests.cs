@@ -37,16 +37,21 @@ public sealed class LogShutdownTests
         }
     }
 
+    // The drain waits for the queue until a quit hands it what remains of the exit deadline, and then
+    // never past it, a session end included.
     [Fact]
-    public void The_drain_is_shorter_when_the_os_ends_the_session()
+    public void The_drain_draws_on_what_remains_of_the_exit_deadline()
     {
         var logs = Directory.CreateTempSubdirectory("pathhide-log-drain-").FullName;
         try
         {
             Log.Start(null, logs);
-            Assert.Equal(SessionLogger.DrainBound, Log.DrainBound);
+            Assert.Equal(System.Threading.Timeout.InfiniteTimeSpan, Log.DrainBound);
             Log.EndingSession();
-            Assert.Equal(SessionLogger.SessionEndDrainBound, Log.DrainBound);
+            Log.DrainWithin(TimeSpan.FromSeconds(2));
+            Assert.InRange(Log.DrainBound, TimeSpan.Zero, TimeSpan.FromSeconds(2));
+            Log.DrainWithin(TimeSpan.Zero);
+            Assert.Equal(TimeSpan.Zero, Log.DrainBound);
         }
         finally
         {

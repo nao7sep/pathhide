@@ -253,7 +253,7 @@ public sealed class BackupStoreTests : IDisposable
         Assert.Equal(0L, check.ExecuteScalar());
     }
 
-    /// <summary>Holds SQLite's write lock on the store from another connection, as a stalled store would.</summary>
+    /// <summary>Holds SQLite's write lock on the store from another program's connection.</summary>
     private SqliteConnection HoldWriteLock()
     {
         var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -280,23 +280,31 @@ public sealed class BackupStoreTests : IDisposable
     }
 
     [Fact]
-    public void Save_CompletesWhileTheHistoryIsStalled_AndTheHistoryCatchesUpAfterwards()
+    public void Save_CompletesWhenTheHistoryCannotTakeTheWrite()
     {
-        // The save's return while another connection still holds the store's write lock shows it did not
-        // wait for the history; the row landing after release shows the write was kept, not dropped.
+        // Another program holding the store's write lock fails the history's write at once; the save
+        // still lands, and the history keeps the version it had.
         var store = new PathListStore();
         store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Shown }]);
+        var first = File.ReadAllBytes(PathOf("paths.json"));
         BackupStore.Close();
         var holder = HoldWriteLock();
+        try
+        {
+            store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
+            BackupStore.Close();
+        }
+        finally
+        {
+            Release(holder);
+        }
 
-        store.Save([new PathEntry { Path = "/a", DesiredVisibility = DesiredVisibility.Hidden }]);
-        Release(holder);
-
-        Assert.Equal(File.ReadAllBytes(PathOf("paths.json")), Assert.Single(RowsFor(PathOf("paths.json"))).Content);
+        Assert.Contains("\"hidden\"", File.ReadAllText(PathOf("paths.json")));
+        Assert.Equal(first, Assert.Single(RowsFor(PathOf("paths.json"))).Content);
     }
 
     [Fact]
-    public async Task Hide_AppliesAttributesWhileTheHistoryIsStalled()
+    public async Task Hide_AppliesAttributesWhenTheHistoryCannotTakeTheWrite()
     {
         var visibility = new FakeVisibilityService();
         var settings = new FakeSettingsStore();
@@ -306,6 +314,7 @@ public sealed class BackupStoreTests : IDisposable
         await vm.AddPathsCommand.ExecuteAsync(new[] { "/a" });
         await vm.ScanTask;
         BackupStore.Close();
+        var before = Assert.Single(ReadRows(PathOf("paths.json"))).Content;
         var holder = HoldWriteLock();
         try
         {
@@ -314,12 +323,13 @@ public sealed class BackupStoreTests : IDisposable
 
             Assert.Contains("/a", visibility.Hidden);
             Assert.Contains("\"hidden\"", File.ReadAllText(PathOf("paths.json")));
+            BackupStore.Close();
         }
         finally
         {
             Release(holder);
         }
-        Assert.Contains("\"hidden\"", Encoding.UTF8.GetString(Assert.Single(RowsFor(PathOf("paths.json"))).Content));
+        Assert.Equal(before, Assert.Single(RowsFor(PathOf("paths.json"))).Content);
     }
 
     [Fact]
@@ -327,34 +337,11 @@ public sealed class BackupStoreTests : IDisposable
     {
         BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
         BackupStore.Close();
-        var holder = HoldWriteLock();
         BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("second"));
 
-        var flush = BackupStore.FlushAsync(TimeSpan.FromHours(1), TimeProvider.System);
-        Release(holder);
-        await flush;
+        await BackupStore.FlushAsync(TimeSpan.FromHours(1), TimeProvider.System);
 
         Assert.Equal("second", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
-    }
-
-    [Fact]
-    public async Task Flush_WithNoTimeLeft_ReturnsWithoutWaiting()
-    {
-        BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
-        BackupStore.Close();
-        var holder = HoldWriteLock();
-        try
-        {
-            BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("second"));
-
-            await BackupStore.FlushAsync(TimeSpan.Zero, TimeProvider.System);
-
-            Assert.Equal("first", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
-        }
-        finally
-        {
-            Release(holder);
-        }
     }
 
     private static MainWindowViewModel QuittingViewModel()
@@ -374,34 +361,10 @@ public sealed class BackupStoreTests : IDisposable
     {
         BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
         BackupStore.Close();
-        var holder = HoldWriteLock();
         BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("second"));
 
-        var quit = QuittingViewModel().QuitAsync();
-        Release(holder);
-
-        Assert.True(await quit);
+        Assert.True(await QuittingViewModel().QuitAsync());
         Assert.Equal("second", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
-    }
-
-    [Fact]
-    public async Task SessionEnd_DoesNotWaitForPendingHistory()
-    {
-        BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("first"));
-        BackupStore.Close();
-        var holder = HoldWriteLock();
-        try
-        {
-            BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("second"));
-
-            await QuittingViewModel().EndSessionAsync();
-
-            Assert.Equal("first", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
-        }
-        finally
-        {
-            Release(holder);
-        }
     }
 
     [AvaloniaFact]
@@ -416,21 +379,10 @@ public sealed class BackupStoreTests : IDisposable
         window.Show();
         await vm.ScanTask;
         Assert.False(vm.HasWorkToFinish);
-        var holder = HoldWriteLock();
-        try
-        {
-            BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("second"));
-            Assert.False(vm.IsBusy);
-            window.Close();
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(closed.Task.IsCompleted);
-        }
-        finally
-        {
-            Release(holder);
-            window.Close();
-            await closed.Task;
-        }
+        BackupStore.Record(PathOf("config.json"), Encoding.UTF8.GetBytes("second"));
+        Assert.False(vm.IsBusy);
+        window.Close();
+        await closed.Task;
         Assert.Equal("second", Encoding.UTF8.GetString(Assert.Single(ReadRows(PathOf("config.json"))).Content));
     }
 

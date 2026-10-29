@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using Microsoft.Data.Sqlite;
 using PathHide.Services;
 
@@ -8,8 +9,9 @@ namespace PathHide.Storage;
 /// <summary>
 /// The records database, <c>records.sqlite3</c> under the storage root (data-lifecycle conventions,
 /// <em>Records</em>). PathHide's only records are log entries, each a row with its session; the app
-/// process alone opens it, and the elevated child's entries reach it through the app. The records
-/// window reads it through <see cref="RecordsReader"/>.
+/// process alone opens it, and the elevated child's entries reach it through the app. Its one connection
+/// belongs to the session log's writer thread, which also runs the records window's reads
+/// (<see cref="RecordsReader"/>).
 /// </summary>
 public sealed class RecordsStore : ILogSink
 {
@@ -34,7 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_log_entries_session_id ON log_entries (session, i
 CREATE INDEX IF NOT EXISTS idx_log_entries_time_id ON log_entries (time, id);
 ";
 
-    // Used only under the owning SessionLogger's lock.
+    // Used only on the owning SessionLogger's writer thread.
     private readonly SqliteConnection _connection;
 
     private RecordsStore(SqliteConnection connection) => _connection = connection;
@@ -79,6 +81,25 @@ CREATE INDEX IF NOT EXISTS idx_log_entries_time_id ON log_entries (time, id);
         insert.Parameters.AddWithValue("$fields", (object?)LogEntry.ToText(entry.Fields) ?? DBNull.Value);
         insert.Parameters.AddWithValue("$error", (object?)LogEntry.ToText(entry.Error) ?? DBNull.Value);
         insert.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Runs <paramref name="read"/> on the connection. Cancelling it interrupts the read inside the
+    /// database, so a superseded search over a large log stops at once.
+    /// </summary>
+    internal T Read<T>(Func<SqliteConnection, T> read, CancellationToken cancellationToken)
+    {
+        // Disposed before the next command starts, and waits for an interrupt already under way; an
+        // interrupt arriving after the read's statements ended does not reach the next one.
+        using var interrupt = cancellationToken.Register(() => SQLitePCL.raw.sqlite3_interrupt(_connection.Handle));
+        try
+        {
+            return read(_connection);
+        }
+        catch (SqliteException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
     }
 
     public void Dispose() => _connection.Dispose();

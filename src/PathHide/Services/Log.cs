@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
+using PathHide.Storage;
 
 namespace PathHide.Services;
 
@@ -27,6 +29,9 @@ public static class Log
     private static bool _started;
     private static bool _hooksInstalled;
     private static volatile bool _sessionEnding;
+    // When the quit's exit deadline ends, once the quit has handed it over; until then the drain waits for
+    // the queue, as local storage gets no timeout.
+    private static long? _drainDeadline;
 
     /// <summary>Whether developer-only <c>debug</c> events are being written.</summary>
     public static bool DebugEnabled => _logger.DebugEnabled;
@@ -68,6 +73,7 @@ public static class Log
             {
                 _started = true;
                 _sessionEnding = false;
+                _drainDeadline = null;
                 InstallCrashHooks();
                 previous = _logger;
                 _logger = new SessionLogger(session ?? SessionStart, sink, logsDirectory, IsDebugEnabled(), writeInBackground: true,
@@ -77,12 +83,15 @@ public static class Log
         previous.Dispose();
     }
 
-    /// <summary>
-    /// Records that the operating system is ending the session, so <see cref="Shutdown"/> gives the
-    /// queued entries only <see cref="SessionLogger.SessionEndDrainBound"/>: logging must not hold up a
-    /// logout or restart past the quit's own bound (logging-conventions).
-    /// </summary>
+    /// <summary>Records that the operating system is ending the session, for the shutdown record.</summary>
     public static void EndingSession() => _sessionEnding = true;
+
+    /// <summary>
+    /// Hands <see cref="Shutdown"/> what remains of the quit's one exit deadline, so the queued entries
+    /// never hold the exit, or a logout or restart, past it (logging-conventions).
+    /// </summary>
+    public static void DrainWithin(TimeSpan remaining) =>
+        _drainDeadline = Environment.TickCount64 + (long)remaining.TotalMilliseconds;
 
     /// <summary>
     /// Why this launch is ending, for its shutdown record: a fatal failure when it did not end cleanly,
@@ -91,8 +100,9 @@ public static class Log
     public static string ExitReason(bool clean) => !clean ? "fatal" : _sessionEnding ? "session end" : "quit";
 
     /// <summary>
-    /// Writes the queued entries, within a bound, and closes the session's sink. Idempotent. Late events
-    /// that arrive after shutdown fall back to the console rather than being lost.
+    /// Writes the queued entries, within what remains of the exit deadline once a quit has handed it over,
+    /// and closes the session's sink. Idempotent. Late events that arrive after shutdown fall back to the
+    /// console rather than being lost.
     /// </summary>
     public static void Shutdown()
     {
@@ -109,8 +119,13 @@ public static class Log
         previous.Close(DrainBound);
     }
 
-    /// <summary>How long shutdown waits for the queued entries: shorter when the OS is ending the session.</summary>
-    internal static TimeSpan DrainBound => _sessionEnding ? SessionLogger.SessionEndDrainBound : SessionLogger.DrainBound;
+    /// <summary>How long shutdown waits for the queued entries: what remains of the exit deadline, or until they are written.</summary>
+    internal static TimeSpan DrainBound => _drainDeadline is { } deadline
+        ? TimeSpan.FromMilliseconds(Math.Max(0, deadline - Environment.TickCount64))
+        : Timeout.InfiniteTimeSpan;
+
+    /// <summary>A reader for a records window, whose reads run on this session's writer, in turn with the entries.</summary>
+    public static RecordsReader CreateRecordsReader() => new(_logger);
 
     /// <summary>Writes entries another process logged and handed back, as it logged them.</summary>
     public static void Import(IEnumerable<LogEntry> entries) => _logger.Import(entries);

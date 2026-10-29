@@ -196,9 +196,10 @@ public partial class MainWindowViewModel : ObservableObject
     internal IElevatedApplicator? ElevatedApplicator { get; init; }
 
     /// <summary>
-    /// How long a quit waits, in all, for a running command, the user's saves, pending backup history and
-    /// an elevated child. After it come each window's placement save, then, once the window has gone,
-    /// the session log's drain, which draws on the same exit (unsaved-edits-conventions, Quitting).
+    /// The quit's one exit deadline: how long it waits, in all, for a running command, the user's saves,
+    /// pending backup history and an elevated child. After it come each window's placement save, then,
+    /// once the window has gone, the session log's drain, which draws on what remains of it
+    /// (<see cref="ExitRemaining"/>; unsaved-edits-conventions, Quitting).
     /// </summary>
     internal TimeSpan ShutdownBound { get; init; } = TimeSpan.FromSeconds(3);
 
@@ -1066,6 +1067,9 @@ public partial class MainWindowViewModel : ObservableObject
     // start until the app exits or the user calls the quit off.
     private Task<bool>? _shutdown;
 
+    // When the quit's current round began: the start of the one exit deadline.
+    private long? _exitStarted;
+
     private bool _sessionEnding;
 
     // Each save of the user's that failed while a quit waited, kept with what to tell the user so Retry
@@ -1180,21 +1184,28 @@ public partial class MainWindowViewModel : ObservableObject
             Log.Error("shutdown: the session ended with the user's changes unsaved", UnsavedAtQuitFields());
     }
 
+    /// <summary>
+    /// What remains of the quit's one exit deadline, which each of its steps draws on, the session log's
+    /// drain last: all of <see cref="ShutdownBound"/> when the quit had nothing to wait for.
+    /// </summary>
+    internal TimeSpan ExitRemaining()
+    {
+        if (_exitStarted is not { } started)
+            return ShutdownBound;
+        var left = ShutdownBound - Clock.GetElapsedTime(started);
+        return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+    }
+
     private async Task<bool> ShutdownCoreAsync()
     {
-        var started = Clock.GetTimestamp();
-        TimeSpan Remaining()
-        {
-            var left = ShutdownBound - Clock.GetElapsedTime(started);
-            return left > TimeSpan.Zero ? left : TimeSpan.Zero;
-        }
+        _exitStarted = Clock.GetTimestamp();
 
         // Whether the save ended within what remains of the bound; a failed save has logged itself.
         async Task<bool> EndedAsync(Task save)
         {
             try
             {
-                await save.WaitAsync(Remaining(), Clock);
+                await save.WaitAsync(ExitRemaining(), Clock);
             }
             catch (TimeoutException)
             {
@@ -1216,7 +1227,7 @@ public partial class MainWindowViewModel : ObservableObject
         var hasTurn = false;
         try
         {
-            using (var turn = new CancellationTokenSource(Remaining(), Clock))
+            using (var turn = new CancellationTokenSource(ExitRemaining(), Clock))
             {
                 try
                 {
@@ -1244,10 +1255,10 @@ public partial class MainWindowViewModel : ObservableObject
             // Backup history is best effort: an ordinary quit gives pending history what remains of the
             // bound, and the end of the OS session does not wait for it (data-backup-conventions).
             if (!_sessionEnding)
-                await BackupStore.FlushAsync(Remaining(), Clock);
+                await BackupStore.FlushAsync(ExitRemaining(), Clock);
 
             if (ElevatedApplicator is { } elevated)
-                await elevated.ReleaseAsync(Remaining());
+                await elevated.ReleaseAsync(ExitRemaining());
 
             return _unsavedAtQuit.Count == 0;
         }
