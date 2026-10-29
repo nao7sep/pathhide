@@ -65,7 +65,8 @@ public static class FormatVersions
         }.ToString());
         try
         {
-            // No busy timeout: each database has one connection in the app, its owner's.
+            // No busy timeout of the app's own: each database has one connection in the app, its owner's,
+            // and the provider's default retry of a busy command stays as the library sets it.
             connection.Open();
             var recorded = UserVersion(connection);
             var isNew = recorded == 0 && !HasSchema(connection);
