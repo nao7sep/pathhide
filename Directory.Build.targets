@@ -29,8 +29,6 @@
       <_MacExecDir>$(_MacContents)/MacOS</_MacExecDir>
       <_MacResDir>$(_MacContents)/Resources</_MacResDir>
       <_PublishRoot>$([System.IO.Path]::GetFullPath('$(PublishDir)'))</_PublishRoot>
-      <!-- A development tool bundled the same way names its own identity and executable. -->
-      <MacInfoPlist Condition="'$(MacInfoPlist)' == ''">$(MSBuildThisFileDirectory)macOS/Info.plist</MacInfoPlist>
     </PropertyGroup>
 
     <!-- Capture the loose publish output before the bundle directory is created.
@@ -45,7 +43,7 @@
     <Move SourceFiles="@(_PublishedFile)"
           DestinationFiles="@(_PublishedFile->'$(_MacExecDir)/%(RecursiveDir)%(Filename)%(Extension)')" />
 
-    <Copy SourceFiles="$(MacInfoPlist)"
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)macOS/Info.plist"
           DestinationFiles="$(_MacContents)/Info.plist" />
     <!-- The permission prompts macOS shows for protected folders and volumes come from these, in
          the language macOS settles on for the app from CFBundleLocalizations. -->

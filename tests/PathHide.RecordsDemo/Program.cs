@@ -15,7 +15,8 @@ using PathHide.Views;
 // top and they appear. Quitting PathHide (its menu, Cmd+Q, the Dock or the launchers) ends the demo and
 // deletes the folder. The developer's own data is never touched.
 //
-// Run from the repository root:  tests/PathHide.RecordsDemo/run.command
+// Run from the repository root, with the display awake (Avalonia cannot start while every display
+// sleeps):  dotnet run --project tests/PathHide.RecordsDemo
 
 const int Seeded = 10_000;
 var root = Directory.CreateTempSubdirectory("pathhide-records-demo-").FullName;
@@ -43,8 +44,9 @@ using var arrivals = new Timer(_ =>
         Log.Info("demo: live record", new { count });
 }, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(350));
 
-// The app's own startup shows its main window over the throwaway folder; the Records window opens beside
-// it. On macOS a quit ends the process as the lifetime exits, so the folder goes there.
+// The app's own startup and lifetime, so its main window shows over the throwaway folder, the Records
+// window opens beside it, and a quit from the menu, the Dock or the main window's close reaches the
+// lifetime's exit, where the folder goes; without a lifetime, a quit ends the process before any cleanup.
 // As the app builds itself (PathHide's Program.BuildAvaloniaApp), its own macOS menu bar in place of Avalonia's.
 return AppBuilder.Configure<App>().UsePlatformDetect().With(new MacOSPlatformOptions { DisableNativeMenus = true }).WithInterFont()
     .StartWithClassicDesktopLifetime(args, lifetime =>
