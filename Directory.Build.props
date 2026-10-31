@@ -14,7 +14,7 @@
     <Company>$(Authors)</Company>
     <Product>PathHide</Product>
     <Copyright>Copyright © 2026 $(Authors)</Copyright>
-    <Version>0.1.0</Version>
+    <Version>1.0.0</Version>
     <!-- One Avalonia release for the app and its headless tests; DataGrid ships on its own schedule. -->
     <AvaloniaVersion>12.1.4</AvaloniaVersion>
   </PropertyGroup>
