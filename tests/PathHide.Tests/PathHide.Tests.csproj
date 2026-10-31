@@ -11,6 +11,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Code coverage: coverlet.collector (the cross-platform .NET standard), run as
+         a VSTest data collector with the "XPlat Code Coverage" collector (cobertura;
+         see the tests-folder convention for the command). The MTP-native
+         Microsoft.Testing.Extensions.CodeCoverage was incompatible with the
+         Microsoft.Testing.Platform version that xunit.v3 3.2.2 pins, so Coverlet is
+         used instead. -->
     <PackageReference Include="coverlet.collector" Version="10.1.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
