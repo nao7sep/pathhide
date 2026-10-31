@@ -70,7 +70,7 @@ public sealed class JsonStoreTests : IDisposable
 
     [Theory]
     [InlineData("{\"paths\":[],\"paths\":[]}")]
-    [InlineData("{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":2},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"paths\":[]}")]
+    [InlineData("{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":2},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"paths\":[]}")]
     [InlineData("{\"paths\":[{\"path\":\"/a\",\"path\":\"/b\",\"desiredVisibility\":\"hidden\"}]}")]
     [InlineData("{\"paths\":[{\"path\":\"/a\",\"desiredVisibility\":\"hidden\",\"desiredVisibility\":\"shown\"}]}")]
     [InlineData("{\"paths\":[{\"path\":\"/a\",\"desiredVisibility\":\"hidden\",\"systemSetByPathHide\":false,\"systemSetByPathHide\":true}]}")]
@@ -154,7 +154,7 @@ public sealed class JsonStoreTests : IDisposable
     [Fact]
     public void Load_NewerConfig_GivesDefaultsButRefusesReplacement()
     {
-        const string newer = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"config\",\"version\":2},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"theme\":\"dark\"}";
+        const string newer = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"config\",\"version\":2},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"theme\":\"dark\"}";
         File.WriteAllText(PathOf("config.json"), newer);
         var store = SettingsDocumentStore();
 
@@ -186,7 +186,7 @@ public sealed class JsonStoreTests : IDisposable
     public void Save_InaccessibleState_ReplacesItWhenTheDirectoryIsWritable()
     {
         var path = PathOf("state.json");
-        File.WriteAllText(path, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"state\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"windowWidth\":700}");
+        File.WriteAllText(path, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"state\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"windowWidth\":700}");
         var mode = File.GetUnixFileMode(path);
         File.SetUnixFileMode(path, UnixFileMode.None);
         var store = new JsonStore<AppState>("state.json", "state", FileFormats.State, recordBackup: false);
@@ -208,7 +208,7 @@ public sealed class JsonStoreTests : IDisposable
     public void Load_InaccessibleConfig_GivesDefaultsAndLeavesTheFileAlone()
     {
         var path = PathOf("config.json");
-        File.WriteAllText(path, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"config\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"theme\":\"dark\"}");
+        File.WriteAllText(path, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"config\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"theme\":\"dark\"}");
         var mode = File.GetUnixFileMode(path);
         File.SetUnixFileMode(path, UnixFileMode.None);
         try
@@ -230,7 +230,7 @@ public sealed class JsonStoreTests : IDisposable
     public void Load_InaccessiblePathList_HaltsAsAnAccessFailureAndLeavesTheFileAlone()
     {
         var path = PathOf("paths.json");
-        const string content = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"paths\":[]}";
+        const string content = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"paths\":[]}";
         File.WriteAllText(path, content);
         var mode = File.GetUnixFileMode(path);
         File.SetUnixFileMode(path, UnixFileMode.None);
@@ -256,7 +256,7 @@ public sealed class JsonStoreTests : IDisposable
     public void Load_PathListThatCannotBeLookedAt_HaltsRatherThanStartingEmpty()
     {
         var path = PathOf("paths.json");
-        const string content = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"paths\":[{\"path\":\"/a\",\"desiredVisibility\":\"hidden\"}]}";
+        const string content = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"paths\":[{\"path\":\"/a\",\"desiredVisibility\":\"hidden\"}]}";
         File.WriteAllText(path, content);
         var mode = File.GetUnixFileMode(_root);
         File.SetUnixFileMode(_root, UnixFileMode.UserRead | UnixFileMode.UserWrite);
@@ -291,7 +291,7 @@ public sealed class JsonStoreTests : IDisposable
         Assert.False(loaded.Single(entry => entry.Path == "/theirs").SystemSetByPathHide);
 
         File.WriteAllText(PathOf("paths.json"),
-            "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"paths\":[{\"path\":\"/old\",\"desiredVisibility\":\"hidden\"}]}");
+            "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"paths\":[{\"path\":\"/old\",\"desiredVisibility\":\"hidden\"}]}");
         Assert.Null(Assert.Single(new PathListStore().Load().Value).SystemSetByPathHide);
     }
 
@@ -423,9 +423,9 @@ public sealed class JsonStoreTests : IDisposable
     public void Startup_removes_scratch_an_interrupted_save_left_and_nothing_else()
     {
         var left = JsonStore<AppState>.TempPath(PathOf("paths.json"), StoreScratch.NewDiscriminator());
-        File.WriteAllText(left, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"paths\":[]}");
+        File.WriteAllText(left, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"paths\":[]}");
         File.WriteAllText(PathOf("notes.tmp"), "the user's own");
-        File.WriteAllText(PathOf("paths.json"), "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"paths\":[]}");
+        File.WriteAllText(PathOf("paths.json"), "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"paths\":[]}");
 
         App.ReadStartupStores();
 

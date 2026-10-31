@@ -64,7 +64,7 @@ public sealed class WindowsStoreRecoveryTests : IDisposable
     [WindowsOnlyFact]
     public void UnreadableConfig_UsesDefaultsAndAChangedSaveReplacesIt()
     {
-        var path = DenyReading(AppSettings.FileName, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"config\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"theme\":\"dark\"}");
+        var path = DenyReading(AppSettings.FileName, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"config\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"theme\":\"dark\"}");
         var store = new SettingsStore();
         var loaded = store.Load();
         Assert.True(loaded.WasUnreadable);
@@ -79,7 +79,7 @@ public sealed class WindowsStoreRecoveryTests : IDisposable
     [WindowsOnlyFact]
     public void UnreadableState_CanBeReplacedInAWritableDirectory()
     {
-        var path = DenyReading(AppState.FileName, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"state\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"windowWidth\":700}");
+        var path = DenyReading(AppState.FileName, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"state\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"windowWidth\":700}");
         var store = new JsonStore<AppState>(AppState.FileName, "state", FileFormats.State, recordBackup: false);
         Assert.True(store.Load().WasUnreadable);
 
@@ -92,7 +92,7 @@ public sealed class WindowsStoreRecoveryTests : IDisposable
     [WindowsOnlyFact]
     public void UnreadablePaths_RefuseLoadAndSaveAndKeepTheOriginalBytes()
     {
-        const string original = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"paths\":[]}";
+        const string original = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"paths\":[]}";
         var path = DenyReading(PathListStore.FileName, original);
         var store = new PathListStore();
         Assert.True(Assert.Throws<UnreadableStoreException>(() => store.Load()).IsAccessFailure);

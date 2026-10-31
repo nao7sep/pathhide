@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -46,8 +47,12 @@ public static class FileFormats
 
     private static readonly AssemblyName Package = typeof(FileFormats).Assembly.GetName();
 
-    /// <summary>The writer's package name, the assembly the build stamps from <c>Directory.Build.props</c>.</summary>
-    internal static string WriterName { get; } = Package.Name!;
+    /// <summary>
+    /// The writer's package name: the assembly the build stamps from <c>Directory.Build.props</c>, written
+    /// as identifiers are, in lowercase letters and digits only (<c>pathhide</c>).
+    /// </summary>
+    internal static string WriterName { get; } =
+        string.Concat(Package.Name!.Where(char.IsAsciiLetterOrDigit)).ToLowerInvariant();
 
     /// <summary>The writer's release version, as the About dialog shows it.</summary>
     internal static string WriterVersion { get; } = Package.Version!.ToString(3);
