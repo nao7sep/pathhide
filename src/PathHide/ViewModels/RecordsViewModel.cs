@@ -59,6 +59,11 @@ public sealed partial class RecordsViewModel : ObservableObject
     private long _insertedThrough;
     // The window's reads, one after another: each queued read starts when the one before it ends.
     private Task _reads = Task.CompletedTask;
+
+    // Test seam (PathHide.Tests via InternalsVisibleTo): the reads queued so far, ended once the last of
+    // them has applied what it read, so a test judges the window after its reads rather than racing them.
+    internal Task Reads => _reads;
+
     // Cancelled when what they were read for is no longer asked for, so the reader stops them inside
     // the database: the list's reads with each new list query, the detail's with each new selection,
     // and every read when the window closes.

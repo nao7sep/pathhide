@@ -44,17 +44,28 @@ public sealed class RecordsWindowScrollTests : WindowTest
             settings.Load().Value, new FakeJsonStore<AppState>(), new AppState(), []);
     }
 
-    private static void Settle(Window window)
+    // Runs the window until it is idle: its jobs run, its layout done, and every read it queued
+    // applied. The reads run on the session log's writer thread and come back to the UI thread through
+    // the thread pool, so running the dispatcher's jobs alone would judge the window before a read that
+    // is still on its way, and which one wins would depend on how warm and how busy the process is.
+    private static void Settle(Window window, RecordsViewModel records)
     {
-        Dispatcher.UIThread.RunJobs();
-        window.UpdateLayout();
-        Dispatcher.UIThread.RunJobs();
+        while (true)
+        {
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            var reads = records.Reads;
+            if (reads.IsCompleted)
+                return;
+            RunUntil(reads);
+        }
     }
 
     // Runs the window until the list shows what holds, a page at a time.
     private static void Until(Window window, RecordsViewModel records, Func<bool> holds)
     {
-        Settle(window);
+        Settle(window, records);
         while (!holds())
         {
             var applied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -69,12 +80,12 @@ public sealed class RecordsWindowScrollTests : WindowTest
             {
                 records.PageApplied -= Applied;
             }
-            Settle(window);
+            Settle(window, records);
         }
     }
 
     // Logs a record and waits until the database has stored it and the window has heard of it.
-    private static void Arrive(Window window, string message)
+    private static void Arrive(Window window, RecordsViewModel records, string message)
     {
         using var stored = new ManualResetEventSlim();
         void Heard() => stored.Set();
@@ -88,7 +99,7 @@ public sealed class RecordsWindowScrollTests : WindowTest
         {
             Log.RecordStored -= Heard;
         }
-        Settle(window);
+        Settle(window, records);
     }
 
     // The first row whose container shows inside the viewport, and how far its top sits from the viewport's.
@@ -127,7 +138,7 @@ public sealed class RecordsWindowScrollTests : WindowTest
             Assert.True(Remaining(scroll) > scroll.Viewport.Height);
 
             // (c) At the top, a new record appears at the top.
-            Arrive(window, "live 1");
+            Arrive(window, records, "live 1");
             RunUntil(_delays.Started.WaitAsync(TestContext.Current.CancellationToken));
             _delays.Elapse(RecordsViewModel.LiveInterval);
             Until(window, records, () => records.Rows[0].Record.Message == "live 1");
@@ -138,15 +149,15 @@ public sealed class RecordsWindowScrollTests : WindowTest
             Until(window, records, () => !records.IsLoadingMore);
             var selected = records.Rows[30];
             records.SelectedRow = selected;
-            Settle(window);
+            Settle(window, records);
             Assert.True(records.HasDetail);
             var offset = scroll.Offset;
             var first = FirstVisible(list, scroll);
             for (var arrival = 2; arrival <= 4; arrival++)
             {
-                Arrive(window, $"live {arrival}");
+                Arrive(window, records, $"live {arrival}");
                 _delays.Elapse(RecordsViewModel.LiveInterval);
-                Settle(window);
+                Settle(window, records);
                 Assert.Equal(offset, scroll.Offset);
                 Assert.Equal(first, FirstVisible(list, scroll));
                 Assert.Equal("live 1", records.Rows[0].Record.Message);
@@ -159,10 +170,14 @@ public sealed class RecordsWindowScrollTests : WindowTest
             Assert.Same(selected, records.SelectedRow);
 
             // (b) Just over a screen from the end reads nothing; within one screen reads the next page,
-            // through every record.
-            scroll.Offset = new Vector(0, scroll.Extent.Height - 2 * scroll.Viewport.Height - 1);
-            Settle(window);
-            Assert.False(records.IsLoadingMore);
+            // through every record. "Just over" is half a row: the list estimates the height of rows it
+            // has not laid out, and realizing those at the new offset corrects the extent by a few
+            // pixels, enough to carry a one-pixel margin inside the screen.
+            var before = records.Rows.Count;
+            var row = list.GetRealizedContainers().First().Bounds.Height;
+            scroll.Offset = new Vector(0, scroll.Extent.Height - 2 * scroll.Viewport.Height - row / 2);
+            Settle(window, records);
+            Assert.Equal(before, records.Rows.Count);
             var slowest = TimeSpan.Zero;
             while (records.HasMore)
             {

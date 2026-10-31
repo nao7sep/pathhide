@@ -89,10 +89,17 @@ public sealed class ElevatedApplicatorTests : IDisposable
     public async Task A_child_still_running_after_a_cancel_keeps_the_operation_unsettled_until_it_exits()
     {
         var exit = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launched = Signal();
         using var stop = new CancellationTokenSource();
-        var applicator = new ElevatedApplicator(_ => Task.FromResult<Task<int>?>(exit.Task), _temp, "/storage-root")
-        { BindWindowsTargets = false };
+        var applicator = new ElevatedApplicator(_ =>
+        {
+            launched.SetResult();
+            return Task.FromResult<Task<int>?>(exit.Task);
+        }, _temp, "/storage-root") { BindWindowsTargets = false };
         var apply = applicator.ApplyAsync(Buckets, stop.Token);
+        // Cancel once the child runs: a cancel that lands while the request is still being prepared
+        // never launches one, and the operation settles at once.
+        await launched.Task.WaitAsync(TestContext.Current.CancellationToken);
         await stop.CancelAsync();
 
         Assert.Equal(ElevatedApplyStatus.Cancelled, (await apply).Status);
