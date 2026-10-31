@@ -257,6 +257,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_path_session ON backups (path, ses
     private static string Sha256(byte[] bytes) =>
         Convert.ToHexStringLower(SHA256.HashData(bytes));
 
+    /// <summary>
+    /// Switches recording off for the session without opening the store: launch found a history it
+    /// cannot read, which stays untouched, and the user has been told.
+    /// </summary>
+    internal static void Disable()
+    {
+        Close();
+        _initialized = true;
+    }
+
     /// <summary>Waits for pending writes, then closes the store. For tests that need to release the file
     /// handle between throwaway roots; the app itself lets the process exit close it. Resets the store so
     /// the next <see cref="Record"/> re-opens against the current <c>PATHHIDE_DATA_DIR</c>.</summary>

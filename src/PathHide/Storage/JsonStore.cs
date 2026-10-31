@@ -13,12 +13,13 @@ namespace PathHide.Storage;
 /// type's default-constructed value. What a present file that cannot be used yields depends on what the
 /// store holds (store-recovery-conventions):
 /// <list type="bullet">
-///   <item>A store holding the user's work product (<c>haltWhenUnreadable</c>) is left exactly in place:
+///   <item>A store holding valuable content, the path list or settings (<c>haltWhenUnreadable</c>), is left exactly in place:
 ///   <see cref="Load"/> and <see cref="Save"/> throw <see cref="UnreadableStoreException"/> or
 ///   <see cref="NewerFormatException"/>, so an unreadable or newer file is never written over.</item>
-///   <item>Any other store holds only harmless preferences or presentation state: a file that cannot be
-///   read or is invalid yields defaults with a warning. Newer files also yield defaults but cannot
-///   be replaced by this version. Nothing is moved aside.</item>
+///   <item>Any other store holds only disposable presentation state: a file that cannot be read or is
+///   invalid yields defaults with a warning in the log, and the next save replaces it.</item>
+///   <item>A newer file is refused by every store: <see cref="Load"/> and <see cref="Save"/> throw
+///   <see cref="NewerFormatException"/>, and it is never written over. Nothing is ever moved aside.</item>
 /// </list>
 /// </summary>
 /// <remarks>
@@ -53,7 +54,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     /// <param name="format">The file's format, from <see cref="FileFormats"/>.</param>
     /// <param name="recordBackup">False for a store that is volatile state and nothing else (window
     /// placement): its saves are written atomically but not recorded into the backup history.</param>
-    /// <param name="haltWhenUnreadable">True for a store holding the user's work product: a file present
+    /// <param name="haltWhenUnreadable">True for a store holding valuable content: a file present
     /// but unreadable or newer is left exactly in place, and <see cref="Load"/> and <see cref="Save"/>
     /// throw instead of falling back to defaults or writing over it.</param>
     public JsonStore(string fileName, string label, FileFormat format, bool recordBackup = true, bool haltWhenUnreadable = false)
@@ -78,9 +79,9 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             Log.Info("store: loaded", new { label = _label, path = _filePath });
             return new LoadedStore<T>(value, WasUnreadable: false);
         }
-        catch (Exception ex) when (!_haltWhenUnreadable)
+        catch (Exception ex) when (!_haltWhenUnreadable && ex is not NewerFormatException)
         {
-            // Defaults do not authorize overwriting a newer format. Save checks the same boundary.
+            // Only disposable state falls back; a newer file stops the launch, and Save refuses it too.
             Log.Warn("store: file unusable, using session defaults", ex,
                 new { label = _label, path = _filePath });
             return new LoadedStore<T>(new T(), WasUnreadable: true);

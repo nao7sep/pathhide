@@ -6,8 +6,8 @@ namespace PathHide.Storage;
 /// </summary>
 /// <remarks>
 /// An absent file and an unusable one both yield defaults, but they mean opposite things: absent is
-/// first run, unusable means there was content that could not be read. Only stores holding harmless
-/// preferences or presentation state reach this outcome; a store holding the user's work product
+/// first run, unusable means there was content that could not be read. Only stores holding disposable
+/// presentation state reach this outcome; a store holding valuable content
 /// throws instead (see <see cref="JsonStore{T}"/>).
 /// </remarks>
 public readonly record struct LoadedStore<T>(T Value, bool WasUnreadable);

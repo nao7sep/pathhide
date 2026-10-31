@@ -1972,6 +1972,18 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HasOperationalResults));
     }
 
+    /// <summary>
+    /// Says that the records database or the backup history could not be read at launch: it is left
+    /// untouched and off for this session, and the rest of PathHide works.
+    /// </summary>
+    internal void ShowSideStoreNotices(Message? recordsOff, Message? backupsOff)
+    {
+        if (recordsOff is not null)
+            ShowOperationalResult(OperationalResultOwner.Records, recordsOff, error: true);
+        if (backupsOff is not null)
+            ShowOperationalResult(OperationalResultOwner.Backups, backupsOff, error: true);
+    }
+
     private void ShowOperationalResult(OperationalResultOwner owner, Message message, bool error)
     {
         Log.Info("operational result", new { owner, message, error });

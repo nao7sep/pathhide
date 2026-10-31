@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using PathHide.I18n;
 using PathHide.Storage;
 
@@ -17,6 +19,7 @@ public static class FailurePresentation
     public static Message SettingsSave(Exception error) => error switch
     {
         NewerFormatException newer => NewerStore(newer),
+        UnreadableStoreException unreadable => Message.Of("failure.settingsUnreadable", ("path", unreadable.Path)),
         UnauthorizedAccessException => Message.Of("failure.settingsSavePermission"),
         TimeoutException => Message.Of("failure.settingsSaveTimeout"),
         _ => Message.Of("failure.settingsSave"),
@@ -55,8 +58,25 @@ public static class FailurePresentation
     public static Message Startup() =>
         Message.Of("failure.startupUnexpected", ("records", StorageRoot.RecordsFile), ("logs", StorageRoot.LogsDirectory));
 
-    /// <summary>The startup halt for a path list that could not be opened, or whose content is not a path list.</summary>
-    public static Message PathListStartup(UnreadableStoreException unreadable) =>
-        Message.Of(unreadable.IsAccessFailure ? "failure.pathListStartupAccess" : "failure.pathListStartup",
-            ("path", unreadable.Path));
+    /// <summary>
+    /// The launch stop: every refused file, each named with why, then what the user can do. Nothing was
+    /// written, and every file is left as it is.
+    /// </summary>
+    public static Message StartupRefused(IReadOnlyList<StartupRefusal> refusals) =>
+        Message.Of("startup.refused", "files", Message.Join("startup.refusedJoin", refusals
+            .Select(refusal => Message.Of(refusal.Reason switch
+            {
+                RefusalReason.Newer => "startup.refusedNewer",
+                RefusalReason.Inaccessible => "startup.refusedInaccessible",
+                _ => "startup.refusedUnreadable",
+            }, ("path", refusal.Path)))
+            .ToArray()));
+
+    /// <summary>The records database could not be read at launch: left as it is, and off for the session.</summary>
+    public static Message RecordsOff() =>
+        Message.Of("failure.recordsOff", ("path", StorageRoot.RecordsFile), ("logs", StorageRoot.LogsDirectory));
+
+    /// <summary>The backup history could not be read at launch: left as it is, and off for the session.</summary>
+    public static Message BackupsOff() =>
+        Message.Of("failure.backupsOff", ("path", System.IO.Path.Combine(StorageRoot.Directory, Backup.BackupStore.FileName)));
 }

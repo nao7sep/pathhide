@@ -147,9 +147,12 @@ public class RenderedKeyTests : WindowTest
         AssertNoKeys(Show(NoticeDialog.CreateStartupFailure(
             Message.Of("startup.failedTitle"), Message.Of("failure.startupStorage"))));
         AssertNoKeys(Show(NoticeDialog.CreateStartupFailure(
-            Message.Of("startup.pathListTitle"),
-            global::PathHide.ViewModels.FailurePresentation.PathListStartup(new global::PathHide.Storage.UnreadableStoreException(
-                "paths", "/r/paths.json", new System.UnauthorizedAccessException())))));
+            Message.Of("startup.failedTitle"),
+            global::PathHide.ViewModels.FailurePresentation.StartupRefused(
+            [
+                new global::PathHide.Storage.StartupRefusal("/r/paths.json", global::PathHide.Storage.RefusalReason.Inaccessible),
+                new global::PathHide.Storage.StartupRefusal("/r/config.json", global::PathHide.Storage.RefusalReason.Newer),
+            ]))));
     }
 
     private static void AssertNoKeys(Visual root)

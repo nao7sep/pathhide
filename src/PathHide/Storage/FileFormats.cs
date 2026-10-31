@@ -179,6 +179,32 @@ public static class FileFormats
         }
     }
 
+    /// <summary>
+    /// Checks the header of the database at <paramref name="path"/> without writing anything: an absent
+    /// file or one holding no schema passes, as <see cref="OpenDatabase"/> would initialize it; anything
+    /// else must hold this format's header at its version. For a store opened lazily, so launch can refuse
+    /// it before anything touches it.
+    /// </summary>
+    /// <exception cref="NewerFormatException">The database is this format at a newer version.</exception>
+    /// <exception cref="InvalidDataException">The database holds a schema but no valid header for this format and version.</exception>
+    /// <exception cref="SqliteException">The file is not a database SQLite can read.</exception>
+    internal static void CheckDatabase(string path, FileFormat format)
+    {
+        if (!File.Exists(path))
+            return;
+        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false,
+        }.ToString());
+        connection.Open();
+        var recorded = Scalar<long>(connection, "PRAGMA user_version;");
+        if (recorded == 0 && Scalar<long>(connection, "SELECT EXISTS (SELECT 1 FROM sqlite_master);") == 0)
+            return;
+        CheckDatabaseHeader(connection, recorded, format, path);
+    }
+
     private static void CheckDatabaseHeader(SqliteConnection connection, long recorded, FileFormat expected, string path)
     {
         if (Scalar<long>(connection, $"SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '{HeaderTable}');") == 0)

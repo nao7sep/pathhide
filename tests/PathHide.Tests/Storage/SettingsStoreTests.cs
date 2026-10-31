@@ -86,7 +86,7 @@ public sealed class SettingsStoreTests : IDisposable
     {
         using var log = new Fakes.StartupDiagnosticLog("config");
         var settings = new AppSettings { DisplayTimeZone = "Europe/Paris" };
-        _ = App.CreateMainViewModel((settings, new AppState(), new List<PathEntry>()));
+        _ = App.CreateMainViewModel(new StartupStores(settings, new AppState(), []));
 
         var record = await log.Reported.Task.WaitAsync(TestContext.Current.CancellationToken);
         Assert.Equal(settings.DisplayTimeZone, record.Fields!["displayTimeZone"]!.GetValue<string>());
@@ -218,7 +218,7 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task DialogSave_DropsAnInvalidSet_AndStoresTheFontCleaned()
+    public async Task DialogSave_KeepsAnInvalidSetTheUserLeftAlone_AndStoresTheFontCleaned()
     {
         using var restoreLanguage = PathHide.Tests.I18n.TestLanguage.Speaking(Localizer.Language);
         const string original = """{ "format":{"owner":"pathhide","kind":"config","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "language": "future-language", "uiFontFamily": "  Inter  " }""";
@@ -232,13 +232,18 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Dark));
 
         var sets = StoredSets();
-        Assert.Equal(new[] { "theme", "uiFontFamily" }, sets.Keys.Order().ToArray());
+        Assert.Equal(new[] { "language", "theme", "uiFontFamily" }, sets.Keys.Order().ToArray());
+        Assert.Equal("future-language", sets["language"].GetString());
         Assert.Equal("Inter", sets["uiFontFamily"].GetString());
         Assert.Equal("dark", sets["theme"].GetString());
+
+        // Choosing a language replaces the value it could not read.
+        Assert.Null(await vm.TryApplySettingsAsync("ja", vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Dark));
+        Assert.Equal("ja", StoredSets()["language"].GetString());
     }
 
     [Fact]
-    public void SaveChanges_WritesTheFileFromTheDraft_DroppingBuiltInCopiesAndUnknownKeys()
+    public void SaveChanges_WritesTheDraft_DroppingBuiltInCopies_AndKeepsUnknownKeysAndUntouchedInvalidSets()
     {
         File.WriteAllText(ConfigPath, """{ "format":{"owner":"pathhide","kind":"config","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "version": 7, "theme": "system", "language": "ja", "windowsHideMode": "future_mode", "old": true }""");
         var store = new SettingsStore();
@@ -247,9 +252,12 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.True(store.SaveChanges(previous, new AppSettings { Language = "ja", Theme = ThemePreference.Dark }));
 
         var sets = StoredSets();
-        Assert.Equal(new[] { "language", "theme" }, sets.Keys.Order().ToArray());
+        Assert.Equal(new[] { "language", "old", "theme", "version", "windowsHideMode" }, sets.Keys.Order().ToArray());
         Assert.Equal("ja", sets["language"].GetString());
         Assert.Equal("dark", sets["theme"].GetString());
+        Assert.Equal("future_mode", sets["windowsHideMode"].GetString());
+        Assert.True(sets["old"].GetBoolean());
+        Assert.Equal(7, sets["version"].GetInt32());
     }
 
     [Fact]
@@ -273,68 +281,56 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.False(File.Exists(ConfigPath));
     }
 
-    [AvaloniaTheory]
+    // config.json holds the user's settings: launch stops rather than run on built-ins over it.
+    [Theory]
     [InlineData("{ invalid json")]
     [InlineData("[]")]
     [InlineData("null")]
-    public async Task Startup_UnusableConfigUsesBuiltIns_LeavesTheFileUntilASettingsSaveReplacesIt(string original)
+    public void Startup_UnreadableConfigStopsTheLaunchAndLeavesTheFile(string original)
     {
-        using var restoreLanguage = PathHide.Tests.I18n.TestLanguage.Speaking(Localizer.Language);
         File.WriteAllText(ConfigPath, original);
 
-        var vm = App.CreateMainViewModel(App.ReadStartupStores());
+        var refused = Assert.Throws<StartupRefusedException>(() => App.ReadStartupStores());
 
-        Assert.Equal(ThemePreference.System, vm.Theme);
+        Assert.Equal(new StartupRefusal(ConfigPath, RefusalReason.Unreadable), Assert.Single(refused.Refusals));
         Assert.Equal(original, File.ReadAllText(ConfigPath));
-        Assert.Empty(Directory.GetFiles(_root, "config-*.invalid"));
-
-        Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Light));
-
-        Assert.Equal("light", Assert.Single(StoredSets()).Value.GetString());
+        Assert.Equal(["config.json"], Directory.EnumerateFiles(_root).Select(Path.GetFileName));
     }
 
+    // A settings file that became unreadable during the session is not saved over: Save says so.
     [AvaloniaFact]
-    public async Task DialogSave_DoesNotReadConfig_AndReplacesWhatChangedOnDisk()
+    public async Task DialogSave_RefusesAConfigThatBecameUnreadable_AndLeavesIt()
     {
-        // Draft comparison uses memory; save admission allows replacing damaged harmless preferences
-        // without moving the file aside. Newer readable markers are protected separately.
         using var restoreLanguage = PathHide.Tests.I18n.TestLanguage.Speaking(Localizer.Language);
         var vm = App.CreateMainViewModel(App.ReadStartupStores());
-        var notices = new List<(Message Title, Message Body)>();
-        vm.ShowNoticeAsync = (title, body) =>
-        {
-            notices.Add((title, body));
-            return Task.CompletedTask;
-        };
         File.WriteAllText(ConfigPath, "{ invalid json");
 
-        Assert.Null(await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Dark));
+        var failure = await vm.TryApplySettingsAsync(vm.Language, vm.UiFontFamily, vm.IsHiddenAndSystem, ThemePreference.Dark);
 
-        Assert.Equal("theme", Assert.Single(StoredSets()).Key);
-        Assert.Empty(Directory.GetFiles(_root, "config-*.invalid"));
-        Assert.Empty(notices);
+        Assert.Equal("failure.settingsUnreadable", failure?.Key);
+        Assert.Equal("{ invalid json", File.ReadAllText(ConfigPath));
+        Assert.Equal(ThemePreference.System, vm.Theme);
     }
 
     [MacOnlyFact]
     [System.Runtime.Versioning.SupportedOSPlatform("macos")]
-    public void SaveChanges_ReplacesUnreadableConfigWithoutReadingItsContent()
+    public void An_inaccessible_config_stops_the_launch_as_one_that_could_not_be_opened()
     {
-        File.WriteAllText(ConfigPath, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"config\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"theme\":\"dark\"}");
+        const string original = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"config\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"theme\":\"dark\"}";
+        File.WriteAllText(ConfigPath, original);
         var mode = File.GetUnixFileMode(ConfigPath);
         File.SetUnixFileMode(ConfigPath, UnixFileMode.None);
         try
         {
-            Assert.Throws<UnauthorizedAccessException>(() => File.ReadAllBytes(ConfigPath));
-            var store = new SettingsStore();
-            var loaded = store.Load();
-            Assert.True(loaded.WasUnreadable);
-            Assert.True(store.SaveChanges(loaded.Value, new AppSettings { Theme = ThemePreference.Light }));
+            var refused = Assert.Throws<StartupRefusedException>(() => App.ReadStartupStores());
+            Assert.Equal(RefusalReason.Inaccessible, Assert.Single(refused.Refusals).Reason);
+            Assert.Throws<UnreadableStoreException>(() => new SettingsStore().SaveChanges(null, new AppSettings { Theme = ThemePreference.Light }));
         }
         finally
         {
             File.SetUnixFileMode(ConfigPath, mode);
         }
-        Assert.Equal("light", Assert.Single(StoredSets()).Value.GetString());
+        Assert.Equal(original, File.ReadAllText(ConfigPath));
     }
 
     [Fact]

@@ -152,16 +152,13 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_NewerConfig_GivesDefaultsButRefusesReplacement()
+    public void Load_NewerFile_IsRefusedByLoadAndSave_EvenForADisposableStore()
     {
         const string newer = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"config\",\"version\":2},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"theme\":\"dark\"}";
         File.WriteAllText(PathOf("config.json"), newer);
         var store = SettingsDocumentStore();
 
-        var loaded = store.Load();
-
-        Assert.True(loaded.WasUnreadable);
-        Assert.Equal(ThemePreference.System, loaded.Value.Theme);
+        Assert.Throws<NewerFormatException>(() => store.Load());
         Assert.Equal(newer, File.ReadAllText(PathOf("config.json")));
 
         Assert.Throws<NewerFormatException>(() => store.Save(new TestDocument { Theme = ThemePreference.Light }));
@@ -336,14 +333,29 @@ public sealed class JsonStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_NewerStateResetsInsteadOfHalting()
+    public void Startup_NewerStateStopsTheLaunch()
     {
-        File.WriteAllText(PathOf(AppState.FileName), "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"state\",\"version\":2}}");
+        const string newer = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"state\",\"version\":2}}";
+        File.WriteAllText(PathOf(AppState.FileName), newer);
 
-        var loaded = new JsonStore<AppState>(AppState.FileName, "state", FileFormats.State, recordBackup: false).Load();
+        var refused = Assert.Throws<StartupRefusedException>(() => App.ReadStartupStores());
 
-        Assert.True(loaded.WasUnreadable);
-        Assert.Null(loaded.Value.WindowPositionX);
+        Assert.Equal(new StartupRefusal(PathOf(AppState.FileName), RefusalReason.Newer), Assert.Single(refused.Refusals));
+        Assert.Equal(newer, File.ReadAllText(PathOf(AppState.FileName)));
+    }
+
+    [Fact]
+    public void Startup_UnreadableStateTakesDefaults_AndTheNextSaveReplacesIt()
+    {
+        File.WriteAllText(PathOf(AppState.FileName), "{ not valid json");
+
+        var loaded = App.ReadStartupStores();
+        Assert.Null(loaded.State.WindowPositionX);
+        Assert.Null(loaded.RecordsOff);
+        Assert.Null(loaded.BackupsOff);
+
+        new JsonStore<AppState>(AppState.FileName, "state", FileFormats.State, recordBackup: false).Save(new AppState { WindowWidth = 900 });
+        Assert.Contains("900", File.ReadAllText(PathOf(AppState.FileName)));
     }
 
     [Fact]

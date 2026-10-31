@@ -75,6 +75,8 @@ sealed class Program
         Log.Start(records, StorageRoot.LogsDirectory);
         if (recordsFailure is not null)
             Log.Error("logger: could not open the records database", recordsFailure, new { file = StorageRoot.RecordsFile });
+        // A newer database stops the launch; any other failure leaves Records off with a notice.
+        App.RecordsOpenFailure = recordsFailure;
         var clean = true;
         var logClosed = false;
         void CloseLog()

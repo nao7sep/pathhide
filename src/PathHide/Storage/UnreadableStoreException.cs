@@ -4,8 +4,8 @@ using System.IO;
 namespace PathHide.Storage;
 
 /// <summary>
-/// The path list is present but cannot be read, and is left exactly as it is at its path, because it is
-/// the user's work product: the app neither continues without it nor writes over it
+/// A store holding valuable content, the path list or settings, is present but cannot be read, and is
+/// left exactly as it is at its path: the app neither starts without it nor writes over it
 /// (store-recovery-conventions).
 /// </summary>
 public sealed class UnreadableStoreException(string label, string path, Exception reason)

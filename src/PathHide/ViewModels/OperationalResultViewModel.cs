@@ -13,6 +13,8 @@ public enum OperationalResultOwner
     Visibility,
     Scan,
     Window,
+    Records,
+    Backups,
 }
 
 /// <summary>

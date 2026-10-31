@@ -25,7 +25,10 @@ public sealed class FailurePresentationTests
             FailurePresentation.WindowAction(error),
             FailurePresentation.StartupStorage(),
             FailurePresentation.Startup(),
-            FailurePresentation.PathListStartup(new UnreadableStoreException("paths", "/r/paths.json", error)),
+            FailurePresentation.StartupRefused([StartupRefusal.From(new UnreadableStoreException("paths", "/r/paths.json", error))!]),
+            FailurePresentation.SettingsSave(new UnreadableStoreException("settings", "/r/config.json", error)),
+            FailurePresentation.RecordsOff(),
+            FailurePresentation.BackupsOff(),
         };
 
         Assert.All(messages, message => Assert.DoesNotContain(Hostile, English.Of(message), StringComparison.Ordinal));
@@ -82,9 +85,7 @@ public sealed class FailurePresentationTests
         var error = new UnreadableStoreException("paths", "/home/u/.pathhide/paths.json", new System.Text.Json.JsonException(Hostile));
 
         Assert.Equal("failure.pathListUnreadable", FailurePresentation.PathListSave(error).Key);
-        Assert.Equal("failure.pathListStartup", FailurePresentation.PathListStartup(error).Key);
         Assert.Contains("/home/u/.pathhide/paths.json", English.Of(FailurePresentation.PathListSave(error)), StringComparison.Ordinal);
-        Assert.Contains("/home/u/.pathhide/paths.json", English.Of(FailurePresentation.PathListStartup(error)), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -93,9 +94,45 @@ public sealed class FailurePresentationTests
         var error = new UnreadableStoreException("paths", "/home/u/.pathhide/paths.json", new IOException(Hostile));
 
         Assert.Equal("failure.pathListUnreadableAccess", FailurePresentation.PathListSave(error).Key);
-        Assert.Equal("failure.pathListStartupAccess", FailurePresentation.PathListStartup(error).Key);
-        var text = English.Of(FailurePresentation.PathListStartup(error));
+        var text = English.Of(FailurePresentation.PathListSave(error));
         Assert.Contains("/home/u/.pathhide/paths.json", text, StringComparison.Ordinal);
         Assert.DoesNotContain(Hostile, text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnUnreadableSettingsFileNamesTheFileLeftInPlace()
+    {
+        var error = new UnreadableStoreException("settings", "/home/u/.pathhide/config.json", new System.Text.Json.JsonException(Hostile));
+        var text = English.Of(FailurePresentation.SettingsSave(error));
+
+        Assert.Contains("/home/u/.pathhide/config.json", text, StringComparison.Ordinal);
+        Assert.Contains("does not save over it", text, StringComparison.Ordinal);
+    }
+
+    // One window names every refused file with why, in the order found, and says what to do.
+    [Fact]
+    public void TheLaunchStopNamesEveryRefusedFileAndWhy()
+    {
+        var text = English.Of(FailurePresentation.StartupRefused(
+        [
+            new StartupRefusal("/d/config.json", RefusalReason.Unreadable),
+            new StartupRefusal("/d/state.json", RefusalReason.Newer),
+            new StartupRefusal("/d/paths.json", RefusalReason.Inaccessible),
+        ]));
+
+        Assert.Contains("/d/config.json could not be read", text, StringComparison.Ordinal);
+        Assert.Contains("/d/state.json was saved by a newer version", text, StringComparison.Ordinal);
+        Assert.Contains("/d/paths.json could not be opened", text, StringComparison.Ordinal);
+        Assert.True(text.IndexOf("config.json", StringComparison.Ordinal) < text.IndexOf("state.json", StringComparison.Ordinal));
+        Assert.Contains("start that version of PathHide", text, StringComparison.Ordinal);
+        Assert.Contains("move it out of the PathHide data folder", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SideStoreNoticesNameTheFileLeftUnchanged()
+    {
+        Assert.Contains(StorageRoot.RecordsFile, English.Of(FailurePresentation.RecordsOff()), StringComparison.Ordinal);
+        Assert.Contains(StorageRoot.LogsDirectory, English.Of(FailurePresentation.RecordsOff()), StringComparison.Ordinal);
+        Assert.Contains("backups.sqlite3", English.Of(FailurePresentation.BackupsOff()), StringComparison.Ordinal);
     }
 }

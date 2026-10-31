@@ -80,41 +80,24 @@ public partial class App : Application
             // Backup history is handed each managed save's bytes once its atomic rename lands (see
             // JsonStore/BackupStore), so there is no startup backup pass to kick off here.
             //
-            // An unreadable or newer path list stops startup before defaults could overwrite it; the
-            // settings and window-state files fall back to defaults inside their loads.
+            // A refused file stops startup before defaults could overwrite it (ReadStartupStores).
             MainWindowViewModel viewModel;
             try
             {
                 // Required reads settle, off the UI thread, before the normal shell exists.
                 base.OnFrameworkInitializationCompleted();
-                var loaded = await Task.Run(ReadStartupStores);
+                var loaded = await Task.Run(() => ReadStartupStores(RecordsOpenFailure));
                 viewModel = CreateMainViewModel(loaded);
                 await viewModel.ValidateLoadedPathsAsync();
             }
-            catch (UnreadableStoreException unreadable)
+            catch (StartupRefusedException refused)
             {
-                // Only the path list halts. The file is left exactly where it is, on this launch and
-                // every later one until the user repairs or moves it: opening with an empty list would
-                // look exactly like losing it, and the first add would then write a fresh file
-                // containing only that entry.
-                Log.Warn("startup: the path list could not be read; halting with it left in place",
-                    new { path = unreadable.Path, access = unreadable.IsAccessFailure });
-                desktop.MainWindow = NoticeDialog.CreateStartupFailure(
-                    I18n.Message.Of("startup.pathListTitle"),
-                    FailurePresentation.PathListStartup(unreadable));
-                RegisterOwnerActivation(desktop.MainWindow);
-                desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
-                desktop.MainWindow.Show();
-                return;
-            }
-            catch (NewerFormatException newer)
-            {
-                // An intact path list a newer PathHide wrote: opening without it would let this version
-                // write over it, so startup stops with the file left exactly as it is.
-                Log.Warn("startup: the path list was written by a newer version; halting", new { path = newer.Path });
+                // Every refused file is left exactly where it is, on this launch and every later one
+                // until the user uses the newer version, or repairs, restores or moves it: opening
+                // without it could write over it, or look exactly like losing it.
                 desktop.MainWindow = NoticeDialog.CreateStartupFailure(
                     I18n.Message.Of("startup.failedTitle"),
-                    FailurePresentation.NewerStore(newer));
+                    FailurePresentation.StartupRefused(refused.Refusals));
                 RegisterOwnerActivation(desktop.MainWindow);
                 desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
                 desktop.MainWindow.Show();
@@ -162,15 +145,68 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Prepare every persisted value before the normal shell exists.
+    /// Why the records database could not be opened, from <c>Program</c>, which opens it before the app
+    /// is built; null when it opened.
     /// </summary>
-    internal static (AppSettings Settings, AppState State, List<PathEntry> Paths) ReadStartupStores()
+    internal static Exception? RecordsOpenFailure { get; set; }
+
+    /// <summary>
+    /// Prepare every persisted value before the normal shell exists, refusing launch for every file it
+    /// must not start with, all of them named at once (store-recovery-conventions, What a refused file
+    /// does): any newer file, and an unreadable path list or settings file. Unreadable window state takes
+    /// its defaults; an unreadable records or backup database is left untouched and switched off for the
+    /// session, with a notice. Nothing is written here but the removal of an interrupted save's scratch.
+    /// </summary>
+    /// <exception cref="StartupRefusedException">Launch must stop; every refused file is named.</exception>
+    internal static StartupStores ReadStartupStores(Exception? recordsFailure = null)
     {
+        var refusals = new List<StartupRefusal>();
+        T Read<T>(Func<T> load, T refused)
+        {
+            try { return load(); }
+            catch (Exception ex) when (StartupRefusal.From(ex) is { } refusal)
+            {
+                Log.Warn("startup: refused a file, left as it is", new { path = refusal.Path, reason = refusal.Reason });
+                refusals.Add(refusal);
+                return refused;
+            }
+        }
+
+        var settings = Read(() => new SettingsStore().Load().Value, new AppSettings());
+        var state = Read(() => CreateStateStore().Load().Value, new AppState());
+        var paths = Read(() => new PathListStore().Load().Value, []);
+
+        I18n.Message? recordsOff = null;
+        if (recordsFailure is NewerFormatException newerRecords)
+            refusals.Add(StartupRefusal.From(newerRecords)!);
+        else if (recordsFailure is not null)
+            recordsOff = FailurePresentation.RecordsOff();
+
+        // Opened lazily at the first save, so its header is checked here, without writing to it.
+        I18n.Message? backupsOff = null;
+        var backups = System.IO.Path.Combine(StorageRoot.Directory, Backup.BackupStore.FileName);
+        try
+        {
+            FileFormats.CheckDatabase(backups, FileFormats.Backups);
+        }
+        catch (NewerFormatException newer)
+        {
+            refusals.Add(StartupRefusal.From(newer)!);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("startup: the backup history could not be read; off for this session, left as it is", ex, new { path = backups });
+            Backup.BackupStore.Disable();
+            backupsOff = FailurePresentation.BackupsOff();
+        }
+
+        if (refusals.Count > 0)
+            throw new StartupRefusedException(refusals);
+
+        // Only a launch that goes ahead may clean up after an interrupted save.
         if (System.IO.Directory.Exists(StorageRoot.Directory))
             StoreScratch.Sweep(StorageRoot.Directory);
-        return (new SettingsStore().Load().Value,
-            CreateStateStore().Load().Value,
-            new PathListStore().Load().Value);
+        return new StartupStores(settings, state, paths, recordsOff, backupsOff);
     }
 
     /// <summary>
@@ -181,14 +217,11 @@ public partial class App : Application
         new(AppState.FileName, "state", FileFormats.State, recordBackup: false);
 
     /// <summary>Compose the platform services and view model using only prepared persisted values.</summary>
-    internal static MainWindowViewModel CreateMainViewModel(
-        (AppSettings Settings, AppState State, List<PathEntry> Paths) loaded)
+    internal static MainWindowViewModel CreateMainViewModel(StartupStores loaded)
     {
         var pathListStore = new PathListStore();
         var settingsStore = new SettingsStore();
-        // Settings are five harmless preferences, so an unusable config.json falls back to built-ins
-        // for the session with a warning in the log, and stays untouched until the next Settings save
-        // replaces it. The path list does NOT — ReadStartupStores must succeed before construction.
+        // ReadStartupStores succeeded, so settings and the path list are what the files hold.
         var settings = loaded.Settings;
 
         var stateStore = CreateStateStore();
@@ -210,11 +243,13 @@ public partial class App : Application
         var (visibilityService, elevatedApplicator) =
             CreatePlatformServices(OperatingSystem.IsWindows());
 
-        return new MainWindowViewModel(new VisibilityCalls(visibilityService), pathListStore, settingsStore, settings, stateStore, state, loaded.Paths)
+        var viewModel = new MainWindowViewModel(new VisibilityCalls(visibilityService), pathListStore, settingsStore, settings, stateStore, state, loaded.Paths)
         {
             ComputerLanguages = ComputerLanguages,
             ElevatedApplicator = elevatedApplicator,
         };
+        viewModel.ShowSideStoreNotices(loaded.RecordsOff, loaded.BackupsOff);
+        return viewModel;
     }
 
     /// <summary>
@@ -231,3 +266,11 @@ public partial class App : Application
     private static Task<Task<int>?> LaunchElevatedAsync(IReadOnlyList<string> arguments) =>
         OperatingSystem.IsWindows() ? WindowsElevatedChild.LaunchAsync(arguments) : Task.FromResult<Task<int>?>(null);
 }
+
+/// <summary>What launch read: the values to start with, and the notices for side stores switched off.</summary>
+internal sealed record StartupStores(
+    AppSettings Settings,
+    AppState State,
+    List<PathEntry> Paths,
+    I18n.Message? RecordsOff = null,
+    I18n.Message? BackupsOff = null);

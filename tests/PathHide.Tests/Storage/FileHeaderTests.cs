@@ -13,6 +13,7 @@ using PathHide.Services;
 using PathHide.Storage;
 using PathHide.Tests.Fakes;
 using PathHide.ViewModels;
+using Avalonia.Headless.XUnit;
 using Xunit;
 
 namespace PathHide.Tests.Storage;
@@ -24,12 +25,12 @@ namespace PathHide.Tests.Storage;
 /// state use session defaults but refuse overwriting newer formats.
 /// </summary>
 [Collection(StorageRootEnvironment.CollectionName)]
-public sealed class FormatVersionTests : IDisposable
+public sealed class FileHeaderTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "pathhide-tests", Guid.NewGuid().ToString("N"));
     private readonly string? _previousDataDir;
 
-    public FormatVersionTests()
+    public FileHeaderTests()
     {
         Directory.CreateDirectory(_root);
         _previousDataDir = Environment.GetEnvironmentVariable(StorageRoot.DataDirEnvironmentVariable);
@@ -204,8 +205,8 @@ public sealed class FormatVersionTests : IDisposable
         // Each launch uses the real startup gate; neither may create a shell or rewrite the list.
         for (var launch = 0; launch < 2; launch++)
         {
-            var halted = Assert.Throws<UnreadableStoreException>(() => App.ReadStartupStores());
-            Assert.Equal(PathOf(PathListStore.FileName), halted.Path);
+            var halted = Assert.Throws<StartupRefusedException>(() => App.ReadStartupStores());
+            Assert.Equal(PathOf(PathListStore.FileName), Assert.Single(halted.Refusals).Path);
         }
 
         AssertLeftAsItWas(PathListStore.FileName, bytes);
@@ -223,10 +224,9 @@ public sealed class FormatVersionTests : IDisposable
         File.WriteAllText(PathOf(AppSettings.FileName), contents);
 
         Assert.Equal(Languages.System, LanguageBootstrap.SavedPreference());
-        var loaded = new SettingsStore().Load();
-
-        Assert.True(loaded.WasUnreadable);
-        Assert.Equal(ThemePreference.System, loaded.Value.Theme);
+        var store = new SettingsStore();
+        Assert.Throws<UnreadableStoreException>(() => store.Load());
+        Assert.Throws<UnreadableStoreException>(() => store.SaveChanges(null, new AppSettings { Theme = ThemePreference.Light }));
         AssertLeftAsItWas(AppSettings.FileName, Encoding.UTF8.GetBytes(contents));
     }
 
@@ -248,32 +248,29 @@ public sealed class FormatVersionTests : IDisposable
         const string contents = """{ "format":{"owner":"pathhide","kind":"config","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "language": "ja", "language": "de" }""";
         File.WriteAllText(PathOf(AppSettings.FileName), contents);
 
-        Assert.True(new SettingsStore().Load().WasUnreadable);
+        Assert.Throws<UnreadableStoreException>(() => new SettingsStore().Load());
         Assert.Equal(Languages.System, LanguageBootstrap.SavedPreference());
     }
 
     [Fact]
-    public void Settings_Newer_LoadBuiltInsAndRefuseSaves()
+    public void Settings_Newer_AreRefusedByLoadAndSave()
     {
         var bytes = WriteNewer(AppSettings.FileName, """{ "format":{"owner":"pathhide","kind":"config","version":2},"writer":{"name":"pathhide","version":"1.0.0"}, "language": "ja", "theme": "dark" }""");
         var store = new SettingsStore();
 
-        var loaded = store.Load();
-
-        Assert.True(loaded.WasUnreadable);
-        Assert.Equal(ThemePreference.System, loaded.Value.Theme);
+        Assert.Throws<NewerFormatException>(() => store.Load());
         // The language is not read out of a file this build cannot read.
         Assert.Equal(Languages.System, LanguageBootstrap.SavedPreference());
         AssertLeftAsItWas(AppSettings.FileName, bytes);
 
-        Assert.Throws<NewerFormatException>(() => store.SaveChanges(loaded.Value, new AppSettings { Theme = ThemePreference.Light }));
+        Assert.Throws<NewerFormatException>(() => store.SaveChanges(null, new AppSettings { Theme = ThemePreference.Light }));
         AssertLeftAsItWas(AppSettings.FileName, bytes);
     }
 
     // --- state.json ---
 
     [Fact]
-    public void State_WithoutAHeader_IsUnreadable()
+    public void State_WithoutAHeader_IsUnreadable_SoItTakesDefaults()
     {
         File.WriteAllText(PathOf(AppState.FileName), """{ "windowWidth": 900 }""");
 
@@ -296,12 +293,12 @@ public sealed class FormatVersionTests : IDisposable
     }
 
     [Fact]
-    public void State_Newer_UsesDefaultsAndRefusesSaves()
+    public void State_Newer_IsRefusedByLoadAndSave()
     {
         var bytes = WriteNewer(AppState.FileName, """{ "format":{"owner":"pathhide","kind":"state","version":2},"writer":{"name":"pathhide","version":"1.0.0"}, "windows": [] }""");
         var store = StateStore();
 
-        Assert.True(store.Load().WasUnreadable);
+        Assert.Throws<NewerFormatException>(() => store.Load());
         AssertLeftAsItWas(AppState.FileName, bytes);
 
         Assert.Throws<NewerFormatException>(() => store.Save(new AppState { WindowWidth = 900 }));
@@ -523,5 +520,87 @@ public sealed class FormatVersionTests : IDisposable
         BackupStore.Close();
 
         Assert.Equal(bytes, File.ReadAllBytes(BackupsPath));
+    }
+
+    // --- launch ---
+
+    // Every refused file is named at once, whatever its kind, and nothing is written before the stop.
+    [Fact]
+    public void Launch_NamesEveryRefusedFile_AndWritesNothing()
+    {
+        File.WriteAllText(PathOf(AppSettings.FileName), "{ not valid json");
+        WriteNewer(AppState.FileName, """{ "format": { "owner": "pathhide", "kind": "state", "version": 2 } }""");
+        WriteNewer(PathListStore.FileName, """{ "format": { "owner": "pathhide", "kind": "path-list", "version": 2 } }""");
+        CreateDatabase(BackupsPath, userVersion: 2, FileFormats.Backups.Kind);
+        var records = new NewerFormatException(PathOf(RecordsStore.FileName), 2, 1);
+        var before = Directory.GetFiles(_root).ToDictionary(path => path, File.ReadAllBytes);
+
+        var refused = Assert.Throws<StartupRefusedException>(() => App.ReadStartupStores(records));
+
+        Assert.Equal(
+        [
+            new StartupRefusal(PathOf(AppSettings.FileName), RefusalReason.Unreadable),
+            new StartupRefusal(PathOf(AppState.FileName), RefusalReason.Newer),
+            new StartupRefusal(PathOf(PathListStore.FileName), RefusalReason.Newer),
+            new StartupRefusal(PathOf(RecordsStore.FileName), RefusalReason.Newer),
+            new StartupRefusal(BackupsPath, RefusalReason.Newer),
+        ], refused.Refusals);
+        Assert.Equal(before.Keys.Order(), Directory.GetFiles(_root).Order());
+        Assert.All(before, file => Assert.Equal(file.Value, File.ReadAllBytes(file.Key)));
+    }
+
+    // An unreadable records database is off for the session with a notice; the app starts.
+    [Fact]
+    public void Launch_WithUnreadableRecords_StartsWithANotice()
+    {
+        var loaded = App.ReadStartupStores(new InvalidDataException("not this format"));
+
+        Assert.Equal("failure.recordsOff", loaded.RecordsOff?.Key);
+        Assert.Null(loaded.BackupsOff);
+    }
+
+    // An unreadable backup history is off for the session with a notice, and stays byte-identical
+    // through a session of saves.
+    [Theory]
+    [InlineData(1, null)]
+    [InlineData(1, "records")]
+    [InlineData(0, "backups")]
+    public void Launch_WithUnreadableBackups_StartsWithANotice_AndNeverTouchesThem(int userVersion, string? kind)
+    {
+        CreateDatabase(BackupsPath, userVersion, kind);
+        var bytes = File.ReadAllBytes(BackupsPath);
+
+        var loaded = App.ReadStartupStores();
+        new SettingsStore().SaveChanges(null, new AppSettings { Theme = ThemePreference.Dark });
+        new PathListStore().Save([Entry("/a")]);
+        StateStore().Save(new AppState { WindowWidth = 900 });
+        BackupStore.Close();
+
+        Assert.Equal("failure.backupsOff", loaded.BackupsOff?.Key);
+        Assert.Equal(bytes, File.ReadAllBytes(BackupsPath));
+    }
+
+    [Fact]
+    public void Launch_WithAFileThatIsNotADatabaseAsBackups_StartsWithANotice()
+    {
+        File.WriteAllText(BackupsPath, "not a database at all, just text that is long enough to have a header page");
+        var bytes = File.ReadAllBytes(BackupsPath);
+
+        var loaded = App.ReadStartupStores();
+        new SettingsStore().SaveChanges(null, new AppSettings { Theme = ThemePreference.Dark });
+        BackupStore.Close();
+
+        Assert.Equal("failure.backupsOff", loaded.BackupsOff?.Key);
+        Assert.Equal(bytes, File.ReadAllBytes(BackupsPath));
+    }
+
+    [AvaloniaFact]
+    public void The_side_store_notices_show_under_the_list()
+    {
+        var vm = App.CreateMainViewModel(new StartupStores(new AppSettings(), new AppState(), [],
+            FailurePresentation.RecordsOff(), FailurePresentation.BackupsOff()));
+
+        Assert.Equal(["failure.recordsOff", "failure.backupsOff"], vm.OperationalResults.Select(result => result.Message.Key));
+        Assert.All(vm.OperationalResults, result => Assert.True(result.IsError));
     }
 }

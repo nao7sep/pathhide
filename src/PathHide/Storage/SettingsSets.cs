@@ -10,10 +10,9 @@ namespace PathHide.Storage;
 
 /// <summary>The config set keys, how each is read, and how each is written (config-sets-conventions).</summary>
 /// <remarks>
-/// Retirement policy: all five sets are harmless preferences. An invalid value falls back to its
-/// built-in and is normalized at the next Settings save that changes something; a key PathHide does not
-/// know (only possible from a newer build or a hand edit) is dropped at that save, because the file is
-/// written from <see cref="Differing"/> alone.
+/// An invalid value reads as its built-in and is kept as written by every save until the user sets that
+/// setting; a key PathHide does not know (from a hand edit or another build) is always kept
+/// (<see cref="Kept"/>, config-sets-conventions). No key has been retired.
 /// </remarks>
 internal static class SettingsSets
 {
@@ -22,6 +21,9 @@ internal static class SettingsSets
     internal const string Theme = "theme";
     internal const string WindowsHideMode = "windowsHideMode";
     internal const string DisplayTimeZone = "displayTimeZone";
+
+    private static readonly HashSet<string> Known =
+        new([Language, UiFontFamily, Theme, WindowsHideMode, DisplayTimeZone], StringComparer.Ordinal);
 
     // Settings only: the shared options also read paths.json, whose enums keep their own reading.
     private static readonly JsonSerializerOptions Options = new()
@@ -92,6 +94,21 @@ internal static class SettingsSets
             if (!EqualityComparer<T>.Default.Equals(value, builtInValue))
                 sets[key] = JsonSerializer.SerializeToElement(value, Options);
         }
+    }
+
+    /// <summary>
+    /// What a save keeps from the <paramref name="stored"/> sets beside the <paramref name="written"/>
+    /// ones: every key PathHide does not know, and each known key whose stored value is invalid while the
+    /// user's value for it is still the built-in it read as, so it is not in <paramref name="written"/>.
+    /// </summary>
+    internal static IEnumerable<KeyValuePair<string, JsonElement>> Kept(
+        IReadOnlyDictionary<string, JsonElement> stored, IReadOnlyDictionary<string, JsonElement> written)
+    {
+        Read(stored, out var invalidKeys);
+        return stored
+            .Where(set => !Known.Contains(set.Key) || (invalidKeys.Contains(set.Key) && !written.ContainsKey(set.Key)))
+            .Select(set => KeyValuePair.Create(set.Key, set.Value.Clone()))
+            .ToList();
     }
 
     internal static bool SameSets(IReadOnlyDictionary<string, JsonElement> left, IReadOnlyDictionary<string, JsonElement> right) =>

@@ -46,7 +46,7 @@ public class RecordsPointerTests
     public void The_startup_failure_does_not_send_the_reader_to_the_menu(string tag)
     {
         var catalogue = Catalogue.For(tag);
-        var text = Text(catalogue, "failure.pathListStartup");
+        var text = Text(catalogue, "startup.refused");
 
         Assert.False(text.Contains(Text(catalogue, "menu.button"), StringComparison.OrdinalIgnoreCase), $"{tag}: {text}");
     }
