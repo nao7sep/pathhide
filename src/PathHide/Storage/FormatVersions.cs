@@ -32,14 +32,14 @@ public static class FormatVersions
 
     /// <summary>
     /// The version a JSON store's root records, or null when the root is not an object or does not record
-    /// a positive integer. Missing or unrecognized markers use current-format validation.
+    /// an integer. A store reads only its own version: a newer one is refused as newer, and anything
+    /// else, a missing marker included, as unreadable.
     /// </summary>
     internal static int? Recorded(JsonElement root) =>
         root.ValueKind == JsonValueKind.Object
         && root.TryGetProperty(JsonKey, out var marker)
         && marker.ValueKind == JsonValueKind.Number
         && marker.TryGetInt32(out var version)
-        && version >= 1
             ? version
             : null;
 
@@ -47,14 +47,15 @@ public static class FormatVersions
     /// Opens the database at <paramref name="path"/>, creating it when absent, with one marker check. A
     /// database holding no schema objects is new: it receives <paramref name="schema"/> and its version
     /// in one transaction, so a failed initialization leaves an empty file that the next open
-    /// initializes again. Any other database is read as the current format unless it records a newer
-    /// version; its <paramref name="schema"/> statements then run as written, so they must be idempotent.
+    /// initializes again. Any other database must record <paramref name="supported"/>; its
+    /// <paramref name="schema"/> statements then run as written, so they must be idempotent.
     /// </summary>
     /// <remarks>
     /// One GUI per data root is the only writer of a store (<see cref="Services.SingleInstanceLease"/>),
     /// so creation needs no claim against a concurrent creator.
     /// </remarks>
     /// <exception cref="NewerFormatException">The database records a version newer than <paramref name="supported"/>.</exception>
+    /// <exception cref="InvalidDataException">The database holds a schema but records another version, or none.</exception>
     internal static SqliteConnection OpenDatabase(string path, int supported, string schema)
     {
         var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -72,6 +73,8 @@ public static class FormatVersions
             var isNew = recorded == 0 && !HasSchema(connection);
             if (recorded > supported)
                 throw new NewerFormatException(path, (int)recorded, supported);
+            if (!isNew && recorded != supported)
+                throw new InvalidDataException($"{path} records format version {recorded}; this build reads only {supported}.");
             using (var transaction = connection.BeginTransaction())
             {
                 using var initialize = connection.CreateCommand();

@@ -83,17 +83,6 @@ public sealed class JsonStoreTests : IDisposable
         Assert.Equal(content, File.ReadAllText(PathOf("paths.json")));
     }
 
-    [Theory]
-    [InlineData("0")]
-    [InlineData("null")]
-    [InlineData("\"unknown\"")]
-    [InlineData("1.5")]
-    public void Unrecognized_markers_use_current_shape_and_unknown_fields_are_allowed(string marker)
-    {
-        File.WriteAllText(PathOf("paths.json"), "{\"formatVersion\":" + marker + ",\"paths\":[],\"extra\":1}");
-        Assert.Empty(new PathListStore().Load().Value);
-    }
-
     [Fact]
     public void SaveThenLoad_RoundTripsValue()
     {

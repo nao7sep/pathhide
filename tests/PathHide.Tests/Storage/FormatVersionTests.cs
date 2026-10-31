@@ -18,8 +18,9 @@ using Xunit;
 namespace PathHide.Tests.Storage;
 
 /// <summary>
-/// Unmarked stores use current-shape validation; known newer stores remain byte-identical.
-/// Harmless settings and window state use session defaults but refuse overwriting newer formats.
+/// Each store reads only its own format version. A newer store is refused and left byte-identical; any
+/// other marker, a missing one included, makes the store unreadable like any damaged file. Harmless
+/// settings and window state use session defaults but refuse overwriting newer formats.
 /// </summary>
 [Collection(StorageRootEnvironment.CollectionName)]
 public sealed class FormatVersionTests : IDisposable
@@ -70,13 +71,19 @@ public sealed class FormatVersionTests : IDisposable
 
     // --- paths.json ---
 
-    [Fact]
-    public void PathList_WithoutAVersion_ReadsCurrentShapeWithoutRewriting()
+    [Theory]
+    [InlineData("""{ "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "formatVersion": 0, "paths": [] }""")]
+    [InlineData("""{ "formatVersion": null, "paths": [] }""")]
+    [InlineData("""{ "formatVersion": "1", "paths": [] }""")]
+    [InlineData("""{ "formatVersion": 1.5, "paths": [] }""")]
+    public void PathList_WithoutItsVersion_IsUnreadableAndLeftAsItWas(string contents)
     {
-        var bytes = WriteNewer(PathListStore.FileName, """{ "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""");
+        var bytes = WriteNewer(PathListStore.FileName, contents);
         var store = new PathListStore();
 
-        Assert.Equal("/a", Assert.Single(store.Load().Value).Path);
+        Assert.Throws<UnreadableStoreException>(() => store.Load());
+        Assert.Throws<UnreadableStoreException>(() => store.Save([Entry("/a")]));
         AssertLeftAsItWas(PathListStore.FileName, bytes);
     }
 
@@ -166,16 +173,16 @@ public sealed class FormatVersionTests : IDisposable
     // --- config.json ---
 
     [Fact]
-    public void Settings_WithoutAVersion_ReadCurrentSets()
+    public void Settings_WithoutAVersion_AreUnreadableToTheStoreAndTheLanguageRead()
     {
         const string contents = """{ "language": "ja", "theme": "dark" }""";
         File.WriteAllText(PathOf(AppSettings.FileName), contents);
 
-        Assert.Equal("ja", LanguageBootstrap.SavedPreference());
+        Assert.Equal(Languages.System, LanguageBootstrap.SavedPreference());
         var loaded = new SettingsStore().Load();
 
-        Assert.False(loaded.WasUnreadable);
-        Assert.Equal(ThemePreference.Dark, loaded.Value.Theme);
+        Assert.True(loaded.WasUnreadable);
+        Assert.Equal(ThemePreference.System, loaded.Value.Theme);
         AssertLeftAsItWas(AppSettings.FileName, Encoding.UTF8.GetBytes(contents));
     }
 
@@ -222,14 +229,14 @@ public sealed class FormatVersionTests : IDisposable
     // --- state.json ---
 
     [Fact]
-    public void State_WithoutAVersion_ReadsCurrentShape()
+    public void State_WithoutAVersion_IsUnreadable()
     {
         File.WriteAllText(PathOf(AppState.FileName), """{ "windowWidth": 900 }""");
 
         var loaded = StateStore().Load();
 
-        Assert.False(loaded.WasUnreadable);
-        Assert.Equal(900, loaded.Value.WindowWidth);
+        Assert.True(loaded.WasUnreadable);
+        Assert.NotEqual(900, loaded.Value.WindowWidth);
         AssertLeftAsItWas(AppState.FileName, Encoding.UTF8.GetBytes("""{ "windowWidth": 900 }"""));
     }
 
@@ -311,18 +318,30 @@ public sealed class FormatVersionTests : IDisposable
 
     // --- records.sqlite3 ---
 
-    // An unmarked database is read as the current format, like one marked with it.
-    [Theory]
-    [InlineData(FormatVersions.Records)]
-    [InlineData(0)]
-    public async Task Records_CurrentOrUnmarkedCompleteMissingSchema(int version)
+    [Fact]
+    public async Task Records_AtTheirVersion_CompleteMissingSchema()
     {
         var path = PathOf(RecordsStore.FileName);
-        CreateDatabase(path, version);
+        CreateDatabase(path, FormatVersions.Records);
         using (var store = RecordsStore.TryOpen(path, out var failure) ?? throw failure!)
             store.Write(new LogEntry("2026-10-05T00:00:00.000Z", "2026-10-05T00:00:00.000Z", "info", "kept", null, null));
-        Assert.Equal(version, UserVersion(path));
+        Assert.Equal(FormatVersions.Records, UserVersion(path));
         Assert.Equal("kept", await ReadOnlyMessage(path));
+    }
+
+    // A database that holds tables but records no version is not this format: it is refused, untouched.
+    [Fact]
+    public void Records_Unmarked_AreRefusedAndLeftByteIdentical()
+    {
+        var path = PathOf(RecordsStore.FileName);
+        CreateDatabase(path, userVersion: 0);
+        var bytes = File.ReadAllBytes(path);
+
+        var store = RecordsStore.TryOpen(path, out var failure);
+
+        Assert.Null(store);
+        Assert.IsType<InvalidDataException>(failure);
+        Assert.Equal(bytes, File.ReadAllBytes(path));
     }
 
     /// <summary>The one record a records database holds, read through the store's owner as the app reads it.</summary>
@@ -372,16 +391,26 @@ public sealed class FormatVersionTests : IDisposable
         return (long)command.ExecuteScalar()!;
     }
 
-    [Theory]
-    [InlineData(FormatVersions.Backups)]
-    [InlineData(0)]
-    public void Backups_CurrentOrUnmarkedCompleteMissingSchema(int version)
+    [Fact]
+    public void Backups_AtTheirVersion_CompleteMissingSchema()
     {
-        CreateDatabase(BackupsPath, version);
+        CreateDatabase(BackupsPath, FormatVersions.Backups);
         BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{}"));
         BackupStore.Close();
-        Assert.Equal(version, UserVersion(BackupsPath));
+        Assert.Equal(FormatVersions.Backups, UserVersion(BackupsPath));
         Assert.Equal(1, BackupRows());
+    }
+
+    [Fact]
+    public void Backups_Unmarked_AreRefusedAndLeftByteIdentical()
+    {
+        CreateDatabase(BackupsPath, userVersion: 0);
+        var bytes = File.ReadAllBytes(BackupsPath);
+
+        BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{}"));
+        BackupStore.Close();
+
+        Assert.Equal(bytes, File.ReadAllBytes(BackupsPath));
     }
 
     [Fact]

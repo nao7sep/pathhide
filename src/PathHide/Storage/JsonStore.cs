@@ -126,8 +126,11 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
                 throw new JsonException($"The {_label} file must contain an object.");
-            if (FormatVersions.Recorded(root) is { } version && version > _formatVersion)
-                throw new NewerFormatException(_filePath, version, _formatVersion);
+            var version = FormatVersions.Recorded(root);
+            if (version > _formatVersion)
+                throw new NewerFormatException(_filePath, version.Value, _formatVersion);
+            if (version != _formatVersion)
+                throw new JsonException($"The {_label} file does not record format version {_formatVersion}.");
             return root.Deserialize<T>(JsonOptions.Default)
                 ?? throw new JsonException($"The {_label} file could not be read as its document.");
         }
