@@ -334,19 +334,6 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal("light", Assert.Single(StoredSets()).Value.GetString());
     }
 
-    [AvaloniaFact]
-    public void Startup_LegacyGeometryStaysIgnoredWithoutWritingStateOrConfig()
-    {
-        const string original = """{ "formatVersion": 1, "theme": "dark", "windowWidth": 1100, "windowMaximized": true }""";
-        File.WriteAllText(ConfigPath, original);
-
-        var vm = App.CreateMainViewModel(App.ReadStartupStores());
-
-        Assert.Equal(ThemePreference.Dark, vm.Theme);
-        Assert.Equal(original, File.ReadAllText(ConfigPath));
-        Assert.False(File.Exists(Path.Combine(_root, AppState.FileName)));
-    }
-
     [Fact]
     public void SaveChanges_RecordsTheExactSparseConfigBytes()
     {

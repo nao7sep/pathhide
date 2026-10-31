@@ -113,8 +113,8 @@ public sealed class StorageRootTests : IDisposable
     {
         // A uniquely-named variable avoids colliding with anything in the real environment; it is
         // restored (cleared) in the finally so the process-wide env stays clean for sibling tests.
-        // The env-reference regex only accepts [A-Za-z_][A-Za-z0-9_]* — nanoid's alphabet includes '-',
-        // so it is remapped to '_' here to keep this a legal, always-parseable variable name.
+        // The env-reference regex only accepts [A-Za-z_][A-Za-z0-9_]*; the "N" Guid format is plain
+        // hex digits, so the name stays a legal, always-parseable variable name.
         var probeVariable = "PATHHIDE_OVERRIDE_PROBE_" + Guid.NewGuid().ToString("N");
         var previousProbe = Environment.GetEnvironmentVariable(probeVariable);
         var target = Path.Combine(Path.GetTempPath(), "pathhide-percent-" + Guid.NewGuid().ToString("N"));
