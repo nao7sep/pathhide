@@ -92,7 +92,7 @@ public sealed class WindowsStoreRecoveryTests : IDisposable
     [WindowsOnlyFact]
     public void UnreadablePaths_RefuseLoadAndSaveAndKeepTheOriginalBytes()
     {
-        const string original = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"pathList\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"paths\":[]}";
+        const string original = "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"path-list\",\"version\":1},\"writer\":{\"name\":\"pathhide\",\"version\":\"1.0.0\"},\"paths\":[]}";
         var path = DenyReading(PathListStore.FileName, original);
         var store = new PathListStore();
         Assert.True(Assert.Throws<UnreadableStoreException>(() => store.Load()).IsAccessFailure);

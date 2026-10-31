@@ -28,7 +28,7 @@ public static class FileFormats
     public const string Owner = "pathhide";
 
     /// <summary><c>paths.json</c>.</summary>
-    public static readonly FileFormat PathList = new("pathList", 1);
+    public static readonly FileFormat PathList = new("path-list", 1);
 
     /// <summary><c>config.json</c>.</summary>
     public static readonly FileFormat Settings = new("config", 1);

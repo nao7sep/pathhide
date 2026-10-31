@@ -90,20 +90,20 @@ public sealed class FormatVersionTests : IDisposable
     [InlineData("""{ "format": null, "paths": [] }""")]
     [InlineData("""{ "format": 1, "paths": [] }""")]
     [InlineData("""{ "format": "pathhide.pathList", "paths": [] }""")]
-    [InlineData("""{ "format": { "kind": "pathList", "version": 1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "kind": "path-list", "version": 1 }, "paths": [] }""")]
     [InlineData("""{ "format": { "owner": "pathhide", "version": 1 }, "paths": [] }""")]
-    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList" }, "paths": [] }""")]
-    [InlineData("""{ "format": { "owner": 1, "kind": "pathList", "version": 1 }, "paths": [] }""")]
-    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": null }, "paths": [] }""")]
-    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": "1" }, "paths": [] }""")]
-    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 1.5 }, "paths": [] }""")]
-    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 0 }, "paths": [] }""")]
-    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": -1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "path-list" }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": 1, "kind": "path-list", "version": 1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "path-list", "version": null }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "path-list", "version": "1" }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "path-list", "version": 1.5 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "path-list", "version": 0 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "path-list", "version": -1 }, "paths": [] }""")]
     // Another owner or kind, whatever the shape: another app's list, or PathHide's settings.
-    [InlineData("""{ "format": { "owner": "scriptdock", "kind": "pathList", "version": 1 }, "paths": [] }""")]
-    [InlineData("""{ "format": { "owner": "PathHide", "kind": "pathList", "version": 1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "scriptdock", "kind": "path-list", "version": 1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "PathHide", "kind": "path-list", "version": 1 }, "paths": [] }""")]
     [InlineData("""{ "format": { "owner": "pathhide", "kind": "config", "version": 1 }, "paths": [] }""")]
-    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathlist", "version": 1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 1 }, "paths": [] }""")]
     public void PathList_WithoutItsHeader_IsUnreadableAndLeftAsItWas(string contents)
     {
         var bytes = WriteNewer(PathListStore.FileName, contents);
@@ -128,10 +128,10 @@ public sealed class FormatVersionTests : IDisposable
     // The writer says which build wrote the file, for people: it is never read, so a missing, odd or
     // foreign writer changes nothing, and unknown keys inside format are ignored.
     [Theory]
-    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 1 }, "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 1 }, "writer": null, "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 1 }, "writer": { "name": "otherapp", "version": 9 }, "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ], "writer": "x", "format": { "version": 1, "kind": "pathList", "owner": "pathhide", "later": true } }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "path-list", "version": 1 }, "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "path-list", "version": 1 }, "writer": null, "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "path-list", "version": 1 }, "writer": { "name": "otherapp", "version": 9 }, "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ], "writer": "x", "format": { "version": 1, "kind": "path-list", "owner": "pathhide", "later": true } }""")]
     public void PathList_IsReadByItsFormatAlone_NeverByItsWriter(string contents)
     {
         File.WriteAllText(PathOf(PathListStore.FileName), contents);
@@ -142,7 +142,7 @@ public sealed class FormatVersionTests : IDisposable
     [Fact]
     public void PathList_Newer_IsRefusedAndLeftByteIdentical()
     {
-        var bytes = WriteNewer(PathListStore.FileName, """{ "format": { "owner": "pathhide", "kind": "pathList", "version": 2 }, "entries": {} }""");
+        var bytes = WriteNewer(PathListStore.FileName, """{ "format": { "owner": "pathhide", "kind": "path-list", "version": 2 }, "entries": {} }""");
         var store = new PathListStore();
 
         var refused = Assert.Throws<NewerFormatException>(() => store.Load());
@@ -154,16 +154,16 @@ public sealed class FormatVersionTests : IDisposable
     }
 
     [Theory]
-    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 1 } }""")]
-    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "/a/", "desiredVisibility": "hidden" }, { "path": "/a", "desiredVisibility": "shown" } ] }""")]
-    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "C:/a", "desiredVisibility": "hidden" }, { "path": "c:\\A\\", "desiredVisibility": "shown" } ] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "path-list", "version": 1 } }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "/a/", "desiredVisibility": "hidden" }, { "path": "/a", "desiredVisibility": "shown" } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "C:/a", "desiredVisibility": "hidden" }, { "path": "c:\\A\\", "desiredVisibility": "shown" } ] }""")]
     [InlineData("""[ { "path": "/a", "desiredVisibility": "hidden" } ]""")]
-    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": null }""")]
-    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ null ] }""")]
-    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": null, "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "", "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "relative/a", "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "/a", "desiredVisibility": 2 } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": null }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ null ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": null, "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "relative/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "/a", "desiredVisibility": 2 } ] }""")]
     public void PathList_WithoutAReadableShape_IsLeftInPlace(string contents)
     {
         var bytes = WriteNewer(PathListStore.FileName, contents);
@@ -179,7 +179,7 @@ public sealed class FormatVersionTests : IDisposable
     public void PathList_AcceptsEveryPathFamilyOnEveryPlatform()
     {
         File.WriteAllText(PathOf(PathListStore.FileName), """
-            { "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [
+            { "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [
               { "path": "/a", "desiredVisibility": "hidden" },
               { "path": "C:\\a", "desiredVisibility": "shown" },
               { "path": "\\\\server\\share\\a", "desiredVisibility": 0 } ] }
@@ -194,9 +194,9 @@ public sealed class FormatVersionTests : IDisposable
 
     [Theory]
     [InlineData("{ not valid json")]
-    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "/a", "desiredVisibility": "hidden" }, null ] }""")]
-    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "relative/a", "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "/a", "desiredVisibility": 7 } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "/a", "desiredVisibility": "hidden" }, null ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "relative/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"path-list","version":1},"writer":{"name":"pathhide","version":"1.0.0"}, "paths": [ { "path": "/a", "desiredVisibility": 7 } ] }""")]
     public void PathList_Unreadable_HaltsEveryLaunchWithoutTouchingTheFile(string contents)
     {
         var bytes = WriteNewer(PathListStore.FileName, contents);
