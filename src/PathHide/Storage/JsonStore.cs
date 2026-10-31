@@ -22,8 +22,8 @@ namespace PathHide.Storage;
 /// </list>
 /// </summary>
 /// <remarks>
-/// The file is a JSON object: <typeparamref name="T"/>'s properties beside the format version this
-/// store owns (store-recovery-conventions).
+/// The file is a JSON object: the identity header this store's format owns (<see cref="FileFormats"/>),
+/// then <typeparamref name="T"/>'s properties.
 /// </remarks>
 /// <remarks>
 /// The app's single managed-text atomic-write choke point, and so the one place the data-backup hook
@@ -39,7 +39,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
 {
     private readonly string _filePath;
     private readonly string _label;
-    private readonly int _formatVersion;
+    private readonly FileFormat _format;
     private readonly bool _recordBackup;
     private readonly bool _haltWhenUnreadable;
 
@@ -50,17 +50,17 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
     /// </summary>
     /// <param name="fileName">File name (no directory component), e.g. <c>"paths.json"</c>.</param>
     /// <param name="label">Human-readable noun used in log messages, e.g. <c>"paths"</c>.</param>
-    /// <param name="formatVersion">The file's format version, from <see cref="FormatVersions"/>.</param>
+    /// <param name="format">The file's format, from <see cref="FileFormats"/>.</param>
     /// <param name="recordBackup">False for a store that is volatile state and nothing else (window
     /// placement): its saves are written atomically but not recorded into the backup history.</param>
     /// <param name="haltWhenUnreadable">True for a store holding the user's work product: a file present
     /// but unreadable or newer is left exactly in place, and <see cref="Load"/> and <see cref="Save"/>
     /// throw instead of falling back to defaults or writing over it.</param>
-    public JsonStore(string fileName, string label, int formatVersion, bool recordBackup = true, bool haltWhenUnreadable = false)
+    public JsonStore(string fileName, string label, FileFormat format, bool recordBackup = true, bool haltWhenUnreadable = false)
     {
         _filePath = Path.Combine(StorageRoot.Directory, fileName);
         _label = label;
-        _formatVersion = formatVersion;
+        _format = format;
         _recordBackup = recordBackup;
         _haltWhenUnreadable = haltWhenUnreadable;
     }
@@ -100,7 +100,7 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
         }
         var document = JsonSerializer.SerializeToNode(value, JsonOptions.Default) as JsonObject
             ?? throw new InvalidOperationException($"The {_label} store holds a JSON object.");
-        document.Insert(0, FormatVersions.JsonKey, _formatVersion);
+        FileFormats.WriteHeader(document, _format);
         var bytes = new UTF8Encoding(false).GetBytes(document.ToJsonString(JsonOptions.Default));
         if (compareExistingContent && existing is not null && existing.AsSpan().SequenceEqual(bytes))
             return;
@@ -126,12 +126,8 @@ public sealed class JsonStore<T> : IJsonStore<T> where T : class, new()
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
                 throw new JsonException($"The {_label} file must contain an object.");
-            var version = FormatVersions.Recorded(root);
-            if (version > _formatVersion)
-                throw new NewerFormatException(_filePath, version.Value, _formatVersion);
-            if (version != _formatVersion)
-                throw new JsonException($"The {_label} file does not record format version {_formatVersion}.");
-            return root.Deserialize<T>(JsonOptions.Default)
+            FileFormats.CheckHeader(root, _format, _filePath);
+            return FileFormats.Content(root).Deserialize<T>(JsonOptions.Default)
                 ?? throw new JsonException($"The {_label} file could not be read as its document.");
         }
         catch (NewerFormatException) { throw; }

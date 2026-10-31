@@ -54,7 +54,7 @@ return AppBuilder.Configure<App>().UsePlatformDetect().With(new MacOSPlatformOpt
     lifetime.Startup += (_, _) =>
     {
         var owner = new MainWindowViewModel(new VisibilityCalls(new MacVisibilityService()), new PathListStore(), new SettingsStore(),
-            new AppSettings(), new JsonStore<AppState>(AppState.FileName, "state", FormatVersions.State, recordBackup: false),
+            new AppSettings(), new JsonStore<AppState>(AppState.FileName, "state", FileFormats.State, recordBackup: false),
             new AppState(), []);
         new RecordsWindow(new RecordsViewModel(Log.CreateRecordsReader(), Log.Session), owner).Show();
     };

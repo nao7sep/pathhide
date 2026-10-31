@@ -60,12 +60,15 @@ public sealed class SettingsStoreTests : IDisposable
         return fields;
     }
 
-    /// <summary>The sets config.json holds, after checking the format version recorded beside them.</summary>
+    /// <summary>The sets config.json holds, after checking the identity header written before them.</summary>
     private Dictionary<string, JsonElement> StoredSets()
     {
-        var stored = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(ConfigPath))!;
-        Assert.True(stored.Remove(FormatVersions.JsonKey, out var version));
-        Assert.Equal(FormatVersions.Settings, version.GetInt32());
+        var text = File.ReadAllText(ConfigPath);
+        using (var document = JsonDocument.Parse(text))
+            FileFormats.CheckHeader(document.RootElement, FileFormats.Settings, ConfigPath);
+        var stored = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(text)!;
+        Assert.True(stored.Remove(FileFormats.FormatKey));
+        Assert.True(stored.Remove(FileFormats.WriterKey));
         return stored;
     }
 
@@ -160,7 +163,7 @@ public sealed class SettingsStoreTests : IDisposable
     [Fact]
     public void Load_OneSetLeavesOtherSetsAtTheirBuiltIns_AndDoesNotRewrite()
     {
-        const string original = """{ "formatVersion": 1, "theme": "dark" }""";
+        const string original = """{ "format":{"owner":"pathhide","kind":"config","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "theme": "dark" }""";
         File.WriteAllText(ConfigPath, original);
 
         var loaded = new SettingsStore().Load();
@@ -196,7 +199,7 @@ public sealed class SettingsStoreTests : IDisposable
         var theme = key == "theme" ? value : "\"dark\"";
         var language = key == "language" ? value : "\"ja\"";
         var other = key is "theme" or "language" ? "" : ", \"" + key + "\": " + value;
-        var original = "{ \"formatVersion\": 1, \"theme\": " + theme + ", \"language\": " + language + other + " }";
+        var original = "{ \"format\":{\"owner\":\"pathhide\",\"kind\":\"config\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"}, \"theme\": " + theme + ", \"language\": " + language + other + " }";
         File.WriteAllText(ConfigPath, original);
         Log.Start(RecordsStore.TryOpen(StorageRoot.RecordsFile, out _), StorageRoot.LogsDirectory);
 
@@ -218,7 +221,7 @@ public sealed class SettingsStoreTests : IDisposable
     public async Task DialogSave_DropsAnInvalidSet_AndStoresTheFontCleaned()
     {
         using var restoreLanguage = PathHide.Tests.I18n.TestLanguage.Speaking(Localizer.Language);
-        const string original = """{ "formatVersion": 1, "language": "future-language", "uiFontFamily": "  Inter  " }""";
+        const string original = """{ "format":{"owner":"pathhide","kind":"config","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "language": "future-language", "uiFontFamily": "  Inter  " }""";
         File.WriteAllText(ConfigPath, original);
         var vm = App.CreateMainViewModel(App.ReadStartupStores());
         Assert.Equal(Languages.System, vm.Language);
@@ -237,7 +240,7 @@ public sealed class SettingsStoreTests : IDisposable
     [Fact]
     public void SaveChanges_WritesTheFileFromTheDraft_DroppingBuiltInCopiesAndUnknownKeys()
     {
-        File.WriteAllText(ConfigPath, """{ "formatVersion": 1, "version": 7, "theme": "system", "language": "ja", "windowsHideMode": "future_mode", "old": true }""");
+        File.WriteAllText(ConfigPath, """{ "format":{"owner":"pathhide","kind":"config","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "version": 7, "theme": "system", "language": "ja", "windowsHideMode": "future_mode", "old": true }""");
         var store = new SettingsStore();
         var previous = store.Load().Value;
 
@@ -252,7 +255,7 @@ public sealed class SettingsStoreTests : IDisposable
     [Fact]
     public void SaveChanges_SelectingTheBuiltInRemovesTheSet_AndKeepsTheFile()
     {
-        File.WriteAllText(ConfigPath, """{ "formatVersion": 1, "theme": "dark" }""");
+        File.WriteAllText(ConfigPath, """{ "format":{"owner":"pathhide","kind":"config","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "theme": "dark" }""");
         var store = new SettingsStore();
 
         Assert.True(store.SaveChanges(store.Load().Value, new AppSettings()));
@@ -316,7 +319,7 @@ public sealed class SettingsStoreTests : IDisposable
     [System.Runtime.Versioning.SupportedOSPlatform("macos")]
     public void SaveChanges_ReplacesUnreadableConfigWithoutReadingItsContent()
     {
-        File.WriteAllText(ConfigPath, "{\"formatVersion\":1,\"theme\":\"dark\"}");
+        File.WriteAllText(ConfigPath, "{\"format\":{\"owner\":\"pathhide\",\"kind\":\"config\",\"version\":1},\"writer\":{\"name\":\"PathHide\",\"version\":\"1.0.0\"},\"theme\":\"dark\"}");
         var mode = File.GetUnixFileMode(ConfigPath);
         File.SetUnixFileMode(ConfigPath, UnixFileMode.None);
         try

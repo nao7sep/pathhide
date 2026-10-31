@@ -9,7 +9,7 @@ namespace PathHide.Storage;
 public sealed class SettingsStore : ISettingsStore
 {
     private readonly JsonStore<Dictionary<string, JsonElement>> _store =
-        new(AppSettings.FileName, "settings", FormatVersions.Settings);
+        new(AppSettings.FileName, "settings", FileFormats.Settings);
 
     public LoadedStore<AppSettings> Load()
     {

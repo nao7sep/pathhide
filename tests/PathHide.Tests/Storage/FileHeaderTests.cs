@@ -18,9 +18,10 @@ using Xunit;
 namespace PathHide.Tests.Storage;
 
 /// <summary>
-/// Each store reads only its own format version. A newer store is refused and left byte-identical; any
-/// other marker, a missing one included, makes the store unreadable like any damaged file. Harmless
-/// settings and window state use session defaults but refuse overwriting newer formats.
+/// Each store reads only its own format, by the identity header alone. A newer version is refused and
+/// left byte-identical; a missing or malformed header, another owner or kind, or any other version makes
+/// the store unreadable like any damaged file. The writer is never read. Harmless settings and window
+/// state use session defaults but refuse overwriting newer formats.
 /// </summary>
 [Collection(StorageRootEnvironment.CollectionName)]
 public sealed class FormatVersionTests : IDisposable
@@ -48,11 +49,21 @@ public sealed class FormatVersionTests : IDisposable
 
     private string PathOf(string fileName) => Path.Combine(_root, fileName);
 
-    private int RecordedIn(string fileName) =>
-        JsonNode.Parse(File.ReadAllText(PathOf(fileName)))![FormatVersions.JsonKey]!.GetValue<int>();
+    /// <summary>Asserts the file opens with the header naming <paramref name="format"/> and this build as its writer.</summary>
+    private void AssertHeaderIn(string fileName, FileFormat format)
+    {
+        var root = JsonNode.Parse(File.ReadAllText(PathOf(fileName)))!.AsObject();
+        Assert.Equal([FileFormats.FormatKey, FileFormats.WriterKey], root.Select(property => property.Key).Take(2));
+        Assert.Equal(FileFormats.Owner, (string?)root["format"]!["owner"]);
+        Assert.Equal(format.Kind, (string?)root["format"]!["kind"]);
+        Assert.Equal(format.Version, (int)root["format"]!["version"]!);
+        Assert.Equal("PathHide", (string?)root["writer"]!["name"]);
+        Assert.Equal("1.0.0", (string?)root["writer"]!["version"]);
+        Assert.Equal(2, root["writer"]!.AsObject().Count);
+    }
 
     private static JsonStore<AppState> StateStore() =>
-        new(AppState.FileName, "state", FormatVersions.State, recordBackup: false);
+        new(AppState.FileName, "state", FileFormats.State, recordBackup: false);
 
     private static PathEntry Entry(string path) => new() { Path = path, DesiredVisibility = DesiredVisibility.Hidden };
 
@@ -72,12 +83,28 @@ public sealed class FormatVersionTests : IDisposable
     // --- paths.json ---
 
     [Theory]
+    // No header at all, and the marker earlier builds wrote, which no reader accepts any more.
     [InlineData("""{ "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "formatVersion": 0, "paths": [] }""")]
-    [InlineData("""{ "formatVersion": null, "paths": [] }""")]
-    [InlineData("""{ "formatVersion": "1", "paths": [] }""")]
-    [InlineData("""{ "formatVersion": 1.5, "paths": [] }""")]
-    public void PathList_WithoutItsVersion_IsUnreadableAndLeftAsItWas(string contents)
+    [InlineData("""{ "formatVersion": 1, "paths": [] }""")]
+    // A malformed header.
+    [InlineData("""{ "format": null, "paths": [] }""")]
+    [InlineData("""{ "format": 1, "paths": [] }""")]
+    [InlineData("""{ "format": "pathhide.pathList", "paths": [] }""")]
+    [InlineData("""{ "format": { "kind": "pathList", "version": 1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "version": 1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList" }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": 1, "kind": "pathList", "version": 1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": null }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": "1" }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 1.5 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 0 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": -1 }, "paths": [] }""")]
+    // Another owner or kind, whatever the shape: another app's list, or PathHide's settings.
+    [InlineData("""{ "format": { "owner": "scriptdock", "kind": "pathList", "version": 1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "PathHide", "kind": "pathList", "version": 1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "config", "version": 1 }, "paths": [] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathlist", "version": 1 }, "paths": [] }""")]
+    public void PathList_WithoutItsHeader_IsUnreadableAndLeftAsItWas(string contents)
     {
         var bytes = WriteNewer(PathListStore.FileName, contents);
         var store = new PathListStore();
@@ -94,14 +121,28 @@ public sealed class FormatVersionTests : IDisposable
 
         store.Save([Entry("/a")]);
 
-        Assert.Equal(FormatVersions.PathList, RecordedIn(PathListStore.FileName));
+        AssertHeaderIn(PathListStore.FileName, FileFormats.PathList);
         Assert.Equal("/a", Assert.Single(store.Load().Value).Path);
+    }
+
+    // The writer says which build wrote the file, for people: it is never read, so a missing, odd or
+    // foreign writer changes nothing, and unknown keys inside format are ignored.
+    [Theory]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 1 }, "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 1 }, "writer": null, "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 1 }, "writer": { "name": "otherapp", "version": 9 }, "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "paths": [ { "path": "/a", "desiredVisibility": "hidden" } ], "writer": "x", "format": { "version": 1, "kind": "pathList", "owner": "pathhide", "later": true } }""")]
+    public void PathList_IsReadByItsFormatAlone_NeverByItsWriter(string contents)
+    {
+        File.WriteAllText(PathOf(PathListStore.FileName), contents);
+
+        Assert.Equal("/a", Assert.Single(new PathListStore().Load().Value).Path);
     }
 
     [Fact]
     public void PathList_Newer_IsRefusedAndLeftByteIdentical()
     {
-        var bytes = WriteNewer(PathListStore.FileName, """{ "formatVersion": 2, "entries": {} }""");
+        var bytes = WriteNewer(PathListStore.FileName, """{ "format": { "owner": "pathhide", "kind": "pathList", "version": 2 }, "entries": {} }""");
         var store = new PathListStore();
 
         var refused = Assert.Throws<NewerFormatException>(() => store.Load());
@@ -113,17 +154,17 @@ public sealed class FormatVersionTests : IDisposable
     }
 
     [Theory]
-    [InlineData("""{ "formatVersion": 1 }""")]
-    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a/", "desiredVisibility": "hidden" }, { "path": "/a", "desiredVisibility": "shown" } ] }""")]
-    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "C:/a", "desiredVisibility": "hidden" }, { "path": "c:\\A\\", "desiredVisibility": "shown" } ] }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "pathList", "version": 1 } }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": [ { "path": "/a/", "desiredVisibility": "hidden" }, { "path": "/a", "desiredVisibility": "shown" } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": [ { "path": "C:/a", "desiredVisibility": "hidden" }, { "path": "c:\\A\\", "desiredVisibility": "shown" } ] }""")]
     [InlineData("""[ { "path": "/a", "desiredVisibility": "hidden" } ]""")]
-    [InlineData("""{ "formatVersion": 1, "paths": null }""")]
-    [InlineData("""{ "formatVersion": 1, "paths": [ null ] }""")]
-    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": null, "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "", "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "relative/a", "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a", "desiredVisibility": 2 } ] }""")]
-    public void PathList_WithoutAReadableVersionOrShape_IsLeftInPlace(string contents)
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": null }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": [ null ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": [ { "path": null, "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": [ { "path": "", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": [ { "path": "relative/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": [ { "path": "/a", "desiredVisibility": 2 } ] }""")]
+    public void PathList_WithoutAReadableShape_IsLeftInPlace(string contents)
     {
         var bytes = WriteNewer(PathListStore.FileName, contents);
         var store = new PathListStore();
@@ -138,7 +179,7 @@ public sealed class FormatVersionTests : IDisposable
     public void PathList_AcceptsEveryPathFamilyOnEveryPlatform()
     {
         File.WriteAllText(PathOf(PathListStore.FileName), """
-            { "formatVersion": 1, "paths": [
+            { "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": [
               { "path": "/a", "desiredVisibility": "hidden" },
               { "path": "C:\\a", "desiredVisibility": "shown" },
               { "path": "\\\\server\\share\\a", "desiredVisibility": 0 } ] }
@@ -153,9 +194,9 @@ public sealed class FormatVersionTests : IDisposable
 
     [Theory]
     [InlineData("{ not valid json")]
-    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a", "desiredVisibility": "hidden" }, null ] }""")]
-    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "relative/a", "desiredVisibility": "hidden" } ] }""")]
-    [InlineData("""{ "formatVersion": 1, "paths": [ { "path": "/a", "desiredVisibility": 7 } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": [ { "path": "/a", "desiredVisibility": "hidden" }, null ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": [ { "path": "relative/a", "desiredVisibility": "hidden" } ] }""")]
+    [InlineData("""{ "format":{"owner":"pathhide","kind":"pathList","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "paths": [ { "path": "/a", "desiredVisibility": 7 } ] }""")]
     public void PathList_Unreadable_HaltsEveryLaunchWithoutTouchingTheFile(string contents)
     {
         var bytes = WriteNewer(PathListStore.FileName, contents);
@@ -172,10 +213,13 @@ public sealed class FormatVersionTests : IDisposable
 
     // --- config.json ---
 
-    [Fact]
-    public void Settings_WithoutAVersion_AreUnreadableToTheStoreAndTheLanguageRead()
+    [Theory]
+    [InlineData("""{ "language": "ja", "theme": "dark" }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "config" }, "language": "ja", "theme": "dark" }""")]
+    [InlineData("""{ "format": { "owner": "scriptdock", "kind": "config", "version": 1 }, "language": "ja", "theme": "dark" }""")]
+    [InlineData("""{ "format": { "owner": "pathhide", "kind": "state", "version": 1 }, "language": "ja", "theme": "dark" }""")]
+    public void Settings_WithoutTheirHeader_AreUnreadableToTheStoreAndTheLanguageRead(string contents)
     {
-        const string contents = """{ "language": "ja", "theme": "dark" }""";
         File.WriteAllText(PathOf(AppSettings.FileName), contents);
 
         Assert.Equal(Languages.System, LanguageBootstrap.SavedPreference());
@@ -193,7 +237,7 @@ public sealed class FormatVersionTests : IDisposable
 
         Assert.True(store.SaveChanges(new AppSettings(), new AppSettings { Language = "ja", Theme = ThemePreference.Dark }));
 
-        Assert.Equal(FormatVersions.Settings, RecordedIn(AppSettings.FileName));
+        AssertHeaderIn(AppSettings.FileName, FileFormats.Settings);
         Assert.Equal(ThemePreference.Dark, store.Load().Value.Theme);
         Assert.Equal("ja", LanguageBootstrap.SavedPreference());
     }
@@ -201,7 +245,7 @@ public sealed class FormatVersionTests : IDisposable
     [Fact]
     public void Settings_WithARepeatedKey_AreUnreadableToTheStoreAndTheLanguageRead()
     {
-        const string contents = """{ "formatVersion": 1, "language": "ja", "language": "de" }""";
+        const string contents = """{ "format":{"owner":"pathhide","kind":"config","version":1},"writer":{"name":"PathHide","version":"1.0.0"}, "language": "ja", "language": "de" }""";
         File.WriteAllText(PathOf(AppSettings.FileName), contents);
 
         Assert.True(new SettingsStore().Load().WasUnreadable);
@@ -211,7 +255,7 @@ public sealed class FormatVersionTests : IDisposable
     [Fact]
     public void Settings_Newer_LoadBuiltInsAndRefuseSaves()
     {
-        var bytes = WriteNewer(AppSettings.FileName, """{ "formatVersion": 2, "language": "ja", "theme": "dark" }""");
+        var bytes = WriteNewer(AppSettings.FileName, """{ "format":{"owner":"pathhide","kind":"config","version":2},"writer":{"name":"PathHide","version":"1.0.0"}, "language": "ja", "theme": "dark" }""");
         var store = new SettingsStore();
 
         var loaded = store.Load();
@@ -229,7 +273,7 @@ public sealed class FormatVersionTests : IDisposable
     // --- state.json ---
 
     [Fact]
-    public void State_WithoutAVersion_IsUnreadable()
+    public void State_WithoutAHeader_IsUnreadable()
     {
         File.WriteAllText(PathOf(AppState.FileName), """{ "windowWidth": 900 }""");
 
@@ -247,14 +291,14 @@ public sealed class FormatVersionTests : IDisposable
 
         store.Save(new AppState { WindowWidth = 900 });
 
-        Assert.Equal(FormatVersions.State, RecordedIn(AppState.FileName));
+        AssertHeaderIn(AppState.FileName, FileFormats.State);
         Assert.Equal(900, store.Load().Value.WindowWidth);
     }
 
     [Fact]
     public void State_Newer_UsesDefaultsAndRefusesSaves()
     {
-        var bytes = WriteNewer(AppState.FileName, """{ "formatVersion": 2, "windows": [] }""");
+        var bytes = WriteNewer(AppState.FileName, """{ "format":{"owner":"pathhide","kind":"state","version":2},"writer":{"name":"PathHide","version":"1.0.0"}, "windows": [] }""");
         var store = StateStore();
 
         Assert.True(store.Load().WasUnreadable);
@@ -273,13 +317,22 @@ public sealed class FormatVersionTests : IDisposable
         Pooling = false,
     }.ToString();
 
-    /// <summary>A database holding one table and recording <paramref name="userVersion"/>; 0 is no marker.</summary>
-    private static void CreateDatabase(string path, int userVersion)
+    /// <summary>
+    /// A database holding one table and recording <paramref name="userVersion"/> (0 is none), with a
+    /// <c>file_header</c> naming <paramref name="owner"/> and <paramref name="kind"/> unless
+    /// <paramref name="kind"/> is null.
+    /// </summary>
+    private static void CreateDatabase(string path, int userVersion, string? kind, string owner = FileFormats.Owner)
     {
         using var connection = new SqliteConnection(ConnectionString(path, SqliteOpenMode.ReadWriteCreate));
         connection.Open();
         using var command = connection.CreateCommand();
         command.CommandText = $"CREATE TABLE earlier (x); PRAGMA user_version = {userVersion};";
+        if (kind is not null)
+            command.CommandText +=
+                "CREATE TABLE file_header (key TEXT PRIMARY KEY, value TEXT NOT NULL);" +
+                $"INSERT INTO file_header VALUES ('format.owner', '{owner}'), ('format.kind', '{kind}'), " +
+                "('writer.name', 'otherwriter'), ('writer.version', '0.0.1');";
         command.ExecuteNonQuery();
     }
 
@@ -292,6 +345,32 @@ public sealed class FormatVersionTests : IDisposable
         return (long)command.ExecuteScalar()!;
     }
 
+    private static Dictionary<string, string> HeaderRows(string path)
+    {
+        using var connection = new SqliteConnection(ConnectionString(path, SqliteOpenMode.ReadOnly));
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT key, value FROM file_header;";
+        using var reader = command.ExecuteReader();
+        var rows = new Dictionary<string, string>();
+        while (reader.Read())
+            rows[reader.GetString(0)] = reader.GetString(1);
+        return rows;
+    }
+
+    /// <summary>Asserts the database records <paramref name="format"/> and this build as its writer.</summary>
+    private static void AssertDatabaseHeaderIn(string path, FileFormat format)
+    {
+        Assert.Equal(format.Version, UserVersion(path));
+        Assert.Equal(new Dictionary<string, string>
+        {
+            ["format.owner"] = FileFormats.Owner,
+            ["format.kind"] = format.Kind,
+            ["writer.name"] = "PathHide",
+            ["writer.version"] = "1.0.0",
+        }, HeaderRows(path));
+    }
+
     [Fact]
     public void AnEmptyFileHoldsNothing_SoItIsInitializedAsNew()
     {
@@ -299,42 +378,48 @@ public sealed class FormatVersionTests : IDisposable
         File.WriteAllBytes(path, []);
 
         using (var store = RecordsStore.TryOpen(path, out var failure) ?? throw failure!)
-            Assert.Equal(FormatVersions.Records, UserVersion(path));
+            AssertDatabaseHeaderIn(path, FileFormats.Records);
     }
 
     [Fact]
     public void FailedInitializationLeavesNoPartialSchema_AndTheNextOpenInitializes()
     {
         var path = PathOf("failed.sqlite3");
-        Assert.Throws<SqliteException>(() => FormatVersions.OpenDatabase(path, 1,
+        var format = new FileFormat("test", 1);
+        Assert.Throws<SqliteException>(() => FileFormats.OpenDatabase(path, format,
             "CREATE TABLE first (x); INVALID SQL;"));
         Assert.Equal(0, UserVersion(path));
 
-        using (FormatVersions.OpenDatabase(path, 1, "CREATE TABLE IF NOT EXISTS first (x);"))
+        using (FileFormats.OpenDatabase(path, format, "CREATE TABLE IF NOT EXISTS first (x);"))
         {
         }
-        Assert.Equal(1, UserVersion(path));
+        AssertDatabaseHeaderIn(path, format);
     }
 
     // --- records.sqlite3 ---
 
     [Fact]
-    public async Task Records_AtTheirVersion_CompleteMissingSchema()
+    public async Task Records_AtTheirVersion_CompleteMissingSchemaAndRewriteTheWriter()
     {
         var path = PathOf(RecordsStore.FileName);
-        CreateDatabase(path, FormatVersions.Records);
+        CreateDatabase(path, FileFormats.Records.Version, FileFormats.Records.Kind);
         using (var store = RecordsStore.TryOpen(path, out var failure) ?? throw failure!)
             store.Write(new LogEntry("2026-10-05T00:00:00.000Z", "2026-10-05T00:00:00.000Z", "info", "kept", null, null));
-        Assert.Equal(FormatVersions.Records, UserVersion(path));
+        AssertDatabaseHeaderIn(path, FileFormats.Records);
         Assert.Equal("kept", await ReadOnlyMessage(path));
     }
 
-    // A database that holds tables but records no version is not this format: it is refused, untouched.
-    [Fact]
-    public void Records_Unmarked_AreRefusedAndLeftByteIdentical()
+    // A database that holds tables but no header for this format is not this format: it is refused, untouched.
+    [Theory]
+    [InlineData(0, null, FileFormats.Owner)]
+    [InlineData(1, null, FileFormats.Owner)]
+    [InlineData(0, "records", FileFormats.Owner)]
+    [InlineData(1, "backups", FileFormats.Owner)]
+    [InlineData(1, "records", "scriptdock")]
+    public void Records_WithoutTheirHeader_AreRefusedAndLeftByteIdentical(int userVersion, string? kind, string owner)
     {
         var path = PathOf(RecordsStore.FileName);
-        CreateDatabase(path, userVersion: 0);
+        CreateDatabase(path, userVersion, kind, owner);
         var bytes = File.ReadAllBytes(path);
 
         var store = RecordsStore.TryOpen(path, out var failure);
@@ -360,7 +445,7 @@ public sealed class FormatVersionTests : IDisposable
         using (var store = RecordsStore.TryOpen(path, out var failure) ?? throw failure!)
             store.Write(new PathHide.Services.LogEntry("2026-10-05T00:00:00.000Z", "2026-10-05T00:00:00.000Z", "info", "kept", null, null));
 
-        Assert.Equal(FormatVersions.Records, UserVersion(path));
+        AssertDatabaseHeaderIn(path, FileFormats.Records);
         Assert.Equal("kept", await ReadOnlyMessage(path));
     }
 
@@ -368,7 +453,7 @@ public sealed class FormatVersionTests : IDisposable
     public void Records_Newer_AreRefusedAndLeftByteIdentical()
     {
         var path = PathOf(RecordsStore.FileName);
-        CreateDatabase(path, userVersion: 2);
+        CreateDatabase(path, userVersion: 2, FileFormats.Records.Kind);
         var bytes = File.ReadAllBytes(path);
 
         var store = RecordsStore.TryOpen(path, out var failure);
@@ -394,17 +479,20 @@ public sealed class FormatVersionTests : IDisposable
     [Fact]
     public void Backups_AtTheirVersion_CompleteMissingSchema()
     {
-        CreateDatabase(BackupsPath, FormatVersions.Backups);
+        CreateDatabase(BackupsPath, FileFormats.Backups.Version, FileFormats.Backups.Kind);
         BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{}"));
         BackupStore.Close();
-        Assert.Equal(FormatVersions.Backups, UserVersion(BackupsPath));
+        AssertDatabaseHeaderIn(BackupsPath, FileFormats.Backups);
         Assert.Equal(1, BackupRows());
     }
 
-    [Fact]
-    public void Backups_Unmarked_AreRefusedAndLeftByteIdentical()
+    [Theory]
+    [InlineData(0, null)]
+    [InlineData(1, null)]
+    [InlineData(1, "records")]
+    public void Backups_WithoutTheirHeader_AreRefusedAndLeftByteIdentical(int userVersion, string? kind)
     {
-        CreateDatabase(BackupsPath, userVersion: 0);
+        CreateDatabase(BackupsPath, userVersion, kind);
         var bytes = File.ReadAllBytes(BackupsPath);
 
         BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{}"));
@@ -421,14 +509,14 @@ public sealed class FormatVersionTests : IDisposable
         BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{ }"));
         BackupStore.Close();
 
-        Assert.Equal(FormatVersions.Backups, UserVersion(BackupsPath));
+        AssertDatabaseHeaderIn(BackupsPath, FileFormats.Backups);
         Assert.Equal(1, BackupRows());
     }
 
     [Fact]
     public void Backups_Newer_AreRefusedAndLeftByteIdentical()
     {
-        CreateDatabase(BackupsPath, userVersion: 2);
+        CreateDatabase(BackupsPath, userVersion: 2, FileFormats.Backups.Kind);
         var bytes = File.ReadAllBytes(BackupsPath);
 
         BackupStore.Record(PathOf(AppSettings.FileName), Encoding.UTF8.GetBytes("{}"));

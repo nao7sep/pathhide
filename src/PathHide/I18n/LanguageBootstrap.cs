@@ -47,9 +47,9 @@ internal static class LanguageBootstrap
             // Parsed as the settings store parses it, so a repeated key means System here too.
             using var document = JsonDocument.Parse(File.ReadAllText(path),
                 new JsonDocumentOptions { AllowDuplicateProperties = false });
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                && FormatVersions.Recorded(document.RootElement) == FormatVersions.Settings
-                && document.RootElement.TryGetProperty(SettingsSets.Language, out var language)
+            // A file the settings store would refuse yields System here too (the catch below).
+            FileFormats.CheckHeader(document.RootElement, FileFormats.Settings, path);
+            return document.RootElement.TryGetProperty(SettingsSets.Language, out var language)
                 && language.ValueKind == JsonValueKind.String
                 ? Languages.NormalizePreference(language.GetString())
                 : Languages.System;

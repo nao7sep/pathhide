@@ -229,7 +229,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_backups_path_session ON backups (path, ses
             // the first thing written on a fresh root.
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
 
-            connection = FormatVersions.OpenDatabase(file, FormatVersions.Backups, Schema);
+            connection = FileFormats.OpenDatabase(file, FileFormats.Backups, Schema);
             using (var pragma = connection.CreateCommand())
             {
                 pragma.CommandText = "PRAGMA journal_mode = WAL;";

@@ -9,7 +9,7 @@ namespace PathHide.Storage;
 
 /// <summary>
 /// The path list, <c>paths.json</c>, read and written through the managed atomic JSON store. The file is
-/// an object holding the entries under <c>paths</c>, so it can record its format version beside them.
+/// an object holding the entries under <c>paths</c>, after its identity header.
 /// </summary>
 /// <remarks>
 /// The list is the user's work product, re-derivable from nothing else on disk: a file that cannot be read
@@ -21,7 +21,7 @@ public sealed class PathListStore : IJsonStore<List<PathEntry>>
     public const string FileName = "paths.json";
 
     private readonly JsonStore<PathListDocument> _store =
-        new(FileName, "paths", FormatVersions.PathList, haltWhenUnreadable: true);
+        new(FileName, "paths", FileFormats.PathList, haltWhenUnreadable: true);
 
     public LoadedStore<List<PathEntry>> Load()
     {
@@ -32,7 +32,7 @@ public sealed class PathListStore : IJsonStore<List<PathEntry>>
     public void Save(List<PathEntry> value) => _store.Save(new PathListDocument { Paths = value });
 }
 
-/// <summary>What <c>paths.json</c> holds beside its format version.</summary>
+/// <summary>What <c>paths.json</c> holds after its identity header.</summary>
 /// <remarks>
 /// Every entry must be one the app could have added: an absolute path in any family the grammar accepts,
 /// whichever platform reads it, with a defined desired visibility. Anything else makes the file

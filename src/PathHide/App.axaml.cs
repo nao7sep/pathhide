@@ -178,7 +178,7 @@ public partial class App : Application
     /// file gives defaults silently and the next save replaces it.
     /// </summary>
     private static JsonStore<AppState> CreateStateStore() =>
-        new(AppState.FileName, "state", FormatVersions.State, recordBackup: false);
+        new(AppState.FileName, "state", FileFormats.State, recordBackup: false);
 
     /// <summary>Compose the platform services and view model using only prepared persisted values.</summary>
     internal static MainWindowViewModel CreateMainViewModel(

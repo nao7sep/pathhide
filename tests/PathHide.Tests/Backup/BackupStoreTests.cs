@@ -217,7 +217,7 @@ public sealed class BackupStoreTests : IDisposable
     [Fact]
     public void Record_LeavesAnUnsupportedPreSessionStoreUntouched()
     {
-        // A store written by a build without sessions: same table and version, no session_id column.
+        // A store written by a build without sessions: same header, table and version, no session_id column.
         using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
             DataSource = StoreFile,
@@ -233,6 +233,8 @@ public sealed class BackupStoreTests : IDisposable
                 CREATE INDEX idx_backups_path_id ON backups (path, id);
                 INSERT INTO backups (path, content, content_sha256, byte_size, written_at_utc)
                   VALUES ($path, X'6F6C64', 'x', 3, '2026-01-01T00:00:00.000Z');
+                CREATE TABLE file_header (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                INSERT INTO file_header VALUES ('format.owner', 'pathhide'), ('format.kind', 'backups');
                 PRAGMA user_version = 1;
                 """;
             command.Parameters.AddWithValue("$path", PathOf("config.json"));

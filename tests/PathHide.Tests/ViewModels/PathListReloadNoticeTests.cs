@@ -50,7 +50,7 @@ public sealed class PathListReloadNoticeTests
     public async Task Reload_WhenANewerVersionWroteThePathList_KeepsTheRowsAndNamesTheFile()
     {
         var (vm, paths, shown) = await CreateWithOneRowAsync();
-        paths.LoadException = new NewerFormatException(ListPath, 2, FormatVersions.PathList);
+        paths.LoadException = new NewerFormatException(ListPath, 2, FileFormats.PathList.Version);
 
         await ((IAsyncRelayCommand)vm.ReloadCommand).ExecuteAsync(null);
 

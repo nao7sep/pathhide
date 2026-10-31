@@ -49,7 +49,7 @@ CREATE INDEX IF NOT EXISTS idx_log_entries_time_id ON log_entries (time, id);
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-            connection = FormatVersions.OpenDatabase(path, FormatVersions.Records, Schema);
+            connection = FileFormats.OpenDatabase(path, FileFormats.Records, Schema);
             using (var command = connection.CreateCommand())
             {
                 command.CommandText = "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;";
